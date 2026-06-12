@@ -24,6 +24,8 @@ It also gives Claude a persistent, file-based **auto-memory** that grows over ti
 
 ## See it work
 
+![A /start session in Claude Code: the state files load and a session briefing comes back — sample data from the included example musician project](docs/assets/start-demo.gif)
+
 `/setup` interviews you and fills in your files. After that, `/start` reads your state, priorities, and projects and hands you a session plan instead of a blank prompt. For a filled-in version of the included example musician project, it reads like:
 
 > **Session briefing — Tuesday**
