@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 ### Added
+- `docs/assets/start-demo.gif` — animated `/start` demo embedded at the top of the README's "See it work" section. Representative VHS rendering of a `/start` session against the included example musician project (sample data): the state files load in the order `commands/start.md` specifies, then the session briefing comes back.
 - `scripts/check-links.sh` — deterministic broken-link checker. Walks every inline link in tracked markdown, skips fenced/inline code and external URLs, and fails on any local target that doesn't resolve. Pure bash + awk + git; catches SSOT drift when a cross-referenced file is renamed or moved. Wired into `.github/workflows/validate.yml`.
 - `docs/first-skill.md` — five-minute hand-held tutorial: copy a command, change three things, run it. Lowers the activation barrier for building your first skill.
 - `/end` step 6 — **Propose auto-memory updates.** `/end` now scans the session for durable, cross-conversation patterns and proposes 0–2 additions to Claude Code's auto-memory (`MEMORY.md`), with a friction-point check ("was there a friction point a memory entry would have prevented?"). Closes the capture→curate loop: the repo shipped the auto-memory spec and `/dream` curation, but nothing in the daily loop wrote to memory.
