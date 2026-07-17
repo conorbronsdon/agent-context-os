@@ -233,7 +233,7 @@ This is a template — the most useful contributions are structural: better exam
 
 ## Used by
 
-- [Conor Bronsdon](https://github.com/conorbronsdon) — Modular, Chain of Thought podcast
+- [Conor Bronsdon](https://github.com/conorbronsdon) — Modular, [Chain of Thought podcast](https://chainofthought.show)
 
 Using this template? Open a PR adding yourself.
 
