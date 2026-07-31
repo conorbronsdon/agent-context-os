@@ -233,7 +233,7 @@ This is a template — the most useful contributions are structural: better exam
 
 ## Used by
 
-- [Conor Bronsdon](https://github.com/conorbronsdon) host of [Chain of Thought podcast](https://chainofthought.show)
+- [Conor Bronsdon](https://github.com/conorbronsdon) host of [Chain of Thought podcast](https://chainofthought.show/?utm_source=github&utm_medium=referral&utm_campaign=repo-readme&utm_content=claude-context-os)
 
 Using this template? Open a PR adding yourself.
 
