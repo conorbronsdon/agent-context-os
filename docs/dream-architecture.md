@@ -78,8 +78,10 @@ Three load-bearing benefits once a curator runs autonomously:
 ~/.claude/projects/<encoded-cwd>/memory/
 ├── .git/                   ← local-only repo
 ├── MEMORY.md               ← index (cap 100 lines)
-├── ARCHIVE.md              ← pruned/superseded entries
-├── {topic}.md              ← detail files
+├── ARCHIVE.md              ← tombstone rows, one per retired file
+├── {topic}.md              ← LIVE detail files only
+├── archive/                ← retired files, moved here on archive
+│   └── {topic}.md          ← each stamped `archived: YYYY-MM-DD` in frontmatter
 └── .dreams/                ← curator artifacts
     └── {ISO-timestamp}/
         ├── REPORT.md       ← human review surface
@@ -166,7 +168,13 @@ The curator never auto-applies, so automating the *propose* step is safe; apply 
 
 ## Backup & recovery
 
-Two distinct failure modes; only one needs new infra.
+Three distinct failure modes; only one needs new infra.
+
+0. **Failure to forget** (the inverse of the two below) — an `archive` that writes the tombstone row and stops. The file stays in the memory root, unstamped and unchanged, so every later session reads it as a live memory. Git backups do not help, because nothing was lost: the corpus is quietly asserting stale things as current. The tell is a curator proposing to archive something that was archived weeks ago — it has no way to see the earlier row.
+
+   Fix it structurally, not by discipline: archiving is stamp + move to `archive/` + inbound-link rewrite, and the apply step refuses to re-archive a file already carrying an `archived:` stamp. The refusal *is* the tripwire.
+
+   Same root cause, adjacent gap: a `split` that removes its target without writing a tombstone deletes a memory silently, and leaves any live file that linked the old slug pointing at nothing.
 
 1. **Mistaken forgetting** (a bad `merge`/`split`/`archive` drops a fact) — **already covered by memory git.** Every `/dream-apply` commits before it changes anything, and structural ops use `git rm` (not destructive deletion), so absorbed/split-away content stays in history. Recovery is `git revert HEAD` or `git show HEAD~N:<file>`.
 2. **Machine loss** — local git can't help; you need an off-machine copy. Keep the no-remote rule (memory may hold confidential context) and use a `git bundle` instead of a hosted remote: `git bundle create memory-<date>.bundle --all` produces one restorable file (`git clone <bundle> memory`) you copy to private storage. Cadence: periodic, or after a large `/dream-apply`.

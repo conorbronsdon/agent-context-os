@@ -31,7 +31,7 @@ For each `memory/project_*.md` and `memory/reference_*.md` (skip `env_`, `feedba
 
 3. Classify each finding:
    - **`modify`** — assertion is wrong; rewrite to current truth. Required: cite specific evidence line(s).
-   - **`archive`** — entire memory is now historical (project complete, decision moot). Required: confirm via 2+ evidence sources.
+   - **`archive`** — entire memory is now historical (project complete, decision moot). Required: confirm via 2+ evidence sources, **and count how many live memories link to it**. Heavy inbound linkage is evidence the file is still load-bearing — when you find it, re-read the target's *current body* against the archive rationale before proposing. A file archived on a stale premise while live memories still depend on it is worse than one left live too long.
    - **`flag`** — rot suspected but evidence ambiguous; surface to the user for decision. Required: explain what's ambiguous.
 
 4. **Do NOT propose anything you can't cite evidence for.** Empty-evidence proposals get rejected at apply time.

@@ -3,7 +3,7 @@ name: dream-apply
 description: Walk a dream proposal artifact, review each item, apply accepted ones to memory and commit.
 allowed-tools: Read, Write, Edit, Bash, AskUserQuestion
 x-source: skills-sync/commands/dream-apply.md
-x-source-version: 10497e0
+x-source-version: 2d8b897
 ---
 
 # /dream-apply — review + apply a curator pass
@@ -67,7 +67,16 @@ b. Ask via `AskUserQuestion`:
 
 c. On `Accept`: apply the change.
    - For `modify` action: use Edit tool on `$MEMORY_DIR/{target}`, replacing `current_excerpt` with `proposed_excerpt`.
-   - For `archive` action: append a row to `$MEMORY_DIR/ARCHIVE.md` (`| {today} | {target} | {one-line reason} |`), then remove the corresponding line from `$MEMORY_DIR/MEMORY.md` index, then leave the file in place (don't delete the .md).
+   - For `archive` action, all five steps — an archive that stops early leaves the file reading as live:
+     1. **Check it isn't already archived.** `grep "^archived:" $MEMORY_DIR/{target}` and grep `$MEMORY_DIR/ARCHIVE.md` for the filename. If either hits, stop and report — re-archiving an already-retired file is the symptom of a previous archive skipping steps 3-4, not a new finding.
+     2. Append a row to `$MEMORY_DIR/ARCHIVE.md`: `| {today} | [{target}](archive/{target}) | {one-line reason} |`.
+     3. **Stamp the file**: insert `archived: {today}` as the last line of its frontmatter block. This is what stops a future session reading it as a live memory.
+     4. **Move it**: `git mv $MEMORY_DIR/{target} $MEMORY_DIR/archive/{target}`, then rewrite every inbound reference in the *live* set — `]({slug}.md)` → `](archive/{slug}.md)`, and `[[{slug}]]` → `[{slug}](archive/{slug}.md)` so wikilinks still resolve across the directory boundary. Grep the live files for the slug; don't assume the proposal enumerated them.
+     5. Remove the corresponding line from `$MEMORY_DIR/MEMORY.md` — **unless** the reference is a sub-link inside another entry's line, in which case just add the `archive/` prefix. An archived file cited as evidence for a still-live rule is a legitimate reference.
+
+     **Never `rm` an archived file.** It stays readable under `archive/` for on-demand recall; only `merge`/`split` remove files, and only because their content moved into a survivor.
+
+     ⚠️ **Before archiving, count how many live memories link to the target.** Heavy inbound linkage is evidence the file is still load-bearing — re-read its *current body* against the archive rationale before proceeding. A file archived on a premise that has since gone stale, while live memories still depend on it, is a worse outcome than one left live too long.
    - For `add` action (pattern curator): create new memory file with proposed content, add an index line to `$MEMORY_DIR/MEMORY.md`.
    - For `merge` action (structural):
      1. Write the survivor: if `survivor` matches an existing file in `targets`, Edit/overwrite it with `merged_body`; if it's a new name, Write `$MEMORY_DIR/{survivor}`.
@@ -76,7 +85,7 @@ c. On `Accept`: apply the change.
      4. Redirect dangling `[[wikilinks]]`: for any link the proposal flagged as pointing at an absorbed file, Edit it to point at the survivor. If the proposal didn't enumerate them, grep `$MEMORY_DIR` for the absorbed slugs and fix what you find.
    - For `split` action (structural):
      1. For each entry in `result_files`: Write `$MEMORY_DIR/{name}` with its `body`. If a child's `name` equals `target`, overwrite the original in place.
-     2. If `target` is **not** among the `result_files` names, `git rm` it (content redistributed; recoverable from history).
+     2. If `target` is **not** among the `result_files` names, `git rm` it (content redistributed; recoverable from history) **and append a tombstone row to `$MEMORY_DIR/ARCHIVE.md`** naming the children it split into. Never remove a memory file without a tombstone — a silent deletion is unrecoverable except by git archaeology, and any live file still linking the old slug is left pointing at nothing. Then grep the live set for the removed slug and repoint each hit at whichever child now carries that fact; if none does, de-link it but keep the sentence.
      3. Apply index changes to `$MEMORY_DIR/MEMORY.md`: remove `original_index_line`, add each child's `index_line`.
    - For `flag` action: write nothing — flags are just surfacing.
 
