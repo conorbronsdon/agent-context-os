@@ -29,12 +29,18 @@ The memory dir is created automatically by Claude Code, but the git repo on it i
 ```bash
 PROJECT_KEY=$(pwd | sed 's|[:\\/]|-|g')
 MEMORY_DIR="$HOME/.claude/projects/$PROJECT_KEY/memory"
-mkdir -p "$MEMORY_DIR"
+mkdir -p "$MEMORY_DIR/archive"        # retired memories move here
 cd "$MEMORY_DIR"
+touch archive/.gitkeep                # git does not track empty dirs
 git init
 git add -A
 git commit -m "initial memory snapshot"
 ```
+
+`archive/` has to exist before the first retirement: `git mv x.md archive/x.md`
+does **not** create it, and fails at exit 128 *after* the tombstone row and the
+`archived:` stamp are already written — leaving the half-finished state the
+archive procedure exists to prevent.
 
 No remote. The memory dir often contains personal or confidential context.
 

@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Fixed
+- `scripts/dream/README.md` — first-time setup created `$MEMORY_DIR` but not `archive/`, so anyone following it by hand hit the same exit-128 the apply step was fixed for, after the tombstone row and stamp were already written.
 - `commands/dream-apply.md` — the five-step archive procedure could not execute. `git mv` does not create its destination, and `$MEMORY_DIR` is its own git repo, so the move now runs `mkdir -p` then `git -C "$MEMORY_DIR" mv`. Without both it exits 128 *after* the tombstone row and stamp are written, producing the half-finished archive the procedure exists to prevent.
 - `commands/dream-apply.md` — the already-archived guard grepped `ARCHIVE.md` for a bare filename, which false-positives on merge survivors and split children (their slugs appear in their own tombstones while the files stay live), and grepped the root path for `^archived:`, which cannot match a correctly-archived file because it has moved.
 - `commands/dream-apply.md` — the moved file's own outbound links were never repointed, so every archived file's references silently broke on the move.
