@@ -1,36 +1,34 @@
 ---
 name: content-shipped
-description: Log a published piece of content to content/log.md. Use after publishing a blog post, LinkedIn post, newsletter, podcast episode, or any public content.
+description: Log a completed piece of content to content/log.md. Use after publishing any post, episode, newsletter, clip, or article.
 allowed-tools: Read, Edit
+x-source: skills-sync/skills/content-shipped/SKILL.md
+x-source-version: c0af010
 ---
 
-# /content-shipped — Log Published Content
+# content-shipped — Log Shipped Content
+
+Use after publishing anything: a blog post, social post, newsletter issue, video clip, or any other content piece.
 
 ## Instructions
 
-### 1. Gather details
+### 1. Gather metadata
+Ask for (or infer from context):
+- **Date** — today's date (run `date +%Y-%m-%d` if not provided)
+- **Type** — e.g.: `blog-post`, `linkedin-post`, `newsletter`, `video`, `episode`, `clip`, `other`
+- **Title / Description** — post title, hook, or short description
+- **Platform** — where it was published
+- **Link** — URL if available; use `TBD` if not yet live
+- **Notes** — any additional context worth remembering
 
-Ask the user for (or infer from context):
-- **Title** of the piece
-- **Type** (blog post, LinkedIn post, newsletter, podcast, video, talk)
-- **Platform** (where it was published)
-- **URL** (link to the published piece)
-- **Topic** (1-line summary)
+### 2. Log the entry
 
-### 2. Add entry to content/log.md
-
-Add a new entry at the top of the file (after the header), using this format:
-
-```markdown
-## [DATE] — [Title]
-
-- **Type:** [type]
-- **Platform:** [platform]
-- **URL:** [url]
-- **Topic:** [summary]
-- **Performance:** [to be updated]
+Append a row to `content/log.md`:
+```
+| {Date} | {Type} | {Title/Description} | {Platform} | {Link} | {Notes} |
 ```
 
-### 3. Confirm
+If an MCP tool like `content_log_add` is available, use it instead.
 
-Tell the user the entry was logged and remind them to update performance metrics later if relevant.
+### 3. Confirm
+One line: "Logged: {type} — {title/description}"

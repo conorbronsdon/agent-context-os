@@ -9,6 +9,7 @@
 - `commands/dream-apply.md` — the moved file's own outbound links were never repointed, so every archived file's references silently broke on the move.
 
 ### Changed
+- `/content-shipped` + `content/log.md` — the command wrote one format and the file it writes to documented another. The command told you to prepend a `## [DATE] — [Title]` section; `content/log.md` shipped a commented-out template for the same, but the convention in actual use is a single table row per piece, which is what `/report` can group and sort. Both now describe the table: `| Date | Type | Title / Description | Platform | Link | Notes |`. The command also gains explicit **Date** and **Notes** fields and a `TBD` convention for a link that isn't live yet.
 - `docs/auto-memory.md`, `docs/memory-template.md` — storage layout and retirement steps updated for `archive/`; these are not in the fanout manifest and were missed by the previous publish.
 - `scripts/dream/prompts/{rot,merge,split}.md`, `docs/dream-architecture.md` — curator inputs now exclude `memory/archive/`.
 ### Added
