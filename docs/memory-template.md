@@ -49,7 +49,7 @@ See `docs/auto-memory.md` for the full spec (what to save, what NOT to save, bod
 - **One detail file per memory.** Frontmatter: `name`, `description`, `type`.
 - **MEMORY.md is index-only.** One line per entry, under ~150 chars. No frontmatter on this file.
 - **Organize by type, then topic.** Not chronologically.
-- **Cap at ~100 lines.** When approaching, consolidate or move to `ARCHIVE.md`.
+- **Cap at ~100 lines.** When approaching, consolidate, or retire: tombstone row in `ARCHIVE.md` + `archived: <date>` stamp in the file + move it to `archive/`. All three, or the file keeps loading as live.
 
 ## First-time setup
 

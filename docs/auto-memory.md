@@ -9,7 +9,8 @@ This doc is the spec. Add it to your global `~/.claude/CLAUDE.md` (so every Clau
 ```
 ~/.claude/projects/<encoded-cwd>/memory/
 ├── MEMORY.md           ← index, loaded into every conversation (cap 100 lines)
-├── ARCHIVE.md          ← pruned / superseded entries
+├── ARCHIVE.md          ← tombstone rows, one per retired memory
+├── archive/            ← the retired files themselves, each stamped `archived: YYYY-MM-DD`
 └── <topic>.md          ← one detail file per memory, loaded on demand
 ```
 
@@ -104,7 +105,9 @@ Memories can become stale. Before acting on a memory that names a specific file,
 
 ## Memory budget
 
-`MEMORY.md` loads on every conversation. Cap it at ~100 lines. When approaching the cap, consolidate or move detail files to `ARCHIVE.md`. Detail files are exempt from the cap — they load on demand.
+`MEMORY.md` loads on every conversation. Cap it at ~100 lines. When approaching the cap, consolidate, or retire a memory: write a tombstone row in `ARCHIVE.md`, stamp `archived: <date>` into the file's frontmatter, and move the file to `archive/`. Detail files are exempt from the cap — they load on demand.
+
+An `ARCHIVE.md` row is not on its own an archive. A row without the stamp and the move leaves the file in the memory root, where every later session reads it as live.
 
 ## Curation: /dream
 

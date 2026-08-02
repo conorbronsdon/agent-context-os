@@ -8,9 +8,9 @@ This is the inverse of the `split` curator, and it is also the main pressure-rel
 
 ## Inputs you'll be given
 
-- All files in `memory/` (the detail files under audit)
+- All files in `memory/` (the detail files under audit) — live files only, skip `memory/archive/**`
 - `memory/MEMORY.md` (the index — one line per memory; cap 100 lines)
-- `memory/ARCHIVE.md` (where superseded entries go — do NOT merge into a live file; check here to avoid re-merging something already retired)
+- `memory/ARCHIVE.md` (tombstone rows; the retired files themselves live in `memory/archive/` — do NOT merge into a live file; check here to avoid re-merging something already retired)
 
 You may NOT modify any of these. You produce a proposal artifact only.
 

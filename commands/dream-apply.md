@@ -3,7 +3,7 @@ name: dream-apply
 description: Walk a dream proposal artifact, review each item, apply accepted ones to memory and commit.
 allowed-tools: Read, Write, Edit, Bash, AskUserQuestion
 x-source: skills-sync/commands/dream-apply.md
-x-source-version: 2d8b897
+x-source-version: 9b7b0a7
 ---
 
 # /dream-apply — review + apply a curator pass
@@ -68,10 +68,22 @@ b. Ask via `AskUserQuestion`:
 c. On `Accept`: apply the change.
    - For `modify` action: use Edit tool on `$MEMORY_DIR/{target}`, replacing `current_excerpt` with `proposed_excerpt`.
    - For `archive` action, all five steps — an archive that stops early leaves the file reading as live:
-     1. **Check it isn't already archived.** `grep "^archived:" $MEMORY_DIR/{target}` and grep `$MEMORY_DIR/ARCHIVE.md` for the filename. If either hits, stop and report — re-archiving an already-retired file is the symptom of a previous archive skipping steps 3-4, not a new finding.
+     1. **Check it isn't already archived.** `test -f "$MEMORY_DIR/archive/{target}"`, and `grep -F "](archive/{target})" "$MEMORY_DIR/ARCHIVE.md"`. A hit on either means it is already retired — stop and report.
+        **Do not grep `ARCHIVE.md` for the bare filename.** Merge tombstones name the *surviving* file and split tombstones name the *children*; those files are live, so a bare-name grep refuses legitimate archives.
+        Separately, if `$MEMORY_DIR/{target}` still exists **and** already carries an `^archived:` stamp, that is a half-finished archive from a crashed earlier run — finish steps 4-5 rather than starting over, and do not write a second tombstone row.
      2. Append a row to `$MEMORY_DIR/ARCHIVE.md`: `| {today} | [{target}](archive/{target}) | {one-line reason} |`.
      3. **Stamp the file**: insert `archived: {today}` as the last line of its frontmatter block. This is what stops a future session reading it as a live memory.
-     4. **Move it**: `git mv $MEMORY_DIR/{target} $MEMORY_DIR/archive/{target}`, then rewrite every inbound reference in the *live* set — `]({slug}.md)` → `](archive/{slug}.md)`, and `[[{slug}]]` → `[{slug}](archive/{slug}.md)` so wikilinks still resolve across the directory boundary. Grep the live files for the slug; don't assume the proposal enumerated them.
+     4. **Move it.** `git mv` does **not** create the destination, and `$MEMORY_DIR` is its own git repo — so run both, from inside it:
+        ```sh
+        mkdir -p "$MEMORY_DIR/archive"
+        git -C "$MEMORY_DIR" mv "{target}" "archive/{target}"
+        ```
+        Skipping either is how this step dies at exit 128 *after* steps 2-3 have already written the row and the stamp — producing the exact half-finished state this procedure exists to prevent.
+
+        Then fix links in three directions, where `{slug}` is `{target}` without its `.md`:
+        - **Inbound, live files except the index**: `]({slug}.md)` → `](archive/{slug}.md)`, and `[[{slug}]]` → `[{slug}](archive/{slug}.md)` so wikilinks resolve across the directory boundary. Grep for the slug; don't assume the proposal enumerated them. **Exclude `MEMORY.md`** — step 5 owns that line, and rewriting it here breaks step 5's excerpt match.
+        - **Outbound, inside the moved file**: its own relative links now resolve one level too deep. `](x.md)` → `](../x.md)` for targets still live; `](archive/x.md)` → `](x.md)` for targets already retired.
+        - Leave unresolved `[[links]]` that point at nothing — those are deliberate placeholders, not errors.
      5. Remove the corresponding line from `$MEMORY_DIR/MEMORY.md` — **unless** the reference is a sub-link inside another entry's line, in which case just add the `archive/` prefix. An archived file cited as evidence for a still-live rule is a legitimate reference.
 
      **Never `rm` an archived file.** It stays readable under `archive/` for on-demand recall; only `merge`/`split` remove files, and only because their content moved into a survivor.

@@ -120,7 +120,7 @@ Curators fall into two **classes**:
 
 **Questions:** merge — *"Do 2+ memories cover the same thing and always get recalled together?"* split — *"Has one file accreted 2+ unrelated concerns?"*
 
-**Inputs:** `memory/*.md` (all detail files) + `memory/MEMORY.md` (index) + `memory/ARCHIVE.md`. No state/session inputs.
+**Inputs:** `memory/*.md` (live detail files only — `memory/archive/**` is excluded) + `memory/MEMORY.md` (index) + `memory/ARCHIVE.md`. No state/session inputs.
 
 **Output actions:** `merge` (consolidate `targets` → `survivor`, write ARCHIVE tombstones, collapse index lines), `split` (divide `target` → `result_files`, expand index lines), `flag` (boundary is a judgment call).
 

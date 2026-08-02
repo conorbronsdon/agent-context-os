@@ -8,7 +8,7 @@
 
 You'll have access to:
 
-- All files in `memory/` (the memories under audit)
+- All files in `memory/` (the memories under audit) — **skip `memory/archive/`**, those are retired by design and are not rot
 - `state/decisions.md` (append-only history of decisions — strong evidence for "this happened")
 - `state/blockers.md` (current blockers + recently-unblocked — strong evidence for "this resolved")
 - `state/current.md` (active priorities, last-updated entries — moderate evidence)

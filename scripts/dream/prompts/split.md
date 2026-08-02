@@ -10,7 +10,7 @@ This is the inverse of the `merge` curator. Do not propose a split that `merge` 
 
 - All files in `memory/` (the detail files under audit)
 - `memory/MEMORY.md` (the index — one line per memory; cap 100 lines)
-- `memory/ARCHIVE.md` (pruned/superseded entries — context only, do not split)
+- `memory/ARCHIVE.md` (tombstone rows — context only, do not split; retired files live in `memory/archive/` and are never split candidates)
 
 You may NOT modify any of these. You produce a proposal artifact only.
 

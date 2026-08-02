@@ -1,6 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+
+### Fixed
+- `commands/dream-apply.md` — the five-step archive procedure could not execute. `git mv` does not create its destination, and `$MEMORY_DIR` is its own git repo, so the move now runs `mkdir -p` then `git -C "$MEMORY_DIR" mv`. Without both it exits 128 *after* the tombstone row and stamp are written, producing the half-finished archive the procedure exists to prevent.
+- `commands/dream-apply.md` — the already-archived guard grepped `ARCHIVE.md` for a bare filename, which false-positives on merge survivors and split children (their slugs appear in their own tombstones while the files stay live), and grepped the root path for `^archived:`, which cannot match a correctly-archived file because it has moved.
+- `commands/dream-apply.md` — the moved file's own outbound links were never repointed, so every archived file's references silently broke on the move.
+
+### Changed
+- `docs/auto-memory.md`, `docs/memory-template.md` — storage layout and retirement steps updated for `archive/`; these are not in the fanout manifest and were missed by the previous publish.
+- `scripts/dream/prompts/{rot,merge,split}.md`, `docs/dream-architecture.md` — curator inputs now exclude `memory/archive/`.
 ### Added
 - `docs/assets/start-demo.gif` — animated `/start` demo embedded at the top of the README's "See it work" section. Representative VHS rendering of a `/start` session against the included example musician project (sample data): the state files load in the order `commands/start.md` specifies, then the session briefing comes back.
 - `scripts/check-links.sh` — deterministic broken-link checker. Walks every inline link in tracked markdown, skips fenced/inline code and external URLs, and fails on any local target that doesn't resolve. Pure bash + awk + git; catches SSOT drift when a cross-referenced file is renamed or moved. Wired into `.github/workflows/validate.yml`.
