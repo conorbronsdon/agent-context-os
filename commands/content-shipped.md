@@ -23,9 +23,10 @@ Ask for (or infer from context):
 
 ### 2. Log the entry
 
-Add a row as the **last line of the table** in `content/log.md` — directly
-beneath the existing rows, not at the end of the file (anything below the table,
-like a comment block, must stay below it):
+Insert the row **immediately after the `|------|` separator row** — or after the
+last existing data row if the table already has some. Anchor on the separator, not
+on "the last row": a fresh log has no data rows, so "after the last row" resolves to
+after the *header* and puts your entry above the separator, which breaks the table:
 ```
 | {Date} | {Type} | {Title/Description} | {Platform} | {Link} | {Notes} |
 ```

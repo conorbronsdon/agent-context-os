@@ -2,10 +2,10 @@
 
 Running log of published content. One row per piece.
 
-<!-- `/content-shipped` adds each new row at the BOTTOM of the table, so the file
-     is in the order things were logged. Do not rely on that as a sort order —
-     backfilled entries land out of sequence. The Date column is the sort key;
-     sort at read time if you need chronological.
+<!-- Order: append — oldest first. `/content-shipped` adds each new row at the
+     BOTTOM of the table, so the file reads in the order things were logged.
+     Backfilled entries are the one exception and land out of sequence, so the
+     Date column is the sort key if you need strict chronology.
 
      Keep the columns in this order. A reordered header silently mis-files every
      later entry, because the command writes positionally.
