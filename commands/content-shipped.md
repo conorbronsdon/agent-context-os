@@ -1,7 +1,7 @@
 ---
 name: content-shipped
 description: Log a completed piece of content to content/log.md. Use after publishing any post, episode, newsletter, clip, or article.
-allowed-tools: Read, Edit
+allowed-tools: Read, Edit, Bash
 x-source: skills-sync/skills/content-shipped/SKILL.md
 x-source-version: c0af010
 ---
@@ -23,12 +23,15 @@ Ask for (or infer from context):
 
 ### 2. Log the entry
 
-Append a row to `content/log.md`:
+Add a row as the **last line of the table** in `content/log.md` — directly
+beneath the existing rows, not at the end of the file (anything below the table,
+like a comment block, must stay below it):
 ```
 | {Date} | {Type} | {Title/Description} | {Platform} | {Link} | {Notes} |
 ```
 
-If an MCP tool like `content_log_add` is available, use it instead.
+If your setup exposes an MCP tool that appends to the log, use it instead of
+editing the file by hand.
 
 ### 3. Confirm
 One line: "Logged: {type} — {title/description}"
