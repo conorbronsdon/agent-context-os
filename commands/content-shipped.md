@@ -1,9 +1,9 @@
 ---
 name: content-shipped
-description: Log a completed piece of content to content/log.md. Use after publishing any post, episode, newsletter, clip, or article.
+description: Log a completed piece of content to content/log.md. Use after publishing a blog post, LinkedIn post, podcast episode, newsletter, clip, video, or article.
 allowed-tools: Read, Edit, Bash
 x-source: skills-sync/skills/content-shipped/SKILL.md
-x-source-version: c0af010
+x-source-version: b85d60f
 ---
 
 # content-shipped — Log Shipped Content
@@ -21,15 +21,16 @@ Ask for (or infer from context):
 - **Link** — URL if available; use `TBD` if not yet live
 - **Notes** — any additional context worth remembering
 
-### 2. Log the entry
+### 2. Add the entry to content/log.md
 
-Insert the row **immediately after the separator row** (the `|---|` line under the header) — or after the
-last existing data row if the table already has some. Anchor on the separator, not
-on "the last row": a fresh log has no data rows, so "after the last row" resolves to
-after the *header* and puts your entry above the separator, which breaks the table:
+Append the row as the **last line of the table**.
 ```
 | {Date} | {Type} | {Title/Description} | {Platform} | {Link} | {Notes} |
 ```
+
+A fresh log has no data rows, so the table's last line is the dashed separator row —
+put the first entry directly beneath it. Every later row goes beneath the previous
+one. Never insert above the separator; that breaks the table.
 
 If your setup exposes an MCP tool that appends to the log, use it instead of
 editing the file by hand.
