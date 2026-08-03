@@ -1,0 +1,10 @@
+# Shell scripts and vhs tapes must stay LF in the repo. On a Windows checkout
+# with core.autocrlf=true, `git add` would otherwise store CRLF, and a script
+# committed that way dies in Linux/Docker with "bad interpreter: no such file
+# or directory" on the shebang.
+*.sh text eol=lf
+*.tape text eol=lf
+
+# Rendered demo assets are binary — never touch line endings or diff them.
+*.gif binary
+*.png binary
