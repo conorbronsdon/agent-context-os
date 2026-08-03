@@ -41,6 +41,8 @@ It also gives Claude a persistent, file-based **auto-memory** that grows over ti
 
 Every line came from plain markdown in the repo — not a chat you rebuild from memory each morning. Run `/end` and it writes the session to `sessions/` and updates `state/`, so tomorrow's `/start` knows exactly where you left off.
 
+<sub>The GIF is scripted, not screen-captured — [`docs/start-demo.tape`](docs/start-demo.tape) regenerates it, and [`docs/demo/start-session.sh`](docs/demo/start-session.sh) holds the transcript it plays back. Neither reads state nor calls a model.</sub>
+
 ---
 
 ## Quick start

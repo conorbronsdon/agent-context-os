@@ -75,8 +75,19 @@ fi
 
 SECRET_PATTERNS='(AKIA[0-9A-Z]{16}|sk-[a-zA-Z0-9]{48}|ghp_[a-zA-Z0-9]{36}|xox[bps]-[a-zA-Z0-9-]+|-----BEGIN (RSA |EC )?PRIVATE KEY)'
 
+# -E only. `grep -qEP` is not "both engines" — it is a usage error: grep rejects
+# it with "conflicting matchers specified" and exits 2. Exit 2 is not 0, so the
+# `if` never fired, and `2>/dev/null` hid the message. This check reported clean
+# on every file since it was written, including files that did contain a key.
+# Demonstrated 2026-08-03 by planting a fake AWS-style access key in a tracked
+# file: the script printed "All checks passed". (No sample literal is written
+# here on purpose — a real one in this comment makes the file flag itself.)
+#
+# -P alone is not the fix either. Git Bash on Windows builds grep without PCRE,
+# so `grep -qP` also exits 2 there and would reintroduce the same silent pass on
+# the machine this repo is maintained from. -E covers every pattern above.
 while IFS= read -r tracked_file; do
-  if grep -qEP "$SECRET_PATTERNS" "$tracked_file" 2>/dev/null; then
+  if grep -qE "$SECRET_PATTERNS" "$tracked_file" 2>/dev/null; then
     ERRORS+=("POSSIBLE SECRET in $tracked_file — review before pushing")
   fi
 done < <(git ls-files 2>/dev/null)
