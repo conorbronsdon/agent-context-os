@@ -23,7 +23,7 @@ Ask for (or infer from context):
 
 ### 2. Log the entry
 
-Insert the row **immediately after the `|------|` separator row** — or after the
+Insert the row **immediately after the separator row** (the `|---|` line under the header) — or after the
 last existing data row if the table already has some. Anchor on the separator, not
 on "the last row": a fresh log has no data rows, so "after the last row" resolves to
 after the *header* and puts your entry above the separator, which breaks the table:

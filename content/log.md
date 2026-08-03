@@ -10,7 +10,8 @@ Running log of published content. One row per piece.
      Keep the columns in this order. A reordered header silently mis-files every
      later entry, because the command writes positionally.
 
-     Type is free-form, but stay consistent so entries group when summarized:
+     Type is free-form, but reuse the same spellings — inconsistent values are
+     what make the column useless to grep or count later:
      blog-post, linkedin-post, social, newsletter, episode, clip, video, talk,
      open-source, other. Use TBD for a Link that isn't live yet. -->
 
