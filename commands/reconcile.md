@@ -1,38 +1,55 @@
 ---
 name: reconcile
-description: Tripwire check for multi-session drift. NOT read-only — step 1 runs `git pull --rebase` to sync the branch and surface collisions (a failed rebase is the signal), then scans state files, SSOT rules, and recent commits for parallel-session inconsistencies. Run after parallel work, or when something feels off.
+description: Tripwire check for multi-session drift. Read-only scan — reports sync status, uncommitted work, cross-branch collisions, and SSOT/state-file inconsistencies from parallel sessions; proposes fixes, applies nothing without approval. Run after parallel work, or when something feels off.
 allowed-tools: Read, Bash, Glob, Grep
 x-source: skills-sync/commands/reconcile.md
-x-source-version: c9b6c33
+x-source-version: 7ae9852
 ---
 
 # /reconcile — Multi-Session Drift Check
 
-Scan the repo for inconsistencies introduced by parallel Claude Code sessions (especially with worktrees). Read-only tripwire — it flags problems but doesn't fix them without approval.
+When multiple agent sessions run in parallel (especially with worktrees), files drift out of sync. This core scans for inconsistencies and proposes fixes — it flags problems but doesn't fix them without approval.
 
 > This is the generic core. A consuming repo with single-source-of-truth rules (e.g. a pipeline file that other files reference) adds those specific cross-checks as its own overlay — see step 4.
+
+**Invocation:** the scan is read-only, so this core is safely model-invocable. It never pulls, rebases, or moves the working tree — sync divergence is reported, not fixed. A home that wants a sync-first reconcile adds a pull step in its own overlay, and should weigh the cost first: an auto-rebase in a shared checkout can strand other sessions' worktree bases, which is the exact situation this core is run to diagnose. Everything that changes *files* is proposed, never applied.
+
+## Configuration
+
+If the project root carries a `workspace.yaml`, read it for where state lives. Below, `<state_dir>` and `<task_file>` are its resolved values; the defaults are `state/` and `TODO.md`.
+
+## When to Use
+
+- After merging worktree branches back to the default branch
+- When something "feels off" after parallel work
+- After a crash where multiple sessions were open
+- As a periodic sanity check during heavy parallel workflows
 
 ## Instructions
 
 ### 0. Orientation (run FIRST)
 
-Scope the check before reading any files:
+Scope the check and resolve the default branch before reading any files. Don't assume `main`:
 
 ```bash
+git rev-parse --git-dir >/dev/null 2>&1 || { echo "not a git repository — nothing to reconcile"; exit 0; }
 REPO_ROOT=$(git rev-parse --show-toplevel)
+DEFAULT=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
+DEFAULT=${DEFAULT:-$(git remote show origin 2>/dev/null | sed -n 's/.*HEAD branch: //p')}
+DEFAULT=${DEFAULT:-main}   # no remote configured — fall back and say so in the report
 find "$REPO_ROOT" -name "*.md" -mtime -1 -not -path "*/node_modules/*" | sort   # recently modified
 git -C "$REPO_ROOT" log --oneline -10
 ```
 
 Focus the reconcile on files that actually changed recently.
 
-### 1. Pull latest
+### 1. Sync status (read-only)
 
 ```bash
-cd "$REPO_ROOT" && git pull --rebase 2>&1 || echo "pull failed — check for conflicts"
+git rev-list --left-right --count "origin/$DEFAULT...HEAD" 2>/dev/null || echo "no remote-tracking ref — sync status unknown"
 ```
 
-If pull fails with conflicts, stop and report them — that's the #1 signal of a parallel-session collision.
+Report behind/ahead counts against the remote-tracking ref as it sits on disk. Do **not** pull or rebase here — a rebase in a shared checkout can strand other sessions' worktrees, and surfacing divergence is this core's job; resolving it is the user's. If the refs may be stale, say so and let the user decide whether to fetch first (`git fetch` updates remote-tracking refs and FETCH_HEAD; it never touches the working tree).
 
 ### 2. Uncommitted / cross-session changes
 
@@ -49,17 +66,17 @@ Flag unstaged changes you didn't make ("likely from another session — review b
 git log --all --oneline --since="24 hours ago" --graph
 ```
 
-Look for multiple branches touching the same files and unmerged branch commits. For each file modified on more than one branch, diff the versions:
+Look for multiple branches touching the same files, and commits on branches that haven't been merged. For each file modified on more than one branch, diff the versions:
 
 ```bash
-git diff <default-branch>..<branch> -- <file>
+git diff "$DEFAULT"..<branch> -- <file>
 ```
 
 Flag where both branches changed the same lines, one branch deleted what another modified, or `**Last Updated:**` fields diverged.
 
 ### 4. SSOT violations
 
-If the project has single-source-of-truth rules (a fact lives in one file; others reference it):
+If the project has single-source-of-truth rules (a fact lives in exactly one file; others reference it):
 
 - Scan for the same fact duplicated across files with **different values** (DUPLICATE)
 - Flag a cross-reference that hardcoded a value instead of pointing at the source (STALE COPY)
@@ -69,11 +86,11 @@ A consuming repo lists its canonical-fact table here in its own overlay; the gen
 
 ### 5. State-file consistency
 
-Read the state files (e.g. `state/current.md`, `state/weekly-priorities.md`, `state/blockers.md`) and check:
+Read the state files under `<state_dir>` (e.g. `current.md`, `weekly-priorities.md`, `blockers.md`, the decision log, session logs) and any task file (`<task_file>`), and check:
 
-- **Duplication** — an actionable task in `current.md` that should only live in `TODO.md`; the same item logged twice from different sessions
-- **Contradiction** — one file marks something done while another still has it open
-- **Timestamp drift** — `**Last Updated:**` older than the most recent commit touching that file
+- **Duplication** — an actionable task in `current.md` that should only live in `<task_file>`; the same item logged twice from different sessions
+- **Contradiction** — one session marked something complete while another still has it open
+- **Timestamp drift** — a `**Last Updated:**` line older than the most recent commit touching that file; a *stacked or spliced* `Last Updated` line is itself a drift signal
 - **Orphaned references** — sections pointing at files or items another session removed
 
 ### 6. Report
@@ -81,26 +98,29 @@ Read the state files (e.g. `state/current.md`, `state/weekly-priorities.md`, `st
 ```
 RECONCILE — [DATE]
 
-GIT: pull [clean/conflicts] · uncommitted [none/list] · branches [N, collisions?]
+GIT: sync [behind X / ahead Y / unknown] · uncommitted [none/list] · branches [N, collisions?]
 SSOT: [PASS / violations]
 STATE: [PASS / issues]
 OVERALL: [CLEAN / N issues found]
 ```
 
-List each issue with a proposed fix. Wait for approval before changing anything.
+List each issue with the file, the line, and a proposed fix. Wait for approval before changing anything.
 
 ### 7. Fix mode (with approval only)
 
-On explicit "fix all" / "clean it up", apply the proposed fixes and commit:
+Present each fix individually. On explicit "fix all" / "clean it up", apply the proposed fixes and commit:
 
 ```
 reconcile: fix [N] drift issues from parallel sessions
 ```
 
+Common fixes: merge the newer version of a conflicting file, remove duplicate entries (keep the more detailed one), correct timestamps to match actual last-edit dates, resolve SSOT violations by keeping the canonical source and updating the references.
+
 ## Design Principles
 
-- **Read-only by default.** Never edit without explicit approval.
-- **Trust recent over old.** When two versions conflict, the more recent edit is usually right.
+- **Read-only.** The scan changes nothing; fixes exist only in fix mode, with explicit approval.
+- **Prefer evidence of intent over recency.** When two versions conflict, look at which change the surrounding work depends on (commit messages, linked edits, whether other files reference the new value). A stale session can easily produce the *newer* timestamp. Use recency only as a tie-breaker when intent is unreadable.
+- **Preserve intent.** Don't auto-resolve — different sessions may have had different goals.
 - **Fast.** Targeted checks only — under 30 seconds. Don't deep-read every file.
 - **Specific.** Every flag names the file, the line, and the conflict. "Something seems off" is not a flag.
 - **No false alarms.** A cross-reference that correctly points at its source is fine — only flag real value mismatches or duplicated facts.
