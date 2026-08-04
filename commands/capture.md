@@ -3,7 +3,7 @@ name: capture
 description: Triage raw notes from inbox/ into the correct repo locations. Use when you drop unstructured content and need it routed.
 allowed-tools: Read, Write, Edit, Glob, Bash
 x-source: skills-sync/commands/capture.md
-x-source-version: 173c978
+x-source-version: 40f7149
 ---
 
 # /capture — Triage Inbox
@@ -26,6 +26,7 @@ For each item, determine its type and destination:
 | Priority change | `state/current.md` | Update priorities |
 | Writing idea or draft | project skill dir, or keep in `inbox/` | Move if ready, keep if raw |
 | Reference link or note | relevant context file | Append to the appropriate section |
+| ⚠️ Secret (password, PIN, seed phrase, recovery code, API key) | **NEVER commit to the repo** | Flag it for the user's password manager; quarantine outside git |
 | Unknown / multi-category | ask the user | Don't guess — present 1–2 options |
 
 ### 3. Present the triage plan (don't act yet)
@@ -64,3 +65,5 @@ inbox/ is clean.
 - **Bias toward existing files.** Append to `TODO.md`, `state/decisions.md`, etc. rather than creating new files when the content fits.
 - **Ask when unsure.** If an item could go several places, ask. One wrong routing is worse than a five-second question.
 - **No orphans.** Everything gets routed or explicitly deferred — nothing stays in `inbox/` after a run.
+- **Never commit secrets.** Passwords, PINs, seed phrases, recovery codes, and API keys never go into the repo. Flag them for the password manager and quarantine outside git.
+- **Delete-bias for one-off notes.** Many captured notes (bookmarks, dead ideas, one-off to-dos) are better deleted than filed. Ask "what happens if this is lost?" before creating a home for it.
