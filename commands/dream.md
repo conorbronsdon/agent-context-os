@@ -3,7 +3,7 @@ name: dream
 description: Run a curator pass against the memory dir. Produces a proposal artifact for /dream-apply. Default curator: rot.
 allowed-tools: Read, Bash, Write, Glob, Grep
 x-source: skills-sync/commands/dream.md
-x-source-version: 40f7149
+x-source-version: 8ede26c
 ---
 
 # /dream — autonomous memory curator pass
@@ -17,10 +17,11 @@ Substrate background: `docs/dream-architecture.md`. Curator prompts: `scripts/dr
 /dream rot         # content class: memory vs. world — "is it still true?"
 /dream merge       # structural class: consolidate overlapping memories + collapse index lines
 /dream split       # structural class: divide multi-concern files into focused ones
-/dream pattern     # NOT YET BUILT (v0.3)
-/dream contradiction  # NOT YET BUILT (v0.4)
-/dream untapped    # NOT YET BUILT (v0.5)
-/dream audit       # NOT YET BUILT (v0.6)
+/dream lint        # structural class: index/file agreement, duplicates, misfiles, half-finished archives
+/dream pattern     # NOT YET BUILT (v0.4)
+/dream contradiction  # NOT YET BUILT (v0.5)
+/dream untapped    # NOT YET BUILT (v0.6)
+/dream audit       # NOT YET BUILT (v0.7)
 ```
 
 ## Steps
@@ -61,11 +62,12 @@ Read the **"Inputs you'll be given"** section of the loaded curator prompt and g
   **Why not `find -mtime -14`:** any git history rewrite resets mtime on every tracked file, after which `-mtime -14` matches the whole directory and silently blows up the input set. Session filenames are `YYYY-MM-DD.md` and sort lexically, so the date compare above stays exact through any rewrite.
 - `git log --since="14 days ago" --oneline` for the current repo
 
-**Structural curators** (`merge`, `split`) — examine the *shape of the memory set itself*; NO state/session inputs:
+**Structural curators** (`merge`, `split`, `lint`) — examine the *shape of the memory set itself*; no state/session file inputs (lint's extras below are existence probes and commit titles, not state):
 
 - Read every `$MEMORY_DIR/*.md` detail file
 - Read `$MEMORY_DIR/MEMORY.md` (the index) and `$MEMORY_DIR/ARCHIVE.md`
 - Optionally `git -C "$MEMORY_DIR" log --since="30 days ago" --oneline` (accretion signal)
+- `lint` additionally: cheap read-only existence checks for local paths memories name (`ls`, `test -e`, `git ls-files`), and optionally `git log --oneline -30` of the current work repo for its shipped-work heuristic — never URL fetches
 
 ### 5. Write `inputs.json` to the dream dir
 
@@ -94,6 +96,7 @@ Schema is defined in the curator prompt and varies by curator class. Every propo
 - **Content curators** (`rot`): `target`, `current_excerpt`, `proposed_excerpt`.
 - **`merge`**: `targets` (array), `survivor`, `merged_body`, `index_changes` ({remove[], add}), `archive_tombstones`, `net_index_lines`.
 - **`split`**: `target`, `result_files` (array of {name, purpose, index_line, body}), `original_index_line`.
+- **`lint`**: content-curator shape (`target`, `current_excerpt`, `proposed_excerpt`) plus a `check` field naming which of its ten checks fired.
 
 `/dream-apply` branches on `action` to apply each shape.
 

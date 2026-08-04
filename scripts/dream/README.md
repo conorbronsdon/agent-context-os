@@ -17,10 +17,11 @@ Curator catalog (build order):
 - `rot` (content, v0.1, ships with starter) — flag project memories that no longer match state files / recent commits
 - `merge` (structural, v0.2) — consolidate overlapping memories into one entry; collapse redundant index lines (main relief for the MEMORY.md 100-line budget)
 - `split` (structural, v0.2) — divide multi-concern files into focused, single-responsibility ones
-- `pattern` (content, v0.3, planned) — propose new memories from recurring session-log frictions
-- `contradiction` (content, v0.4, planned) — flag memory rules giving conflicting guidance
-- `untapped` (content, v0.5, planned) — surface session-log themes never raised to memory
-- `audit` (content, v0.6, maybe) — flag sessions that ignored MEMORY.md rules
+- `lint` (structural, v0.3) — structural-integrity audit: index/file agreement, duplicates, contradictions, type misfiles, half-finished archives, index-only content (ported from agent-memory-kit, skills-sync#9)
+- `pattern` (content, v0.4, planned) — propose new memories from recurring session-log frictions
+- `contradiction` (content, v0.5, planned) — flag memory rules giving conflicting guidance
+- `untapped` (content, v0.6, planned) — surface session-log themes never raised to memory
+- `audit` (content, v0.7, maybe) — flag sessions that ignored MEMORY.md rules
 
 ## First-time setup
 

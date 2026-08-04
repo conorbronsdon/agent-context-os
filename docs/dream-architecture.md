@@ -1,6 +1,6 @@
 # Dream — autonomous memory curator
 
-**Status:** v0.2. Curators: rot (content), merge + split (structural).
+**Status:** v0.3. Curators: rot (content), merge + split + lint (structural).
 
 ## Why this exists
 
@@ -104,7 +104,7 @@ Apply step honors `confidence`: `high` defaults to accept, `medium` shows full d
 Curators fall into two **classes**:
 
 - **Content curators** ask *"is this memory still true?"* — they compare memory against the world (state files, sessions, commits). `rot`, `pattern`, `contradiction`, `audit`.
-- **Structural curators** ask *"is this memory well-shaped?"* — they examine the shape of the memory set itself (detail files + the `MEMORY.md` index) and read no state/session inputs. `merge`, `split`.
+- **Structural curators** ask *"is this memory well-shaped?"* — they examine the shape of the memory set itself (detail files + the `MEMORY.md` index) and read no state or session files (lint adds only read-only existence probes and an optional work-repo `git log`). `merge`, `split`, `lint`.
 
 ### v0.1: rot (content) — shipped
 
@@ -126,29 +126,39 @@ Curators fall into two **classes**:
 
 **Why second:** `MEMORY.md` drifts over its 100-line / loaded-budget cap; merge is the direct pressure-relief, and split enforces one-fact-per-file. Structural ops touch many files at once, so they lean hard on the git-revert safety net and human review. Guiding principle: **Focus Over Coverage** — never produce vaguer files just to hit a number; merge and split are opposing forces and a good pass leaves the other nothing to undo.
 
-### v0.3: pattern (content, later)
+### v0.3: lint (structural) — shipped
+
+**Question:** "Is the store well-formed and internally consistent — index and files in agreement, no duplicates, no contradictions, no half-finished archives?"
+
+**Inputs:** `memory/*.md` + `memory/MEMORY.md` + `memory/ARCHIVE.md` (live root only — `memory/archive/**` excluded), plus cheap read-only existence checks (`ls`, `test -e`, `git ls-files`) for local paths memories name, and optionally `git log --oneline -30` when run inside a work repo. No state/session inputs, no URL fetches — it runs standalone against any memory directory, which makes it the right first pass on an inherited or long-uncurated store.
+
+**Output actions:** `modify`, `archive`, `flag` (content-curator proposal shape plus a `check` field naming which of its ten checks fired: index drift, unresolved links, pattern-level staleness, duplicates, contradictions, unverifiable references, type misfiles, index-only content, duplicate archive rows, build-log bloat).
+
+**Why third:** rot compares memory against the world; lint catches the store drifting against *itself* — the class rot structurally cannot see. Sharpest case: a type misfile, where a project status filed as `feedback` escapes every rot pass because rot audits `project`/`reference` hardest. Ported from agent-memory-kit (`prompts/lint.md` @ `1bd9a14`, skills-sync#9), where it was capability the publication node had and the core lacked.
+
+### v0.4: pattern (content, later)
 
 **Question:** "What recurring frictions in the last 14 days of sessions don't have a memory entry yet?"
 
 **Output actions:** `add` (new memory candidate). Required-evidence floor: must appear in 3+ sessions to propose.
 
-### v0.4: contradiction (content, later)
+### v0.5: contradiction (content, later)
 
 **Question:** "Does memory contain rules that give conflicting guidance for the same situation?"
 
 **Output actions:** `flag` (always — never auto-resolve a contradiction; surface to the user).
 
-### v0.5: untapped (content, later)
+### v0.6: untapped (content, later)
 
 **Question:** "What recurring themes in session logs have never been raised into memory or a skill?"
 
 **Output actions:** `flag`.
 
-### v0.6: audit (content, later, possibly never)
+### v0.7: audit (content, later, possibly never)
 
 **Question:** "Did sessions in the last 7 days follow the rules in MEMORY.md?"
 
-**Risk:** Memory rules aren't structured enough to mechanically check adherence. May produce noise. Hold until v0.5 ships.
+**Risk:** Memory rules aren't structured enough to mechanically check adherence. May produce noise. Hold until `untapped` ships.
 
 ## What this deliberately doesn't do
 
