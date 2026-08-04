@@ -2,7 +2,7 @@
 name: skill-creator
 description: Generate a new skill from a plain-language description — decides invocation control, arguments, and context cost, then scaffolds, validates, and tests it
 x-source: skills-sync/skills/skill-creator/SKILL.md
-x-source-version: 7ae9852
+x-source-version: d66f695
 ---
 <!-- x-source: agent-skill-builder/SKILL.md @ dfe7aa2 -->
 
