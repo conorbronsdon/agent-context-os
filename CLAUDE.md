@@ -10,7 +10,7 @@
 |---------|------|
 | `/setup` | Interactive onboarding — builds identity, project, and state files conversationally |
 | `/start` | Load state, pull live data, get a session briefing |
-| `/end` | Log session, update state files for next time |
+| `/end` | Log session, update state and the decision log, propose memory updates, check git |
 | `/update` | Mid-session checkpoint — quick state save |
 | `/today` | Morning heartbeat — briefing, staleness check, deadlines |
 | `/clean-ai-writing` | Load `writing/skills/avoid-ai-writing/SKILL.md` and apply it |
