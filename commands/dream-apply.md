@@ -3,7 +3,7 @@ name: dream-apply
 description: Walk a dream proposal artifact, review each item, apply accepted ones to memory and commit.
 allowed-tools: Read, Write, Edit, Bash, AskUserQuestion
 x-source: skills-sync/commands/dream-apply.md
-x-source-version: 60ba3e0
+x-source-version: 40f7149
 ---
 
 # /dream-apply — review + apply a curator pass

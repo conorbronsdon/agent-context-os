@@ -3,7 +3,7 @@ name: dream
 description: Run a curator pass against the memory dir. Produces a proposal artifact for /dream-apply. Default curator: rot.
 allowed-tools: Read, Bash, Write, Glob, Grep
 x-source: skills-sync/commands/dream.md
-x-source-version: 60ba3e0
+x-source-version: 40f7149
 ---
 
 # /dream — autonomous memory curator pass
@@ -53,7 +53,12 @@ Read the **"Inputs you'll be given"** section of the loaded curator prompt and g
 
 - `ls $MEMORY_DIR/*.md` and read each `project_*.md` / `reference_*.md` (skip `env_`, `feedback_`, `user_` unless the curator asks)
 - Read `state/decisions.md`, `state/blockers.md`, `state/current.md`
-- `find sessions/ -name "*.md" -mtime -14` and read each
+- Select session logs **by filename date, never by mtime**, and read each:
+  ```
+  CUT=$(date -u -d '14 days ago' +%F 2>/dev/null || date -u -v-14d +%F)
+  ls sessions/*.md | sed 's|.*/||' | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}\.md$' | sort | awk -v c="$CUT.md" '$0 >= c'
+  ```
+  **Why not `find -mtime -14`:** any git history rewrite resets mtime on every tracked file, after which `-mtime -14` matches the whole directory and silently blows up the input set. Session filenames are `YYYY-MM-DD.md` and sort lexically, so the date compare above stays exact through any rewrite.
 - `git log --since="14 days ago" --oneline` for the current repo
 
 **Structural curators** (`merge`, `split`) — examine the *shape of the memory set itself*; NO state/session inputs:
@@ -121,4 +126,5 @@ Review and apply: /dream-apply {ISO}
 
 - Curator MUST NOT modify any input file. Read-only on `memory/`, `state/`, `sessions/`.
 - Curator MUST NOT push the memory git repo to any remote. Local-only by design.
+- Curator outputs MUST NOT carry content the consuming repo's scope rules exclude (work-domain identifiers, internal project names, other repos' state). Session logs may contain residue that upstream filters missed — exclude it from proposals rather than propagating it into memory.
 - If `$ARGUMENTS` names a curator that hasn't been built yet, refuse politely and list what is available.
