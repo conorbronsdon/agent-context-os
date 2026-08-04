@@ -1,35 +1,42 @@
 ---
 name: today
-description: Morning heartbeat — briefing, deadline check, and staleness scan
+description: Morning heartbeat — briefing, deadline check, and staleness scan. Run at the start of each day or after a 12+ hour gap
 allowed-tools: Read, Write, Bash, Glob, mcp__google-workspace
 x-source: skills-sync/commands/today.md
-x-source-version: 173c978
+x-source-version: 7ae9852
 ---
 
 # /today — Morning Heartbeat
 
-Lightweight daily check-in. Run at the start of each day or after any long gap between sessions. Designed to finish in under 60 seconds — if it's slow, it won't get used.
+Lightweight daily check-in that catches staleness, surfaces deadlines, and proposes state updates — including gaps left by sessions that closed without `/end`. Run at the start of each day or after any long gap between sessions. Designed to finish in under 60 seconds — if it's slow, it won't get used.
+
+**Invocation:** user-timed. A home that packages this core as a skill should set `disable-model-invocation: true` — the heartbeat is timed by the user (mornings, or after a gap), and the flag keeps the description out of ambient context.
+
+## Configuration
+
+If the project root carries a `workspace.yaml`, read it. Below, `<state_dir>`, `<sessions_dir>`, and `<task_file>` are its resolved values; the defaults are `state/`, `sessions/`, and `TODO.md`. Staleness thresholds come from `staleness.current_days` (3), `weekly_days` (5), and `blockers_days` (7).
 
 ## Instructions
 
 ### 1. Establish context
-Run `date +%Y-%m-%d` and `date +%A`. Read `state/heartbeat-log.md` (if present) to find the last check-in date.
+Run `date +%Y-%m-%d` and `date +%A`. Read `<state_dir>/heartbeat-log.md` (if present) to find the last check-in date.
 
 ### 2. Scan recent activity
-Catch work even from sessions that closed without `/end`:
+Catch work even from sessions that closed without `/end`. In a git repository:
 
 ```bash
 git log --oneline --since="3 days ago"
 ```
 
-Also check `sessions/` for logs newer than the last heartbeat. Note what was last worked on for continuity.
+Also check `<sessions_dir>` for logs newer than the last heartbeat. Note what was last worked on for continuity. Outside a git repository, rely on the session logs alone.
 
 ### 3. Load state
-Read `state/current.md` and `state/weekly-priorities.md`.
+Read `<state_dir>/current.md`, `<state_dir>/weekly-priorities.md`, and `<state_dir>/blockers.md`.
 
 ### 4. Check staleness (escalating)
-- `state/current.md` `**Last Updated:**` older than 3 days → flag
-- `state/weekly-priorities.md` `**Week of:**` from a previous week → flag
+- `current.md` `**Last Updated:**` older than `staleness.current_days` → flag
+- `weekly-priorities.md` `**Week of:**` from a previous week (or older than `staleness.weekly_days`) → flag
+- `blockers.md` older than `staleness.blockers_days` → flag
 - Open threads in `current.md` carrying a date annotation:
   - older than 7 days → "stale — still relevant?"
   - older than 14 days → "likely stale — remove or convert to a task?"
@@ -37,12 +44,21 @@ Read `state/current.md` and `state/weekly-priorities.md`.
 Present these as proposals. **Do not auto-update.**
 
 ### 5. Surface deadlines
-Scan `TODO.md` for unchecked items (`[ ]`) with a date in the next 7 days, or marked urgent / time-sensitive. List them, most urgent first.
+Scan `<task_file>` for unchecked items (`[ ]`) with a date in the next 7 days, or marked urgent / time-sensitive. List them, most urgent first.
 
-### 6. Pull live data (if MCP available)
+### 6. Identify state gaps
+Compare the git-log activity from step 2 against the state files:
+- Decisions committed but not recorded in `<state_dir>/decisions.md`?
+- Completed work not reflected in `<state_dir>/current.md`?
+
+List proposed updates. **Do not auto-update. Wait for approval.**
+
+This step reconciles *state files* against what actually shipped. It is not memory curation — see the boundary note at the bottom.
+
+### 7. Pull live data (if MCP available)
 Same as `/start` — calendar for the next 7 days, unread email count. Skip if MCP isn't connected.
 
-### 7. Deliver the heartbeat
+### 8. Deliver the heartbeat
 
 ```
 MORNING CHECK-IN — [DATE] ([day of week])
@@ -55,6 +71,7 @@ SINCE LAST CHECK-IN:
 STATE:
 - current.md — [fresh / N days stale]
 - weekly-priorities.md — [fresh / N days stale]
+- blockers.md — [fresh / N days stale]
 
 DEADLINES (next 7 days):
 - [items, most urgent first]
@@ -63,13 +80,17 @@ DEADLINES (next 7 days):
 STALE ITEMS:
 - [item] — [N] days old [propose: remove / convert to task]
 
+[If state gaps found:]
+STATE GAPS:
+- [proposed update]
+
 [Calendar highlights, if MCP available]
 ```
 
 Skip any section that's clean — if everything's fresh and nothing's due, say so in one line.
 
-### 8. Log the heartbeat
-Append to `state/heartbeat-log.md`:
+### 9. Log the heartbeat
+Append to `<state_dir>/heartbeat-log.md`:
 
 ```markdown
 ## [DATE]
@@ -77,9 +98,18 @@ Append to `state/heartbeat-log.md`:
 - State staleness: [summary]
 - Deadlines flagged: [count]
 - Stale items flagged: [count]
+- State gaps found: [count]
+- Updates applied: [list or "none — awaiting response"]
 ```
 
-### 9. Transition
+### 10. Transition
 Ask: "What's the focus today?" Do NOT re-run the full `/start` flow — this is the lighter, faster check-in.
 
-> Memory curation lives in `/dream`, not here. `/today` surfaces staleness and deadlines; `/dream` proposes memory changes. Keeping them separate avoids two commands editing memory.
+## Design principles
+
+- **Fast.** Under 60 seconds. If it's slow, it won't get used.
+- **Propose, don't act.** Never silently edit state during the heartbeat.
+- **Skip what's clean.** All fresh and no near deadlines → say so in one line.
+- **Graceful degradation.** A session that closed without `/end` is caught here; missing files are noted, not fatal.
+
+> Memory curation lives in `/dream`, not here. `/today` surfaces staleness, deadlines, and state-file gaps; `/dream` proposes changes to `MEMORY.md`. Keeping them separate avoids two commands editing memory.
