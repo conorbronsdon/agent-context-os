@@ -5,14 +5,22 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
 SSOT_OUTPUT=$(printf '%s' '{"tool_input":{"file_path":"/tmp/context/state/current.md"}}' | \
   bash "$ROOT/.claude/hooks/ssot-guard.sh")
-if ! printf '%s' "$SSOT_OUTPUT" | grep -q "current.md is updated"; then
-  echo "ssot-guard did not parse Claude hook JSON" >&2
+if ! printf '%s' "$SSOT_OUTPUT" | python3 -c '
+import json, sys
+payload = json.load(sys.stdin)
+assert "current.md is updated" in payload["systemMessage"]
+'; then
+  echo "ssot-guard did not emit visible Claude hook JSON" >&2
   exit 1
 fi
 
 MALFORMED_OUTPUT=$(printf '%s' 'not-json' | bash "$ROOT/.claude/hooks/ssot-guard.sh")
-if [ -n "$MALFORMED_OUTPUT" ]; then
-  echo "ssot-guard should no-op for malformed input" >&2
+if ! printf '%s' "$MALFORMED_OUTPUT" | python3 -c '
+import json, sys
+payload = json.load(sys.stdin)
+assert "malformed input" in payload["systemMessage"]
+'; then
+  echo "ssot-guard should surface malformed input" >&2
   exit 1
 fi
 
@@ -25,6 +33,18 @@ cp "$ROOT/.claude/hooks/worktree-guard.sh" "$TEST_REPO/.claude/hooks/worktree-gu
 printf '%s\n' 'guarded-repo' > "$TEST_REPO/.claude/hooks/guarded-repos.txt"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "claude.exe one\\nclaude.exe two\\n"' > "$TEMP_ROOT/bin/tasklist"
 chmod +x "$TEMP_ROOT/bin/tasklist"
+
+for payload in 'not-json' '{}'; do
+  set +e
+  INPUT_STDERR=$(printf '%s' "$payload" | \
+    PATH="$TEMP_ROOT/bin:$PATH" bash "$TEST_REPO/.claude/hooks/worktree-guard.sh" 2>&1 >/dev/null)
+  INPUT_STATUS=$?
+  set -e
+  if [ "$INPUT_STATUS" -ne 2 ] || ! printf '%s' "$INPUT_STDERR" | grep -q "malformed or had no file path"; then
+    echo "worktree-guard should fail closed for malformed or incomplete input" >&2
+    exit 1
+  fi
+done
 
 set +e
 GUARD_STDERR=$(printf '%s' "{\"tool_input\":{\"file_path\":\"$TEST_REPO/note.md\"}}" | \

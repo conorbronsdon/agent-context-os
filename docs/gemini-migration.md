@@ -31,6 +31,6 @@ Exact wording is not a useful parity target. Use `docs/templates/workflow-parity
 
 ## Privacy posture
 
-Gemini session recordings can contain source code, local paths, prompts, tool arguments, and credentials. The included miner defaults to metadata-only output, requires an explicitly chosen session directory, strips full paths, and never emits thought/reasoning fields. Content inspection is opt-in and still needs review before sharing or committing.
+Gemini session recordings can contain source code, local paths, prompts, tool arguments, and credentials. The included miner defaults to metadata-only output, requires an explicitly chosen session directory, folds append-log rewinds and metadata updates, and never emits thought/reasoning fields. Free-form summaries, sanitized paths, and observable content each require explicit session IDs and opt-in flags. Redaction is best-effort, so every opt-in report remains sensitive and needs review before sharing or committing.
 
 Generated inventories belong under `.context-os/migrations/`, which is ignored by git.

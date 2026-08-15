@@ -113,6 +113,12 @@ else
   echo "    Missing: git"
 fi
 
+if command -v python3 &>/dev/null; then
+  echo "    Found: python3"
+else
+  echo "    Missing: python3 — required by safety hooks and Gemini workflow migration"
+fi
+
 if command -v gws &>/dev/null; then
   echo "    Found: gws (Google Workspace CLI)"
 else

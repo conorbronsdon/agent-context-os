@@ -11,4 +11,4 @@ This project references it for workflow archaeology ideas; it is not vendored or
 - exclude private thoughts/reasoning,
 - review output before sharing, training on it, or committing it.
 
-The local `scripts/mine-gemini-workflows.py` applies those boundaries to a narrow use case: finding repeated, validated workflows that may deserve a portable skill. It deliberately does not attempt a universal chat export.
+The local `scripts/mine-gemini-workflows.py` applies those boundaries to a narrow use case: it folds Gemini's append log into final state, then finds repeated workflows with positive validation evidence. It deliberately does not attempt a universal chat export; free-form content requires explicit session allowlisting and remains sensitive even after best-effort redaction.

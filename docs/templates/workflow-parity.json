@@ -3,7 +3,7 @@
   "workflow": "replace-with-workflow-name",
   "source": {
     "provider": "gemini",
-    "evidence_session_fingerprints": [],
+    "evidence_recording_digests": [],
     "historical_outcome_summary": "Describe a known-good outcome without copying private transcript content."
   },
   "representative_input": "A realistic, non-sensitive input for this workflow.",

@@ -28,10 +28,18 @@ import sys
 
 try:
     payload = json.load(sys.stdin)
-    print(payload.get("tool_input", {}).get("file_path", ""))
+    path = payload.get("tool_input", {}).get("file_path", "")
+    print(path if isinstance(path, str) and path else "__HOOK_INPUT_ERROR__")
 except (json.JSONDecodeError, AttributeError, TypeError):
-    pass
+    print("__HOOK_INPUT_ERROR__")
 ' 2>/dev/null)
+    if [ "$FILE_PATH" = "__HOOK_INPUT_ERROR__" ]; then
+      printf '%s\n' '{"systemMessage":"SSOT advisory hook received malformed input or no file path; no SSOT check was performed."}'
+      exit 0
+    fi
+  else
+    printf '%s\n' '{"systemMessage":"SSOT advisory hook could not parse input because Python 3 is unavailable."}'
+    exit 0
   fi
 fi
 
@@ -42,17 +50,22 @@ fi
 # ── Define SSOT patterns ──────────────────────────────────────────────────────
 # Add your own patterns here. Format: file glob → reminder message.
 
+MESSAGE=""
 case "$FILE_PATH" in
   */state/current.md)
-    echo "Reminder: current.md is updated by /end and /update commands. Manual edits are fine but will be overwritten next session close."
+    MESSAGE="Reminder: current.md is updated by /end and /update commands. Manual edits are fine but will be overwritten next session close."
     ;;
   */state/decisions.md)
-    echo "Reminder: decisions.md is append-only. Don't edit past entries — add new ones at the top."
+    MESSAGE="Reminder: decisions.md is append-only. Don't edit past entries — add new ones at the top."
     ;;
   # Example: protect a metrics file
   # */analytics/metrics.md)
   #   echo "Reminder: metrics.md is the SSOT for numbers. Update here, not in other docs."
   #   ;;
 esac
+
+if [ -n "$MESSAGE" ]; then
+  printf '{"systemMessage":"%s"}\n' "$MESSAGE"
+fi
 
 exit 0

@@ -219,7 +219,7 @@ See [`docs/gemini-migration.md`](docs/gemini-migration.md). [`0xSero/ai-data-ext
 bash scripts/validate-all.sh
 ```
 
-The aggregate validator checks skill/command frontmatter, CLAUDE.md size, committed secrets, stale files, local links, shell syntax, hook behavior, JSON, and the workflow-miner unit tests. The core harness needs Bash; the Gemini migration miner and its tests use Python 3. CI runs the same command on every push and PR.
+The aggregate validator checks skill/command frontmatter, CLAUDE.md size, committed secrets, stale files, local links, shell syntax, hook behavior, JSON, and the workflow-miner unit tests. The harness needs Bash and Python 3 (for safe hook-input parsing and Gemini migration). CI runs the same command on every push and PR.
 
 ---
 

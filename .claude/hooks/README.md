@@ -2,6 +2,8 @@
 
 These scripts run automatically during Claude Code sessions. Most are **advisory** — they print warnings but never block. `worktree-guard.sh` is the exception: it blocks edits to a guarded repo's primary checkout when more than one Claude session is running.
 
+The PreToolUse hooks require Python 3 to parse Claude's JSON input. Setup checks for it. The advisory hook emits a visible dependency warning if it is missing; a configured blocking guard fails closed rather than silently allowing an unsafe edit.
+
 ## Files
 
 | Hook | Event | Purpose | Blocks? |
