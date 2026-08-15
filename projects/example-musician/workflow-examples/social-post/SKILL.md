@@ -1,12 +1,6 @@
 ---
 name: social-post
 description: Write a platform-native social media post for a music release, show announcement, or general artist content. Load artist-context.md and promotion-strategy.md before running. Use when asked to "write a caption," "write a post for [platform]," or "help me announce [thing]."
-requires:
-  context:
-    - projects/example-musician/artist-context.md
-    - projects/example-musician/promotion-strategy.md
-  skills:
-    - writing/skills/avoid-ai-writing/SKILL.md
 ---
 
 # Social Post — Musician
@@ -15,9 +9,10 @@ Write a social media post for the artist. Load their artist context and promotio
 
 ## Before writing
 
-1. Read `artist-context.md` — understand the sound, audience, and voice
-2. Read `promotion-strategy.md` — understand what's being promoted and what's worked before
-3. Note the platform — Instagram, TikTok, Twitter/X, and LinkedIn all require different approaches
+1. Read `projects/example-musician/artist-context.md` — understand the sound, audience, and voice
+2. Read `projects/example-musician/promotion-strategy.md` — understand what's being promoted and what's worked before
+3. Read `writing/skills/avoid-ai-writing/SKILL.md` — apply its writing audit
+4. Note the platform — Instagram, TikTok, Twitter/X, and LinkedIn all require different approaches
 
 ## Platform guidelines
 

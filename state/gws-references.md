@@ -1,18 +1,27 @@
 # Google Workspace References
 
-Legacy placeholder retained so existing users do not lose locally recorded IDs. The current template does not read this file or ship a Google Workspace adapter. See `references/gws-mcp-setup.md` before connecting a replacement.
+Optional placeholder for people who deliberately connect the current Google
+Workspace CLI or another reviewed integration. The template does not read this
+file, install an integration, or ship a live Google Workspace adapter. Review
+[`references/google-workspace-cli-setup.md`](../references/google-workspace-cli-setup.md)
+before enabling access.
 
-Treat every identifier below as sensitive metadata. Do not populate or commit it in a repository whose readers should not know the referenced accounts or resources.
+Treat every identifier below as sensitive metadata. Do not populate or commit
+it in a repository whose readers should not know the referenced accounts or
+resources.
 
 ## How to use
 
-If you adopt a separately reviewed integration, add only the identifiers it needs and keep the integration's permissions narrower than the account as a whole.
+If you adopt a separately reviewed integration, add only the identifiers it
+needs and keep its services and permissions narrower than the account as a
+whole. Review the exact command and target before every write; do not treat the
+presence of an ID here as authorization to read or modify that resource.
 
 ## Sheets
 
 ```
 # Format: Label: SPREADSHEET_ID (tab name if relevant)
-# Example: Content log: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms (Sheet1)
+# Example: Content log: [SPREADSHEET_ID] (Sheet1)
 ```
 
 | Label | Sheet ID | Tab |
@@ -21,9 +30,9 @@ If you adopt a separately reviewed integration, add only the identifiers it need
 
 **How to find a Sheet ID:** Open the sheet in your browser. The ID is the long string in the URL between `/d/` and `/edit`:
 ```
-https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms/edit
-                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-                                        this is the Sheet ID
+https://docs.google.com/spreadsheets/d/[SPREADSHEET_ID]/edit
+                                   ^^^^^^^^^^^^^^^^
+                                   this is the Sheet ID placeholder
 ```
 
 ## Other resources

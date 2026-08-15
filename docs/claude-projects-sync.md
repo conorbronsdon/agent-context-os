@@ -6,7 +6,7 @@ Treat the repository as the maintained source. Record which file version was upl
 
 ## Choose a minimal knowledge set
 
-Upload only the files needed for the Project's purpose. Every upload exposes that content to the selected Claude.ai Project and its configured collaborators.
+Think of this repo as the source. claude.ai projects are manual consumers. You upload selected files into project knowledge, but browser projects do not provide repository writes, checked-in hooks, or slash-command behavior.
 
 | Project purpose | Possible files |
 |---|---|
@@ -46,13 +46,17 @@ There is no automatic propagation. If you cannot confirm a Project's uploaded ve
 
 Claude.ai cannot write this repository. If it drafts an improvement:
 
-1. copy the proposed text into an ignored local staging file;
-2. compare it with the current canonical repository file;
-3. resolve conflicts and remove sensitive residue;
-4. apply only the reviewed parts; and
-5. run `bash scripts/validate-all.sh` before commit.
+1. Copy the draft into a temporary file outside the repository.
+2. Compare it with the maintained source and remove Project-only or sensitive
+   context.
+3. Propose the exact destination and diff before changing repository files.
+4. Apply only the reviewed change, then run `bash scripts/validate-all.sh`.
+5. Review the git diff and approve any commit or push separately.
 
-Do not ask a browser Project to output every private conversation or knowledge file merely to create a backup. Use the metadata-first [migration guide](migration-guide.md) when bringing existing Project context into the repository.
+Claude can follow provider-neutral instructions in an uploaded skill file, but
+host-specific tool grants, hooks, paths, and frontmatter do not carry over
+automatically. Use this only when the browser Project has the required context
+and tools; upload the `SKILL.md`, then reference it by name in the conversation.
 
 ## When not to use a Project copy
 

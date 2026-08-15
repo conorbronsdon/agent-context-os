@@ -1,4 +1,4 @@
-# claude-context-os
+# Context OS
 
 This repository is the durable source of truth for personal, project, and session context. Keep provider-neutral state in the repository and keep host-specific behavior in its adapter directory.
 

@@ -14,12 +14,10 @@ class DocumentationPositioningTests(unittest.TestCase):
 
     def test_readme_routes_the_four_core_jobs(self) -> None:
         readme = self.text("README.md")
-        self.assertIn("workspace harness", readme)
-        self.assertIn("does not provide a model or agent loop", readme)
-        self.assertIn("Claude-first, Codex-compatible", readme)
-        self.assertIn("Keep it local-only or use a private remote by default", readme)
-        self.assertIn("does not erase", readme)
-        for host in ("Claude Code", "Codex", "Claude.ai Projects", "Gemini CLI"):
+        self.assertIn("Git-backed context and workflow layer", readme)
+        self.assertIn("does not scrape every account", readme)
+        self.assertIn("private repository", readme)
+        for host in ("Claude Code", "Codex", "claude.ai", "Gemini CLI"):
             self.assertIn(host, readme)
         for target in (
             "docs/migration-guide.md",
@@ -31,25 +29,26 @@ class DocumentationPositioningTests(unittest.TestCase):
 
     def test_repository_name_is_preserved_without_neutral_parity_overclaim(self) -> None:
         readme = self.text("README.md")
-        self.assertIn("# claude-context-os", readme)
-        self.assertIn("established repository name stays", readme)
-        self.assertNotIn("# agent-context-os", readme)
+        self.assertIn("# Context OS", readme)
+        self.assertIn("conorbronsdon/claude-context-os.git", readme)
+        self.assertNotIn("agent-context-os", readme)
 
     def test_getting_started_keeps_mutations_opt_in(self) -> None:
         guide = self.text("docs/getting-started.md")
         for phrase in (
-            "does not import conversations",
-            "does not install integrations",
-            "No migration path should copy credentials",
-            "at most one new trust boundary at a time",
+            "do not store credentials, raw account exports",
+            "Each optional change is prompted",
+            "Avoid bulk ingestion",
+            "Core setup requires no external integration",
             "$context-setup",
             "/setup",
-            "local-only or use a private remote by default",
-            "No lifecycle adapter",
+            "private remote",
+            "Antigravity",
         ):
             self.assertIn(phrase, guide)
-        self.assertIn("does not run an installed-host end-to-end session", guide)
-        self.assertIn("up to 50 recent chats from the last 30 days", guide)
+        codex = self.text("docs/codex-onboarding.md")
+        self.assertIn("up to 50 recent chats from the last 30 days", codex)
+        self.assertIn("cannot prove the behavior of every installed Codex version", codex)
 
     def test_integration_chooser_covers_the_catalog(self) -> None:
         guide = self.text("docs/integrations-guide.md")
@@ -80,7 +79,8 @@ class DocumentationPositioningTests(unittest.TestCase):
             self.assertNotIn("mcp__google-workspace", host_config, relative_path)
             self.assertNotIn("gws mcp", host_config, relative_path)
         notion = self.text("references/notion-mcp-setup.md")
-        self.assertIn("does not currently ship", notion)
+        self.assertIn("hosted, actively maintained MCP server", notion)
+        self.assertIn("Context OS does not add the server", notion)
         self.assertNotIn("npm install -g @notionhq/notion-mcp-server", notion)
         self.assertNotIn("ntn_YOUR_KEY_HERE", notion)
 
@@ -91,32 +91,36 @@ class DocumentationPositioningTests(unittest.TestCase):
         self.assertIn(".agents/skills/", prompts)
         self.assertNotIn("projects/[project-name]/skills/", prompts)
         for section in prompts.split("## Prompt ")[1:]:
-            self.assertRegex(section, r"(?i)do not (?:write|create|edit)")
-            self.assertRegex(section, r"(?i)(?:explicitly approve|ask me to approve)")
+            self.assertRegex(
+                section,
+                r"(?i)(?:do not|without claiming to)[^\n]*(?:write|create|edit|change|update)",
+            )
+            self.assertRegex(section, r"(?i)draft")
         prompt_two = prompts.split("## Prompt 2:", 1)[1].split("## Prompt 3:", 1)[0]
-        self.assertIn("Separately explain that renaming removes the old path", prompt_two)
+        self.assertIn("copy-and-rename checklist", prompt_two)
+        self.assertIn("after review", prompt_two)
 
     def test_migration_guide_covers_supported_source_paths(self) -> None:
         guide = self.text("docs/migration-guide.md")
-        for heading in ("Claude Projects", "Gemini CLI", "Codex", "Other AI systems"):
+        for heading in ("ChatGPT", "Claude and claude.ai projects", "Gemini CLI", "Codex `/import`", "Another assistant or agent"):
             self.assertIn(heading, guide)
-        self.assertIn("Do not bulk-commit", guide)
-        self.assertIn("Never delete the source", guide)
-        self.assertIn("metadata-first", guide)
+        self.assertIn("Never commit the archive", guide)
+        self.assertIn("Keep raw exports outside the repository", guide)
+        self.assertIn("Both paths start metadata-first", guide)
 
     def test_native_gemini_import_is_handed_off_as_a_slash_command(self) -> None:
         for path in ("docs/gemini-migration.md", ".agents/skills/migrate-gemini/SKILL.md"):
             text = self.text(path)
             self.assertIn("/import gemini --dry-run", text)
             self.assertNotIn("claude import gemini", text)
-        self.assertIn("cannot silently invoke another slash command", self.text("docs/migration-guide.md"))
+        self.assertIn("cannot invoke that slash command for you", self.text("docs/gemini-migration.md"))
 
     def test_current_gemini_and_codex_import_boundaries_are_explicit(self) -> None:
         for path in ("README.md", "docs/getting-started.md", "docs/migration-guide.md", "docs/gemini-migration.md"):
             text = self.text(path)
             self.assertIn("Antigravity", text, path)
         migration = self.text("docs/migration-guide.md")
-        self.assertIn("at most 50 chats from the last 30 days", migration)
+        self.assertIn("at most 50 recent chats from the last 30 days", migration)
         self.assertIn("unavailable inside a running task", migration)
         self.assertNotIn("not a conversation or memory importer", migration)
 
@@ -124,8 +128,8 @@ class DocumentationPositioningTests(unittest.TestCase):
         for path in ("docs/first-skill.md", "docs/agent-template.md", "projects/README.md"):
             self.assertIn(".agents/skills/", self.text(path))
         projects = self.text("projects/README.md")
-        self.assertIn("do not live under `projects/<project>/skills/`", projects)
-        self.assertIn("ordinary context", projects)
+        self.assertIn("workflow-examples", projects)
+        self.assertIn("agents do not discover them as active skills", projects)
 
     def test_memory_docs_do_not_guess_claude_internal_paths(self) -> None:
         paths = (
@@ -155,14 +159,6 @@ class DocumentationPositioningTests(unittest.TestCase):
 
     def test_memory_type_definitions_match_exactly(self) -> None:
         expected = {"user", "feedback", "environment", "project", "reference"}
-        readme_section = self.text("README.md").split("## Auto-memory", 1)[1].split(
-            "`MEMORY.md` is an index", 1
-        )[0]
-        readme_types = set(
-            re.findall(r"^- \*\*([a-z]+)\*\*", readme_section, re.MULTILINE)
-        )
-        self.assertEqual(expected, readme_types)
-
         spec_section = self.text("docs/auto-memory.md").split(
             "Use five durable types:", 1
         )[1].split("Convert relative dates", 1)[0]
@@ -210,7 +206,7 @@ class DocumentationPositioningTests(unittest.TestCase):
         guide = self.text("docs/optimizing-context.md")
         self.assertNotIn("3–5x", guide)
         self.assertNotIn("4,000 tokens", guide)
-        self.assertIn("no reliable fixed conversion ratio", guide)
+        self.assertIn("Exact token cost depends on the parser", guide)
         self.assertNotIn("output the full text of each uploaded file", guide)
         self.assertIn("Select exact named files", guide)
 
@@ -235,7 +231,7 @@ class DocumentationPositioningTests(unittest.TestCase):
 
     def test_copied_adapter_template_is_narrow_and_user_invoked(self) -> None:
         template = self.text("docs/agent-template.md")
-        self.assertIn('allowed-tools: "Read, Glob"', template)
+        self.assertIn('allowed-tools: "Read"', template)
         self.assertIn("disable-model-invocation: true", template)
         self.assertNotIn("Read, Bash, Write, Edit, Glob", template)
 

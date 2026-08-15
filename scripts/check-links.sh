@@ -41,6 +41,10 @@ CHECKED=0
 
 for f in "${MD[@]}"; do
   [ -z "$f" ] && continue
+  # A tracked file can be absent locally while a rename or deletion is staged.
+  # CI sees only committed paths, but local validation should skip the removed
+  # side of an in-progress change instead of asking awk to open it.
+  [ -f "$f" ] || continue
   CHECKED=$((CHECKED + 1))
   dir=$(dirname "$f")
   # awk skips fenced code blocks, then prints every ](target) target on its own

@@ -1,12 +1,10 @@
-# Setup Prompts
+# Manual setup prompts for claude.ai
 
-Use these prompts when the native `/setup` or `$context-setup` lifecycle is unavailable, or when working in a browser host that cannot edit the repository. The agent asks questions and drafts context; you still review every file before saving or committing it.
+Use these prompts when claude.ai is your only available interface. Claude will draft the content, but you must review it and copy approved text into the repository yourself.
 
-**In Claude Code:** Prefer `/setup` from the repository directory. It reads the portable workflow, proposes a file map, and waits before replacing populated content. It never assumes a commit or push.
+**In Claude Code:** Prefer `/setup`, which follows the shared, approval-gated workflow in `.agents/skills/context-setup/SKILL.md`.
 
-**In Codex:** Prefer `$context-setup` from the repository directory. It uses the same portable workflow and writes the same shared state.
-
-**In Claude.ai:** These prompts can draft the content, but copy only reviewed output into the repository. Do not paste credentials, private exports, or context that every repository collaborator should not see.
+**In claude.ai:** These prompts produce drafts. They do not create files, register commands, commit changes, or keep project knowledge synchronized.
 
 Run them in order the first time. After that, use them whenever you need to refresh a section.
 
@@ -32,7 +30,7 @@ Ask me the following questions one at a time — wait for my answer before movin
 9. What are your key credentials or social proof — the things that establish your credibility?
 10. Where are you online? (Website, social handles, etc.)
 
-After I've answered all of them, prepare the exact proposed contents for both files and show the complete file map. Do not write, save, or replace anything yet. Ask me to approve those exact two file writes. Only after I explicitly approve, write the approved content, update the Last Updated date to today, and show the resulting diff. If this host cannot edit the repository, return the reviewed content for me to copy manually.
+After I've answered all of them, produce two clearly labeled Markdown drafts for `identity/who-i-am.md` and `identity/professional-background.md`. Use my exact words where possible — don't polish or generalize. Use today for the proposed Last Updated date. Do not claim to create or update local files; tell me where to copy each approved draft.
 ```
 
 ---
@@ -41,7 +39,7 @@ After I've answered all of them, prepare the exact proposed contents for both fi
 
 The example project in this repo is built for a musician — so the questions below are tailored for that. If your project is something else entirely, skip to Prompt 3, which is generic and works for any project type.
 
-This prompt fills in `projects/example-musician/artist-context.md` and `projects/example-musician/promotion-strategy.md`, then renames the folder to match your artist name.
+This prompt drafts replacements for `projects/example-musician/artist-context.md` and `projects/example-musician/promotion-strategy.md`, plus a manual rename plan for the folder.
 
 ```
 Read projects/example-musician/artist-context.md and projects/example-musician/promotion-strategy.md so you understand the structure. Then interview me to fill them in.
@@ -74,11 +72,12 @@ Ask me the following questions one at a time — wait for my answer before movin
 15. What are you specifically trying to accomplish in the next 3 months?
 16. Where do you want to be as an artist in 1-2 years?
 
-After I've answered everything:
-1. Propose the exact new folder name, both complete file contents, the ROUTING.md edit, and the full changed-file map. Do not write or rename anything yet.
-2. Ask me first to approve the two content files and ROUTING.md edit.
-3. Separately explain that renaming removes the old path and can break links, then ask me to approve that exact rename consequence.
-4. Only after both approvals, make only the approved writes and rename, update the Last Updated dates, and show the resulting diff. If this host cannot edit the repository, return the reviewed files and rename instructions for me to apply manually.
+After I've answered everything, draft the following artifacts without claiming to change local files:
+1. A proposed folder name: `projects/[artist-name-lowercase-hyphenated]`
+2. Complete Markdown for `artist-context.md` and `promotion-strategy.md` using my words, not polished versions
+3. The exact replacement line for `ROUTING.md`
+4. Today's proposed Last Updated dates
+5. A short copy-and-rename checklist for me to apply locally after review
 ```
 
 ---
@@ -101,12 +100,14 @@ Ask me the following questions one at a time:
 7. What tasks do you do repeatedly for this project? List them — even rough descriptions are fine.
 8. Of those recurring tasks, which ones take the most time or feel the most inconsistent?
 
-After I've answered everything:
-1. Draft the complete proposed contents for `projects/[project-name]/context.md`, `strategy.md`, the top 1-2 portable skills under `.agents/skills/[skill-name]/SKILL.md`, and the exact ROUTING.md edit. If I use Claude Code, separately propose any thin `.claude/commands/` adapter without duplicating the workflow.
-2. Show the full file map and exact content/diff. Do not create or edit any file yet.
-3. Ask me to approve that exact batch. Only after explicit approval, create only those files and edits.
-4. Run `bash scripts/validate-all.sh`, show the changed-file list and diff, and wait before any commit.
-5. Tell me what was built and what to fill in next. If this host cannot edit the repository, return the reviewed batch for me to copy manually.
+After I've answered everything, produce a review packet without claiming to change local files:
+1. The proposed folder path `projects/[project-name]/`
+2. Complete Markdown drafts for `context.md` and `strategy.md`
+3. For the top 1-2 recurring tasks I mentioned, a provider-neutral skill draft for `.agents/skills/[project-name]-[task-name]/SKILL.md`; keep project facts in the project files and reference them from the skill body
+4. The exact proposed line for `ROUTING.md` under "Project tasks"
+5. A proposed `CHANGELOG.md` bullet
+6. Ask whether I want a Claude Code slash command for any skill; if yes, draft a separate thin `.claude/commands/[task-name].md` adapter and matching `CLAUDE.md` table row
+7. Label every draft with its destination path and finish with a manual copy checklist
 ```
 
 ---
@@ -124,15 +125,14 @@ Read state/current.md and state/weekly-priorities.md. Then ask me:
 4. Any open threads or things you're waiting on?
 5. Anything that changed since last week that I should know about?
 
-Draft the exact proposed diff for both files with updated dates. Keep it terse — these files are read at the start of every session, so clarity beats completeness. Do not write yet. Ask me to approve that exact two-file update; only then apply it and show the resulting diff. If this host cannot edit the repository, return the reviewed content for me to copy manually.
+Draft complete replacements for both files with my answers and proposed current dates. Keep them terse — these files are read at the start of every session, so clarity beats completeness. Do not claim to update local files; label each draft with its destination path.
 ```
 
 ---
 
 ## Tips
 
-- **Prefer the native lifecycle** — `/setup` in Claude Code or `$context-setup` in Codex keeps the workflow and safety gates current
-- **Review repository visibility first** — identity and project context can be sensitive even when it contains no credentials
+- **Prefer `/setup` locally** in Claude Code, or `$context-setup` in Codex, so the same review gates and portable paths apply
 - **Your words beat polished prose** — the prompts tell Claude to use your exact answers. Don't overthink your responses.
 - **Re-run anytime** — these aren't one-time setup. Run Prompt 2 or 3 again when a project evolves significantly. Run Prompt 4 every Monday.
 - **Add your own** — once you see the pattern, you can write prompts for anything. A prompt that builds your weekly review, drafts a specific type of email, or updates a specific context file on a schedule.

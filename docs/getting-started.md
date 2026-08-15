@@ -1,93 +1,128 @@
-# Getting started
+# Getting started with Context OS
 
-`claude-context-os` is a Claude-first, Codex-compatible workspace harness for durable agent context. It organizes version-controlled context, reusable workflows, session handoffs, optional integrations, and review gates. It does not invoke a model or provide an agent loop; an explicitly supported host does that.
+Context OS can begin with a blank interview or selected context from another assistant. The result is the same: a small, reviewable repository that Claude Code and Codex can use as shared state.
 
-This guide takes you from a fresh clone to a repeatable session loop without silently importing history, enabling tools, or publishing private context.
+## Before you clone
 
-## 1. Choose where the context will live
+You need Git, Bash, and Python 3. You also need Claude Code or Codex for the guided lifecycle. claude.ai can help produce files, but it cannot maintain a local checkout directly.
 
-The repository can contain personal identity, business plans, meeting references, and project decisions. Before adding real content:
+Decide where the repository will live. If it will contain personal, client, employer, financial, or unpublished project context, use a private remote. Repository visibility is only one control; do not store credentials, raw account exports, or information you would not want every configured agent to read.
 
-- keep the workspace local-only or use a private remote by default;
-- keep passwords, access tokens, recovery codes, and raw credentials out of the repository;
-- add only context that every intended collaborator may read; and
-- review staged changes before every commit or push.
+## Create your copy
 
-A later deletion does not erase material from git history. Do not push until you have checked both the exact diff and the remote audience.
-
-The template ignores local migration inventories under `.context-os/`, but ignored files are still sensitive local data.
-
-## 2. Clone and run the local setup
+Clone the public template:
 
 ```bash
 git clone https://github.com/conorbronsdon/claude-context-os.git my-context
 cd my-context
-bash scripts/setup.sh --agent codex
-# or: bash scripts/setup.sh --agent claude
 ```
 
-The shell setup can personalize the template, offer an optional local hook, and launch the selected host. Each infrastructure or commit action has its own prompt. It does not import conversations. It does not install integrations, authenticate services, or enable publishing tools.
+For a private copy, create an empty private repository, then keep this template as `upstream` and make your repository `origin`:
 
-Choose the host workflow after setup:
+```bash
+git remote rename origin upstream
+git remote add origin <YOUR_PRIVATE_REPO_URL>
+git remote -v
+```
 
-| Host | First-time context | Start | Checkpoint | Close |
-|---|---|---|---|---|
-| Claude Code | `/setup` | `/start` | `/update` | `/end` |
-| Codex | `$context-setup` | `$context-start` | `$context-update` | `$context-end` |
-| Claude.ai | [`SETUP-PROMPTS.md`](../SETUP-PROMPTS.md) | Use uploaded project knowledge | Manual | Copy reviewed changes back |
-| Gemini CLI / Antigravity CLI | Migration from Gemini artifacts; portable-skill discovery only for continuing enterprise/API-key Gemini CLI | No lifecycle adapter | No lifecycle adapter | No lifecycle adapter |
+Do not push until you have reviewed the placeholder files, example project, and first setup diff.
 
-CI structurally validates the Claude Code and Codex lifecycle contracts and adapter mappings; it does not run an installed-host end-to-end session. Claude.ai is a manual knowledge copy with no write-back. Consumer Gemini CLI requests transitioned to Antigravity CLI in June 2026, while enterprise/API-key Gemini CLI use continues. This repository's Gemini support is limited to migration helpers and portable-skill discovery on continuing Gemini CLI; Antigravity behavior is not validated. Treat another agent as a new adapter: verify its instruction discovery, invocation, permissions, and write behavior before claiming parity.
+## Run the local setup
 
-## 3. Start fresh or bring context forward
+Choose the host you expect to use first:
 
-For a clean start, run the first-time context workflow above. It interviews you, shows the proposed file map, and waits before replacing populated context.
+```bash
+bash scripts/setup.sh --agent claude
+# or
+bash scripts/setup.sh --agent codex
+```
 
-If useful context already exists in another AI system, follow the [migration guide](migration-guide.md). Import one source and one project at a time. Preserve durable facts, decisions, preferences, and proven workflows—not entire chat histories by default.
+You can omit `--agent` to auto-detect an installed host, or use `--agent none` to prepare the repository without launching one.
 
-Available paths include:
+The script can:
 
-- a manual audit prompt for Claude Projects and other browser-hosted workspaces;
-- reviewed Gemini CLI configuration migration with `/migrate-gemini` or `$migrate-gemini`;
-- evidence-based Gemini workflow recovery with `/mine-gemini-workflows` or `$mine-gemini-workflows`; and
-- optional Codex `/import` from Claude Code or Cursor for supported setup, project files, and up to 50 recent chats from the last 30 days, followed by item selection and a diff review.
+- replace the name placeholder;
+- point `origin` at your repository;
+- remove the sample musician project;
+- install the local pre-commit hook; and
+- generate a local, gitignored repository map.
 
-No migration path should copy credentials, private reasoning, or an unreviewed bulk export into tracked files.
+Each optional change is prompted. The script shows setup-file changes before offering a narrowly scoped commit, and that commit defaults to no.
 
-## 4. Run the core loop
+## Choose fresh setup or migration
 
-The portable loop is deliberately small:
+### Start from your answers
 
-1. **Start** — load current state, decisions, blockers, and recent session continuity.
-2. **Work** — use only the project context and optional tools needed for the task.
-3. **Checkpoint** — append a factual progress note when continuity would otherwise be lost.
-4. **Close** — review the proposed handoff before state or decisions are updated.
+Launch the selected host from the repository root:
 
-Shared continuity lives in `state/` and `sessions/`. Claude Code auto-memory is a host-specific layer that is enabled by default and may write automatically; it is not silently shared with Codex. The repository's `/dream` curation extension remains optional and separately gated.
+```bash
+claude
+# or
+codex
+```
 
-## 5. Add one optional integration at a time
+Run `/setup` in Claude Code or `$context-setup` in Codex. The guided interview asks one question at a time, proposes a file map, and waits before changing populated files.
 
-Use the [integration chooser](integrations-guide.md) to match a goal to a reviewed catalog entry. Then read the generated [capability and safety reference](../references/integrations.md) before installing anything.
+### Bring existing context
 
-The catalog is descriptive, not an installer. Setup never activates an entry. Add at most one new trust boundary at a time, and confirm the exact destination, credentials, sensitive reads, writes, remote effects, and uninstall behavior for the one integration you choose.
+Read the [migration guide](migration-guide.md) first. Create one reviewed migration packet from a selected project, conversation set, memory export, or group of source files. Then run the same setup command and provide that packet as your starting material.
 
-## 6. Maintain context without busywork
+Avoid bulk ingestion. A small set of current facts and proven workflows is more useful than years of unfiltered history.
 
-| Cadence | Recommended action | Why |
-|---|---|---|
-| Each session | Start and close the lifecycle | Preserve an accurate handoff |
-| During long sessions | Checkpoint only meaningful progress | Avoid state churn |
-| Weekly | Review `state/current.md`, priorities, and blockers | Remove stale urgency |
-| When a project changes | Update its canonical context and route | Prevent duplicated facts |
-| Periodically | Review session patterns and optional integrations | Retire stale workflows and permissions |
-| Claude Code only, when useful | Run `/dream`, then review with `/dream-apply` | Curate auto-memory through proposals |
+Gemini artifacts remain useful migration sources, but consumer Gemini CLI requests transitioned to Antigravity CLI in June 2026. Continuing enterprise/API-key Gemini CLI and Antigravity are separate targets; this repository does not claim that Antigravity shares Gemini skill discovery, hooks, permissions, or lifecycle behavior. See the [Gemini migration boundary](gemini-migration.md).
 
-Update files when meaning changes, not merely to refresh dates. The [auto-memory specification](auto-memory.md) and [dream architecture](dream-architecture.md) explain the optional Claude-only curation layer.
+## Review the first result
 
-## Verify the workspace
+Check the files that setup proposes or changes:
+
+- `identity/` for stable facts and background;
+- `projects/` for long-lived project context;
+- `state/` for current work, priorities, blockers, and decisions;
+- `.agents/skills/` for provider-neutral recurring workflows; and
+- `ROUTING.md` for the paths an agent should load for each task.
+
+Remove any unsupported inference, stale claim, duplicate fact, or context that is too sensitive for the repository.
+
+Then run:
 
 ```bash
 bash scripts/validate-all.sh
+git diff --check
+git status --short
 ```
 
-Validation checks repository structure, local links, lifecycle adapters, hooks, JSON, catalog consistency, shell syntax, and tests. It cannot certify external services or prove that a third-party integration has not changed; re-check linked evidence before enabling one.
+Commit and push only after the diff matches what you intend to preserve.
+
+## Run the daily loop
+
+| Moment | Claude Code | Codex |
+|---|---|---|
+| Start work | `/start` | `$context-start` |
+| Save progress without closing | `/update` | `$context-update` |
+| End with a reviewed handoff | `/end` | `$context-end` |
+
+The lifecycle writes shared continuity to `state/` and `sessions/`. Claude Code has additional host-specific hooks, commands, and auto-memory features. The [Codex onboarding guide](codex-onboarding.md) documents the exact boundary.
+
+## Add capabilities later
+
+Core setup requires no external integration. When you have a concrete need, start with the [integration chooser](integrations-guide.md), then open the selected [catalog entry](../references/integrations.md) and check:
+
+- which agents the integration supports;
+- what it reads and writes;
+- which credentials it needs;
+- whether it can publish, overwrite, delete, or run arbitrary code;
+- which confirmations are required; and
+- how to verify and uninstall it.
+
+Install and authenticate one add-on at a time. Run its narrow health check before relying on it in a workflow.
+
+## Keep the workspace healthy
+
+- Run the start and end loop instead of rewriting top-level context in every chat.
+- Update stable identity only when it changes. Update state when active work changes.
+- Keep one fact in one canonical file and route to it elsewhere.
+- Review files that pass their staleness threshold.
+- Use one git worktree per concurrent agent session.
+- Run `bash scripts/validate-all.sh` after changing instructions, skills, scripts, or generated references.
+
+See [repository maintenance](repo-maintenance.md) and the [safety contract](safety-contract.md) for the operating rules.

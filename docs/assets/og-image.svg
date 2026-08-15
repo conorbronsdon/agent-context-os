@@ -18,20 +18,20 @@
   <!-- prompt symbol -->
   <text x="80" y="148" font-family="JetBrains Mono, Fira Code, Menlo, monospace" font-size="42" fill="#7c5cff">$</text>
 
-  <!-- repo name -->
-  <text x="120" y="148" font-family="JetBrains Mono, Fira Code, Menlo, monospace" font-size="56" font-weight="700" fill="#ffffff">claude-context-os</text>
+  <!-- product name -->
+  <text x="120" y="148" font-family="JetBrains Mono, Fira Code, Menlo, monospace" font-size="56" font-weight="700" fill="#ffffff">Context OS</text>
 
   <!-- divider -->
   <line x1="80" y1="200" x2="320" y2="200" stroke="#7c5cff" stroke-width="2"/>
 
   <!-- tagline -->
-  <text x="80" y="290" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="44" font-weight="600" fill="#e6e9f2">An operating system for your Claude context.</text>
-  <text x="80" y="350" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="44" font-weight="600" fill="#e6e9f2">Version-controlled, self-curating, always current.</text>
+  <text x="80" y="290" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="44" font-weight="600" fill="#e6e9f2">Git-backed context for Claude Code and Codex.</text>
+  <text x="80" y="350" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="44" font-weight="600" fill="#e6e9f2">Portable state. Reviewable workflows.</text>
 
   <!-- sub bullets -->
-  <text x="80" y="438" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="24" fill="#9aa3b8">+ Files Claude Code reads directly — and claude.ai reads as knowledge</text>
-  <text x="80" y="476" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="24" fill="#9aa3b8">+ Auto-memory that grows, with a /dream curator that keeps it fresh</text>
-  <text x="80" y="514" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="24" fill="#9aa3b8">+ A /start &#8594; work &#8594; /end session loop</text>
+  <text x="80" y="438" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="24" fill="#9aa3b8">+ Bring selected context forward without importing a private archive</text>
+  <text x="80" y="476" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="24" fill="#9aa3b8">+ Share state and portable skills across supported coding agents</text>
+  <text x="80" y="514" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="24" fill="#9aa3b8">+ Start &#8594; work &#8594; reviewed handoff</text>
 
   <!-- footer -->
   <text x="80" y="588" font-family="JetBrains Mono, Fira Code, Menlo, monospace" font-size="22" fill="#6e7898">github.com/conorbronsdon/claude-context-os</text>

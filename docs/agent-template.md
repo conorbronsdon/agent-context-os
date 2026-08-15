@@ -1,6 +1,6 @@
-# Agent Template
+# Portable skill template
 
-Reusable scaffold for building new skills. Use this as a reference when creating skills for your projects.
+Reusable scaffold for provider-neutral skills. Put the canonical workflow under `.agents/skills/`; add a host adapter only when that host needs one.
 
 ---
 
@@ -42,19 +42,15 @@ description: [One sentence, 60+ chars, what this skill does and when to use it]
 
 ---
 
-## Portable location
+## Optional Claude Code adapter
 
-Place the workflow above at `.agents/skills/[skill-name]/SKILL.md`. Add `agents/openai.yaml` only when Codex UI metadata is useful. Keep changing project facts in `projects/` and reference them from the workflow.
-
-## Optional Claude command adapter
-
-Place in `.claude/commands/[skill-name].md`. This is what the slash command loads.
+Place this thin adapter in `.claude/commands/[skill-name].md` only when a Claude slash command is useful. Host permissions belong here, not in the portable skill.
 
 ```markdown
 ---
 name: [skill-name]
-description: "[Short description, 20+ chars]"
-allowed-tools: "Read, Glob"
+description: [Short description, 20+ chars]
+allowed-tools: "Read"
 disable-model-invocation: true
 ---
 
@@ -65,15 +61,20 @@ The example is deliberately read-only and user-invoked. Add a write, shell, or e
 
 ---
 
-## Checklist Before Shipping a New Skill
+## Checklist before shipping a portable skill
 
 - [ ] SKILL.md has YAML frontmatter with `name` and `description` (60+ chars)
-- [ ] Provider-neutral workflow lives under `.agents/skills/`
-- [ ] Optional Claude adapter is thin, user-only when it writes, and grants only reviewed tools
-- [ ] Optional Codex metadata uses exact explicit invocation when the workflow writes
+- [ ] Context dependencies and related workflows are named in the body
+- [ ] Host-specific tools, permission grants, hooks, and commands stay out of `.agents/skills/`
 - [ ] Routing rule added to ROUTING.md if appropriate
 - [ ] CHANGELOG.md updated with new files
 - [ ] Run `scripts/validate-all.sh` to verify structure
+
+If you add the optional Claude adapter:
+
+- [ ] The command routes to the canonical `.agents/skills/` file
+- [ ] Any `allowed-tools` grant is the smallest reviewed set
+- [ ] The slash command row is added to the `CLAUDE.md` command table
 
 ---
 
@@ -93,6 +94,6 @@ For a Claude-only general-purpose skill:
     └── SKILL.md
 ```
 
-Project-folder workflow documents are context, not natively discovered skills. Use `.agents/skills/[skill-name]/SKILL.md` for the portable source and add a thin `.claude/commands/[skill-name].md` adapter when a Claude slash command is wanted.
+For a provider-neutral skill shared with compatible agents, use `.agents/skills/[skill-name]/SKILL.md` and add a thin `.claude/commands/[skill-name].md` adapter when a Claude slash command is wanted.
 
 Commands always live flat in `.claude/commands/[skill-name].md`.

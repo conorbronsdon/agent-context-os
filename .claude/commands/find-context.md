@@ -1,7 +1,7 @@
 ---
 name: find-context
 description: Find relevant context files by topic. Use when you need to load files for a topic without a slash command, or when a task spans multiple domains.
-allowed-tools: Read, Glob, Grep, Bash
+allowed-tools: "Read, Glob, Grep"
 x-source: skills-sync/commands/context.md
 x-source-version: 173c978
 ---
@@ -17,10 +17,8 @@ The user will say `/find-context <topic>` (e.g., `/find-context auth rewrite`, `
 
 ### 2. Search (three strategies, in parallel)
 
-**Tag match** — grep for the topic in YAML `tags:` frontmatter (the strongest signal — the file was explicitly categorized):
-```bash
-grep -rl "tags:.*<keyword>" --include="*.md" .
-```
+**Tag match** — use `Grep` to search Markdown files for the topic in YAML
+`tags:` frontmatter (the strongest signal—the file was explicitly categorized).
 
 **Filename match** — `Glob` for files with the topic keyword in their name.
 

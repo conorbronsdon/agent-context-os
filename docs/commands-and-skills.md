@@ -32,7 +32,7 @@ These are the portable skills `.agents/skills/migrate-gemini` and `.agents/skill
 | `/reconcile` | Detect repository and session drift | Read-only report by default; explicit fix mode may edit and commit individually approved repairs |
 | `/recover` | Inspect orphaned worktrees/branches and offer cleanup | Cleanup is destructive and remains approval-gated |
 | `/content-shipped` | Record a confirmed published item | Writes `content/log.md`; it does not publish the item |
-| `/clean-ai-writing` | Apply the included writing workflow | Edits only the reviewed draft target |
+| `/clean-ai-writing` | Apply the included writing workflow | Reads supplied content and returns a proposed revision in chat; no file write grant |
 
 ## Claude Code auto-memory
 

@@ -17,7 +17,12 @@ EXPECTED = {
 }
 COMMAND_KEY = re.compile(r"^[a-z][a-z0-9-]*$")
 START_TOOLS = "Read, Glob"
-REQUIRED_COMMAND_FIELDS = {"name", "description", "allowed-tools", "disable-model-invocation"}
+REQUIRED_COMMAND_FIELDS = {
+    "name",
+    "description",
+    "allowed-tools",
+    "disable-model-invocation",
+}
 OPTIONAL_COMMAND_FIELDS = {"x-source", "x-source-version"}
 
 
@@ -149,7 +154,7 @@ def validate_command(path: Path, command_name: str) -> None:
     if data["disable-model-invocation"] is not True:
         raise MetadataError("disable-model-invocation must be boolean true in frontmatter")
     if command_name == "start" and data["allowed-tools"] != START_TOOLS:
-        raise MetadataError("start must pre-approve exactly the reviewed read-only tool set")
+        raise MetadataError("start must pre-approve only repository read tools")
 
 
 def main() -> int:

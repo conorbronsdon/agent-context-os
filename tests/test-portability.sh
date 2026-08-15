@@ -12,6 +12,7 @@ fail() {
 
 test -f AGENTS.md || fail "missing root AGENTS.md"
 test -f docs/codex-onboarding.md || fail "missing Codex onboarding guide"
+test -f state/current-log.md || fail "missing current.md history seed"
 
 skills=(context-setup context-start context-update context-end)
 commands=(setup start update end)
@@ -54,9 +55,27 @@ for command in "${side_effecting_commands[@]}"; do
     || fail ".claude/commands/$command.md failed strict side-effecting frontmatter validation"
 done
 
+grep -qx 'allowed-tools: "Read"' .claude/commands/clean-ai-writing.md \
+  || fail "clean-ai-writing must remain read-only when it is model-invocable"
+grep -qx 'allowed-tools: "Read, Glob, Grep"' .claude/commands/find-context.md \
+  || fail "find-context must not pre-approve Bash when it is model-invocable"
+
 for skill in "${skills[@]}"; do
   grep -Fq "\$$skill" AGENTS.md || fail "AGENTS.md does not route to \$$skill"
 done
+
+while IFS= read -r portable_skill; do
+  frontmatter=$(awk '
+    NR == 1 && $0 == "---" { inside = 1; next }
+    inside && $0 == "---" { exit }
+    inside { print }
+  ' "$portable_skill")
+  if grep -Eq '^(requires|allowed-tools):' <<<"$frontmatter"; then
+    fail "$portable_skill puts nonstandard dependencies or host permissions in portable frontmatter"
+  fi
+done < <(find .agents/skills projects/example-musician/workflow-examples -name SKILL.md -type f | sort)
+
+test ! -d projects/example-musician/skills || fail "example project still presents a nested skills directory as discoverable"
 
 [ "$(wc -l < AGENTS.md)" -le 100 ] || fail "AGENTS.md should stay under 100 lines"
 grep -Fq 'hooks and settings' docs/codex-onboarding.md || fail "Codex guide must disclose host-only hooks and settings"
@@ -106,6 +125,12 @@ unrestricted_start="$portability_tmp/unrestricted-start.md"
 sed 's/^allowed-tools:.*/allowed-tools: [Read, Bash]/' .claude/commands/start.md > "$unrestricted_start"
 if python3 tests/validate-openai-metadata.py --command "$unrestricted_start" start >/dev/null 2>&1; then
   fail "unrestricted inline Bash grant passed command validation"
+fi
+
+wildcard_start="$portability_tmp/wildcard-start.md"
+sed 's/^allowed-tools:.*/allowed-tools: "Read, Glob, Bash(gws drive files list:*)"/' .claude/commands/start.md > "$wildcard_start"
+if python3 tests/validate-openai-metadata.py --command "$wildcard_start" start >/dev/null 2>&1; then
+  fail "gws trailing-wildcard pre-approval passed command validation"
 fi
 
 for bad_scalar in false null 123; do

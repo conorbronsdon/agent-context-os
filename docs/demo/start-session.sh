@@ -23,7 +23,7 @@ R=$'\033[0m'
 
 say() { printf '%b\n' "$1"; }
 
-say "${GRAY}claude-context-os — example musician project (sample data)${R}"
+say "${GRAY}Context OS: example musician project (sample data)${R}"
 echo
 say "${BLUE}>${R} ${BOLD}${GRAY}/start${R}"
 echo

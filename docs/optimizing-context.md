@@ -1,6 +1,6 @@
 # Optimizing Context Files
 
-The format of your context files matters as much as their content. PDF processing includes extracted text and page images, so cost varies with page content and layout. Clean Markdown is often smaller when visual layout is unnecessary, but there is no reliable fixed conversion ratio. Measure representative files instead of relying on an absolute estimate.
+The format of context files affects both token use and retrieval quality. PDFs often carry layout, font, header, and footer noise that clean Markdown avoids. Large, noisy files slow any agent session that loads them.
 
 This guide covers how to convert common file formats to markdown and how to trim files for maximum efficiency.
 
@@ -17,7 +17,7 @@ Claude reads everything in its context window as tokens. Different formats carry
 | HTML | Medium-high | Tag overhead, especially with complex layouts |
 | PDF | Variable | Extracted text plus page images; visual layout may be useful |
 
-For PDFs, token use depends on extracted text and the rendered page images. Convert to Markdown when the durable value is textual and layout is irrelevant; keep the PDF when diagrams, forms, or spatial relationships matter. Compare the actual result for your representative documents.
+Exact token cost depends on the parser, document, and host. The useful rule is qualitative: preserve the facts and structure an agent needs, and remove layout artifacts and repeated boilerplate.
 
 The goal: your context should be **as short as possible while remaining complete**. Every token Claude spends parsing formatting noise is a token not spent on your actual task.
 
@@ -85,10 +85,9 @@ include the first 5 rows as examples and describe the pattern of the remaining d
 
 ### Web page / article
 
-If a separately reviewed browser or retrieval integration is enabled, you may fetch a page through that tool. Otherwise:
-- Use a browser's "Reader Mode" (Safari, Firefox) to strip navigation and ads, then copy the clean text
+Use a browser's "Reader Mode" (Safari, Firefox) to strip navigation and ads, then copy the clean text. You can also:
 - Use a service like [Reader](https://reader.readwise.io) to get clean markdown from any URL
-- Or just select the relevant section, copy, and paste into the conversion prompt — you rarely need the whole page
+- Select the relevant section, copy, and paste it into the conversion prompt — you rarely need the whole page
 
 ### Existing claude.ai project files
 

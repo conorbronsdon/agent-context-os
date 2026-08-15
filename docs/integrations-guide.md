@@ -11,13 +11,15 @@ Nothing in this guide installs, activates, authenticates, or grants permissions 
 | Browse and install reusable agent skills | [Agent Skills](../references/integrations.md#agent-skills) | Replacement or removal of an existing local skill |
 | Add a standalone lifecycle/workspace package | [Agent Workspace](../references/integrations.md#agent-workspace) | Local state writes and optional cleanup actions |
 | Discover creator-oriented tools without installing one | [AI Tools for Creators](../references/integrations.md#ai-tools-for-creators) | Listings can drift and are not endorsements |
+| Read calendar, email, Drive, or Sheets data | [Google Workspace CLI](../references/integrations.md#google-workspace-cli) | OAuth identity, sensitive reads, and the CLI's broader write-capable surface |
+| Search or change a Notion workspace | [Notion MCP](../references/integrations.md#notion-mcp) | OAuth, sensitive and connected-source reads, remote writes, and overwrite-capable updates |
 | Coordinate Gemini work with a persistent issue graph | [Beads for Gemini CLI](../references/integrations.md#beads-for-gemini-cli) | User-global defaults, remote sync, and force overwrite |
 | Search meeting notes or retrieve transcripts | [Granola MCP](../references/integrations.md#granola-mcp) | OAuth, sensitive reads, retention, and participant consent |
 | Let an agent work with an Obsidian vault | [Obsidian CLI](../references/integrations.md#obsidian-cli) | Broad command/eval surface and implicit vault/file targeting |
 | Manage Substack drafts or publish Notes | [Substack MCP](../references/integrations.md#substack-mcp) | Session credentials, sensitive analytics, and immediate public Notes |
 | Read or update a mounted Markdown vault | [Tolaria MCP](../references/integrations.md#tolaria-mcp) | Sensitive vault reads and full-note overwrite |
 
-Google Workspace is not currently shipped as a working integration. The [legacy status note](../references/gws-mcp-setup.md) explains why the obsolete tracked configuration was removed. Do not recreate it from old instructions.
+The obsolete checked-in `gws mcp` configuration was removed. The current Google Workspace path uses the reviewed CLI setup in [`references/google-workspace-cli-setup.md`](../references/google-workspace-cli-setup.md); it is still opt-in and is not pre-approved by the command adapters.
 
 ## Activation checklist
 

@@ -27,7 +27,12 @@ class IntegrationCatalogTests(unittest.TestCase):
     def test_catalog_has_expected_entries_and_visible_safety_columns(self) -> None:
         rendered = MODULE.render_reference(self.catalog)
         self.assertEqual(self.catalog["schema_version"], 2)
-        self.assertEqual(len(self.catalog["integrations"]), 8)
+        self.assertEqual(len(self.catalog["integrations"]), 10)
+        self.assertTrue(
+            {"google-workspace-cli", "notion-mcp"}.issubset(
+                {item["id"] for item in self.catalog["integrations"]}
+            )
+        )
         self.assertIn("Remote writes", rendered)
         self.assertIn("Sensitive reads", rendered)
         self.assertIn("Typed safety signals", rendered)
@@ -35,6 +40,39 @@ class IntegrationCatalogTests(unittest.TestCase):
         self.assertIn("immediate public publish action", rendered)
         self.assertTrue(rendered.endswith("\n"))
         self.assertFalse(rendered.endswith("\n\n"))
+
+    def test_issue_22_connectors_have_typed_sensitive_and_mutating_gates(self) -> None:
+        for integration_id in ("google-workspace-cli", "notion-mcp"):
+            item = self.entry(integration_id)
+            for capability in (
+                "sensitive_read",
+                "write",
+                "remote_write",
+                "overwrite",
+                "oauth",
+                "destructive",
+            ):
+                self.assertTrue(item["capabilities"][capability])
+            for gate in (
+                "read_sensitive",
+                "write",
+                "write_remote",
+                "overwrite",
+                "oauth",
+                "destructive",
+            ):
+                self.assertIn(gate, item["confirmation"]["required_for"])
+
+        gws_guide = (ROOT / "references" / "google-workspace-cli-setup.md").read_text()
+        self.assertIn(
+            "gws auth login --readonly -s drive,gmail,calendar,sheets", gws_guide
+        )
+        self.assertIn("gws auth status", gws_guide)
+        self.assertNotIn("gws auth login -s drive,gmail,calendar,sheets", gws_guide)
+        self.assertIn("does not pre-approve Bash", gws_guide)
+        gws = self.entry("google-workspace-cli")
+        self.assertNotIn("pre-approves", " ".join(gws["capabilities"]["details"]))
+        self.assertIn("gws auth status", gws["health_check"])
 
     def test_issue_19_entries_have_typed_high_risk_gates(self) -> None:
         tol = self.entry("tolaria")

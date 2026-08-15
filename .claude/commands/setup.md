@@ -1,6 +1,6 @@
 ---
 name: setup
-description: "Interactive onboarding — interview the user and build all context files in one conversation"
+description: "Guided onboarding or import for durable workspace context"
 allowed-tools: "Read, Write, Edit, Bash, Glob"
 disable-model-invocation: true
 ---

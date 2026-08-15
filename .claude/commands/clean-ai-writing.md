@@ -1,7 +1,7 @@
 ---
 name: clean-ai-writing
 description: Audit and rewrite content to remove AI writing patterns
-allowed-tools: Read
+allowed-tools: "Read"
 ---
 
 # /clean-ai-writing

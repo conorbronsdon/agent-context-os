@@ -9,7 +9,9 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [Agent Workspace](https://github.com/conorbronsdon/agent-workspace) | `workspace_template` | verified | Yes | No | No | No | Yes | 2026-08-15 |
 | [AI Tools for Creators](https://github.com/conorbronsdon/ai-tools-for-creators) | `resource_catalog` | listed | No | No | No | No | No | 2026-08-15 |
 | [Beads for Gemini CLI](https://beads.gascity.com/integrations/gemini) | `agent_extension` | verified | Yes | Yes | No | No | Yes | 2026-08-15 |
+| [Google Workspace CLI](https://github.com/googleworkspace/cli) | `connector` | verified | Yes | Yes | No | Yes | Yes | 2026-08-15 |
 | [Granola MCP](https://docs.granola.ai/help-center/sharing/integrations/mcp) | `mcp_server` | verified | No | No | No | Yes | No | 2026-08-15 |
+| [Notion MCP](https://developers.notion.com/guides/mcp/get-started-with-mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-15 |
 | [Obsidian CLI](https://obsidian.md/help/cli) | `editor_guide` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-15 |
 | [Substack MCP](https://github.com/conorbronsdon/substack-mcp) | `mcp_server` | verified | Yes | Yes | Yes | Yes | No | 2026-08-15 |
 | [Tolaria MCP](https://github.com/refactoringhq/tolaria) | `local_workspace` | verified | Yes | No | No | Yes | Yes | 2026-08-15 |
@@ -108,6 +110,34 @@ Capabilities and limits:
 - bd dolt push --force can overwrite remote history
 - bd init --discard-remote authorizes a divergent local initialization; a later Dolt push is the separate remote-history replacement
 
+## Google Workspace CLI
+
+Google's pre-1.0 command-line interface and Agent Skills for scoped access to Workspace APIs; optional session-start reads require read-only OAuth scopes and per-invocation approval.
+
+- **Supported agents:** `claude_code`, `codex`, `gemini_cli`, `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** A current gws release; A Google account with Workspace access; A Google Cloud project and OAuth client; gcloud for automated auth setup or a manual OAuth configuration
+- **Credentials:** OAuth client configuration; Encrypted local OAuth credentials or an access token; Optional service-account credential file; Optional file-backed encryption key when an OS keyring is unavailable
+- **Reads:** Sensitive Gmail, Drive, Calendar, Sheets, Docs, Chat, Admin, and other selected Workspace API data allowed by the active account and OAuth scopes
+- **Writes / external effects:** Remote writes through selected Workspace APIs, including email sends, messages, events, documents, spreadsheets, tasks, subscriptions, and file uploads; Overwrite or replacement methods exposed by selected APIs and helpers; Resource deletion methods exposed by selected Google Discovery APIs
+- **Typed safety signals:** sensitive read, remote write, overwrite, delete, oauth
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `overwrite`, `delete`, `oauth`, `destructive`
+- **Confirmation:** Confirm the exact Google account, Cloud project, services, and OAuth scopes; ask before broad sensitive reads, and separately confirm every send, upload, event creation, remote update, replacement, or deletion after showing the exact target and payload.
+- **Risk tags:** `sensitive-read`, `remote-write`, `overwrite-capable`, `delete-capable`, `oauth`, `destructive-capable`, `pre-v1`, `dynamic-api-surface`, `external-messages`
+- **Evidence:** [1](https://github.com/googleworkspace/cli/blob/a3768d0e82ad83cca2da97724e46bea4ff0e6dbd/README.md); [2](https://github.com/googleworkspace/cli/blob/a3768d0e82ad83cca2da97724e46bea4ff0e6dbd/docs/skills.md)
+- **Health check:** Run gws --version and gws auth status, verify the active account and read-only scope list, then perform one approval-gated read with a single-result limit and no --page-all or --output; do not use a write for the initial check.
+- **Uninstall:** Remove installed gws skills or extensions, uninstall the CLI if desired, review then remove its local configuration, and revoke the Google OAuth grant; leave Workspace content unchanged. (removes user data: No)
+
+Capabilities and limits:
+
+- The CLI builds commands from current Google Discovery documents, so enabled services can expose a wider method surface than a static guide lists
+- Context OS does not install or authenticate gws; at the pinned upstream revision verified here, the CLI does not expose the older gws mcp command
+- The Claude session-start adapter does not pre-approve Bash; every proposed CLI read goes through normal approval with its exact identifiers, limits, fields, and output flags visible
+- The documented login uses --readonly for the selected services and verifies the resulting account and scopes with gws auth status
+- OAuth scopes limit account access but do not provide per-action review; use narrow scopes and separate confirmation for every send, remote write, overwrite, and deletion
+- gws auth setup requires gcloud; the documented manual OAuth path is the fallback, and testing-mode apps can hit scope-count limits
+- Upstream supports dry-run for API methods and many mutating helpers, but availability must be checked for the exact command
+
 ## Granola MCP
 
 Granola's official hosted, read-only MCP for sensitive meeting notes and plan-dependent transcripts.
@@ -134,6 +164,32 @@ Capabilities and limits:
 - Basic access is limited to personal notes from the last 30 days; folder, search, and transcript tools can require a paid plan
 - Free and Business plans may use anonymized data for model improvement by default, with an account opt-out documented
 - Granola can transcribe voice memos, but current MCP documentation guarantees meeting-note and transcript tools rather than voice-memo coverage
+
+## Notion MCP
+
+Notion's hosted, actively maintained OAuth MCP for searching, reading, and changing content available to the connected user.
+
+- **Supported agents:** `claude_code`, `codex`, `cursor`, `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** A Notion workspace; An MCP client supporting remote Streamable HTTP and browser OAuth; A user permitted to connect external MCP clients
+- **Credentials:** Per-user browser OAuth token managed by the MCP client and hosted service
+- **Reads:** Sensitive pages, databases, data sources, comments, meeting notes, members, guests, email addresses, and workspace identity allowed to the connected user; Search results from connected sources such as Slack, Google Drive, or Jira when Notion AI and workspace configuration allow them; Retrieved content that enters the connected model context
+- **Writes / external effects:** Remote writes to Notion pages, databases, data sources, views, folders, comments, properties, icons, covers, and file uploads; Page moves, duplication, template application, and full-content replacement or other overwrite-capable updates
+- **Typed safety signals:** sensitive read, remote write, overwrite, oauth
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `overwrite`, `oauth`, `destructive`
+- **Confirmation:** Confirm the exact Notion user and workspace during OAuth; ask before broad or connected-source reads, then show the exact destination and content before remote writes, moves, uploads, template application, or overwrite-capable updates.
+- **Risk tags:** `sensitive-read`, `remote-write`, `overwrite-capable`, `oauth`, `destructive-capable`, `hosted`, `prompt-injection`, `connected-sources`
+- **Evidence:** [1](https://developers.notion.com/guides/mcp/get-started-with-mcp); [2](https://developers.notion.com/guides/mcp/mcp-supported-tools); [3](https://developers.notion.com/guides/mcp/mcp-security-best-practices)
+- **Health check:** After OAuth, fetch self to verify the exact workspace, user, and available tool access, then fetch one explicitly chosen page before any broad search or write.
+- **Uninstall:** Remove the MCP entry from the client and revoke the connection in Notion Settings under Connections; preserve all workspace pages, databases, comments, and uploaded files. (removes user data: No)
+
+Capabilities and limits:
+
+- Use only Notion's official Streamable HTTP endpoint at https://mcp.notion.com/mcp; the older open-source npm server is no longer actively maintained
+- OAuth gives the connected client access to content the user can access, and Notion warns that retrieved content can contain prompt injection
+- Search can cross into connected sources, while meeting-note queries and some multi-source tools depend on workspace plan and Notion AI access
+- Require a diff before replace\_content, template application, property replacement, or another overwrite-capable update
+- File uploads and remote content changes require exact target review; broad searches, member lookup, and meeting-note queries require a sensitive-read review
 
 ## Obsidian CLI
 
