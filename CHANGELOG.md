@@ -4,6 +4,7 @@
 
 ### Added
 - A validated, opt-in integrations catalog with generated documentation, explicit credential/data/side-effect boundaries, and no automatic installation or activation. Initial links cover Agent Skills, Agent Workspace, AI Tools for Creators, and Substack MCP.
+- Reviewed optional entries for Tolaria, the official Obsidian CLI, Beads for Gemini CLI, and Granola's hosted MCP, with conservative overwrite, publish, destructive, OAuth, remote-sync, and transcript gates.
 
 ### Fixed
 - Moved project slash commands from the undiscovered root `commands/` directory to `.claude/commands/`; moved the native meta-skill to `.claude/skills/`; renamed `/context` to `/find-context` to avoid the Claude Code built-in.

@@ -104,6 +104,108 @@
       "uninstall": "No installation is performed by this catalog entry."
     },
     {
+      "id": "beads-gemini",
+      "name": "Beads for Gemini CLI",
+      "summary": "A project-scoped Gemini integration for Beads issue graphs and persistent agent coordination state.",
+      "source_url": "https://beads.gascity.com/integrations/gemini",
+      "kind": "agent_extension",
+      "supported_agents": ["gemini_cli"],
+      "installation": {
+        "automatic": false,
+        "scope": "project_or_user",
+        "prerequisites": ["The bd CLI", "A deliberately initialized Beads project", "Gemini CLI"]
+      },
+      "data_boundary": {
+        "credentials": ["Optional Dolt, Git, or cloud remote credentials stay with their configured clients"],
+        "reads": ["Local issue descriptions, comments, dependencies, memories, readiness, and coordination state"],
+        "writes": ["The project Beads database", "Project or user Gemini hooks and instructions", "Optional remote issue-history sync or push", "Issue deletion, purge, migration, repair, or reset when explicitly invoked"]
+      },
+      "capabilities": {
+        "read": true,
+        "write": true,
+        "publish": false,
+        "destructive": true,
+        "details": ["Prefer project-scoped bd setup gemini --project over the global default", "bd init can modify agent instructions and configure a remote", "Remote sync and reset operations need separate review"]
+      },
+      "confirmation": {
+        "required_for": ["credential_setup", "external_install", "write", "destructive"],
+        "notes": "Confirm initialization and setup after showing the project diff; separately confirm remote sync, migrations, fixes, delete or purge, and every reset operation."
+      },
+      "risk_tags": ["local-state", "hooks", "project-config", "remote-sync", "destructive-capable"],
+      "maturity": "verified",
+      "last_verified": "2026-08-15",
+      "health_check": "Run bd version, bd doctor, bd setup gemini --check, and a bounded bd ready --json query.",
+      "uninstall": "Remove only the Gemini integration with the documented project or user --remove command; back up first and require separate confirmation before a full project reset."
+    },
+    {
+      "id": "granola-mcp",
+      "name": "Granola MCP",
+      "summary": "Granola's official hosted, read-only MCP for meeting notes and plan-dependent transcripts.",
+      "source_url": "https://docs.granola.ai/help-center/sharing/integrations/mcp",
+      "kind": "mcp_server",
+      "supported_agents": ["claude_code", "generic"],
+      "installation": {
+        "automatic": false,
+        "scope": "user",
+        "prerequisites": ["A Granola account with notes", "An MCP client supporting Streamable HTTP and browser OAuth"]
+      },
+      "data_boundary": {
+        "credentials": ["Per-user browser OAuth bearer token; never copy it into repository configuration or logs"],
+        "reads": ["Owned, directly shared, private-folder-shared, or workspace-public notes allowed by the active account and plan", "Account information, meeting folders, meeting notes, searches, and plan-dependent transcripts that enter the connected model context"],
+        "writes": []
+      },
+      "capabilities": {
+        "read": true,
+        "write": false,
+        "publish": false,
+        "destructive": false,
+        "details": ["Do not ingest meeting data automatically at startup", "Ask before raw transcript retrieval or broad multi-meeting search", "Free and Business plans may use anonymized data for Granola model improvement by default, with an account opt-out documented", "Voice-memo transcript availability through MCP is not guaranteed by current documentation"]
+      },
+      "confirmation": {
+        "required_for": ["credential_setup", "external_install"],
+        "notes": "Require explicit OAuth, verify the active account and workspace, and ask before transcript retrieval, broad searches, or moving meeting content elsewhere."
+      },
+      "risk_tags": ["sensitive-read", "oauth", "hosted", "transcripts", "plan-limited"],
+      "maturity": "verified",
+      "last_verified": "2026-08-15",
+      "health_check": "After OAuth, call get_account_info to verify the exact account and workspace, then run a narrowly bounded list_meetings request.",
+      "uninstall": "Disconnect Granola in the client and remove the MCP entry; do not claim token revocation unless the current client documents it."
+    },
+    {
+      "id": "obsidian",
+      "name": "Obsidian CLI",
+      "summary": "Obsidian's official desktop CLI for scoped access to local Markdown vaults; no MCP server is required.",
+      "source_url": "https://obsidian.md/help/cli",
+      "kind": "editor_guide",
+      "supported_agents": ["claude_code", "codex", "gemini_cli", "generic"],
+      "installation": {
+        "automatic": false,
+        "scope": "project_or_user",
+        "prerequisites": ["Obsidian desktop 1.12.7 or newer", "The command line interface enabled on PATH", "Obsidian running for CLI calls"]
+      },
+      "data_boundary": {
+        "credentials": ["Optional Obsidian Sync or Publish credentials remain inside Obsidian"],
+        "reads": ["Explicitly selected local vault notes, properties, tasks, backlinks, and history"],
+        "writes": ["Vault notes, properties, tasks, moves, and renames", "Trash or permanent deletion", "Publish or unpublish actions", "Plugin changes and arbitrary Obsidian command or eval execution"]
+      },
+      "capabilities": {
+        "read": true,
+        "write": true,
+        "publish": true,
+        "destructive": true,
+        "details": ["Prefer exact vault and path parameters over ambiguous file resolution", "Use the Obsidian CLI for link-aware moves and renames", "Deny arbitrary eval and command by default"]
+      },
+      "confirmation": {
+        "required_for": ["credential_setup", "external_install", "write", "publish", "destructive"],
+        "notes": "Confirm overwrites, bulk or link-affecting moves, sync control, deletion, publish or unpublish, plugin changes, arbitrary command, and eval; use the normal local-edit gate for a single bounded note edit."
+      },
+      "risk_tags": ["local-data", "read-write", "publish-capable", "destructive-capable", "arbitrary-eval"],
+      "maturity": "verified",
+      "last_verified": "2026-08-15",
+      "health_check": "Run obsidian version, resolve the exact vault path, then perform a bounded JSON search with limit 1.",
+      "uninstall": "Disable the CLI or remove the harness allowlist; do not delete, unregister, or alter the vault unless separately requested."
+    },
+    {
       "id": "substack-mcp",
       "name": "Substack MCP",
       "summary": "An MCP server for reading Substack publication data, managing private drafts, and publishing short-form Notes.",
@@ -136,6 +238,40 @@
       "last_verified": "2026-08-15",
       "health_check": "After explicit authentication, run the documented subscriber-count read and verify the expected publication account.",
       "uninstall": "Remove the MCP client entry and, if used, review then remove the local browser-login session file."
+    },
+    {
+      "id": "tolaria",
+      "name": "Tolaria",
+      "summary": "A local-first Markdown vault desktop app with a bundled stdio MCP and embedded coding-agent interface.",
+      "source_url": "https://github.com/refactoringhq/tolaria",
+      "kind": "local_workspace",
+      "supported_agents": ["claude_code", "codex", "opencode", "generic"],
+      "installation": {
+        "automatic": false,
+        "scope": "project_or_user",
+        "prerequisites": ["Tolaria for macOS, Windows, or Linux", "A mounted local vault", "The separately installed and authenticated agent CLI selected by the user"]
+      },
+      "data_boundary": {
+        "credentials": ["Agent or API credentials remain with the selected CLI or provider", "Optional Git remote credentials remain with system Git"],
+        "reads": ["Markdown and YAML frontmatter in explicitly mounted vaults"],
+        "writes": ["Create, append, or full-content update of notes in mounted vaults", "Attach an additional vault or clone one through system Git"]
+      },
+      "capabilities": {
+        "read": true,
+        "write": true,
+        "publish": false,
+        "destructive": true,
+        "details": ["Treat full-content update_note as overwrite-capable even though its MCP annotation says non-destructive", "Prefer get_note, diff review, and expectedMtime before update_note", "Git can replicate vault contents and direct cloud-agent targets may send selected note context to their provider", "Bundled MCP documents no delete or publish tool, but a native agent can have broader file or shell access"]
+      },
+      "confirmation": {
+        "required_for": ["credential_setup", "external_install", "write", "destructive"],
+        "notes": "Use normal approval for a single create or append; show a diff or confirm full replacement, bulk edits, vault attachment or clone, Power User mode, Git push, and broader native-agent actions."
+      },
+      "risk_tags": ["local-data", "read-write", "optional-network", "agent-execution", "overwrite-capable"],
+      "maturity": "verified",
+      "last_verified": "2026-08-15",
+      "health_check": "Start Tolaria, list mounted vaults, read vault context, run a bounded search, then use a disposable note for any write smoke test.",
+      "uninstall": "Remove any manually added MCP entry and uninstall the app; preserve all vaults unless deletion is separately confirmed."
     }
   ]
 }

@@ -23,9 +23,20 @@ class IntegrationCatalogTests(unittest.TestCase):
 
     def test_catalog_is_sorted_only_at_render_time_and_has_unique_ids(self) -> None:
         rendered = MODULE.render_reference(self.catalog)
-        self.assertEqual(len(self.catalog["integrations"]), 4)
+        self.assertEqual(len(self.catalog["integrations"]), 8)
         self.assertIn("Substack MCP", rendered)
         self.assertIn("immediate public publish action", rendered)
+
+    def test_issue_19_entries_have_expected_high_risk_gates(self) -> None:
+        entries = {item["id"]: item for item in self.catalog["integrations"]}
+        self.assertTrue(entries["tolaria"]["capabilities"]["destructive"])
+        self.assertIn("overwrite-capable", entries["tolaria"]["risk_tags"])
+        self.assertTrue(entries["obsidian"]["capabilities"]["publish"])
+        self.assertIn("arbitrary-eval", entries["obsidian"]["risk_tags"])
+        self.assertEqual(entries["beads-gemini"]["supported_agents"], ["gemini_cli"])
+        self.assertIn("destructive", entries["beads-gemini"]["confirmation"]["required_for"])
+        self.assertFalse(entries["granola-mcp"]["capabilities"]["write"])
+        self.assertEqual(entries["granola-mcp"]["data_boundary"]["writes"], [])
 
     def test_generated_reference_matches_catalog(self) -> None:
         expected = MODULE.render_reference(self.catalog)

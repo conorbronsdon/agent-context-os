@@ -8,7 +8,11 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [Agent Skills](https://github.com/conorbronsdon/agent-skills) | `skill_catalog` | verified | Yes | No | Yes | 2026-08-15 |
 | [Agent Workspace](https://github.com/conorbronsdon/agent-workspace) | `workspace_template` | verified | Yes | No | Yes | 2026-08-15 |
 | [AI Tools for Creators](https://github.com/conorbronsdon/ai-tools-for-creators) | `resource_catalog` | listed | No | No | No | 2026-08-15 |
+| [Beads for Gemini CLI](https://beads.gascity.com/integrations/gemini) | `agent_extension` | verified | Yes | No | Yes | 2026-08-15 |
+| [Granola MCP](https://docs.granola.ai/help-center/sharing/integrations/mcp) | `mcp_server` | verified | No | No | No | 2026-08-15 |
+| [Obsidian CLI](https://obsidian.md/help/cli) | `editor_guide` | verified | Yes | Yes | Yes | 2026-08-15 |
 | [Substack MCP](https://github.com/conorbronsdon/substack-mcp) | `mcp_server` | verified | Yes | Yes | No | 2026-08-15 |
+| [Tolaria](https://github.com/refactoringhq/tolaria) | `local_workspace` | verified | Yes | No | Yes | 2026-08-15 |
 
 ## Agent Skills
 
@@ -73,6 +77,73 @@ Capabilities and limits:
 - Discovery links only; every linked tool needs separate review
 
 
+## Beads for Gemini CLI
+
+A project-scoped Gemini integration for Beads issue graphs and persistent agent coordination state.
+
+- **Supported agents:** `gemini_cli`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** The bd CLI; A deliberately initialized Beads project; Gemini CLI
+- **Credentials:** Optional Dolt, Git, or cloud remote credentials stay with their configured clients
+- **Reads:** Local issue descriptions, comments, dependencies, memories, readiness, and coordination state
+- **Writes / external effects:** The project Beads database; Project or user Gemini hooks and instructions; Optional remote issue-history sync or push; Issue deletion, purge, migration, repair, or reset when explicitly invoked
+- **Confirmation:** Confirm initialization and setup after showing the project diff; separately confirm remote sync, migrations, fixes, delete or purge, and every reset operation.
+- **Risk tags:** `local-state`, `hooks`, `project-config`, `remote-sync`, `destructive-capable`
+- **Health check:** Run bd version, bd doctor, bd setup gemini --check, and a bounded bd ready --json query.
+- **Uninstall:** Remove only the Gemini integration with the documented project or user --remove command; back up first and require separate confirmation before a full project reset.
+
+Capabilities and limits:
+
+- Prefer project-scoped bd setup gemini --project over the global default
+- bd init can modify agent instructions and configure a remote
+- Remote sync and reset operations need separate review
+
+
+## Granola MCP
+
+Granola's official hosted, read-only MCP for meeting notes and plan-dependent transcripts.
+
+- **Supported agents:** `claude_code`, `generic`
+- **Install scope:** `user`; never automatic
+- **Prerequisites:** A Granola account with notes; An MCP client supporting Streamable HTTP and browser OAuth
+- **Credentials:** Per-user browser OAuth bearer token; never copy it into repository configuration or logs
+- **Reads:** Owned, directly shared, private-folder-shared, or workspace-public notes allowed by the active account and plan; Account information, meeting folders, meeting notes, searches, and plan-dependent transcripts that enter the connected model context
+- **Writes / external effects:** None
+- **Confirmation:** Require explicit OAuth, verify the active account and workspace, and ask before transcript retrieval, broad searches, or moving meeting content elsewhere.
+- **Risk tags:** `sensitive-read`, `oauth`, `hosted`, `transcripts`, `plan-limited`
+- **Health check:** After OAuth, call get\_account\_info to verify the exact account and workspace, then run a narrowly bounded list\_meetings request.
+- **Uninstall:** Disconnect Granola in the client and remove the MCP entry; do not claim token revocation unless the current client documents it.
+
+Capabilities and limits:
+
+- Do not ingest meeting data automatically at startup
+- Ask before raw transcript retrieval or broad multi-meeting search
+- Free and Business plans may use anonymized data for Granola model improvement by default, with an account opt-out documented
+- Voice-memo transcript availability through MCP is not guaranteed by current documentation
+
+
+## Obsidian CLI
+
+Obsidian's official desktop CLI for scoped access to local Markdown vaults; no MCP server is required.
+
+- **Supported agents:** `claude_code`, `codex`, `gemini_cli`, `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** Obsidian desktop 1.12.7 or newer; The command line interface enabled on PATH; Obsidian running for CLI calls
+- **Credentials:** Optional Obsidian Sync or Publish credentials remain inside Obsidian
+- **Reads:** Explicitly selected local vault notes, properties, tasks, backlinks, and history
+- **Writes / external effects:** Vault notes, properties, tasks, moves, and renames; Trash or permanent deletion; Publish or unpublish actions; Plugin changes and arbitrary Obsidian command or eval execution
+- **Confirmation:** Confirm overwrites, bulk or link-affecting moves, sync control, deletion, publish or unpublish, plugin changes, arbitrary command, and eval; use the normal local-edit gate for a single bounded note edit.
+- **Risk tags:** `local-data`, `read-write`, `publish-capable`, `destructive-capable`, `arbitrary-eval`
+- **Health check:** Run obsidian version, resolve the exact vault path, then perform a bounded JSON search with limit 1.
+- **Uninstall:** Disable the CLI or remove the harness allowlist; do not delete, unregister, or alter the vault unless separately requested.
+
+Capabilities and limits:
+
+- Prefer exact vault and path parameters over ambiguous file resolution
+- Use the Obsidian CLI for link-aware moves and renames
+- Deny arbitrary eval and command by default
+
+
 ## Substack MCP
 
 An MCP server for reading Substack publication data, managing private drafts, and publishing short-form Notes.
@@ -92,4 +163,27 @@ Capabilities and limits:
 
 - No long-form publish, delete, or schedule mutation
 - Note creation publishes immediately and has no server-side undo
+
+
+## Tolaria
+
+A local-first Markdown vault desktop app with a bundled stdio MCP and embedded coding-agent interface.
+
+- **Supported agents:** `claude_code`, `codex`, `opencode`, `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** Tolaria for macOS, Windows, or Linux; A mounted local vault; The separately installed and authenticated agent CLI selected by the user
+- **Credentials:** Agent or API credentials remain with the selected CLI or provider; Optional Git remote credentials remain with system Git
+- **Reads:** Markdown and YAML frontmatter in explicitly mounted vaults
+- **Writes / external effects:** Create, append, or full-content update of notes in mounted vaults; Attach an additional vault or clone one through system Git
+- **Confirmation:** Use normal approval for a single create or append; show a diff or confirm full replacement, bulk edits, vault attachment or clone, Power User mode, Git push, and broader native-agent actions.
+- **Risk tags:** `local-data`, `read-write`, `optional-network`, `agent-execution`, `overwrite-capable`
+- **Health check:** Start Tolaria, list mounted vaults, read vault context, run a bounded search, then use a disposable note for any write smoke test.
+- **Uninstall:** Remove any manually added MCP entry and uninstall the app; preserve all vaults unless deletion is separately confirmed.
+
+Capabilities and limits:
+
+- Treat full-content update\_note as overwrite-capable even though its MCP annotation says non-destructive
+- Prefer get\_note, diff review, and expectedMtime before update\_note
+- Git can replicate vault contents and direct cloud-agent targets may send selected note context to their provider
+- Bundled MCP documents no delete or publish tool, but a native agent can have broader file or shell access
 
