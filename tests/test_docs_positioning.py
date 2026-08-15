@@ -78,6 +78,12 @@ class DocumentationPositioningTests(unittest.TestCase):
             host_config = self.text(relative_path)
             self.assertNotIn("mcp__google-workspace", host_config, relative_path)
             self.assertNotIn("gws mcp", host_config, relative_path)
+        state_refs = self.text("state/gws-references.md")
+        start = self.text(".claude/commands/start.md")
+        self.assertRegex(state_refs, r"Claude `/start` adapter may\s+read it")
+        self.assertRegex(state_refs, r"already\s+installed and authenticated")
+        self.assertIn("state/gws-references.md", start)
+        self.assertIn("normal tool approval flow", start)
         notion = self.text("references/notion-mcp-setup.md")
         self.assertIn("hosted, actively maintained MCP server", notion)
         self.assertIn("Context OS does not add the server", notion)
@@ -96,6 +102,7 @@ class DocumentationPositioningTests(unittest.TestCase):
                 r"(?i)(?:do not|without claiming to)[^\n]*(?:write|create|edit|change|update)",
             )
             self.assertRegex(section, r"(?i)draft")
+            self.assertIn("durable in git", section)
         prompt_two = prompts.split("## Prompt 2:", 1)[1].split("## Prompt 3:", 1)[0]
         self.assertIn("copy-and-rename checklist", prompt_two)
         self.assertIn("after review", prompt_two)
@@ -190,6 +197,9 @@ class DocumentationPositioningTests(unittest.TestCase):
             dream.index('validate-memory.py artifact "$TS" --for-commit'),
         )
         self.assertIn("validate-memory.py changes", apply)
+        self.assertIn("--expect-digest", apply)
+        self.assertIn("--staged", apply)
+        self.assertIn("disables rename detection", apply)
         self.assertIn('git -C "$MEMORY_DIR" add -A --', apply)
         self.assertNotIn('git -C "$MEMORY_DIR" add -A\n', apply)
         self.assertNotIn('git -C "$MEMORY_DIR" add ".dreams/$TS/"', dream)
@@ -201,6 +211,18 @@ class DocumentationPositioningTests(unittest.TestCase):
             "treat `$ARGUMENTS` as the ISO timestamp",
         ):
             self.assertNotIn(obsolete, dream + apply)
+        self.assertIn("Root present + exactly one row is a resumable crashed run", apply)
+        lint = self.text("scripts/dream/prompts/lint.md")
+        self.assertIn("root present + one row resumes", lint)
+
+    def test_gws_safety_claims_have_direct_pinned_evidence(self) -> None:
+        catalog = json.loads(self.text("integrations/catalog.json"))
+        gws = next(item for item in catalog["integrations"] if item["id"] == "google-workspace-cli")
+        evidence = gws["evidence"]
+        self.assertTrue(any(url.endswith("/crates/google-workspace-cli/src/auth_commands.rs") for url in evidence))
+        self.assertTrue(any(url.endswith("/CHANGELOG.md") for url in evidence))
+        for url in evidence:
+            self.assertIn("/blob/a3768d0e82ad83cca2da97724e46bea4ff0e6dbd/", url)
 
     def test_context_optimization_avoids_fixed_pdf_arithmetic(self) -> None:
         guide = self.text("docs/optimizing-context.md")

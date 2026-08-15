@@ -12,6 +12,7 @@ empty evidence.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -181,8 +182,11 @@ def ensure_no_symlink_components(path: Path, stop_at: Path, label: str) -> None:
 
 def changed_memory_paths(memory_dir: Path) -> set[str]:
     return set().union(
-        run_git_paths(["diff", "--name-only", "-z"], cwd=memory_dir),
-        run_git_paths(["diff", "--cached", "--name-only", "-z"], cwd=memory_dir),
+        run_git_paths(["diff", "--no-renames", "--name-only", "-z"], cwd=memory_dir),
+        run_git_paths(
+            ["diff", "--cached", "--no-renames", "--name-only", "-z"],
+            cwd=memory_dir,
+        ),
         run_git_paths(
             ["ls-files", "--others", "--exclude-standard", "-z"], cwd=memory_dir
         ),
@@ -299,6 +303,86 @@ def require_allowed_changes(memory_dir: Path, allowed: set[str]) -> set[str]:
             + ", ".join(sorted(unexpected))
         )
     return changed
+
+
+def require_no_unstaged_changes(memory_dir: Path) -> None:
+    completed = subprocess.run(
+        ["git", "diff", "--quiet", "--exit-code"],
+        cwd=memory_dir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if completed.returncode == 1:
+        raise ValidationError("memory git has unstaged changes after reviewed staging")
+    if completed.returncode != 0:
+        raise ValidationError("cannot compare the memory worktree with its index")
+
+
+def staged_entry(memory_dir: Path, relative: str) -> tuple[str, bytes] | None:
+    completed = subprocess.run(
+        ["git", "ls-files", "--stage", "-z", "--", relative],
+        cwd=memory_dir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if completed.returncode != 0:
+        raise ValidationError(f"cannot inspect staged path: {relative}")
+    entries = [entry for entry in completed.stdout.split(b"\0") if entry]
+    candidate = memory_dir / relative
+    if not entries:
+        if candidate.exists():
+            raise ValidationError(f"reviewed path is not staged: {relative}")
+        return None
+    if len(entries) != 1:
+        raise ValidationError(f"reviewed path has unresolved index stages: {relative}")
+    metadata, separator, encoded_path = entries[0].partition(b"\t")
+    fields = metadata.split()
+    try:
+        decoded_path = encoded_path.decode("utf-8")
+    except UnicodeError as exc:
+        raise ValidationError(f"staged path is not UTF-8: {relative}") from exc
+    if not separator or len(fields) != 3 or fields[2] != b"0" or decoded_path != relative:
+        raise ValidationError(f"malformed staged entry for reviewed path: {relative}")
+    blob = subprocess.run(
+        ["git", "cat-file", "blob", fields[1].decode("ascii")],
+        cwd=memory_dir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if blob.returncode != 0:
+        raise ValidationError(f"cannot read staged blob for reviewed path: {relative}")
+    return fields[0].decode("ascii"), blob.stdout
+
+
+def change_digest(memory_dir: Path, paths: set[str], *, staged: bool) -> str:
+    digest = hashlib.sha256()
+    digest.update(b"context-os-dream-change-v1\0")
+    for relative in sorted(paths):
+        encoded = relative.encode("utf-8")
+        digest.update(len(encoded).to_bytes(8, "big"))
+        digest.update(encoded)
+        if staged:
+            entry = staged_entry(memory_dir, relative)
+        else:
+            candidate = memory_dir / relative
+            if candidate.is_symlink() or (candidate.exists() and not candidate.is_file()):
+                raise ValidationError(f"reviewed path must be a regular file or deletion: {relative}")
+            try:
+                entry = (
+                    ("100755" if candidate.stat().st_mode & 0o111 else "100644"),
+                    candidate.read_bytes(),
+                ) if candidate.exists() else None
+            except OSError as exc:
+                raise ValidationError(f"cannot read reviewed path {relative}: {exc}") from exc
+        if entry is None:
+            digest.update(b"D")
+        else:
+            mode, content = entry
+            digest.update(b"F")
+            digest.update(mode.encode("ascii"))
+            digest.update(len(content).to_bytes(8, "big"))
+            digest.update(content)
+    return digest.hexdigest()
 
 
 def valid_timestamp(value: str) -> bool:
@@ -691,7 +775,27 @@ def cmd_changes(args: argparse.Namespace) -> dict[str, Any]:
             "reviewed allowlist includes paths that did not change: "
             + ", ".join(sorted(omitted))
         )
-    return {**binding, "changed_paths": sorted(changed), "allowed_paths": sorted(allowed)}
+    if args.staged:
+        if not args.expect_digest:
+            raise ValidationError("--staged requires the reviewed --expect-digest")
+        require_no_unstaged_changes(memory_dir)
+    elif args.expect_digest:
+        raise ValidationError("--expect-digest is valid only with --staged")
+    digest = change_digest(memory_dir, changed, staged=args.staged)
+    if args.expect_digest:
+        if not re.fullmatch(r"[0-9a-f]{64}", args.expect_digest):
+            raise ValidationError("--expect-digest must be a lowercase SHA-256 digest")
+        if digest != args.expect_digest:
+            raise ValidationError(
+                "staged bytes do not match the reviewed change digest; inspect and re-approve the final diff"
+            )
+    return {
+        **binding,
+        "changed_paths": sorted(changed),
+        "allowed_paths": sorted(allowed),
+        "change_digest": digest,
+        "source": "index" if args.staged else "worktree",
+    }
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -717,6 +821,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     changes.add_argument(
         "--allow", action="append", default=[], help="reviewed memory-relative path"
+    )
+    changes.add_argument(
+        "--staged",
+        action="store_true",
+        help="hash the staged blobs and require no unstaged changes",
+    )
+    changes.add_argument(
+        "--expect-digest",
+        help="reviewed worktree digest that the staged blobs must match",
     )
     return parser
 

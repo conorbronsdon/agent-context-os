@@ -19,13 +19,26 @@ Build useful context from the user's own words or selected migration material wi
 
 ## Procedure
 
-### 1. Choose the starting point
+### 1. Confirm storage and audience before collecting context
+
+Explain that identity, project, state, session, and imported context can be
+sensitive. Tracked files are visible to every repository collaborator and
+configured agent, and deleting them later does not erase them from git history.
+Recommend a local-only workspace or private remote by default; a public remote
+requires deliberately sanitized content. Keep raw exports and migration staging
+outside tracked files.
+
+Ask the user to confirm that the current storage location, repository audience,
+and intended agent access are appropriate. If they do not explicitly confirm,
+stop before reading migration material or asking for personal information.
+
+### 2. Choose the starting point
 
 Ask whether the user wants to start from their answers, selected existing material, or both.
 
 For existing material, read `docs/migration-guide.md`. Ask for one reviewed migration packet or a narrow set of source files. Inventory the selected input, mark claims that need verification, identify sensitive items that should stay out of the workspace, and propose destinations. Do not read beyond the scope the user selected.
 
-### 2. Inspect the workspace
+### 3. Inspect the workspace
 
 Read:
 
@@ -38,7 +51,7 @@ Read:
 
 Classify each as missing, placeholder-only, or populated. Tell the user what can be filled safely, what would be merged, and what would be updated.
 
-### 3. Gather identity context
+### 4. Gather identity context
 
 Ask for, one question at a time:
 
@@ -54,7 +67,7 @@ Ask for, one question at a time:
 
 Use approved migration items as candidate answers, then ask only for missing details or verification. Draft updates to the two identity files, preserve the user's language, and use today's date for `**Last Updated:**`.
 
-### 4. Gather the first project
+### 5. Gather the first project
 
 Ask for one recurring project, then gather:
 
@@ -69,7 +82,7 @@ Draft `projects/<project-slug>/context.md` and `projects/<project-slug>/strategy
 
 Offer to repeat this phase for another project.
 
-### 5. Gather weekly state
+### 6. Gather weekly state
 
 Ask for:
 
@@ -80,7 +93,7 @@ Ask for:
 
 Draft `state/current.md` and `state/weekly-priorities.md` with current dates.
 
-### 6. Review and apply
+### 7. Review and apply
 
 Present:
 

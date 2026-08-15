@@ -283,6 +283,10 @@ fi
 
 case "$SELECTED_AGENT" in
   claude)
+    echo "  Claude Code auto-memory is enabled by default and may write machine-local memory."
+    echo "  Inspect it with /memory; to opt out, set autoMemoryEnabled: false in"
+    echo "  .claude/settings.local.json. Setup does not change that host setting."
+    echo ""
     printf '  1. cd %q && claude\n' "$REPO_ROOT"
     echo "  2. Type: /setup"
     echo "     Claude will interview you and build your context files."

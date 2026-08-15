@@ -7,6 +7,14 @@ disable-model-invocation: true
 
 # /setup — Claude Code adapter
 
+Before delegating, disclose that Claude Code auto-memory is enabled by default
+and may write machine-local memory automatically during ordinary sessions. The
+user can inspect it with `/memory` or disable it with
+`autoMemoryEnabled: false` in `.claude/settings.local.json`. This repository's
+review gates govern its own lifecycle and `/dream` flows; they do not turn
+ordinary host auto-memory into a reviewed write path. Do not change the setting
+as part of setup.
+
 Read and follow `.agents/skills/context-setup/SKILL.md` as the canonical workflow.
 
 After the user approves the portable workflow's proposed changes:

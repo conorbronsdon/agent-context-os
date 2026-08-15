@@ -84,6 +84,22 @@ grep -Fq '/import' docs/codex-onboarding.md || fail "Codex guide must explain op
 
 grep -Fq 'trusted repository-scoped' docs/codex-onboarding.md || fail "Codex guide must describe supported project configuration accurately"
 
+setup_skill=.agents/skills/context-setup/SKILL.md
+storage_line=$(grep -n 'Confirm storage and audience before collecting context' "$setup_skill" | cut -d: -f1)
+source_line=$(grep -n 'Choose the starting point' "$setup_skill" | cut -d: -f1)
+test -n "$storage_line" && test -n "$source_line" && test "$storage_line" -lt "$source_line" \
+  || fail "portable setup does not confirm storage before reading or collecting context"
+grep -Fq 'does not erase them from git history' "$setup_skill" \
+  || fail "portable setup omits git-history retention disclosure"
+grep -Fq 'explicitly confirm' "$setup_skill" \
+  || fail "portable setup does not require audience confirmation"
+grep -Fq 'auto-memory is enabled by default' .claude/commands/setup.md \
+  || fail "Claude setup adapter omits the host auto-memory default"
+grep -Fq '/memory' .claude/commands/setup.md \
+  || fail "Claude setup adapter omits memory inspection"
+grep -Fq 'autoMemoryEnabled: false' .claude/commands/setup.md \
+  || fail "Claude setup adapter omits the auto-memory opt-out"
+
 portability_tmp=$(mktemp -d)
 trap 'rm -rf "$portability_tmp"' EXIT
 invalid_metadata="$portability_tmp/invalid-openai.yaml"
@@ -216,6 +232,13 @@ git -C "$no_remote_fixture" remote remove origin
 no_remote_output=$(printf 'n\n' | (cd "$no_remote_fixture" && bash scripts/setup.sh --agent none))
 grep -Fq 'visibility and intended audience' <<<"$no_remote_output" || fail "no-remote setup omitted unconditional audience warning"
 git -C "$no_remote_fixture" diff --quiet || fail "no-remote default-no path wrote tracked content"
+
+memory_notice_fixture="$portability_tmp/claude-memory-notice"
+make_setup_fixture "$memory_notice_fixture"
+memory_notice_output=$(printf 'y\n\nn\nn\nn\n' | (cd "$memory_notice_fixture" && PATH=/usr/bin:/bin bash scripts/setup.sh --agent claude))
+grep -Fq 'auto-memory is enabled by default' <<<"$memory_notice_output" || fail "local Claude onboarding omitted auto-memory default"
+grep -Fq 'Inspect it with /memory' <<<"$memory_notice_output" || fail "local Claude onboarding omitted /memory inspection"
+grep -Fq 'autoMemoryEnabled: false' <<<"$memory_notice_output" || fail "local Claude onboarding omitted opt-out setting"
 
 template_fixture="$portability_tmp/template-remote"
 make_setup_fixture "$template_fixture"

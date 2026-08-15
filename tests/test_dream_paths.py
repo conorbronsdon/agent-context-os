@@ -560,6 +560,110 @@ class DreamMemoryPathTests(unittest.TestCase):
         self.assertNotEqual(traversal.returncode, 0)
         self.assertIn("canonical relative path", traversal.stderr)
 
+    def test_change_allowlist_counts_both_sides_of_a_rename(self) -> None:
+        (self.memory / "archive").mkdir()
+        run(
+            [
+                "git",
+                "mv",
+                "project_alpha.md",
+                "archive/project_alpha.md",
+            ],
+            self.memory,
+        )
+
+        destination_only = self.helper(
+            "changes", "--allow", "archive/project_alpha.md"
+        )
+        self.assertNotEqual(destination_only.returncode, 0)
+        self.assertIn("project_alpha.md", destination_only.stderr)
+
+        reviewed = self.helper(
+            "changes",
+            "--allow",
+            "project_alpha.md",
+            "--allow",
+            "archive/project_alpha.md",
+        )
+        self.assertEqual(reviewed.returncode, 0, reviewed.stderr)
+        payload = json.loads(reviewed.stdout)
+        self.assertEqual(
+            payload["changed_paths"],
+            ["archive/project_alpha.md", "project_alpha.md"],
+        )
+
+        staged = self.helper(
+            "changes",
+            "--staged",
+            "--expect-digest",
+            payload["change_digest"],
+            "--allow",
+            "project_alpha.md",
+            "--allow",
+            "archive/project_alpha.md",
+        )
+        self.assertEqual(staged.returncode, 0, staged.stderr)
+        self.assertEqual(json.loads(staged.stdout)["source"], "index")
+
+    def test_staged_digest_rejects_same_path_replacement(self) -> None:
+        target = self.memory / "project_alpha.md"
+        target.write_text("reviewed replacement\n", encoding="utf-8")
+        reviewed = self.helper("changes", "--allow", "project_alpha.md")
+        self.assertEqual(reviewed.returncode, 0, reviewed.stderr)
+        digest = json.loads(reviewed.stdout)["change_digest"]
+
+        target.write_text("UNREVIEWED REPLACEMENT\n", encoding="utf-8")
+        run(["git", "add", "--", "project_alpha.md"], self.memory)
+        replaced = self.helper(
+            "changes",
+            "--staged",
+            "--expect-digest",
+            digest,
+            "--allow",
+            "project_alpha.md",
+        )
+        self.assertNotEqual(replaced.returncode, 0)
+        self.assertIn("staged bytes do not match", replaced.stderr)
+
+    def test_staged_digest_accepts_exact_reviewed_bytes_only(self) -> None:
+        target = self.memory / "project_alpha.md"
+        target.write_text("reviewed replacement\n", encoding="utf-8")
+        reviewed = self.helper("changes", "--allow", "project_alpha.md")
+        self.assertEqual(reviewed.returncode, 0, reviewed.stderr)
+        digest = json.loads(reviewed.stdout)["change_digest"]
+        run(["git", "add", "--", "project_alpha.md"], self.memory)
+
+        staged = self.helper(
+            "changes",
+            "--staged",
+            "--expect-digest",
+            digest,
+            "--allow",
+            "project_alpha.md",
+        )
+        self.assertEqual(staged.returncode, 0, staged.stderr)
+        self.assertEqual(json.loads(staged.stdout)["change_digest"], digest)
+
+    def test_staged_digest_rejects_unreviewed_mode_change(self) -> None:
+        target = self.memory / "project_alpha.md"
+        target.write_text("reviewed replacement\n", encoding="utf-8")
+        reviewed = self.helper("changes", "--allow", "project_alpha.md")
+        self.assertEqual(reviewed.returncode, 0, reviewed.stderr)
+        digest = json.loads(reviewed.stdout)["change_digest"]
+
+        target.chmod(0o755)
+        run(["git", "add", "--", "project_alpha.md"], self.memory)
+        replaced = self.helper(
+            "changes",
+            "--staged",
+            "--expect-digest",
+            digest,
+            "--allow",
+            "project_alpha.md",
+        )
+        self.assertNotEqual(replaced.returncode, 0)
+        self.assertIn("staged bytes do not match", replaced.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

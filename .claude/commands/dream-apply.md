@@ -71,11 +71,14 @@ b. Ask via `AskUserQuestion`:
 c. On `Accept`: apply the change.
    - For `modify` action: use Edit tool on `$MEMORY_DIR/{target}`, replacing `current_excerpt` with `proposed_excerpt`.
    - For `archive` action, all five steps — an archive that stops early leaves the file reading as live:
-     1. **Check it isn't already archived.** `test -f "$MEMORY_DIR/archive/{target}"`, and `grep -F "](archive/{target})" "$MEMORY_DIR/ARCHIVE.md"`. A hit on either means it is already retired — stop and report.
+     1. **Classify fresh, resumable, or complete from the filesystem.** Check the root target, `archive/{target}`, and the exact matching row count in `ARCHIVE.md`.
+        - Destination present + root absent + exactly one row means complete: stop as already retired.
+        - Destination and root both present, destination without a row, or duplicate rows are inconsistent: stop for manual review.
+        - Root present + exactly one row is a resumable crashed run, whether or not the stamp was written. Reuse the row's date, skip step 2, then finish stamp + move + links + index.
+        - Root present + no row is a fresh archive: continue through all steps.
         **Do not grep `ARCHIVE.md` for the bare filename.** Merge tombstones name the *surviving* file and split tombstones name the *children*; those files are live, so a bare-name grep refuses legitimate archives.
-        Separately, if `$MEMORY_DIR/{target}` still exists **and** already carries an `^archived:` stamp, that is a half-finished archive from a crashed earlier run — finish steps 4-5 rather than starting over, and do not write a second tombstone row.
-     2. Append a row to `$MEMORY_DIR/ARCHIVE.md`: `| {today} | [{target}](archive/{target}) | {one-line reason} |`.
-     3. **Stamp the file**: insert `archived: {today}` as the last line of its frontmatter block. This is what stops a future session reading it as a live memory.
+     2. For a fresh archive only, append one row to `$MEMORY_DIR/ARCHIVE.md`: `| {today} | [{target}](archive/{target}) | {one-line reason} |`.
+     3. **Stamp the file**: insert `archived: {archive_date}` as the last line of its frontmatter block, using today's date for a fresh archive or the existing row date for a resumed one. This is what stops a future session reading it as a live memory.
      4. **Move it.** `git mv` does **not** create the destination, and `$MEMORY_DIR` is its own git repo — so run both, from inside it:
         ```sh
         mkdir -p "$MEMORY_DIR/archive"
@@ -131,23 +134,27 @@ Write this file only at the already validated `$dream_dir/applied.json`; do not 
 
 ### 6. Commit to memory git
 
-Pass every path in that reviewed list to the executable allowlist check as a repeated `--allow` argument. Then stage only those same paths:
+Pass every path in that reviewed list to the executable allowlist check as a repeated `--allow` argument and capture its `change_digest`. The helper disables rename detection so both sides of a move must be named. Then stage only those same paths and require the staged blobs to match the reviewed digest:
 
 ```
 python3 scripts/dream/validate-memory.py changes \
   --allow ".dreams/$TS/applied.json" \
   --allow "<each other exact changed memory-relative path>"
+# Parse change_digest from that JSON as REVIEWED_DIGEST.
 git -C "$MEMORY_DIR" add -A -- \
   ".dreams/$TS/applied.json" \
   "<each other exact changed memory-relative path>"
 python3 scripts/dream/validate-memory.py changes \
+  --staged \
+  --expect-digest "$REVIEWED_DIGEST" \
   --allow ".dreams/$TS/applied.json" \
   --allow "<each other exact changed memory-relative path>"
 git -C "$MEMORY_DIR" diff --quiet
+git -C "$MEMORY_DIR" diff --cached --check
 git -C "$MEMORY_DIR" commit -m "dream-apply($TS): N accepted / M rejected / K deferred"
 ```
 
-Both helper calls must report only the reviewed paths, and the unstaged diff must be empty. If an unrelated tracked, staged, or untracked path appears, or a concurrent write lands after staging, stop without committing. Never replace the exact path list with bare `git add -A`.
+The second helper hashes the index rather than trusting path names and refuses any unstaged change. It must report the same digest and only the reviewed paths. If a rename omits its source, staged bytes differ, an unrelated tracked/staged/untracked path appears, or a concurrent write lands, stop without committing and show the final staged diff for renewed approval. Never replace the exact path list with bare `git add -A`.
 
 If no proposals were accepted, still commit `applied.json` so the audit trail is complete.
 

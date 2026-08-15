@@ -8,6 +8,14 @@ Use these prompts when claude.ai is your only available interface. Claude will d
 
 Run them in order the first time. After that, use them whenever you need to refresh a section.
 
+Before using any prompt, confirm the storage boundary: identity, project, and
+state drafts may be sensitive; every repository collaborator and configured
+agent can read tracked copies; deleting a file later does not erase it from git
+history. Prefer a local-only workspace or private remote, keep raw exports out
+of tracked files, and deliberately sanitize anything intended for a public
+repository. If that storage and audience are not appropriate, stop before
+sharing personal or project context.
+
 ---
 
 ## Prompt 1: Fill in your identity
@@ -15,6 +23,11 @@ Run them in order the first time. After that, use them whenever you need to refr
 Builds `identity/who-i-am.md` and `identity/professional-background.md`.
 
 ```
+Before reading files or asking questions, restate that tracked identity and
+project context is visible to repository collaborators and durable in git
+history. Ask me to confirm that this storage and audience are appropriate. If I
+do not explicitly confirm, stop.
+
 Read identity/who-i-am.md and identity/professional-background.md so you understand the structure. Then interview me to fill them in.
 
 Ask me the following questions one at a time — wait for my answer before moving to the next:
@@ -42,6 +55,11 @@ The example project in this repo is built for a musician — so the questions be
 This prompt drafts replacements for `projects/example-musician/artist-context.md` and `projects/example-musician/promotion-strategy.md`, plus a manual rename plan for the folder.
 
 ```
+Before reading files or asking questions, restate that tracked project context
+is visible to repository collaborators and durable in git history. Ask me to
+confirm that this storage and audience are appropriate. If I do not explicitly
+confirm, stop.
+
 Read projects/example-musician/artist-context.md and projects/example-musician/promotion-strategy.md so you understand the structure. Then interview me to fill them in.
 
 Ask me the following questions one at a time — wait for my answer before moving to the next:
@@ -87,6 +105,11 @@ After I've answered everything, draft the following artifacts without claiming t
 Use this for any project beyond music — a side business, a creative project, a job search, a content series, anything recurring where you'd want Claude to know the context.
 
 ```
+Before reading files or asking questions, restate that tracked project context
+is visible to repository collaborators and durable in git history. Ask me to
+confirm that this storage and audience are appropriate. If I do not explicitly
+confirm, stop.
+
 I want to add a new project section to this repo. Read projects/README.md so you understand the structure, then interview me to build it out.
 
 Ask me the following questions one at a time:
@@ -117,6 +140,11 @@ After I've answered everything, produce a review packet without claiming to chan
 Run this at the start of each week to update `state/current.md` and `state/weekly-priorities.md`. Takes 2 minutes.
 
 ```
+Before reading files or asking questions, restate that tracked state can be
+sensitive, is visible to repository collaborators, and is durable in git
+history. Ask me to confirm that this storage and audience are appropriate. If I
+do not explicitly confirm, stop.
+
 Read state/current.md and state/weekly-priorities.md. Then ask me:
 
 1. What are the top 3 things you need to accomplish this week?

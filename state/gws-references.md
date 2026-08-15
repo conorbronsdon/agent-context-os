@@ -1,9 +1,12 @@
 # Google Workspace References
 
 Optional placeholder for people who deliberately connect the current Google
-Workspace CLI or another reviewed integration. The template does not read this
-file, install an integration, or ship a live Google Workspace adapter. Review
-[`references/google-workspace-cli-setup.md`](../references/google-workspace-cli-setup.md)
+Workspace CLI or another reviewed integration. The repository-only default path
+does not read this file or call Google. The shipped Claude `/start` adapter may
+read it only during its optional live-source step, after `gws` is already
+installed and authenticated and the user approves the exact CLI invocation.
+The template does not install, authenticate, or pre-approve Bash for that step.
+Review [`references/google-workspace-cli-setup.md`](../references/google-workspace-cli-setup.md)
 before enabling access.
 
 Treat every identifier below as sensitive metadata. Do not populate or commit
