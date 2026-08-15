@@ -2,11 +2,12 @@
 
 # claude-context-os
 
-An operating system for your Claude context — version-controlled files, a self-curating memory, and a `/start` → work → `/end` session loop, shared across Claude Code and claude.ai.
+An operating system for durable agent context — version-controlled files, reviewable memory, and a start → work → end session loop shared across Claude Code, Codex, and claude.ai.
 
 [![GitHub stars](https://img.shields.io/github/stars/conorbronsdon/claude-context-os?style=social)](https://github.com/conorbronsdon/claude-context-os/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Built for Claude Code](https://img.shields.io/badge/built%20for-Claude%20Code-d97757?style=flat-square)](https://docs.anthropic.com/en/docs/claude-code)
+[![Codex ready](https://img.shields.io/badge/Codex-ready-111827?style=flat-square)](docs/codex-onboarding.md)
 [![Validate](https://github.com/conorbronsdon/claude-context-os/actions/workflows/validate.yml/badge.svg)](https://github.com/conorbronsdon/claude-context-os/actions/workflows/validate.yml)
 [![X](https://img.shields.io/badge/X-@ConorBronsdon-black?style=flat-square&logo=x)](https://x.com/ConorBronsdon)
 
@@ -16,7 +17,7 @@ An operating system for your Claude context — version-controlled files, a self
 
 Most people paste their context into Claude's project instructions and forget about it. It goes stale. They lose track of what's there. When something changes — a new job, a new project, a new workflow — updating it means hunting through UI fields with no version history. And if you use Claude in multiple places, you're maintaining the same context in multiple places.
 
-This repo flips that. Your context lives in files. Claude Code reads them directly; claude.ai projects read the same files as uploaded knowledge. Update a file once, and every interface you use stays current. Build a skill once — like the `avoid-ai-writing` skill included here — and it works as a slash command in Claude Code and as uploaded context in any claude.ai project.
+This repo flips that. Your context lives in files. Claude Code and Codex use checked-in host adapters to read the same repository state; claude.ai projects can use selected files as uploaded knowledge. Update a canonical file once, and every configured interface can use the same source of truth. Provider-neutral workflows live in `.agents/skills/`, while host-only commands, hooks, and memory stay clearly labeled.
 
 It also gives Claude a persistent, file-based **auto-memory** that grows over time (typed entries for user/feedback/project/reference) plus a `/dream` curator that runs autonomous passes over the memory dir — rot detection, contradiction surfacing, pattern capture — and produces reviewable proposals before anything writes back. See [`docs/auto-memory.md`](docs/auto-memory.md) and [`docs/dream-architecture.md`](docs/dream-architecture.md). The design bet is trust infrastructure for agents, applied to your own context: version control for provenance, a curator for memory hygiene, and reviewable proposals so nothing writes back unreviewed.
 
@@ -26,7 +27,7 @@ It also gives Claude a persistent, file-based **auto-memory** that grows over ti
 
 ![A /start session in Claude Code: the state files load and a session briefing comes back — sample data from the included example musician project](docs/assets/start-demo.gif)
 
-`/setup` interviews you and fills in your files. After that, `/start` reads your state, priorities, and projects and hands you a session plan instead of a blank prompt. For a filled-in version of the included example musician project, it reads like:
+`/setup` in Claude Code—or `$context-setup` in Codex—interviews you and fills in your files. After that, `/start` or `$context-start` reads your state, priorities, and projects and hands you a session plan instead of a blank prompt. The demo below shows the Claude Code adapter against the included example musician project:
 
 > **Session briefing — Tuesday**
 >
@@ -39,7 +40,7 @@ It also gives Claude a persistent, file-based **auto-memory** that grows over ti
 >
 > **Suggested first move:** send the 4 drafted pitches, then write the next 6.
 
-Every line came from plain markdown in the repo — not a chat you rebuild from memory each morning. Run `/end` and it writes the session to `sessions/` and updates `state/`, so tomorrow's `/start` knows exactly where you left off.
+Every line came from plain markdown in the repo—not a chat you rebuild from memory each morning. Run `/end` in Claude Code or `$context-end` in Codex and the reviewed handoff goes to `sessions/` and `state/`.
 
 <sub>The GIF is scripted, not screen-captured — [`docs/start-demo.tape`](docs/start-demo.tape) regenerates it, and [`docs/demo/start-session.sh`](docs/demo/start-session.sh) holds the transcript it plays back. Neither reads state nor calls a model.</sub>
 
@@ -53,7 +54,15 @@ cd my-context
 bash scripts/setup.sh
 ```
 
-The setup script walks you through the basics: sets your name, swaps the git remote to your own repo, installs hooks, and offers to launch Claude Code. If you don't have Claude Code yet:
+The setup script walks you through the basics, detects an installed host, and offers to launch it. Choose one explicitly when both are installed:
+
+```bash
+bash scripts/setup.sh --agent claude
+# or
+bash scripts/setup.sh --agent codex
+```
+
+If you don't have Claude Code yet:
 
 ```bash
 npm install -g @anthropic-ai/claude-code
@@ -67,6 +76,8 @@ Once you're in Claude Code, run:
 
 Claude interviews you and builds your context files — identity, first project, weekly priorities. Takes about 10 minutes. No manual editing required.
 
+In Codex, invoke `$context-setup` instead. The same portable workflow writes the same repository state. See [`docs/codex-onboarding.md`](docs/codex-onboarding.md) for the complete lifecycle and host-specific limits.
+
 **Using claude.ai instead?** Open `SETUP-PROMPTS.md` and paste the prompts there — same questions, same results, you just copy the output into files manually.
 _Note: you can give your claude.ai session this repo as project context after it's set up, and easily sync it_
 
@@ -74,7 +85,7 @@ _Note: you can give your claude.ai session this repo as project context after it
 
 ## After setup
 
-Run your first session:
+Run your first Claude Code session:
 
 ```bash
 cd /path/to/my-context
@@ -82,34 +93,35 @@ claude
 /start
 ```
 
-`/start` loads your state and gives you a briefing. At the end of your session, run `/end` to log what happened. That's the core loop — `/start` → work → `/end`.
+For Codex, launch `codex` in the repository and use `$context-start` → work → `$context-end`. Both hosts use the same `state/` and `sessions/` files.
 
 **Start small.** Don't port your whole working life on day one. Run the core loop for a week, add one project, build one skill when you hit a task you repeat. The structure scales when you're ready — it doesn't demand everything up front.
 
-| Command | When | What it does |
-|---------|------|-------------|
-| `/setup` | First time | Interactive onboarding — builds all your context files |
-| `/start` | Beginning of session | Loads state, pulls live data, gives you a briefing |
-| `/update` | Mid-session | Quick checkpoint — saves progress without closing |
-| `/end` | End of session | Logs what happened, updates state and the decision log, proposes auto-memory updates, and checks for uncommitted work |
-| `/today` | Start of day | Lighter heartbeat — staleness check, calendar, priorities |
-| `/capture` | When inbox has items | Triages raw notes from `inbox/` into the right files |
-| `/find-context` | Any time | Finds relevant context files by topic keyword without colliding with Claude's built-in `/context` |
-| `/reconcile` | After parallel work | Detects drift between sessions, SSOT violations |
-| `/recover` | After a crash | Scans orphaned worktrees and stale branches, offers safe cleanup |
-| `/content-shipped` | After publishing | Logs a published piece to `content/log.md` |
-| `/clean-ai-writing` | Before sharing anything | Loads the `avoid-ai-writing` skill and applies it to any content you specify |
-| `/dream` | Weekly-ish | Runs an autonomous curator pass over the memory dir (default: rot detection) |
-| `/dream-apply` | After `/dream` | Walks the proposal artifact, accept/reject/edit per item |
-| `/skill-creator` | Adding new skills | Generates the SKILL.md, command file, and CLAUDE.md additions from a plain-language description |
-| `/migrate-gemini` | Porting Gemini CLI setup | Inventories selected instructions, skills, hooks, and MCP config, then migrates with dry-run review and parity checks |
-| `/mine-gemini-workflows` | Recovering proven workflows | Ranks repeated validated workflows from a selected Gemini session directory without exporting private reasoning |
+| Claude Code / Codex | When | What it does |
+|---|---|---|
+| `/setup` / `$context-setup` | First time | Interactive onboarding—builds the shared context files |
+| `/start` / `$context-start` | Beginning of session | Loads state and gives a briefing; Claude can also use its configured live-data adapter |
+| `/update` / `$context-update` | Mid-session | Saves a quick checkpoint without closing |
+| `/end` / `$context-end` | End of session | Records a reviewed handoff, updates shared state and decisions, and checks repository safety |
+| `/today` / — | Start of day | Claude-only heartbeat with staleness, calendar, and priorities |
+| `/capture` / — | When inbox has items | Triages raw notes from `inbox/` into the right files |
+| `/find-context` / — | Any time | Finds relevant context files by topic keyword |
+| `/reconcile` / — | After parallel work | Detects drift between sessions and source-of-truth violations |
+| `/recover` / — | After a crash | Scans orphaned worktrees and stale branches and offers safe cleanup |
+| `/content-shipped` / — | After publishing | Logs a published piece to `content/log.md` |
+| `/clean-ai-writing` / — | Before sharing | Applies the included writing skill |
+| `/dream` / — | Periodically | Runs a Claude auto-memory curator pass |
+| `/dream-apply` / — | After `/dream` | Reviews and applies Claude auto-memory proposals |
+| `/skill-creator` / — | Adding Claude skills | Generates a Claude-native skill and adapter for review |
+| `/migrate-gemini` / `$migrate-gemini` | Porting Gemini setup | Inventories and migrates selected workflows with review and parity checks |
+| `/mine-gemini-workflows` / `$mine-gemini-workflows` | Recovering workflows | Ranks repeated validated workflows without exporting private reasoning |
 
 ---
 
 ## What's in the repo
 
 ```
+AGENTS.md                          # Codex adapter — lifecycle, routing, safety, validation
 CLAUDE.md                         # Root context — loaded on every session
 ROUTING.md                        # Context routing for tasks without a slash command
 TODO.md                           # Task backlog
@@ -121,13 +133,13 @@ state/                            # Session state, priorities, decisions, blocke
 sessions/                         # Per-day session logs (created by /end)
 inbox/                            # Drop zone for raw notes (triaged by /capture)
 content/log.md                    # Published content log
-.agents/skills/                   # Portable skills shared by Gemini CLI and Codex
+.agents/skills/                   # Portable workflows shared across supported agents
 .claude/commands/                 # Claude Code slash commands and portable-skill adapters
 .claude/skills/                   # Native Claude Code skills (e.g., skill-creator)
 .claude/settings.json             # Checked-in hook activation
 scripts/                          # Setup, validation, repo map generation
 scripts/dream/                    # Curator prompts + how-to for the /dream substrate
-docs/                             # Architecture guides — auto-memory, dream, migration, safety
+docs/                             # Architecture and onboarding guides, including Codex
 references/                       # Integration setup (Google Workspace, Notion)
 integrations/                     # Machine-checked catalog of opt-in add-ons and risk boundaries
 .claude/hooks/                    # Session start + SSOT guard + parallel-session guards
@@ -142,16 +154,19 @@ integrations/                     # Machine-checked catalog of opt-in add-ons an
 
 ---
 
-## Skills work everywhere
+## Portable skills, explicit adapters
 
-A skill is a markdown file that tells Claude how to do a recurring task. Build it once and it works as a slash command in Claude Code and as uploaded knowledge in claude.ai.
+A skill is a markdown file that tells an agent how to do a recurring task. Provider-neutral workflow cores belong in `.agents/skills/`; Claude Code slash commands can be thin adapters to them, and Codex discovers the repository skills directly.
 
-The `avoid-ai-writing` skill is included as a working example. In Claude Code: `/clean-ai-writing`. In claude.ai: upload `writing/skills/avoid-ai-writing/SKILL.md` as project knowledge and ask Claude to apply it. The easiest way to do this is by using Claude projects to give it this repo, for consistent context with all of your skills included.
+The session loop is the first complete portable example: Claude Code maps `/setup`, `/start`, `/update`, and `/end` to `$context-setup`, `$context-start`, `$context-update`, and `$context-end`. Host-only features remain in `.claude/` and are not presented as portable.
+
+The `avoid-ai-writing` skill remains a Claude-oriented working example. In Claude Code, run `/clean-ai-writing`; in claude.ai, upload `writing/skills/avoid-ai-writing/SKILL.md` as project knowledge and ask Claude to apply it.
 
 To build your own:
 
-1. Run `/skill-creator` and describe what the skill should do — it generates the SKILL.md, the command file, and the CLAUDE.md additions for you to review.
-2. Or do it manually: read `docs/agent-template.md`, create `projects/<your-project>/skills/<your-skill-name>/SKILL.md`, add a command file in `.claude/commands/`, add a row to `CLAUDE.md`, then run `scripts/validate-all.sh`.
+1. For a portable workflow, create `.agents/skills/<skill-name>/SKILL.md`; add `agents/openai.yaml` when it should appear cleanly in Codex's skill UI.
+2. Add a `.claude/commands/` adapter only when Claude Code needs a slash command or host-specific tools.
+3. Run `scripts/validate-all.sh` and test each host-specific path you claim to support.
 
 New here? **[docs/first-skill.md](docs/first-skill.md)** walks you through building your first skill by hand in five minutes — copy one, change three things, run it. See `projects/README.md` for conventions and the example musician project for the full pattern.
 
@@ -159,7 +174,7 @@ New here? **[docs/first-skill.md](docs/first-skill.md)** walks you through build
 
 ## Auto-memory
 
-Claude Code auto-loads `~/.claude/projects/<encoded-cwd>/memory/MEMORY.md` at the start of every conversation in this project. claude-context-os ships a spec ([`docs/auto-memory.md`](docs/auto-memory.md)) for what to save (and what NOT to save) across four typed memory categories:
+Claude Code auto-loads `~/.claude/projects/<encoded-cwd>/memory/MEMORY.md` at the start of every conversation in this project. This is a Claude-only extension, not the portable memory layer. Shared continuity lives in the repository's `state/` and `sessions/` directories. claude-context-os also ships a spec ([`docs/auto-memory.md`](docs/auto-memory.md)) for what to save (and what NOT to save) across four typed Claude memory categories:
 
 - **user** — role, expertise, preferences
 - **feedback** — guidance about *how* to work, both corrections and validated approaches
@@ -180,7 +195,7 @@ See [`docs/dream-architecture.md`](docs/dream-architecture.md) for the full desi
 
 ## Running multiple Claude sessions
 
-Running more than one Claude Code session against the same repo simultaneously will eventually corrupt your tree — silent branch-switches, one session's `git add` landing in another session's commit, files committed to the wrong branch. The fix is `git worktree`: one checkout per session.
+Running more than one agent session against the same checkout can corrupt your tree—silent branch switches, one session's staging landing in another session's commit, or files committed to the wrong branch. Use one git worktree per concurrent session. The checked-in enforcement hooks described below are Claude Code adapters; Codex users should still use separate worktrees, but this repository does not claim equivalent hook enforcement there.
 
 The repo ships two hooks that enforce this pattern:
 
@@ -224,7 +239,7 @@ See [`docs/gemini-migration.md`](docs/gemini-migration.md). [`0xSero/ai-data-ext
 bash scripts/validate-all.sh
 ```
 
-The aggregate validator checks skill/command frontmatter, CLAUDE.md size, committed secrets, stale files, local links, shell syntax, hook behavior, JSON, and the workflow-miner unit tests. The harness needs Bash and Python 3 (for safe hook-input parsing and Gemini migration). CI runs the same command on every push and PR.
+The aggregate validator checks skill/command frontmatter, Codex portability and adapter mappings, CLAUDE.md size, committed secrets, stale files, local links, shell syntax, hook behavior, JSON, and Python tests. The harness needs Bash and Python 3. CI runs the same command on every push and PR.
 
 ---
 

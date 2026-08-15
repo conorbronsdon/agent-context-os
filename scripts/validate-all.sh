@@ -7,6 +7,7 @@ cd "$ROOT"
 
 bash scripts/validate-skills.sh
 bash scripts/check-links.sh
+bash tests/test-portability.sh
 bash tests/test-hooks.sh
 
 while IFS= read -r -d '' script; do

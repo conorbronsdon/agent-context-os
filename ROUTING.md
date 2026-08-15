@@ -16,9 +16,10 @@ For tasks without a slash command, use this table to determine which files to lo
 - Professional credentials → read `identity/professional-background.md`
 
 ## Session management
-- Starting a session → `/start`
-- Ending a session → `/end`
-- Quick checkpoint → `/update`
+- First-time onboarding → Claude Code `/setup`; portable skill `$context-setup`
+- Starting a session → Claude Code `/start`; portable skill `$context-start`
+- Ending a session → Claude Code `/end`; portable skill `$context-end`
+- Quick checkpoint → Claude Code `/update`; portable skill `$context-update`
 - Morning check-in → `/today`
 - Synthesize session patterns → review `sessions/` logs directly
 - Weekly review → read `state/current.md` and `state/weekly-priorities.md`
@@ -28,9 +29,11 @@ For tasks without a slash command, use this table to determine which files to lo
 - Thinking through a decision → apply thought-partner mode (see CLAUDE.md)
 
 ## Building new skills
-- Creating a new skill → read `docs/agent-template.md` for the scaffold and checklist
+- Creating a portable skill → use `.agents/skills/<name>/SKILL.md` and keep host adapters thin
+- Creating a Claude-only skill → read `docs/agent-template.md` for the scaffold and checklist
 - Validating skill structure → run `scripts/validate-all.sh`
 
 ## Agent migration
 - Migrating selected Gemini CLI configuration or workflows → `/migrate-gemini`
 - Discovering repeated workflows from selected Gemini sessions → `/mine-gemini-workflows`
+- Running the workspace in Codex → read `docs/codex-onboarding.md`

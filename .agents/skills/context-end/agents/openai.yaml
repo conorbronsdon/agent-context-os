@@ -1,0 +1,6 @@
+interface:
+  display_name: "Context End"
+  short_description: "Close a session with an approved handoff"
+  default_prompt: "Use $context-end to close this session and prepare a reviewed handoff."
+policy:
+  allow_implicit_invocation: false

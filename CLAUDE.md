@@ -27,6 +27,8 @@
 
 Add more commands as you build out skills. See `docs/agent-template.md` for how.
 
+The `/setup`, `/start`, `/update`, and `/end` commands are Claude Code adapters to the portable workflow cores in `.agents/skills/context-*`. Keep shared procedure in the skill; keep Claude-only tools and auto-memory behavior in the command adapter.
+
 ## When to Load Additional Context
 
 For tasks without a slash command → load `ROUTING.md`.
@@ -69,6 +71,8 @@ For high-traffic repos, enable the parallel-session guards: add the repo basenam
 ## Claude Code vs claude.ai
 
 This repo is designed for **Claude Code** (CLI). If you also use **claude.ai projects**, upload key files (CLAUDE.md, ROUTING.md, identity files) as project knowledge. See `docs/claude-projects-sync.md` if present.
+
+Codex uses the same repository state through root `AGENTS.md` and `.agents/skills/`. See `docs/codex-onboarding.md`; do not copy Claude hooks, settings, or auto-memory assumptions into portable skills.
 
 ## Repo Maintenance
 See `docs/repo-maintenance.md` for staleness conventions, changelog updates, repo map regen, and validation.

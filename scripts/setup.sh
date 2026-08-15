@@ -8,6 +8,42 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "$REPO_ROOT"
 
+AGENT_TARGET="auto"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --agent)
+      if [ "$#" -lt 2 ]; then
+        echo "Usage: bash scripts/setup.sh [--agent auto|claude|codex|none]" >&2
+        exit 2
+      fi
+      AGENT_TARGET="$2"
+      shift 2
+      ;;
+    --agent=*)
+      AGENT_TARGET="${1#--agent=}"
+      shift
+      ;;
+    -h|--help)
+      echo "Usage: bash scripts/setup.sh [--agent auto|claude|codex|none]"
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      echo "Usage: bash scripts/setup.sh [--agent auto|claude|codex|none]" >&2
+      exit 2
+      ;;
+  esac
+done
+
+case "$AGENT_TARGET" in
+  auto|claude|codex|none) ;;
+  *)
+    echo "Invalid --agent value: $AGENT_TARGET" >&2
+    echo "Expected one of: auto, claude, codex, none" >&2
+    exit 2
+    ;;
+esac
+
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
 prompt_yn() {
@@ -107,6 +143,14 @@ else
   echo "    Missing: claude — install with: npm install -g @anthropic-ai/claude-code"
 fi
 
+CODEX_FOUND=false
+if command -v codex &>/dev/null; then
+  echo "    Found: codex"
+  CODEX_FOUND=true
+else
+  echo "    Optional: codex — see docs/codex-onboarding.md"
+fi
+
 if command -v git &>/dev/null; then
   echo "    Found: git"
 else
@@ -142,18 +186,45 @@ echo ""
 echo "  ─────────────────────────────"
 echo "  Setup complete. Next:"
 echo ""
-echo "  1. cd $REPO_ROOT && claude"
-echo "  2. Type: /setup"
-echo "     Claude will interview you and build your context files."
-echo "     (~10 minutes, fully conversational)"
-echo ""
-echo "  Or if you prefer claude.ai:"
-echo "     Open SETUP-PROMPTS.md and paste the prompts there."
-echo ""
 
-if [ "$CLAUDE_FOUND" = true ]; then
-  if prompt_yn "  Launch Claude Code now?" "y"; then
-    cd "$REPO_ROOT"
-    exec claude
+SELECTED_AGENT="$AGENT_TARGET"
+if [ "$SELECTED_AGENT" = "auto" ]; then
+  if [ "$CLAUDE_FOUND" = true ]; then
+    SELECTED_AGENT="claude"
+  elif [ "$CODEX_FOUND" = true ]; then
+    SELECTED_AGENT="codex"
+  else
+    SELECTED_AGENT="none"
   fi
 fi
+
+case "$SELECTED_AGENT" in
+  claude)
+    echo "  1. cd $REPO_ROOT && claude"
+    echo "  2. Type: /setup"
+    echo "     Claude will interview you and build your context files."
+    echo "     (~10 minutes, fully conversational)"
+    echo ""
+    if [ "$CLAUDE_FOUND" = true ] && prompt_yn "  Launch Claude Code now?" "y"; then
+      cd "$REPO_ROOT"
+      exec claude
+    fi
+    ;;
+  codex)
+    echo "  1. cd $REPO_ROOT && codex"
+    echo '  2. Type: $context-setup'
+    echo "     Codex will interview you and build your context files."
+    echo "     See docs/codex-onboarding.md for the session loop and limitations."
+    echo ""
+    if [ "$CODEX_FOUND" = true ] && prompt_yn "  Launch Codex now?" "y"; then
+      cd "$REPO_ROOT"
+      exec codex
+    fi
+    ;;
+  none)
+    echo "  Claude Code: cd $REPO_ROOT && claude, then run /setup"
+    echo '  Codex:       cd '"$REPO_ROOT"' && codex, then run $context-setup'
+    echo "  claude.ai:   open SETUP-PROMPTS.md and paste the prompts there"
+    echo ""
+    ;;
+esac

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Context Setup"
+  short_description: "Build durable workspace context conversationally"
+  default_prompt: "Use $context-setup to initialize this workspace through a guided interview."
+policy:
+  allow_implicit_invocation: false
