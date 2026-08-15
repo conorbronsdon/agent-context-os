@@ -19,7 +19,7 @@
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 GUARD_LIST="$SCRIPT_DIR/guarded-repos.txt"
 [ ! -f "$GUARD_LIST" ] && exit 0
-if ! grep -v '^[[:space:]]*#' "$GUARD_LIST" | grep -q '[^[:space:]]'; then
+if ! tr -d '\r' < "$GUARD_LIST" | grep -v '^[[:space:]]*#' | grep -q '[^[:space:]]'; then
   exit 0
 fi
 
@@ -56,6 +56,9 @@ if [ -z "$FILE_PATH" ] || [ "$FILE_PATH" = "__HOOK_INPUT_ERROR__" ]; then
   exit 2
 fi
 
+# Normalize Claude's native Windows paths before dirname/git inspection.
+FILE_PATH="${FILE_PATH//\\//}"
+
 # 3. Session count. tasklist on Windows, ps elsewhere.
 SESSION_COUNT=$(tasklist //FI "IMAGENAME eq claude.exe" 2>/dev/null | grep -c "^claude.exe")
 if [ "$SESSION_COUNT" -eq 0 ]; then
@@ -89,7 +92,7 @@ esac
 REPO_NAME=$(basename "$CANONICAL_ROOT")
 
 # 6. Is this repo guarded?
-if ! grep -v '^[[:space:]]*#' "$GUARD_LIST" | grep -v '^[[:space:]]*$' | grep -Fxq "$REPO_NAME"; then
+if ! tr -d '\r' < "$GUARD_LIST" | grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$' | grep -Fxq "$REPO_NAME"; then
   exit 0
 fi
 

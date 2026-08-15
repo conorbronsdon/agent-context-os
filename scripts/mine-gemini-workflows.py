@@ -30,7 +30,7 @@ SECRET_PATTERNS = (
     re.compile(r"(?<![\w.+-])[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b"),
 )
 PRIVATE_CONTENT_KEYS = {"thought", "thoughts", "thinking", "reasoning"}
-SUCCESS_STATUSES = {"passed", "pass", "success", "successful", "validated", "complete"}
+VALIDATION_STATUSES = {"passed", "failed", "unknown"}
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -133,13 +133,109 @@ def is_message_record(value: Any) -> bool:
     }
 
 
-def fold_records(records: list[Any]) -> tuple[dict[str, Any], list[dict[str, Any]], bool]:
+def validate_scratchpad(value: Any) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict) or value.get("version") != 1:
+        return "memoryScratchpad must be a version 1 object or null"
+    for key in ("workflowSummary", "workflow_summary"):
+        if key in value and not isinstance(value[key], str):
+            return f"memoryScratchpad.{key} must be a string"
+    for key in ("toolSequence", "tool_sequence", "touchedPaths", "touched_paths"):
+        if key in value and (
+            not isinstance(value[key], list) or not all(isinstance(item, str) for item in value[key])
+        ):
+            return f"memoryScratchpad.{key} must be a string array"
+    status = value.get("validationStatus", value.get("validation_status"))
+    if status is not None and status not in VALIDATION_STATUSES:
+        return "memoryScratchpad.validationStatus must be passed, failed, or unknown"
+    return None
+
+
+def validate_message(value: Any) -> str | None:
+    if not isinstance(value, dict):
+        return "message must be an object"
+    if not isinstance(value.get("id"), str) or not value["id"]:
+        return "message.id must be a non-empty string"
+    if value.get("type") not in {"user", "gemini", "info", "error", "warning"}:
+        return "message.type is unsupported"
+    if not isinstance(value.get("timestamp"), str) or not value["timestamp"]:
+        return "message.timestamp must be a non-empty string"
+    if "content" not in value or not isinstance(value["content"], (str, list, dict)):
+        return "message.content has an unsupported shape"
+    calls = value.get("toolCalls")
+    if calls is not None:
+        if not isinstance(calls, list):
+            return "message.toolCalls must be an array"
+        for call in calls:
+            if not isinstance(call, dict):
+                return "tool call must be an object"
+            if not all(isinstance(call.get(key), str) and call[key] for key in ("id", "name", "status", "timestamp")):
+                return "tool call requires string id, name, status, and timestamp"
+            if not isinstance(call.get("args"), dict):
+                return "tool call args must be an object"
+    return None
+
+
+def validate_metadata(value: dict[str, Any], *, initial: bool) -> str | None:
+    if initial:
+        if not isinstance(value.get("sessionId"), str) or not value["sessionId"]:
+            return "initial metadata requires sessionId"
+        if not isinstance(value.get("projectHash"), str) or not value["projectHash"]:
+            return "initial metadata requires projectHash"
+    for key in ("sessionId", "projectHash", "startTime", "lastUpdated", "summary", "kind"):
+        if key in value and value[key] is not None and not isinstance(value[key], str):
+            return f"metadata.{key} must be a string"
+    if "directories" in value and value["directories"] is not None and (
+        not isinstance(value["directories"], list)
+        or not all(isinstance(item, str) for item in value["directories"])
+    ):
+        return "metadata.directories must be a string array"
+    for key in ("memoryScratchpad", "memory_scratchpad"):
+        if key in value:
+            problem = validate_scratchpad(value[key])
+            if problem:
+                return problem
+    if "messages" in value:
+        if not isinstance(value["messages"], list):
+            return "metadata.messages must be an array"
+        for message in value["messages"]:
+            problem = validate_message(message)
+            if problem:
+                return problem
+    return None
+
+
+def validate_record(record: Any) -> str | None:
+    if not isinstance(record, dict):
+        return "record must be an object"
+    if "$rewindTo" in record:
+        if set(record) != {"$rewindTo"}:
+            return "$rewindTo record has unexpected fields"
+        return None if isinstance(record["$rewindTo"], str) and record["$rewindTo"] else "$rewindTo must be a non-empty string"
+    if "$set" in record:
+        if set(record) != {"$set"}:
+            return "$set record has unexpected fields"
+        if not isinstance(record["$set"], dict):
+            return "$set must be an object"
+        return validate_metadata(record["$set"], initial=False)
+    if "id" in record or "type" in record:
+        return validate_message(record)
+    if "sessionId" in record or "projectHash" in record:
+        return validate_metadata(record, initial=True)
+    return "unrecognized record shape"
+
+
+def fold_records(
+    records: list[Any],
+) -> tuple[dict[str, Any], list[dict[str, Any]], bool, list[str]]:
     """Mirror Gemini's append-log fold for metadata, messages, rewinds, and checkpoints."""
     metadata: dict[str, Any] = {}
     messages: dict[str, dict[str, Any]] = {}
     order: list[str] = []
     scratchpad_tracking = False
     scratchpad_stale = False
+    schema_warnings: list[str] = []
 
     def put_message(message: dict[str, Any]) -> None:
         message_id = message["id"]
@@ -155,7 +251,10 @@ def fold_records(records: list[Any]) -> tuple[dict[str, Any], list[dict[str, Any
                 if is_message_record(message):
                     put_message(message)
 
-    for record in records:
+    for index, record in enumerate(records, start=1):
+        problem = validate_record(record)
+        if problem:
+            schema_warnings.append(f"record {index}: {problem}")
         if not isinstance(record, dict):
             continue
 
@@ -181,8 +280,11 @@ def fold_records(records: list[Any]) -> tuple[dict[str, Any], list[dict[str, Any
 
         update = record.get("$set")
         if isinstance(update, dict):
-            if "memoryScratchpad" in update:
-                scratchpad_tracking = bool(update.get("memoryScratchpad"))
+            scratchpad_key = (
+                "memoryScratchpad" if "memoryScratchpad" in update else "memory_scratchpad"
+            )
+            if scratchpad_key in update:
+                scratchpad_tracking = bool(update.get(scratchpad_key))
                 scratchpad_stale = False
             if "messages" in update:
                 replace_messages(update.get("messages"))
@@ -196,7 +298,9 @@ def fold_records(records: list[Any]) -> tuple[dict[str, Any], list[dict[str, Any
             metadata.update(record)
 
     metadata.pop("messages", None)
-    return metadata, [messages[message_id] for message_id in order], scratchpad_stale
+    if not isinstance(metadata.get("sessionId"), str) or not isinstance(metadata.get("projectHash"), str):
+        schema_warnings.append("recording is missing required sessionId/projectHash metadata")
+    return metadata, [messages[message_id] for message_id in order], scratchpad_stale, schema_warnings
 
 
 def parse_date(value: str | None) -> dt.date | None:
@@ -277,9 +381,7 @@ def collect_observable_text(messages: list[dict[str, Any]]) -> list[dict[str, st
 
 
 def validation_is_success(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    return isinstance(value, str) and value.lower() in SUCCESS_STATUSES
+    return value == "passed"
 
 
 def session_summary(
@@ -291,7 +393,8 @@ def session_summary(
     include_summaries: bool = False,
 ) -> tuple[dict[str, Any], list[str]]:
     records, source_format, warnings, file_digest = load_records(path)
-    metadata, messages, scratchpad_stale = fold_records(records)
+    metadata, messages, scratchpad_stale, schema_warnings = fold_records(records)
+    warnings.extend(f"{path.name}: {warning}" for warning in schema_warnings)
     scratchpad = scratchpad_from(metadata)
     raw_session_id = metadata.get("sessionId") or metadata.get("session_id")
     session_id = str(raw_session_id or path.stem)
@@ -355,7 +458,13 @@ def candidate_key(session: dict[str, Any]) -> tuple[str, str] | None:
 
 def build_candidates(sessions: list[dict[str, Any]], minimum: int) -> list[dict[str, Any]]:
     groups: dict[str, dict[str, Any]] = {}
+    fingerprint_counts = collections.Counter(session["session_fingerprint"] for session in sessions)
+    duplicate_fingerprints = {
+        fingerprint for fingerprint, count in fingerprint_counts.items() if count > 1
+    }
     for session in sessions:
+        if session["session_fingerprint"] in duplicate_fingerprints:
+            continue
         keyed = candidate_key(session)
         if not keyed:
             continue
@@ -365,9 +474,9 @@ def build_candidates(sessions: list[dict[str, Any]], minimum: int) -> list[dict[
             {"label": label, "session_ids": [], "validated_session_ids": [], "tool_sequences": []},
         )
         group["session_ids"].append(session["session_id"])
-        group["tool_sequences"].append(session["tool_sequence"])
         if session["validation_passed"]:
             group["validated_session_ids"].append(session["session_id"])
+            group["tool_sequences"].append(session["tool_sequence"])
 
     candidates: list[dict[str, Any]] = []
     for group in groups.values():
@@ -452,6 +561,18 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 2
 
+    duplicate_fingerprints = {
+        fingerprint
+        for fingerprint, count in collections.Counter(
+            session["session_fingerprint"] for _, session in rows
+        ).items()
+        if count > 1
+    }
+    if duplicate_fingerprints:
+        warnings.append(
+            f"excluded {len(duplicate_fingerprints)} duplicate session identity/identities from candidate evidence"
+        )
+
     included_rows: list[tuple[Path, dict[str, Any]]] = []
     for path, session in rows:
         if args.since:
@@ -471,6 +592,15 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 2
+
+    # Candidate evidence is always computed from the metadata-only pass. Sensitive
+    # opt-ins may add human-readable labels to selected rows, but must not alter
+    # grouping, counts, or rankings.
+    workflow_candidates = build_candidates(
+        [session for _, session in included_rows], args.min_occurrences
+    )
+
+    if sensitive_opt_in:
         enriched_rows: list[tuple[Path, dict[str, Any]]] = []
         for path, session in included_rows:
             if session["session_id"] in selected_ids:
@@ -501,7 +631,7 @@ def main(argv: list[str] | None = None) -> int:
             "note": "Redaction is best-effort, not a guarantee. Review before sharing or committing.",
         },
         "sessions": sessions,
-        "workflow_candidates": build_candidates(sessions, args.min_occurrences),
+        "workflow_candidates": workflow_candidates,
         "warnings": warnings,
     }
     rendered = json.dumps(report, indent=2, ensure_ascii=False) + "\n"

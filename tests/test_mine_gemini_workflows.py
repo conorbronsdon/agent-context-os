@@ -50,7 +50,13 @@ class GeminiWorkflowMinerTests(unittest.TestCase):
                 "content": [{"text": "Memo complete"}],
                 "thoughts": [{"subject": "private", "description": "Never export this"}],
                 "toolCalls": [
-                    {"id": f"call-{index}", "name": name, "args": {}, "status": "success"}
+                    {
+                        "id": f"call-{index}",
+                        "name": name,
+                        "args": {},
+                        "status": "success",
+                        "timestamp": "2026-08-15T10:02:00Z",
+                    }
                     for index, name in enumerate(tool_sequence)
                 ],
             },
@@ -108,7 +114,15 @@ class GeminiWorkflowMinerTests(unittest.TestCase):
                 "type": "gemini",
                 "timestamp": "2026-08-01T10:02:00Z",
                 "content": "abandoned content",
-                "toolCalls": [{"id": "old", "name": "abandoned_tool", "args": {}, "status": "success"}],
+                "toolCalls": [
+                    {
+                        "id": "old",
+                        "name": "abandoned_tool",
+                        "args": {},
+                        "status": "success",
+                        "timestamp": "2026-08-01T10:02:00Z",
+                    }
+                ],
             },
             {
                 "$set": {
@@ -126,7 +140,15 @@ class GeminiWorkflowMinerTests(unittest.TestCase):
                 "type": "gemini",
                 "timestamp": "2026-08-15T10:02:00Z",
                 "content": "replacement content",
-                "toolCalls": [{"id": "new", "name": "replacement_tool", "args": {}, "status": "failed"}],
+                "toolCalls": [
+                    {
+                        "id": "new",
+                        "name": "replacement_tool",
+                        "args": {},
+                        "status": "failed",
+                        "timestamp": "2026-08-15T10:02:00Z",
+                    }
+                ],
             },
             {
                 "$set": {
@@ -257,6 +279,31 @@ class GeminiWorkflowMinerTests(unittest.TestCase):
             self.assertEqual(status, 2)
             self.assertIn("resolve to multiple recordings", stderr)
 
+            status, stdout, _ = self.run_main([str(root), "--min-occurrences", "2"])
+            report = json.loads(stdout)
+            self.assertEqual(status, 0)
+            self.assertEqual(report["workflow_candidates"], [])
+            self.assertTrue(any("duplicate session identity" in warning for warning in report["warnings"]))
+
+    def test_representative_sequence_uses_only_validated_runs(self) -> None:
+        sessions = []
+        for index, (passed, sequence) in enumerate(
+            [(True, ["good_a"]), (True, ["good_b"])] + [(False, ["failed"]) for _ in range(5)]
+        ):
+            sessions.append(
+                {
+                    "session_id": f"session-{index}",
+                    "session_fingerprint": f"fingerprint-{index}",
+                    "recording_complete": True,
+                    "workflow_summary": "Same workflow",
+                    "tool_sequence": sequence,
+                    "validation_passed": passed,
+                }
+            )
+        candidates = MODULE.build_candidates(sessions, 2)
+        self.assertEqual(len(candidates), 1)
+        self.assertIn(candidates[0]["common_tool_sequence"], [["good_a"], ["good_b"]])
+
     def test_legacy_json_record_is_supported(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "legacy.json"
@@ -273,7 +320,15 @@ class GeminiWorkflowMinerTests(unittest.TestCase):
                                 "type": "gemini",
                                 "timestamp": "2026-08-15T09:01:00Z",
                                 "content": "Done",
-                                "toolCalls": [{"id": "c1", "name": "write_file", "args": {}, "status": "success"}],
+                                "toolCalls": [
+                                    {
+                                        "id": "c1",
+                                        "name": "write_file",
+                                        "args": {},
+                                        "status": "success",
+                                        "timestamp": "2026-08-15T09:01:00Z",
+                                    }
+                                ],
                             },
                         ],
                     }
@@ -303,6 +358,73 @@ class GeminiWorkflowMinerTests(unittest.TestCase):
 
             status, _, stderr = self.run_main(
                 [str(Path(temp)), "--include-content", "--session-id", "session-one"]
+            )
+            self.assertEqual(status, 2)
+            self.assertIn("incomplete or malformed", stderr)
+
+    def test_schema_invalid_json_records_and_scratchpads_are_ineligible(self) -> None:
+        invalid_records = [
+            {"$set": "not-an-object"},
+            None,
+            {"unknown": "record"},
+            {
+                "$set": {
+                    "memoryScratchpad": {
+                        "version": 1,
+                        "toolSequence": ["read_file"],
+                        "validationStatus": "complete",
+                    }
+                }
+            },
+            {
+                "$set": {
+                    "memory_scratchpad": {
+                        "version": 1,
+                        "tool_sequence": ["read_file"],
+                        "validation_status": "complete",
+                    }
+                }
+            },
+        ]
+        with tempfile.TemporaryDirectory() as temp:
+            for index, invalid in enumerate(invalid_records):
+                path = Path(temp) / f"invalid-{index}.jsonl"
+                self.write_jsonl(path, [*self.current_records(f"session-{index}"), invalid])
+                session, warnings = MODULE.session_summary(path)
+                self.assertFalse(session["recording_complete"])
+                self.assertFalse(session["validation_passed"])
+                self.assertTrue(warnings)
+
+    def test_sensitive_summary_opt_in_does_not_change_candidate_grouping(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.write_jsonl(root / "one.jsonl", self.current_records("session-one"))
+            self.write_jsonl(root / "two.jsonl", self.current_records("session-two"))
+
+            status, baseline_stdout, _ = self.run_main([str(root)])
+            sensitive_status, sensitive_stdout, _ = self.run_main(
+                [str(root), "--include-summaries", "--session-id", "session-one"]
+            )
+            baseline = json.loads(baseline_stdout)
+            sensitive = json.loads(sensitive_stdout)
+
+            self.assertEqual(status, 0)
+            self.assertEqual(sensitive_status, 0)
+            self.assertEqual(
+                sensitive["workflow_candidates"], baseline["workflow_candidates"]
+            )
+
+    def test_missing_required_metadata_cannot_export_content(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "missing-meta.jsonl"
+            records = self.current_records("missing-meta")[1:]
+            self.write_jsonl(path, records)
+            session, warnings = MODULE.session_summary(path)
+            self.assertFalse(session["recording_complete"])
+            self.assertTrue(any("missing required sessionId/projectHash" in warning for warning in warnings))
+
+            status, _, stderr = self.run_main(
+                [str(Path(temp)), "--include-content", "--session-id", "missing-meta"]
             )
             self.assertEqual(status, 2)
             self.assertIn("incomplete or malformed", stderr)

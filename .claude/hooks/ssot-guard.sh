@@ -47,6 +47,10 @@ if [ -z "$FILE_PATH" ]; then
   exit 0
 fi
 
+# Claude reports native Windows paths with backslashes. Git Bash glob matching
+# below expects forward slashes.
+FILE_PATH="${FILE_PATH//\\//}"
+
 # ── Define SSOT patterns ──────────────────────────────────────────────────────
 # Add your own patterns here. Format: file glob → reminder message.
 
