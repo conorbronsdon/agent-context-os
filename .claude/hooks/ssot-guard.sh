@@ -8,8 +8,32 @@
 
 set -euo pipefail
 
-# The file being edited is passed as an argument or via environment
+# Claude Code sends hook data as JSON on stdin. Keep the argument and
+# CLAUDE_FILE_PATH fallbacks for direct/manual use.
 FILE_PATH="${1:-${CLAUDE_FILE_PATH:-}}"
+
+if [ -z "$FILE_PATH" ] && [ ! -t 0 ]; then
+  INPUT=$(cat)
+  PYTHON_BIN=""
+  if command -v python3 >/dev/null 2>&1; then
+    PYTHON_BIN="python3"
+  elif command -v python >/dev/null 2>&1; then
+    PYTHON_BIN="python"
+  fi
+
+  if [ -n "$PYTHON_BIN" ]; then
+    FILE_PATH=$(printf '%s' "$INPUT" | "$PYTHON_BIN" -c '
+import json
+import sys
+
+try:
+    payload = json.load(sys.stdin)
+    print(payload.get("tool_input", {}).get("file_path", ""))
+except (json.JSONDecodeError, AttributeError, TypeError):
+    pass
+' 2>/dev/null)
+  fi
+fi
 
 if [ -z "$FILE_PATH" ]; then
   exit 0

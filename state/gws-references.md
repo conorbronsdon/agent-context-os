@@ -4,7 +4,7 @@ Store IDs and references for Google Workspace resources you want Claude to query
 
 ## How to use
 
-Add a line for each resource you want to query. Then update `commands/start.md` to reference the relevant IDs.
+Add a line for each resource you want to query. Then update `.claude/commands/start.md` to reference the relevant IDs.
 
 ## Sheets
 

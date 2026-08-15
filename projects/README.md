@@ -55,7 +55,7 @@ Each skill file should contain:
 | `description` | Yes | When to load this skill — Claude uses this to decide whether it applies |
 | `requires.context` | No | List of context files to read before running |
 | `requires.skills` | No | List of other skill files to load alongside this one |
-| `allowed-tools` | No | Restrict which Claude Code tools the skill can use (e.g. `Read`, `Bash`) |
+| `allowed-tools` | No | Pre-approve narrowly scoped Claude Code tools while active; this is a grant, not a restriction |
 | `upstream` | No | URL of the canonical source if the skill is maintained externally |
 
 Minimal example:
@@ -91,7 +91,7 @@ If you want a slash command:
 ```
 | `/your-command` | brief description |
 ```
-...in the slash commands table in `CLAUDE.md`, and a corresponding file in `commands/your-command.md`.
+...in the slash commands table in `CLAUDE.md`, and a corresponding file in `.claude/commands/your-command.md`.
 
 ---
 

@@ -29,4 +29,8 @@ For tasks without a slash command, use this table to determine which files to lo
 
 ## Building new skills
 - Creating a new skill → read `docs/agent-template.md` for the scaffold and checklist
-- Validating skill structure → run `scripts/validate-skills.sh`
+- Validating skill structure → run `scripts/validate-all.sh`
+
+## Agent migration
+- Migrating selected Gemini CLI configuration or workflows → `/migrate-gemini`
+- Discovering repeated workflows from selected Gemini sessions → `/mine-gemini-workflows`

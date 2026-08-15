@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "workflow": "replace-with-workflow-name",
+  "source": {
+    "provider": "gemini",
+    "evidence_session_fingerprints": [],
+    "historical_outcome_summary": "Describe a known-good outcome without copying private transcript content."
+  },
+  "representative_input": "A realistic, non-sensitive input for this workflow.",
+  "required_capabilities": [],
+  "expected_invariants": {
+    "required_sections": [],
+    "required_files": [],
+    "confirmation_boundaries": [],
+    "forbidden_behaviors": [
+      "Expose credentials or private reasoning",
+      "Change external state without the required confirmation"
+    ]
+  },
+  "acceptance_checks": [
+    {
+      "name": "required-output-present",
+      "type": "manual",
+      "criterion": "The output contains every required section and artifact."
+    }
+  ]
+}

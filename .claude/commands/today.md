@@ -1,7 +1,7 @@
 ---
 name: today
 description: Morning heartbeat — briefing, deadline check, and staleness scan. Run at the start of each day or after a 12+ hour gap
-allowed-tools: Read, Write, Bash, Glob, mcp__google-workspace
+allowed-tools: Read, Write, Bash, Glob, mcp__google-workspace__*
 x-source: skills-sync/commands/today.md
 x-source-version: 7ae9852
 ---

@@ -67,7 +67,7 @@ After all answers:
 - Set `**Last Updated:**` dates
 
 Ask if they want a slash command for any of the skills. If yes:
-- Create the command file in `commands/`
+- Create the command file in `.claude/commands/`
 - Add a row to the slash commands table in `CLAUDE.md`
 
 Tell them what you built.

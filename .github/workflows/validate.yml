@@ -12,12 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Run skill validation
+      - name: Run repository validation
         run: |
-          chmod +x scripts/validate-skills.sh
-          ./scripts/validate-skills.sh
-
-      - name: Check for broken local links
-        run: |
-          chmod +x scripts/check-links.sh
-          bash scripts/check-links.sh
+          chmod +x scripts/*.sh tests/*.sh
+          bash scripts/validate-all.sh

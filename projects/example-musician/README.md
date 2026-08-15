@@ -32,4 +32,4 @@ Once you've filled in the context files, add these to the slash commands table i
 | `/press-pitch` | Draft an outreach email to a blog, playlist, or press contact |
 ```
 
-Then create a corresponding file in `commands/` for each one. The pattern is the same as `commands/start.md` — a frontmatter block declaring the skill name and which tools it needs, followed by instructions that tell Claude which skill file to load. Prompt 3 in `SETUP-PROMPTS.md` will handle this automatically if you ask for slash commands during setup.
+Then create a corresponding file in `.claude/commands/` for each one. The pattern is the same as `.claude/commands/start.md` — a frontmatter block declaring the skill name and which tools it needs, followed by instructions that tell Claude which skill file to load. Prompt 3 in `SETUP-PROMPTS.md` will handle this automatically if you ask for slash commands during setup.

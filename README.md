@@ -94,7 +94,7 @@ claude
 | `/end` | End of session | Logs what happened, updates state and the decision log, proposes auto-memory updates, and checks for uncommitted work |
 | `/today` | Start of day | Lighter heartbeat — staleness check, calendar, priorities |
 | `/capture` | When inbox has items | Triages raw notes from `inbox/` into the right files |
-| `/context` | Any time | Finds relevant context files by topic keyword |
+| `/find-context` | Any time | Finds relevant context files by topic keyword without colliding with Claude's built-in `/context` |
 | `/reconcile` | After parallel work | Detects drift between sessions, SSOT violations |
 | `/recover` | After a crash | Scans orphaned worktrees and stale branches, offers safe cleanup |
 | `/content-shipped` | After publishing | Logs a published piece to `content/log.md` |
@@ -102,6 +102,8 @@ claude
 | `/dream` | Weekly-ish | Runs an autonomous curator pass over the memory dir (default: rot detection) |
 | `/dream-apply` | After `/dream` | Walks the proposal artifact, accept/reject/edit per item |
 | `/skill-creator` | Adding new skills | Generates the SKILL.md, command file, and CLAUDE.md additions from a plain-language description |
+| `/migrate-gemini` | Porting Gemini CLI setup | Inventories selected instructions, skills, hooks, and MCP config, then migrates with dry-run review and parity checks |
+| `/mine-gemini-workflows` | Recovering proven workflows | Ranks repeated validated workflows from a selected Gemini session directory without exporting private reasoning |
 
 ---
 
@@ -119,8 +121,10 @@ state/                            # Session state, priorities, decisions, blocke
 sessions/                         # Per-day session logs (created by /end)
 inbox/                            # Drop zone for raw notes (triaged by /capture)
 content/log.md                    # Published content log
-commands/                         # Slash command definitions (including /setup, /dream, /skill-creator)
-skills/                           # Cross-cutting / meta skills (e.g., skill-creator)
+.agents/skills/                   # Portable skills shared by Gemini CLI and Codex
+.claude/commands/                 # Claude Code slash commands and portable-skill adapters
+.claude/skills/                   # Native Claude Code skills (e.g., skill-creator)
+.claude/settings.json             # Checked-in hook activation
 scripts/                          # Setup, validation, repo map generation
 scripts/dream/                    # Curator prompts + how-to for the /dream substrate
 docs/                             # Architecture guides — auto-memory, dream, migration, safety
@@ -146,7 +150,7 @@ The `avoid-ai-writing` skill is included as a working example. In Claude Code: `
 To build your own:
 
 1. Run `/skill-creator` and describe what the skill should do — it generates the SKILL.md, the command file, and the CLAUDE.md additions for you to review.
-2. Or do it manually: read `docs/agent-template.md`, create `projects/<your-project>/skills/<your-skill-name>/SKILL.md`, add a command file in `commands/`, add a row to `CLAUDE.md`, then run `scripts/validate-skills.sh`.
+2. Or do it manually: read `docs/agent-template.md`, create `projects/<your-project>/skills/<your-skill-name>/SKILL.md`, add a command file in `.claude/commands/`, add a row to `CLAUDE.md`, then run `scripts/validate-all.sh`.
 
 New here? **[docs/first-skill.md](docs/first-skill.md)** walks you through building your first skill by hand in five minutes — copy one, change three things, run it. See `projects/README.md` for conventions and the example musician project for the full pattern.
 
@@ -201,14 +205,21 @@ The `.mcp.json` is already configured. See `references/gws-mcp-setup.md` for det
 
 ---
 
+## Migrating from Gemini CLI
+
+Run `/migrate-gemini` for a reviewed configuration migration, or `/mine-gemini-workflows` to discover repeated workflows in a user-selected session directory. Both flows are privacy-first: dry run before mutation, metadata before message content, no private reasoning export, and parity checks before a workflow is accepted.
+
+See [`docs/gemini-migration.md`](docs/gemini-migration.md). [`0xSero/ai-data-extraction`](https://github.com/0xSero/ai-data-extraction) is credited as useful extraction prior art in [`references/ai-data-extraction.md`](references/ai-data-extraction.md); it is not installed as a dependency.
+
+---
+
 ## Validation
 
 ```bash
-bash scripts/validate-skills.sh
-bash scripts/check-links.sh
+bash scripts/validate-all.sh
 ```
 
-`validate-skills.sh` checks for: missing frontmatter, CLAUDE.md over 100 lines, committed secrets, stale files (90+ days). `check-links.sh` walks every inline link in tracked markdown and fails on any local target that doesn't resolve — so a renamed or moved file can't silently break a cross-reference. Both run in CI on every push and PR (`.github/workflows/validate.yml`), need nothing but bash, and pass before you commit.
+The aggregate validator checks skill/command frontmatter, CLAUDE.md size, committed secrets, stale files, local links, shell syntax, hook behavior, JSON, and the workflow-miner unit tests. The core harness needs Bash; the Gemini migration miner and its tests use Python 3. CI runs the same command on every push and PR.
 
 ---
 

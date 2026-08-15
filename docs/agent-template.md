@@ -44,13 +44,13 @@ description: [One sentence, 60+ chars, what this skill does and when to use it]
 
 ## Command Routing File Template
 
-Place in `commands/[skill-name].md`. This is what the slash command loads.
+Place in `.claude/commands/[skill-name].md`. This is what the slash command loads.
 
 ```markdown
 ---
 name: [skill-name]
 description: [Short description, 20+ chars]
-allowed-tools: [Read, Bash, Write, Edit, Glob — list only what's needed]
+allowed-tools: [Read, Bash, Write, Edit, Glob — pre-approve only what's needed]
 ---
 
 Load `[path/to/SKILL.md]` and follow its instructions.
@@ -61,11 +61,11 @@ Load `[path/to/SKILL.md]` and follow its instructions.
 ## Checklist Before Shipping a New Skill
 
 - [ ] SKILL.md has YAML frontmatter with `name` and `description` (60+ chars)
-- [ ] Command routing file exists in `commands/` with 20+ char description
+- [ ] Command routing file exists in `.claude/commands/` with 20+ char description
 - [ ] Slash command row added to CLAUDE.md command table
 - [ ] Routing rule added to ROUTING.md if appropriate
 - [ ] CHANGELOG.md updated with new files
-- [ ] Run `scripts/validate-skills.sh` to verify structure
+- [ ] Run `scripts/validate-all.sh` to verify structure
 
 ---
 
@@ -77,12 +77,14 @@ projects/your-project/skills/
     └── SKILL.md
 ```
 
-Or for general-purpose skills not tied to a project:
+For a Claude-only general-purpose skill:
 
 ```
-skills/
+.claude/skills/
 └── [skill-name]/
     └── SKILL.md
 ```
 
-Commands always live flat in `commands/[skill-name].md`.
+For a provider-neutral skill shared with Gemini CLI and Codex, use `.agents/skills/[skill-name]/SKILL.md` and add a thin `.claude/commands/[skill-name].md` adapter when a Claude slash command is wanted.
+
+Commands always live flat in `.claude/commands/[skill-name].md`.

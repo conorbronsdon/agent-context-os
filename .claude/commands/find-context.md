@@ -1,19 +1,19 @@
 ---
-name: context
+name: find-context
 description: Find relevant context files by topic. Use when you need to load files for a topic without a slash command, or when a task spans multiple domains.
 allowed-tools: Read, Glob, Grep, Bash
 x-source: skills-sync/commands/context.md
 x-source-version: 173c978
 ---
 
-# /context — Find Relevant Files by Topic
+# /find-context — Find Relevant Files by Topic
 
 Find and load the right context files for any topic, even when it spans multiple domains.
 
 ## Instructions
 
 ### 1. Get the topic
-The user will say `/context <topic>` (e.g., `/context auth rewrite`, `/context q3 planning`).
+The user will say `/find-context <topic>` (e.g., `/find-context auth rewrite`, `/find-context q3 planning`). This avoids colliding with Claude Code's built-in `/context` command.
 
 ### 2. Search (three strategies, in parallel)
 
@@ -50,7 +50,7 @@ Read the selected files and give a one-line summary of what each contains relati
 
 ## Tag Convention
 
-Context files (not skills or commands) can carry a `tags:` line in YAML frontmatter so `/context` can find them by category rather than by incidental keyword:
+Context files (not skills or commands) can carry a `tags:` line in YAML frontmatter so `/find-context` can find them by category rather than by incidental keyword:
 
 ```yaml
 ---

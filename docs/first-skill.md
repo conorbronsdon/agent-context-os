@@ -1,23 +1,23 @@
 # Write your first skill in 5 minutes
 
-A skill is a recurring task you've turned into a slash command — a short markdown file that tells Claude how to do one job, the same way every time. This starter ships a dozen (`/start`, `/end`, `/capture`, `/context`, and more). The fastest way to get your own is to copy one and change three things. Here's the whole thing, start to finish.
+A skill is a recurring task you've turned into a slash command — a short markdown file that tells Claude how to do one job, the same way every time. This starter ships a dozen (`/start`, `/end`, `/capture`, `/find-context`, and more). The fastest way to get your own is to copy one and change three things. Here's the whole thing, start to finish.
 
-We'll turn the built-in `/context` command into a new `/standup` — "what did I do yesterday, what's next, what's blocked." Same shape, different job. Swap in whatever recurring task you keep doing by hand; the steps are identical.
+We'll turn the included `/find-context` command into a new `/standup` — "what did I do yesterday, what's next, what's blocked." Same shape, different job. Swap in whatever recurring task you keep doing by hand; the steps are identical.
 
 > This builds a **command** (a slash command with no extra files). A full **skill** adds a `SKILL.md` under `projects/<project>/skills/` and a `CLAUDE.md` row so it loads in both Claude Code and claude.ai — see `projects/README.md` once you want that. Start with a command; promote it to a skill when you reach for it often.
 
 ## 1. Look at the one you're copying — 30 sec
 
-Open `commands/context.md`. Every command has the same two parts:
+Open `.claude/commands/find-context.md`. Every command has the same two parts:
 
 ```markdown
 ---
-name: context
+name: find-context
 description: Find relevant context files by topic. Use when you need to load files for a topic without a slash command.
 allowed-tools: Read, Glob, Grep, Bash
 ---
 
-# /context — Find Relevant Files by Topic
+# /find-context — Find Relevant Files by Topic
 
 ## Instructions
 ...
@@ -31,7 +31,7 @@ allowed-tools: Read, Glob, Grep, Bash
 The file name *is* the command name. Copy it:
 
 ```bash
-cp commands/context.md commands/standup.md
+cp .claude/commands/find-context.md .claude/commands/standup.md
 ```
 
 (No terminal handy? Duplicate the file in your editor and rename it.) `standup.md` becomes `/standup`. Lowercase, dashes for spaces.
@@ -85,9 +85,8 @@ If it doesn't show up yet, start a fresh session so Claude Code picks up the new
 Run the checks, then commit so your command gets a history like everything else here:
 
 ```bash
-bash scripts/validate-skills.sh   # frontmatter, secrets, staleness
-bash scripts/check-links.sh       # no broken cross-references
-git add commands/standup.md && git commit -m "Add /standup command"
+bash scripts/validate-all.sh
+git add .claude/commands/standup.md && git commit -m "Add /standup command"
 ```
 
 ## 7. Make it a habit

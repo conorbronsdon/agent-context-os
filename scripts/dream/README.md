@@ -48,7 +48,7 @@ No remote. The memory dir often contains personal or confidential context.
 ## Where things live
 
 - **Curator prompts:** `prompts/{name}.md` here
-- **Slash commands:** `commands/dream.md` + `commands/dream-apply.md` in the repo root
+- **Slash commands:** `.claude/commands/dream.md` + `.claude/commands/dream-apply.md` in the repo root
 - **Proposal artifacts:** `~/.claude/projects/<encoded-cwd>/memory/.dreams/{ISO}/`
 - **Memory git repo:** `~/.claude/projects/<encoded-cwd>/memory/.git/` (local-only, no remote)
 
@@ -64,7 +64,7 @@ No remote. The memory dir often contains personal or confidential context.
 The curator never auto-applies — it only produces a proposal artifact, so automating the *propose* step is safe. The apply step always stays human-gated.
 
 - **Nudge:** a `SessionStart` hook that warns when memory is stale-curated (days since the last `.dreams/` artifact) is the lowest-risk reminder. It surfaces; it never runs a curator.
-- **Unattended (advanced):** schedule a headless run on your platform's scheduler. Two gotchas worth knowing: (1) `claude -p "/dream rot"` does **not** invoke the slash command — print mode treats it as literal text, so pass a plain prompt that points Claude at `commands/dream.md` (the command file is the spec). (2) Run with `--permission-mode dontAsk` and an `--allowedTools` allowlist that includes the `Bash` tool wholesale (the command issues compound shell commands that prefix-pattern allowlists can't match) — never `bypassPermissions` for an unattended loop. Gate the run so it doesn't collide with an interactive session writing the same memory git.
+- **Unattended (advanced):** schedule a headless run on your platform's scheduler. Two gotchas worth knowing: (1) `claude -p "/dream rot"` does **not** invoke the slash command — print mode treats it as literal text, so pass a plain prompt that points Claude at `.claude/commands/dream.md` (the command file is the spec). (2) Run with `--permission-mode dontAsk` and an `--allowedTools` allowlist that includes the `Bash` tool wholesale (the command issues compound shell commands that prefix-pattern allowlists can't match) — never `bypassPermissions` for an unattended loop. Gate the run so it doesn't collide with an interactive session writing the same memory git.
 - **Off-machine backup:** the memory dir is local-only by design (no remote). For machine-loss insurance without a remote, `git bundle create memory.bundle --all` produces a single restorable file (`git clone memory.bundle memory`) you can copy to private storage. Don't push the memory repo to a hosted remote — it usually holds confidential context.
 
 ## Why slash commands, not Python

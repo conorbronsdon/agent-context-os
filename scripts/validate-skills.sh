@@ -54,10 +54,15 @@ done < <(find . -path './.git' -prune -o -name 'SKILL.md' -print0)
 
 # ── Check 3: All command .md files have valid frontmatter ───────────────────
 
-if [ -d "commands" ]; then
+if [ -d ".claude/commands" ]; then
   while IFS= read -r -d '' cmd; do
     check_frontmatter "$cmd" 20
-  done < <(find ./commands -name '*.md' -print0)
+    declared_name=$(grep '^name:' "$cmd" | head -1 | sed 's/^name:[[:space:]]*//' || true)
+    file_name=$(basename "$cmd" .md)
+    if [ -n "$declared_name" ] && [ "$declared_name" != "$file_name" ]; then
+      ERRORS+=("COMMAND NAME MISMATCH: $cmd declares '$declared_name'")
+    fi
+  done < <(find ./.claude/commands -name '*.md' -print0)
 fi
 
 # ── Check 4: CLAUDE.md exists and is under 100 lines ────────────────────────

@@ -1,7 +1,7 @@
 ---
 name: start
 description: Start a session — load state files, flag staleness, and give a briefing on current priorities, deadlines, and blockers
-allowed-tools: Read, Bash, Glob, mcp__google-workspace
+allowed-tools: Read, Bash, Glob, mcp__google-workspace__*
 x-source: skills-sync/commands/start.md
 x-source-version: 7ae9852
 ---

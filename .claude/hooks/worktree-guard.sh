@@ -17,14 +17,26 @@
 
 # 1. Read tool input JSON from stdin to extract file_path.
 INPUT=$(cat)
-FILE_PATH=$(printf '%s' "$INPUT" | python -c "
-import sys, json
+PYTHON_BIN=""
+if command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN="python3"
+elif command -v python >/dev/null 2>&1; then
+  PYTHON_BIN="python"
+fi
+
+FILE_PATH=""
+if [ -n "$PYTHON_BIN" ]; then
+  FILE_PATH=$(printf '%s' "$INPUT" | "$PYTHON_BIN" -c '
+import json
+import sys
+
 try:
-    data = json.loads(sys.stdin.read())
-    print(data.get('tool_input', {}).get('file_path', ''))
-except Exception:
+    payload = json.load(sys.stdin)
+    print(payload.get("tool_input", {}).get("file_path", ""))
+except (json.JSONDecodeError, AttributeError, TypeError):
     pass
-" 2>/dev/null)
+' 2>/dev/null)
+fi
 
 # If we can't determine a file path, don't block.
 [ -z "$FILE_PATH" ] && exit 0
@@ -75,22 +87,24 @@ fi
 [ -f "$REPO_ROOT/.allow-shared-edit" ] && exit 0
 
 # 7. Block.
-echo "=== WORKTREE GUARD ==="
-echo ""
-echo "Blocked: $SESSION_COUNT Claude sessions are running and the target file"
-echo "is inside the primary checkout of '$REPO_NAME':"
-echo "  $FILE_PATH"
-echo ""
-echo "Parallel edits to the same checkout cause branch-switch drift."
-echo ""
-echo "Create a worktree before editing. Example:"
-echo ""
-echo "    git -C \"$REPO_ROOT\" worktree add ../${REPO_NAME}-<task> -b claude/<task-name>"
-echo "    cd ../${REPO_NAME}-<task>"
-echo ""
-echo "Override (rare, e.g. shared state files): touch \"$REPO_ROOT/.allow-shared-edit\""
-echo ""
-echo "Or remove '$REPO_NAME' from .claude/hooks/guarded-repos.txt to disable this guard."
-echo ""
-echo "=== END WORKTREE GUARD ==="
+{
+  echo "=== WORKTREE GUARD ==="
+  echo ""
+  echo "Blocked: $SESSION_COUNT Claude sessions are running and the target file"
+  echo "is inside the primary checkout of '$REPO_NAME':"
+  echo "  $FILE_PATH"
+  echo ""
+  echo "Parallel edits to the same checkout cause branch-switch drift."
+  echo ""
+  echo "Create a worktree before editing. Example:"
+  echo ""
+  echo "    git -C \"$REPO_ROOT\" worktree add ../${REPO_NAME}-<task> -b claude/<task-name>"
+  echo "    cd ../${REPO_NAME}-<task>"
+  echo ""
+  echo "Override (rare, e.g. shared state files): touch \"$REPO_ROOT/.allow-shared-edit\""
+  echo ""
+  echo "Or remove '$REPO_NAME' from .claude/hooks/guarded-repos.txt to disable this guard."
+  echo ""
+  echo "=== END WORKTREE GUARD ==="
+} >&2
 exit 2

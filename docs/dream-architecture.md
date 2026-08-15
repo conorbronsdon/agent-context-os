@@ -172,7 +172,7 @@ The curator never auto-applies, so automating the *propose* step is safe; apply 
 
 - **Passive nudge.** A `SessionStart` hook that computes days since the last `.dreams/` artifact and prints a one-line reminder when memory is stale-curated. It surfaces; it never runs a curator (hooks can't invoke Claude).
 - **Active unattended.** Schedule a headless run on your platform's scheduler. Two non-obvious gotchas:
-  1. **Headless can't run slash commands.** `claude -p "/dream rot"` treats the slash command as literal text — print mode is non-interactive. Pass a *plain prompt that points Claude at `commands/dream.md`* (the command file is itself the step-by-step spec).
+  1. **Headless can't run slash commands.** `claude -p "/dream rot"` treats the slash command as literal text — print mode is non-interactive. Pass a *plain prompt that points Claude at `.claude/commands/dream.md`* (the command file is itself the step-by-step spec).
   2. **Permission posture.** Run with `--permission-mode dontAsk` plus an `--allowedTools` allowlist that includes the `Bash` tool **wholesale** — the command issues compound shell commands (`TS=$(date ...)`, `git add && git commit`) that prefix-pattern allowlists (`Bash(git:*)`) can't match, so a narrow list makes the run flail on denials. `dontAsk` still denies every non-shell tool. Never use `bypassPermissions` for an unattended loop.
   - **Collision guard.** Gate the run so it doesn't fire while an interactive session is writing the same memory git (e.g. skip if another Claude process is running). A pass over a few dozen memories can take ~15 minutes.
 
@@ -213,7 +213,7 @@ Three distinct failure modes; only one needs new infra.
 | `scripts/dream/prompts/rot.md` | Rot-detector prompt body (content class). |
 | `scripts/dream/prompts/merge.md` | Merge curator prompt body (structural class). |
 | `scripts/dream/prompts/split.md` | Split curator prompt body (structural class). |
-| `commands/dream.md` | `/dream {curator}` slash command. Default: `rot`. |
-| `commands/dream-apply.md` | `/dream-apply {timestamp}` slash command. |
+| `.claude/commands/dream.md` | `/dream {curator}` slash command. Default: `rot`. |
+| `.claude/commands/dream-apply.md` | `/dream-apply {timestamp}` slash command. |
 | `~/.claude/projects/<encoded-cwd>/memory/.git/` | Local-only repo for memory dir. Run `git init` there on first use. |
 | `~/.claude/projects/<encoded-cwd>/memory/.dreams/` | Per-pass artifacts. Tracked. |

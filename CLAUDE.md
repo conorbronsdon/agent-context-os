@@ -14,15 +14,16 @@
 | `/update` | Mid-session checkpoint — quick state save |
 | `/today` | Morning heartbeat — briefing, staleness check, deadlines |
 | `/clean-ai-writing` | Load `writing/skills/avoid-ai-writing/SKILL.md` and apply it |
-
 | `/capture` | Triage raw notes from `inbox/` into the right locations |
-| `/context` | Find relevant context files by topic keyword |
+| `/find-context` | Find relevant context files by topic keyword (avoids Claude's built-in `/context`) |
 | `/reconcile` | Drift detection after parallel sessions |
 | `/recover` | Scan orphaned worktrees and stale branches, offer cleanup |
 | `/content-shipped` | Log a published piece of content |
 | `/dream` | Run an autonomous curator pass over the memory dir (default: rot detection) |
 | `/dream-apply` | Walk a curator proposal artifact, accept/reject/edit per item |
 | `/skill-creator` | Generate a new skill and command routing file from a plain-language description |
+| `/migrate-gemini` | Migrate selected Gemini CLI workflows with dry-run review and parity checks |
+| `/mine-gemini-workflows` | Find repeated Gemini workflows and draft portable skills |
 
 Add more commands as you build out skills. See `docs/agent-template.md` for how.
 
