@@ -23,7 +23,10 @@ If `workspace.yaml` exists, use its state and sessions directories. Otherwise us
    ```
 
    Create the file with a date header when it does not exist. Never overwrite earlier entries.
-4. Update `<state_dir>/current.md` only when a priority shifted, a thread opened or closed, or a tracked task completed. Preserve unrelated content and its ordering.
+4. Update `<state_dir>/current.md` only when a priority shifted, a thread opened or closed, or a tracked task completed. Preserve unrelated content and its ordering. When changing it:
+   - keep exactly one `**Last Updated:**` line and set it to today's date;
+   - if that line already has a real prior date, prepend a separate line containing that value under `# current.md update log` in `<state_dir>/current-log.md`; and
+   - do not log a placeholder or duplicate the newest existing history entry.
 5. If a durable decision was made, mention that `$context-end` can add it to the decision log; do not expand a quick checkpoint into a full close workflow.
 6. Confirm in one line what was checkpointed and which files changed.
 

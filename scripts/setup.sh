@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # setup.sh — Interactive first-run setup after cloning.
-# Run once: bash scripts/setup.sh
+# Safe to rerun: bash scripts/setup.sh
 
 set -euo pipefail
 
@@ -59,6 +59,15 @@ prompt_yn() {
   [[ "$yn" =~ ^[Yy] ]]
 }
 
+SETUP_PATHS=()
+track_setup_path() {
+  local candidate="$1" existing
+  for existing in "${SETUP_PATHS[@]:-}"; do
+    [ "$existing" = "$candidate" ] && return
+  done
+  SETUP_PATHS+=("$candidate")
+}
+
 # ── Welcome ─────────────────────────────────────────────────────────────────
 
 echo ""
@@ -68,12 +77,19 @@ echo ""
 
 # ── 1. Your name ────────────────────────────────────────────────────────────
 
-read -rp "  What's your name? " USER_NAME
+read -rp "  Name to place in CLAUDE.md (or press Enter to skip): " USER_NAME
 
 if [ -n "$USER_NAME" ]; then
-  # Inject name into CLAUDE.md header
-  sed -i "s/\[Your Name\]/$USER_NAME/g" CLAUDE.md 2>/dev/null || true
-  echo "  → Updated CLAUDE.md with your name"
+  if grep -Fq '[Your Name]' CLAUDE.md; then
+    # Escape the complete sed replacement so &, backslashes, and the delimiter
+    # remain literal user text rather than replacement syntax.
+    SAFE_USER_NAME=$(printf '%s' "$USER_NAME" | sed 's/[\\&|]/\\&/g')
+    sed -i "s|\[Your Name\]|$SAFE_USER_NAME|g" CLAUDE.md
+    track_setup_path "CLAUDE.md"
+    echo "  → Updated CLAUDE.md with your name"
+  else
+    echo "  → CLAUDE.md has no [Your Name] placeholder; left it unchanged"
+  fi
 fi
 
 # ── 2. Git remote ───────────────────────────────────────────────────────────
@@ -102,6 +118,8 @@ if [ -d "projects/example-musician" ]; then
     rm -rf projects/example-musician
     # Clean ROUTING.md reference
     sed -i '/example-musician/d' ROUTING.md 2>/dev/null || true
+    track_setup_path "projects/example-musician"
+    track_setup_path "ROUTING.md"
     echo "  → Removed projects/example-musician/"
   else
     echo "  → Kept example project as reference"
@@ -111,26 +129,35 @@ fi
 # ── 4. Install pre-commit hook ──────────────────────────────────────────────
 
 echo ""
-if [ ! -f ".git/hooks/pre-commit" ]; then
-  cp scripts/pre-commit-hook.sh .git/hooks/pre-commit
-  chmod +x .git/hooks/pre-commit
-  echo "  → Installed pre-commit hook"
-else
+HOOK_PATH=$(git rev-parse --git-path hooks/pre-commit 2>/dev/null || true)
+if [ -n "$HOOK_PATH" ] && [ ! -f "$HOOK_PATH" ]; then
+  if prompt_yn "  Install the local pre-commit hook at $HOOK_PATH?" "n"; then
+    mkdir -p "$(dirname "$HOOK_PATH")"
+    cp scripts/pre-commit-hook.sh "$HOOK_PATH"
+    chmod +x "$HOOK_PATH"
+    echo "  → Installed pre-commit hook"
+  else
+    echo "  → Skipped pre-commit hook"
+  fi
+elif [ -n "$HOOK_PATH" ]; then
   echo "  → Pre-commit hook already installed"
+else
+  echo "  → Not a git checkout; skipped pre-commit hook"
 fi
 
-# ── 5. Make scripts executable ──────────────────────────────────────────────
-
-chmod +x scripts/*.sh 2>/dev/null || true
-
-# ── 6. Generate REPO_MAP.md ─────────────────────────────────────────────────
+# ── 5. Generate REPO_MAP.md ─────────────────────────────────────────────────
 
 if [ -f "scripts/generate-repo-map.sh" ]; then
-  bash scripts/generate-repo-map.sh 2>/dev/null
-  echo "  → Generated REPO_MAP.md"
+  if prompt_yn "  Regenerate tracked REPO_MAP.md from the current tree?" "n"; then
+    bash scripts/generate-repo-map.sh
+    track_setup_path "REPO_MAP.md"
+    echo "  → Generated REPO_MAP.md"
+  else
+    echo "  → Kept the existing REPO_MAP.md"
+  fi
 fi
 
-# ── 7. Check for tools ──────────────────────────────────────────────────────
+# ── 6. Check for tools ──────────────────────────────────────────────────────
 
 echo ""
 echo "  Checking tools..."
@@ -171,16 +198,40 @@ fi
 
 echo "    Optional add-ons: see references/integrations.md (nothing is installed automatically)"
 
-# ── 8. Initial commit ───────────────────────────────────────────────────────
+# ── 7. Initial commit ───────────────────────────────────────────────────────
 
 echo ""
-if prompt_yn "  Create an initial commit with your setup?" "y"; then
-  git add -A
-  git commit -m "Initial setup for ${USER_NAME:-user}" --quiet 2>/dev/null || echo "  → Nothing to commit (already clean)"
-  echo "  → Committed"
+SETUP_STATUS=""
+if [ "${#SETUP_PATHS[@]}" -gt 0 ]; then
+  SETUP_STATUS=$(git status --short -- "${SETUP_PATHS[@]}")
 fi
 
-# ── 9. Next steps ───────────────────────────────────────────────────────────
+if [ -n "$SETUP_STATUS" ]; then
+  echo "  Proposed setup commit paths and exact unstaged diff:"
+  printf '%s\n' "$SETUP_STATUS"
+  git diff -- "${SETUP_PATHS[@]}"
+
+  if ! git diff --cached --quiet; then
+    echo "  → Existing staged changes detected; setup will not combine or alter them."
+    echo "     Review and commit the setup paths manually when ready."
+  elif prompt_yn "  Commit only the setup paths shown above?" "n"; then
+    git add -- "${SETUP_PATHS[@]}"
+    if git diff --cached --quiet; then
+      echo "  → Nothing to commit"
+    elif git commit -m "Initial setup for ${USER_NAME:-user}" --quiet; then
+      echo "  → Committed only the reviewed setup paths"
+    else
+      echo "  → Commit failed; reviewed setup changes remain staged" >&2
+      exit 1
+    fi
+  else
+    echo "  → Left setup changes uncommitted"
+  fi
+else
+  echo "  → No setup file changes to commit"
+fi
+
+# ── 8. Next steps ───────────────────────────────────────────────────────────
 
 echo ""
 echo "  ─────────────────────────────"
@@ -200,7 +251,7 @@ fi
 
 case "$SELECTED_AGENT" in
   claude)
-    echo "  1. cd $REPO_ROOT && claude"
+    printf '  1. cd %q && claude\n' "$REPO_ROOT"
     echo "  2. Type: /setup"
     echo "     Claude will interview you and build your context files."
     echo "     (~10 minutes, fully conversational)"
@@ -211,7 +262,7 @@ case "$SELECTED_AGENT" in
     fi
     ;;
   codex)
-    echo "  1. cd $REPO_ROOT && codex"
+    printf '  1. cd %q && codex\n' "$REPO_ROOT"
     echo '  2. Type: $context-setup'
     echo "     Codex will interview you and build your context files."
     echo "     See docs/codex-onboarding.md for the session loop and limitations."
@@ -222,8 +273,8 @@ case "$SELECTED_AGENT" in
     fi
     ;;
   none)
-    echo "  Claude Code: cd $REPO_ROOT && claude, then run /setup"
-    echo '  Codex:       cd '"$REPO_ROOT"' && codex, then run $context-setup'
+    printf '  Claude Code: cd %q && claude, then run /setup\n' "$REPO_ROOT"
+    printf '  Codex:       cd %q && codex, then run $context-setup\n' "$REPO_ROOT"
     echo "  claude.ai:   open SETUP-PROMPTS.md and paste the prompts there"
     echo ""
     ;;

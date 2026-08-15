@@ -49,7 +49,7 @@ Commit these files only when they are appropriate for the repository's visibilit
 | Claude auto-memory and `/dream` | No | Yes | Use repository `state/` and `sessions/` for shared continuity |
 | Personal agent configuration | No | No | Keep it outside the repository |
 
-Do not add a checked-in `.codex/config.toml`: authentication, approvals, tool configuration, and other machine-level settings belong to the user, not this template.
+Codex supports trusted repository-scoped [`.codex/config.toml` overrides](https://developers.openai.com/codex/config-basic). This template intentionally does not ship one: its portable lifecycle does not need project-level model, sandbox, approval, MCP, or hook overrides, and adding them would expand the template's trust boundary. If a project later adopts shared Codex configuration, review it like infrastructure. Keep credentials, personal preferences, and provider/auth settings at user or managed scope.
 
 ## Optional import
 

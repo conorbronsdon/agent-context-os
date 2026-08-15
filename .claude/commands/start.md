@@ -1,7 +1,8 @@
 ---
 name: start
 description: Start a session — load state files, flag staleness, and give a briefing on current priorities, deadlines, and blockers
-allowed-tools: Read, Bash, Glob, mcp__google-workspace__*
+allowed-tools: Read, Glob, mcp__google-workspace__calendar_events_list, mcp__google-workspace__gmail_users_messages_list, mcp__google-workspace__drive_files_list, mcp__google-workspace__sheets_spreadsheets_values_get
+disable-model-invocation: true
 ---
 
 # /start — Claude Code adapter
