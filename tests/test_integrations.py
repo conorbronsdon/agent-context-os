@@ -31,6 +31,13 @@ class IntegrationCatalogTests(unittest.TestCase):
         expected = MODULE.render_reference(self.catalog)
         self.assertEqual((ROOT / "references" / "integrations.md").read_text(), expected)
 
+    def test_agent_skills_discloses_replacement_and_removal(self) -> None:
+        item = next(item for item in self.catalog["integrations"] if item["id"] == "agent-skills")
+        self.assertTrue(item["capabilities"]["destructive"])
+        self.assertIn("destructive", item["confirmation"]["required_for"])
+        self.assertIn("replacement", item["risk_tags"])
+        self.assertIn("removal", item["risk_tags"])
+
     def test_duplicate_ids_are_rejected(self) -> None:
         self.assert_invalid(
             lambda catalog: catalog["integrations"][1].update(
@@ -38,10 +45,65 @@ class IntegrationCatalogTests(unittest.TestCase):
             )
         )
 
+    def test_duplicate_normalized_names_and_source_urls_are_rejected(self) -> None:
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][1].update(
+                {"name": "Ａgent Ｓkills"}
+            )
+        )
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][1].update(
+                {"source_url": catalog["integrations"][0]["source_url"] + "/"}
+            )
+        )
+
     def test_unknown_fields_and_invalid_urls_are_rejected(self) -> None:
         self.assert_invalid(lambda catalog: catalog["integrations"][0].update({"surprise": True}))
         self.assert_invalid(
             lambda catalog: catalog["integrations"][0].update({"source_url": "http://example.com"})
+        )
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][0].update({"source_url": "https://"})
+        )
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][0].update(
+                {"source_url": "https://example.com/ok)\n| injected |"}
+            )
+        )
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][0].update(
+                {"source_url": "https://example.com:not-a-port/source"}
+            )
+        )
+
+    def test_unhashable_enum_values_fail_as_catalog_errors(self) -> None:
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][0].update({"kind": []})
+        )
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][0].update({"maturity": {}})
+        )
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][0]["installation"].update(
+                {"scope": []}
+            )
+        )
+
+    def test_markdown_table_and_control_line_injection_is_rejected(self) -> None:
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][0].update(
+                {"name": "Injected | Integration"}
+            )
+        )
+        catalog = copy.deepcopy(self.catalog)
+        catalog["integrations"][0]["summary"] = "Uses *emphasis* and [links]"
+        MODULE.validate_catalog(catalog)
+        rendered = MODULE.render_reference(catalog)
+        self.assertIn(r"Uses \*emphasis\* and \[links\]", rendered)
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][0].update(
+                {"summary": "First line\n## Injected section"}
+            )
         )
 
     def test_auto_install_and_missing_risk_boundaries_are_rejected(self) -> None:
@@ -51,6 +113,30 @@ class IntegrationCatalogTests(unittest.TestCase):
         self.assert_invalid(
             lambda catalog: catalog["integrations"][3]["confirmation"].update(
                 {"required_for": ["credential_setup", "external_install", "write"]}
+            )
+        )
+
+    def test_capability_and_data_boundary_contradictions_are_rejected(self) -> None:
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][2]["data_boundary"].update(
+                {"writes": ["Deletes all project files"]}
+            )
+        )
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][3]["capabilities"].update(
+                {"write": False}
+            )
+        )
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][3]["data_boundary"].update(
+                {"reads": []}
+            )
+        )
+
+    def test_future_verification_dates_are_rejected(self) -> None:
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][0].update(
+                {"last_verified": "9999-12-31"}
             )
         )
 

@@ -193,7 +193,7 @@ Both hooks no-op until you list a repo basename in `.claude/hooks/guarded-repos.
 
 ## Optional integrations
 
-The generated [optional integrations catalog](references/integrations.md) links compatible add-ons without installing, activating, authenticating, or expanding permissions for any of them. Its source of truth is [`integrations/catalog.json`](integrations/catalog.json); CI rejects missing safety fields and documentation drift. `listed` and `experimental` entries are leads, not verified endorsements.
+The generated [optional integrations catalog](references/integrations.md) links compatible add-ons without installing, activating, authenticating, or expanding permissions for any of them. Its source of truth is [`integrations/catalog.json`](integrations/catalog.json), enforced by `scripts/integrations.py`; CI rejects missing safety fields, contradictory capability claims, unsafe source metadata, and documentation drift. `listed` and `experimental` entries are leads, not verified endorsements.
 
 Current catalog entries include [Agent Skills](https://github.com/conorbronsdon/agent-skills), [Agent Workspace](https://github.com/conorbronsdon/agent-workspace), [AI Tools for Creators](https://github.com/conorbronsdon/ai-tools-for-creators), and [Substack MCP](https://github.com/conorbronsdon/substack-mcp). Substack Notes publish immediately, so the catalog marks that capability and its confirmation boundary explicitly.
 

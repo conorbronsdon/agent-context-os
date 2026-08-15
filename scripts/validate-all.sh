@@ -25,7 +25,6 @@ paths = [
     Path(".claude/settings.json"),
     Path("docs/templates/workflow-parity.json"),
     Path("integrations/catalog.json"),
-    Path("integrations/schema.json"),
 ]
 for path in paths:
     with path.open(encoding="utf-8") as handle:

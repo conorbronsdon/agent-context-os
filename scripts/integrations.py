@@ -8,8 +8,10 @@ import datetime as dt
 import json
 import re
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -56,10 +58,44 @@ def require_exact_keys(value: dict[str, Any], expected: set[str], location: str)
 def require_string_list(value: Any, location: str, *, nonempty: bool = False) -> None:
     if not isinstance(value, list) or (nonempty and not value):
         raise CatalogError(f"{location}: expected {'a non-empty ' if nonempty else ''}array")
-    if not all(isinstance(item, str) and item.strip() for item in value):
-        raise CatalogError(f"{location}: every item must be a non-empty string")
+    for index, item in enumerate(value):
+        require_safe_text(item, f"{location}[{index}]")
     if len(value) != len(set(value)):
         raise CatalogError(f"{location}: duplicate values are not allowed")
+
+
+def require_safe_text(value: Any, location: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise CatalogError(f"{location}: expected a non-empty string")
+    if value != value.strip() or any(character in value for character in "\r\n\x00"):
+        raise CatalogError(f"{location}: surrounding whitespace and control lines are not allowed")
+
+
+def require_https_url(value: Any, location: str) -> None:
+    require_safe_text(value, location)
+    if any(character.isspace() for character in value) or any(character in value for character in "()"):
+        raise CatalogError(f"{location}: URL contains unsafe Markdown characters")
+    parsed = urlsplit(value)
+    try:
+        port = parsed.port
+    except ValueError:
+        raise CatalogError(f"{location}: URL has an invalid port") from None
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or (port is not None and not 1 <= port <= 65535)
+    ):
+        raise CatalogError(f"{location}: expected an HTTPS URL with a host and no credentials")
+
+
+def canonical_url(value: str) -> str:
+    parsed = urlsplit(value)
+    host = parsed.hostname.lower()
+    port = f":{parsed.port}" if parsed.port and parsed.port != 443 else ""
+    path = parsed.path.rstrip("/")
+    return urlunsplit(("https", host + port, path, parsed.query, parsed.fragment))
 
 
 def validate_catalog(catalog: Any) -> None:
@@ -73,6 +109,7 @@ def validate_catalog(catalog: Any) -> None:
 
     ids: set[str] = set()
     names: set[str] = set()
+    source_urls: set[str] = set()
     expected = {
         "id", "name", "summary", "source_url", "kind", "supported_agents",
         "installation", "data_boundary", "capabilities", "confirmation", "risk_tags",
@@ -84,20 +121,24 @@ def validate_catalog(catalog: Any) -> None:
             raise CatalogError(f"{location}: expected an object")
         require_exact_keys(item, expected, location)
         for field in ("name", "summary", "health_check", "uninstall"):
-            if not isinstance(item[field], str) or not item[field].strip():
-                raise CatalogError(f"{location}.{field}: expected a non-empty string")
+            require_safe_text(item[field], f"{location}.{field}")
+        if any(character in item["name"] for character in "|[]"):
+            raise CatalogError(f"{location}.name: Markdown table/link delimiters are not allowed")
         if not isinstance(item["id"], str) or not ID_PATTERN.fullmatch(item["id"]):
             raise CatalogError(f"{location}.id: expected a stable kebab-case ID")
         if item["id"] in ids:
             raise CatalogError(f"{location}.id: duplicate ID {item['id']!r}")
         ids.add(item["id"])
-        normalized_name = item["name"].casefold()
+        normalized_name = unicodedata.normalize("NFKC", item["name"]).strip().casefold()
         if normalized_name in names:
             raise CatalogError(f"{location}.name: duplicate name {item['name']!r}")
         names.add(normalized_name)
-        if not isinstance(item["source_url"], str) or not item["source_url"].startswith("https://"):
-            raise CatalogError(f"{location}.source_url: expected an HTTPS URL")
-        if item["kind"] not in KINDS:
+        require_https_url(item["source_url"], f"{location}.source_url")
+        normalized_url = canonical_url(item["source_url"])
+        if normalized_url in source_urls:
+            raise CatalogError(f"{location}.source_url: duplicate canonical source URL")
+        source_urls.add(normalized_url)
+        if not isinstance(item["kind"], str) or item["kind"] not in KINDS:
             raise CatalogError(f"{location}.kind: unsupported integration kind")
         require_string_list(item["supported_agents"], f"{location}.supported_agents", nonempty=True)
         if not set(item["supported_agents"]) <= AGENTS:
@@ -109,7 +150,7 @@ def validate_catalog(catalog: Any) -> None:
         require_exact_keys(installation, {"automatic", "scope", "prerequisites"}, f"{location}.installation")
         if installation["automatic"] is not False:
             raise CatalogError(f"{location}.installation.automatic: must remain false")
-        if installation["scope"] not in SCOPES:
+        if not isinstance(installation["scope"], str) or installation["scope"] not in SCOPES:
             raise CatalogError(f"{location}.installation.scope: unsupported scope")
         require_string_list(installation["prerequisites"], f"{location}.installation.prerequisites")
 
@@ -136,27 +177,44 @@ def validate_catalog(catalog: Any) -> None:
         require_string_list(confirmation["required_for"], f"{location}.confirmation.required_for")
         if not set(confirmation["required_for"]) <= CONFIRMATIONS:
             raise CatalogError(f"{location}.confirmation.required_for: unsupported boundary")
-        if not isinstance(confirmation["notes"], str) or not confirmation["notes"].strip():
-            raise CatalogError(f"{location}.confirmation.notes: expected a non-empty string")
+        require_safe_text(confirmation["notes"], f"{location}.confirmation.notes")
         for capability in ("write", "publish", "destructive"):
             if capabilities[capability] and capability not in confirmation["required_for"]:
                 raise CatalogError(f"{location}: {capability} capability requires an explicit confirmation boundary")
+        if bool(boundary["reads"]) != capabilities["read"]:
+            raise CatalogError(f"{location}: data reads and read capability must agree")
+        if bool(boundary["writes"]) != capabilities["write"]:
+            raise CatalogError(f"{location}: data writes and write capability must agree")
+        for capability in ("publish", "destructive"):
+            if capabilities[capability] and not capabilities["write"]:
+                raise CatalogError(f"{location}: {capability} capability requires write capability")
         if installation["scope"] != "none" and "external_install" not in confirmation["required_for"]:
             raise CatalogError(f"{location}: installable entries require an external_install boundary")
         if boundary["credentials"] and "credential_setup" not in confirmation["required_for"]:
             raise CatalogError(f"{location}: credentialed entries require a credential_setup boundary")
 
         require_string_list(item["risk_tags"], f"{location}.risk_tags", nonempty=True)
-        if item["maturity"] not in MATURITY:
+        if not all(ID_PATTERN.fullmatch(tag) for tag in item["risk_tags"]):
+            raise CatalogError(f"{location}.risk_tags: expected kebab-case tags")
+        if not isinstance(item["maturity"], str) or item["maturity"] not in MATURITY:
             raise CatalogError(f"{location}.maturity: unsupported maturity")
         try:
-            dt.date.fromisoformat(item["last_verified"])
+            verified_on = dt.date.fromisoformat(item["last_verified"])
         except (TypeError, ValueError):
             raise CatalogError(f"{location}.last_verified: expected YYYY-MM-DD") from None
+        if verified_on > dt.date.today():
+            raise CatalogError(f"{location}.last_verified: future dates are not allowed")
 
 
 def yes_no(value: bool) -> str:
     return "Yes" if value else "No"
+
+
+def markdown_text(value: str) -> str:
+    escaped = value.replace("\\", "\\\\")
+    for character in "`*_[]<>|":
+        escaped = escaped.replace(character, "\\" + character)
+    return escaped
 
 
 def render_reference(catalog: dict[str, Any]) -> str:
@@ -164,30 +222,31 @@ def render_reference(catalog: dict[str, Any]) -> str:
     sections = []
     for item in sorted(catalog["integrations"], key=lambda value: value["name"].casefold()):
         caps = item["capabilities"]
+        name = markdown_text(item["name"])
         rows.append(
-            f"| [{item['name']}]({item['source_url']}) | `{item['kind']}` | "
+            f"| [{name}]({item['source_url']}) | `{item['kind']}` | "
             f"{item['maturity']} | {yes_no(caps['write'])} | {yes_no(caps['publish'])} | "
             f"{yes_no(caps['destructive'])} | {item['last_verified']} |"
         )
         agents = ", ".join(f"`{agent}`" for agent in item["supported_agents"])
-        prerequisites = "; ".join(item["installation"]["prerequisites"]) or "None"
-        credentials = "; ".join(item["data_boundary"]["credentials"]) or "None"
-        reads = "; ".join(item["data_boundary"]["reads"]) or "None"
-        writes = "; ".join(item["data_boundary"]["writes"]) or "None"
-        details = "\n".join(f"- {detail}" for detail in caps["details"])
+        prerequisites = "; ".join(map(markdown_text, item["installation"]["prerequisites"])) or "None"
+        credentials = "; ".join(map(markdown_text, item["data_boundary"]["credentials"])) or "None"
+        reads = "; ".join(map(markdown_text, item["data_boundary"]["reads"])) or "None"
+        writes = "; ".join(map(markdown_text, item["data_boundary"]["writes"])) or "None"
+        details = "\n".join(f"- {markdown_text(detail)}" for detail in caps["details"])
         sections.append(
-            f"## {item['name']}\n\n"
-            f"{item['summary']}\n\n"
+            f"## {name}\n\n"
+            f"{markdown_text(item['summary'])}\n\n"
             f"- **Supported agents:** {agents}\n"
             f"- **Install scope:** `{item['installation']['scope']}`; never automatic\n"
             f"- **Prerequisites:** {prerequisites}\n"
             f"- **Credentials:** {credentials}\n"
             f"- **Reads:** {reads}\n"
             f"- **Writes / external effects:** {writes}\n"
-            f"- **Confirmation:** {item['confirmation']['notes']}\n"
+            f"- **Confirmation:** {markdown_text(item['confirmation']['notes'])}\n"
             f"- **Risk tags:** {', '.join(f'`{tag}`' for tag in item['risk_tags'])}\n"
-            f"- **Health check:** {item['health_check']}\n"
-            f"- **Uninstall:** {item['uninstall']}\n\n"
+            f"- **Health check:** {markdown_text(item['health_check'])}\n"
+            f"- **Uninstall:** {markdown_text(item['uninstall'])}\n\n"
             f"Capabilities and limits:\n\n{details}\n"
         )
     return (
@@ -195,8 +254,9 @@ def render_reference(catalog: dict[str, Any]) -> str:
         "# Optional integrations\n\n"
         "These add-ons are **references, not bundled dependencies**. Setup does not install, "
         "activate, authenticate, or expand permissions for any entry. Review the current source, "
-        "data boundary, and side effects before opting in. `listed` and `experimental` do not mean "
-        "the integration has been verified end to end.\n\n"
+        "data boundary, and side effects before opting in. `verified` means the catalog metadata "
+        "was checked against the linked source on the stated date; it is not a live authentication "
+        "or end-to-end test. `listed` and `experimental` are leads, not endorsements.\n\n"
         "| Integration | Kind | Maturity | Writes | Publishes | Destructive | Last verified |\n"
         "|---|---|---|---:|---:|---:|---|\n"
         + "\n".join(rows)

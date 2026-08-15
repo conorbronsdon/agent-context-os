@@ -16,20 +16,20 @@
       "data_boundary": {
         "credentials": [],
         "reads": ["Selected public skill source files"],
-        "writes": ["Chosen skill files in an agent-specific project or user directory"]
+        "writes": ["Chosen skill files in an agent-specific project or user directory, including replacement or removal of an existing installation"]
       },
       "capabilities": {
         "read": true,
         "write": true,
         "publish": false,
-        "destructive": false,
-        "details": ["Install, diff, and update explicitly selected skills"]
+        "destructive": true,
+        "details": ["Install and diff explicitly selected skills", "Update can replace an installed skill directory; uninstall removes it"]
       },
       "confirmation": {
-        "required_for": ["external_install", "write"],
-        "notes": "Review the selected skill and destination before installation or update."
+        "required_for": ["external_install", "write", "destructive"],
+        "notes": "Review the selected skill, destination, diff, and local modifications before installation, replacement, or removal."
       },
-      "risk_tags": ["external-install", "project-files"],
+      "risk_tags": ["external-install", "project-files", "replacement", "removal"],
       "maturity": "verified",
       "last_verified": "2026-08-15",
       "health_check": "Use the repository's documented diff and validation workflow for the selected skill.",
@@ -41,16 +41,16 @@
       "summary": "A slim standalone package for agent lifecycle, state, reconciliation, and recovery workflows.",
       "source_url": "https://github.com/conorbronsdon/agent-workspace",
       "kind": "workspace_template",
-      "supported_agents": ["claude_code", "codex", "generic"],
+      "supported_agents": ["claude_code"],
       "installation": {
         "automatic": false,
-        "scope": "project",
+        "scope": "project_or_user",
         "prerequisites": ["Git", "A repository where workspace state may be stored"]
       },
       "data_boundary": {
         "credentials": [],
         "reads": ["Local workspace state, sessions, branches, and worktrees"],
-        "writes": ["Local workspace state and session files after workflow approval"]
+        "writes": ["Local workspace state and session files after workflow approval", "Optional removal of explicitly approved stale worktrees or branches"]
       },
       "capabilities": {
         "read": true,
@@ -109,7 +109,7 @@
       "summary": "An MCP server for reading Substack publication data, managing private drafts, and publishing short-form Notes.",
       "source_url": "https://github.com/conorbronsdon/substack-mcp",
       "kind": "mcp_server",
-      "supported_agents": ["claude_code", "codex", "generic"],
+      "supported_agents": ["claude_code", "generic"],
       "installation": {
         "automatic": false,
         "scope": "project",
