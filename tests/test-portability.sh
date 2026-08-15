@@ -99,6 +99,20 @@ if python3 tests/validate-openai-metadata.py --command "$unrestricted_start" sta
   fail "unrestricted inline Bash grant passed command validation"
 fi
 
+for bad_scalar in false null 123; do
+  typed_command="$portability_tmp/non-string-description-$bad_scalar.md"
+  sed "s/^description:.*/description: $bad_scalar/" .claude/commands/setup.md > "$typed_command"
+  if python3 tests/validate-openai-metadata.py --command "$typed_command" setup >/dev/null 2>&1; then
+    fail "$bad_scalar command description passed scalar-type validation"
+  fi
+done
+
+boolean_tools="$portability_tmp/boolean-tools-start.md"
+sed 's/^allowed-tools:.*/allowed-tools: false/' .claude/commands/start.md > "$boolean_tools"
+if python3 tests/validate-openai-metadata.py --command "$boolean_tools" start >/dev/null 2>&1; then
+  fail "boolean allowed-tools passed scalar-type validation"
+fi
+
 help_output=$(bash scripts/setup.sh --help)
 grep -Fq -- '--agent auto|claude|codex|none' <<<"$help_output" || fail "setup help does not describe agent selection"
 if bash scripts/setup.sh --agent invalid >/dev/null 2>&1; then

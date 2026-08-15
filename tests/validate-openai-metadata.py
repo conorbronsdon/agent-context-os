@@ -103,7 +103,7 @@ def validate(path: Path, skill_name: str) -> None:
         raise MetadataError("policy.allow_implicit_invocation must be boolean false")
 
 
-def command_frontmatter(path: Path) -> dict[str, str]:
+def command_frontmatter(path: Path) -> dict[str, object]:
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except (OSError, UnicodeError) as exc:
@@ -115,14 +115,19 @@ def command_frontmatter(path: Path) -> dict[str, str]:
     except ValueError as exc:
         raise MetadataError("command frontmatter is not closed") from exc
 
-    result: dict[str, str] = {}
+    result: dict[str, object] = {}
     for line_number, line in enumerate(lines[1:closing], 2):
-        key, separator, value = line.partition(": ")
-        if not separator or not COMMAND_KEY.fullmatch(key) or not value or line != line.rstrip():
+        key, separator, raw_value = line.partition(": ")
+        if not separator or not COMMAND_KEY.fullmatch(key) or not raw_value or line != line.rstrip():
             raise MetadataError(f"line {line_number}: malformed command frontmatter")
         if key in result:
             raise MetadataError(f"line {line_number}: duplicate command field {key}")
-        result[key] = value
+        if key == "name":
+            if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", raw_value):
+                raise MetadataError(f"line {line_number}: command name must be a plain name string")
+            result[key] = raw_value
+        else:
+            result[key] = scalar(raw_value, line_number)
     return result
 
 
@@ -133,7 +138,14 @@ def validate_command(path: Path, command_name: str) -> None:
         raise MetadataError(f"command fields must be exactly {sorted(expected)}")
     if data["name"] != command_name:
         raise MetadataError(f"command name must be {command_name}")
-    if data["disable-model-invocation"] != "true":
+    if not isinstance(data["description"], str) or not data["description"].strip():
+        raise MetadataError("description must be a non-empty quoted string")
+    if not isinstance(data["allowed-tools"], str) or not data["allowed-tools"].strip():
+        raise MetadataError("allowed-tools must be a non-empty quoted string")
+    for field in ("description", "allowed-tools"):
+        if any(unicodedata.category(character) in {"Cc", "Cf", "Cs", "Zl", "Zp"} for character in data[field]):
+            raise MetadataError(f"{field} contains a control or format character")
+    if data["disable-model-invocation"] is not True:
         raise MetadataError("disable-model-invocation must be boolean true in frontmatter")
     if command_name == "start" and data["allowed-tools"] != START_TOOLS:
         raise MetadataError("start must pre-approve exactly the reviewed read-only tool set")

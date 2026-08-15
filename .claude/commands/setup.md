@@ -1,7 +1,7 @@
 ---
 name: setup
-description: Interactive onboarding — interview the user and build all context files in one conversation
-allowed-tools: Read, Write, Edit, Bash, Glob
+description: "Interactive onboarding — interview the user and build all context files in one conversation"
+allowed-tools: "Read, Write, Edit, Bash, Glob"
 disable-model-invocation: true
 ---
 
