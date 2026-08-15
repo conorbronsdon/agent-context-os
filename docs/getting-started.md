@@ -35,9 +35,9 @@ Choose the host workflow after setup:
 | Claude Code | `/setup` | `/start` | `/update` | `/end` |
 | Codex | `$context-setup` | `$context-start` | `$context-update` | `$context-end` |
 | Claude.ai | [`SETUP-PROMPTS.md`](../SETUP-PROMPTS.md) | Use uploaded project knowledge | Manual | Copy reviewed changes back |
-| Gemini CLI | Migration and portable-skill discovery only | No lifecycle adapter | No lifecycle adapter | No lifecycle adapter |
+| Gemini CLI / Antigravity CLI | Migration from Gemini artifacts; portable-skill discovery only for continuing enterprise/API-key Gemini CLI | No lifecycle adapter | No lifecycle adapter | No lifecycle adapter |
 
-The repository currently validates the complete lifecycle for Claude Code and Codex. Claude.ai is a manual knowledge copy with no write-back. Gemini support is limited to migration helpers and the portable skill layout. Treat another agent as a new adapter: verify its instruction discovery, invocation, permissions, and write behavior before claiming parity.
+CI structurally validates the Claude Code and Codex lifecycle contracts and adapter mappings; it does not run an installed-host end-to-end session. Claude.ai is a manual knowledge copy with no write-back. Consumer Gemini CLI requests transitioned to Antigravity CLI in June 2026, while enterprise/API-key Gemini CLI use continues. This repository's Gemini support is limited to migration helpers and portable-skill discovery on continuing Gemini CLI; Antigravity behavior is not validated. Treat another agent as a new adapter: verify its instruction discovery, invocation, permissions, and write behavior before claiming parity.
 
 ## 3. Start fresh or bring context forward
 
@@ -50,7 +50,7 @@ Available paths include:
 - a manual audit prompt for Claude Projects and other browser-hosted workspaces;
 - reviewed Gemini CLI configuration migration with `/migrate-gemini` or `$migrate-gemini`;
 - evidence-based Gemini workflow recovery with `/mine-gemini-workflows` or `$mine-gemini-workflows`; and
-- optional Codex `/import` for supported legacy instructions or configuration, followed by a diff review.
+- optional Codex `/import` from Claude Code or Cursor for supported setup, project files, and up to 50 recent chats from the last 30 days, followed by item selection and a diff review.
 
 No migration path should copy credentials, private reasoning, or an unreviewed bulk export into tracked files.
 
@@ -63,7 +63,7 @@ The portable loop is deliberately small:
 3. **Checkpoint** — append a factual progress note when continuity would otherwise be lost.
 4. **Close** — review the proposed handoff before state or decisions are updated.
 
-Shared continuity lives in `state/` and `sessions/`. Claude Code auto-memory is an optional host-specific layer; it is not silently shared with Codex.
+Shared continuity lives in `state/` and `sessions/`. Claude Code auto-memory is a host-specific layer that is enabled by default and may write automatically; it is not silently shared with Codex. The repository's `/dream` curation extension remains optional and separately gated.
 
 ## 5. Add one optional integration at a time
 

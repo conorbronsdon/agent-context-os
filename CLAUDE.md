@@ -21,7 +21,6 @@
 | `/content-shipped` | Log a published piece of content |
 | `/dream` | Run an on-demand curator pass over the configured memory dir (default: rot detection) |
 | `/dream-apply` | Walk a curator proposal artifact, accept/reject/edit per item |
-| `/skill-creator` | Generate a new skill and command routing file from a plain-language description |
 | `/migrate-gemini` | Migrate selected Gemini CLI workflows with dry-run review and parity checks |
 | `/mine-gemini-workflows` | Find repeated Gemini workflows and draft portable skills |
 
@@ -49,7 +48,7 @@ This mode applies to career moves, strategy decisions, project bets, and any "he
 Actions that change external state or are hard to reverse require confirmation. See `docs/safety-contract.md` for the full policy, approval patterns, and design principles.
 
 ## Memory
-Claude Code can maintain host-local memory for this git repository. Do not hand-derive its internal path from the current working directory. Use `/memory` to inspect it; the optional `/dream` workflow requires the explicit local path contract in `docs/auto-memory.md`. Typed entries use `user`, `feedback`, `project`, and `reference`; `MEMORY.md` stays an index capped at ~100 lines.
+Claude Code enables host-local auto-memory by default. Do not hand-derive its internal path from the current working directory. Use `/memory` to inspect it and `autoMemoryEnabled: false` if automatic host writes are unwanted; the optional `/dream` workflow has a separate explicit local path contract in `docs/auto-memory.md`. Typed entries use `user`, `feedback`, `environment`, `project`, and `reference`; `MEMORY.md` stays an index capped at ~100 lines.
 
 Run `/dream` explicitly for shipped curators (`rot`, `merge`, `split`, `lint`), then `/dream-apply` to review live-memory changes. Proposal artifacts are written and committed before review; live memories are not. Pattern, standalone contradiction, and untapped curators are roadmap items. See `docs/dream-architecture.md`.
 
@@ -70,7 +69,7 @@ For high-traffic repos, enable the parallel-session guards: add the repo basenam
 
 ## Claude Code vs claude.ai
 
-This repo is designed for **Claude Code** (CLI). If you also use **claude.ai projects**, upload key files (CLAUDE.md, ROUTING.md, identity files) as project knowledge. See `docs/claude-projects-sync.md` if present.
+This repo is designed for **Claude Code** (CLI). If you also use **claude.ai projects**, upload only a deliberately selected and sanitized subset as plain project knowledge. Repository instructions and skill metadata do not become active commands there. See `docs/claude-projects-sync.md` if present.
 
 Codex uses the same repository state through root `AGENTS.md` and `.agents/skills/`. See `docs/codex-onboarding.md`; do not copy Claude hooks, settings, or auto-memory assumptions into portable skills.
 

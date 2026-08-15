@@ -7,7 +7,7 @@ A Claude-first, Codex-compatible workspace harness for durable agent context —
 [![GitHub stars](https://img.shields.io/github/stars/conorbronsdon/claude-context-os?style=social)](https://github.com/conorbronsdon/claude-context-os/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Built for Claude Code](https://img.shields.io/badge/built%20for-Claude%20Code-d97757?style=flat-square)](https://docs.anthropic.com/en/docs/claude-code)
-[![Codex ready](https://img.shields.io/badge/Codex-ready-111827?style=flat-square)](docs/codex-onboarding.md)
+[![Codex lifecycle adapter](https://img.shields.io/badge/Codex-lifecycle%20adapter-111827?style=flat-square)](docs/codex-onboarding.md)
 [![Validate](https://github.com/conorbronsdon/claude-context-os/actions/workflows/validate.yml/badge.svg)](https://github.com/conorbronsdon/claude-context-os/actions/workflows/validate.yml)
 [![X](https://img.shields.io/badge/X-@ConorBronsdon-black?style=flat-square&logo=x)](https://x.com/ConorBronsdon)
 
@@ -45,9 +45,9 @@ Review the exact diff before each commit and the destination before each push. A
 | Host | What is supported here | What is not implied |
 |---|---|---|
 | Claude Code | Full lifecycle plus checked-in Claude commands, hooks, and optional auto-memory curation | External integrations are not enabled by default |
-| Codex | Validated setup/start/update/end lifecycle through `AGENTS.md` and `.agents/skills/` | Claude hooks, commands, permissions, and auto-memory do not carry over |
+| Codex | Structurally validated setup/start/update/end adapters through `AGENTS.md` and `.agents/skills/` | CI does not run an installed-host end-to-end session; Claude hooks, commands, permissions, and auto-memory do not carry over |
 | Claude.ai Projects | Manually uploaded, selected knowledge files | No live sync, repository writes, slash-command activation, or lifecycle parity |
-| Gemini CLI | Portable skill layout plus reviewed migration/discovery helpers | No tested lifecycle adapter or permission parity is claimed |
+| Gemini CLI / Antigravity CLI | Migration/discovery from Gemini artifacts; portable skills for continuing enterprise/API-key Gemini CLI | Consumer Gemini CLI moved to Antigravity CLI in June 2026; Antigravity lifecycle, discovery, and permission parity are not validated here |
 
 ---
 
@@ -92,11 +92,7 @@ bash scripts/setup.sh --agent claude
 bash scripts/setup.sh --agent codex
 ```
 
-If you don't have Claude Code yet:
-
-```bash
-npm install -g @anthropic-ai/claude-code
-```
+If you don't have Claude Code yet, use the [official installation guide](https://code.claude.com/docs/en/installation). The native installer is recommended; npm remains an advanced alternative that requires Node.js.
 
 Once you're in Claude Code, run:
 
@@ -205,7 +201,7 @@ New here? **[docs/first-skill.md](docs/first-skill.md)** walks you through build
 
 ## Auto-memory
 
-Claude Code can maintain auto-memory for this git repository. This is a Claude-only extension, not the portable memory layer. Claude Code resolves its default store from the repository, not by a path formula this template should guess. The optional curation commands require one explicit local memory directory configured as described in [`docs/auto-memory.md`](docs/auto-memory.md). Shared continuity lives in `state/` and `sessions/`.
+Claude Code enables auto-memory by default and may write it automatically during ordinary sessions. This is a Claude-only host extension, not the portable memory layer or a behavior controlled by this repository's `/end` approval gate. Use `/memory` to inspect it or `autoMemoryEnabled: false` to opt out. The optional `/dream` curation commands have their own explicit local-memory contract and per-item apply review described in [`docs/auto-memory.md`](docs/auto-memory.md). Shared continuity lives in `state/` and `sessions/`.
 
 - **user** — role, expertise, preferences
 - **feedback** — guidance about *how* to work, both corrections and validated approaches
@@ -253,7 +249,7 @@ Current catalog entries include portable skills and workspace add-ons plus revie
 
 The [migration guide](docs/migration-guide.md) covers Claude Projects, Gemini CLI, Codex import, and manual extraction from other AI systems. The goal is durable context—not a bulk archive of conversations.
 
-For Gemini CLI specifically, run `/migrate-gemini` or `$migrate-gemini` for a reviewed configuration migration. Use `/mine-gemini-workflows` or `$mine-gemini-workflows` only to discover repeated workflows in an explicitly selected session directory. Both flows are privacy-first: dry run before mutation, metadata before message content, no private reasoning export, and parity checks before a workflow is accepted.
+For Gemini CLI artifacts, run `/migrate-gemini` or `$migrate-gemini` for a reviewed configuration migration. Use `/mine-gemini-workflows` or `$mine-gemini-workflows` only to discover repeated workflows in an explicitly selected session directory. Consumer Gemini CLI requests moved to Antigravity CLI on June 18, 2026; Standard/Enterprise and paid API-key Gemini CLI use continues, while this repository does not yet claim Antigravity compatibility or 1:1 parity. See Google's [transition announcement](https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/). Both repository flows remain privacy-first: dry run before mutation, metadata before message content, no private reasoning export, and parity checks before a workflow is accepted.
 
 See [`docs/gemini-migration.md`](docs/gemini-migration.md). [`0xSero/ai-data-extraction`](https://github.com/0xSero/ai-data-extraction) is credited as useful extraction prior art in [`references/ai-data-extraction.md`](references/ai-data-extraction.md); it is not installed as a dependency.
 

@@ -7,6 +7,8 @@ description: Migrate selected Gemini CLI instructions, commands, skills, hooks, 
 
 Move proven Gemini CLI workflows into this workspace without bulk-copying private history or silently changing behavior.
 
+Consumer Gemini CLI requests transitioned to Antigravity CLI in June 2026; continuing enterprise/API-key Gemini CLI remains a distinct path. Treat Gemini files as migration sources. Do not claim that Antigravity shares Gemini skill discovery, hook, permission, or lifecycle behavior unless the installed target has been separately validated.
+
 ## Safety rules
 
 - Start with inventory and a dry run. Do not mutate source Gemini files.

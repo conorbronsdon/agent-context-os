@@ -32,7 +32,7 @@ Ask me the following questions one at a time — wait for my answer before movin
 9. What are your key credentials or social proof — the things that establish your credibility?
 10. Where are you online? (Website, social handles, etc.)
 
-After I've answered all of them, write the files. Use my exact words where possible — don't polish or generalize. Update the Last Updated date to today. Tell me what you wrote.
+After I've answered all of them, prepare the exact proposed contents for both files and show the complete file map. Do not write, save, or replace anything yet. Ask me to approve those exact two file writes. Only after I explicitly approve, write the approved content, update the Last Updated date to today, and show the resulting diff. If this host cannot edit the repository, return the reviewed content for me to copy manually.
 ```
 
 ---
@@ -74,12 +74,11 @@ Ask me the following questions one at a time — wait for my answer before movin
 15. What are you specifically trying to accomplish in the next 3 months?
 16. Where do you want to be as an artist in 1-2 years?
 
-After I've answered everything, do the following:
-1. Rename the folder from `projects/example-musician` to `projects/[artist-name-lowercase-hyphenated]`
-2. Write artist-context.md and promotion-strategy.md with my answers — use my words, not polished versions
-3. Update ROUTING.md to point to the new folder name
-4. Update the Last Updated dates to today
-5. Tell me what changed and what to do next
+After I've answered everything:
+1. Propose the exact new folder name, both complete file contents, the ROUTING.md edit, and the full changed-file map. Do not write or rename anything yet.
+2. Ask me first to approve the two content files and ROUTING.md edit.
+3. Separately explain that renaming removes the old path and can break links, then ask me to approve that exact rename consequence.
+4. Only after both approvals, make only the approved writes and rename, update the Last Updated dates, and show the resulting diff. If this host cannot edit the repository, return the reviewed files and rename instructions for me to apply manually.
 ```
 
 ---
@@ -103,14 +102,11 @@ Ask me the following questions one at a time:
 8. Of those recurring tasks, which ones take the most time or feel the most inconsistent?
 
 After I've answered everything:
-1. Create a folder at `projects/[project-name]/`
-2. Write `projects/[project-name]/context.md` with the permanent background
-3. Write `projects/[project-name]/strategy.md` with goals and current focus
-4. For the top 1-2 recurring tasks I mentioned, create a portable skill at `.agents/skills/[project-name]-[task-name]/SKILL.md`. Keep project facts in the project files and reference them from the skill instead of copying them.
-5. Add a line to ROUTING.md under "Project tasks" pointing to the new context file
-6. If I use Claude Code and want a slash command for a portable skill, offer a thin adapter in `.claude/commands/`; do not duplicate the workflow body
-7. Run `bash scripts/validate-all.sh`, show me the changed-file list, and wait before committing
-8. Tell me what you built and what to fill in next
+1. Draft the complete proposed contents for `projects/[project-name]/context.md`, `strategy.md`, the top 1-2 portable skills under `.agents/skills/[skill-name]/SKILL.md`, and the exact ROUTING.md edit. If I use Claude Code, separately propose any thin `.claude/commands/` adapter without duplicating the workflow.
+2. Show the full file map and exact content/diff. Do not create or edit any file yet.
+3. Ask me to approve that exact batch. Only after explicit approval, create only those files and edits.
+4. Run `bash scripts/validate-all.sh`, show the changed-file list and diff, and wait before any commit.
+5. Tell me what was built and what to fill in next. If this host cannot edit the repository, return the reviewed batch for me to copy manually.
 ```
 
 ---
@@ -128,7 +124,7 @@ Read state/current.md and state/weekly-priorities.md. Then ask me:
 4. Any open threads or things you're waiting on?
 5. Anything that changed since last week that I should know about?
 
-Update both files with my answers. Update the dates. Keep it terse — these files are read at the start of every session, so clarity beats completeness. Tell me what changed.
+Draft the exact proposed diff for both files with updated dates. Keep it terse — these files are read at the start of every session, so clarity beats completeness. Do not write yet. Ask me to approve that exact two-file update; only then apply it and show the resulting diff. If this host cannot edit the repository, return the reviewed content for me to copy manually.
 ```
 
 ---

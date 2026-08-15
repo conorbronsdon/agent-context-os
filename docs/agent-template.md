@@ -53,12 +53,15 @@ Place in `.claude/commands/[skill-name].md`. This is what the slash command load
 ```markdown
 ---
 name: [skill-name]
-description: [Short description, 20+ chars]
-allowed-tools: [Read, Bash, Write, Edit, Glob — pre-approve only what's needed]
+description: "[Short description, 20+ chars]"
+allowed-tools: "Read, Glob"
+disable-model-invocation: true
 ---
 
 Read and follow `.agents/skills/[skill-name]/SKILL.md`.
 ```
+
+The example is deliberately read-only and user-invoked. Add a write, shell, or external tool only after documenting its exact effect and approval point; never paste a broad convenience grant into a new command.
 
 ---
 

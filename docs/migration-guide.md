@@ -9,8 +9,8 @@ Work on one source, one project, and one date range at a time. Keep inventories 
 | Source | Supported path | Important boundary |
 |---|---|---|
 | Claude Projects | Manual metadata-first inventory and selected knowledge-file review | Project uploads are not live repository sync; do not request all chat content |
-| Gemini CLI | `/migrate-gemini` or `$migrate-gemini`; optional explicit Claude Code `/import gemini --dry-run` handoff | Hooks, tools, MCP, and permissions require provider-specific review |
-| Codex | Optional Codex `/import` for supported instructions/configuration | This is configuration migration, not generic context or conversation ingestion |
+| Gemini CLI / Antigravity CLI | `/migrate-gemini` or `$migrate-gemini`; optional explicit Claude Code `/import gemini --dry-run` handoff | Consumer Gemini CLI transitioned to Antigravity; only continuing enterprise/API-key Gemini CLI skill discovery is in scope, and host permissions still require review |
+| Codex | Optional Codex `/import` from Claude Code or Cursor | Selects supported setup, project files, and bounded recent chats; it is not an account-wide or arbitrary-history importer |
 | Other AI systems | Manual, user-selected extraction into ignored staging | No universal importer is claimed; exports may contain credentials and sensitive history |
 
 The included [`0xSero/ai-data-extraction` reference](../references/ai-data-extraction.md) is useful prior art for extraction design. It is not installed, executed, or treated as a dependency.
@@ -98,13 +98,15 @@ For ongoing use, see [Using repo files in Claude.ai Projects](claude-projects-sy
 
 Use `/migrate-gemini` in Claude Code or `$migrate-gemini` in a compatible skill host. The workflow inventories configuration, proposes a mapping, and uses parity cases before writes. It does not bulk-ingest chat history.
 
+On June 18, 2026, consumer Gemini CLI stopped serving free and Google AI Pro/Ultra requests and transitioned to Antigravity CLI. Standard/Enterprise and paid Gemini or Enterprise Agent Platform API-key use remains supported. Google does not promise initial 1:1 parity, and this repository has not validated Antigravity discovery, permissions, or lifecycle behavior. Treat old Gemini directories as migration sources, not proof of current host compatibility. See Google's [transition announcement](https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/).
+
 Current Claude Code versions may also expose `/import gemini --dry-run` as an explicit interactive alternative. Invoke it yourself in Claude Code; one custom skill cannot silently invoke another slash command. Review version/provider limitations and every proposed change. See [Gemini migration](gemini-migration.md).
 
 Use `/mine-gemini-workflows` or `$mine-gemini-workflows` only when a repeated workflow must be reconstructed from explicitly selected session recordings. It is metadata-first and keeps raw reasoning excluded.
 
 ## Codex
 
-Codex `/import` can help migrate supported instruction and configuration files from another agent environment. It is optional and may duplicate this repository's existing `AGENTS.md` and `.agents/skills/` content. Preview and review the imported files; do not describe `/import` as a conversation or memory importer. See the official [Codex import documentation](https://developers.openai.com/codex/import).
+Codex CLI `/import` can inspect Claude Code or Cursor and let the user select supported setup, project files, and recent chats. Its chat window is bounded to at most 50 chats from the last 30 days; it is not arbitrary, account-wide, or universal history ingestion. Run it before starting a task in a local interactive CLI—it is unavailable inside a running task, a remote session, or the local app-server daemon. Review the item list and resulting diff because imported instructions, skills, MCP configuration, and recent work can duplicate or conflict with this repository's `AGENTS.md`, `.agents/skills/`, and state. See the official [Codex import documentation](https://developers.openai.com/codex/import).
 
 ## Other AI systems
 

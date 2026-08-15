@@ -53,7 +53,7 @@ Codex supports trusted repository-scoped [`.codex/config.toml` overrides](https:
 
 ## Optional import
 
-Codex offers `/import` for bringing supported instructions and configuration from another agent environment. It is optional migration help, not the runtime path for this repository. The repository already has native `AGENTS.md` and `.agents/skills/`; importing the same material can duplicate or conflict with them. If you use `/import` for older local configuration, preview and review every proposed change before applying it.
+Codex CLI offers `/import` from Claude Code or Cursor for selected supported setup, project files, and up to 50 recent chats from the last 30 days. It is optional migration help, not the runtime path for this repository or an account-wide history importer. Run it before a task in a local interactive CLI; it is unavailable inside a running task, a remote session, or the local app-server daemon. The repository already has native `AGENTS.md` and `.agents/skills/`, so preview the item list and review every resulting change for duplicates or conflicts.
 
 ## Official references
 

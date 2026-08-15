@@ -1,10 +1,10 @@
 ---
 name: today
-description: Morning heartbeat — briefing, deadline check, and staleness scan. Run at the start of each day or after a 12+ hour gap
-allowed-tools: Read, Write, Bash, Glob
+description: "Create a morning heartbeat from repository state and update the local heartbeat log."
+allowed-tools: "Read, Write, Bash, Glob"
 disable-model-invocation: true
-x-source: skills-sync/commands/today.md
-x-source-version: 7ae9852
+x-source: "skills-sync/commands/today.md"
+x-source-version: "7ae9852"
 ---
 
 # /today — Morning Heartbeat

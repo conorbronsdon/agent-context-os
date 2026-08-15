@@ -1,10 +1,10 @@
 ---
 name: dream-apply
-description: Walk a dream proposal artifact, review each item, apply accepted ones to memory and commit.
-allowed-tools: Read, Write, Edit, Bash, AskUserQuestion
+description: "Validate a dream artifact, review each proposal, and apply only individually accepted changes."
+allowed-tools: "Read, Write, Edit, Bash, AskUserQuestion"
 disable-model-invocation: true
-x-source: skills-sync/commands/dream-apply.md
-x-source-version: 8ede26c
+x-source: "skills-sync/commands/dream-apply.md"
+x-source-version: "8ede26c"
 ---
 
 # /dream-apply — review + apply a curator pass
@@ -22,17 +22,21 @@ Substrate background: `docs/dream-architecture.md`.
 
 ### 1. Resolve the dream dir
 
-Read `.context-os/memory-directory` and require exactly one non-empty absolute path. Set that value as `MEMORY_DIR`. Require `MEMORY.md` and `.context-os-repository` inside it; require the marker's only line to equal `git rev-parse --show-toplevel`; require the memory git top level to equal `$MEMORY_DIR`; and refuse if that local repository has a remote. Then set `DREAMS_ROOT="$MEMORY_DIR/.dreams"`.
+Run the executable validator before reading or applying any artifact:
+
+```sh
+python3 scripts/dream/validate-memory.py artifact "${ARGUMENTS:-latest}"
+```
+
+Parse the returned JSON. Set `MEMORY_DIR` from `memory_dir`, `TS` from `timestamp`, and the dream dir from `dream_dir`. The helper rejects malformed timestamps, path traversal, absolute or control-character arguments, symlinked artifact components, missing `proposals.json`/`REPORT.md`, malformed proposal schemas, unknown actions, empty evidence, and any proposal filename that is not a safe memory `.md` basename under the validated memory root.
 
 Do not create or guess a memory directory when a check fails. Stop and direct the user to `docs/auto-memory.md`.
 
-If `$ARGUMENTS` is `latest` or empty: pick the most recent subdir by name (ISO timestamps sort lexically). Otherwise treat `$ARGUMENTS` as the ISO timestamp.
-
-If the dir doesn't exist, list available dreams and stop.
+If `$ARGUMENTS` is `latest` or empty, the helper resolves the most recent valid dream artifact by name. Do not reimplement timestamp/path selection in prose.
 
 ### 2. Load the proposal artifact
 
-Read `$DREAMS_ROOT/$TS/proposals.json` and `$DREAMS_ROOT/$TS/REPORT.md`. If either is missing, stop with an error.
+Read the validated `$dream_dir/proposals.json` and `$dream_dir/REPORT.md`. If either becomes missing or changes after validation, rerun the helper and stop on any error.
 
 ### 3. Show the report header
 
@@ -109,6 +113,8 @@ e. On `Reject`: skip, log to `applied.json` as `rejected`.
 f. On `Skip rest`: break the loop, log remaining as `deferred`.
 
 ### 5. Write `applied.json` to the dream dir
+
+Write this file only at the already validated `$dream_dir/applied.json`; do not reconstruct its path from user input.
 
 ```json
 {

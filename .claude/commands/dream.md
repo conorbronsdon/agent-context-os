@@ -1,10 +1,10 @@
 ---
 name: dream
-description: Run a curator pass against the memory dir. Produces a proposal artifact for /dream-apply. Default curator: rot.
-allowed-tools: Read, Bash, Write, Glob, Grep
+description: "Run a curator pass against the validated memory directory and produce a proposal artifact."
+allowed-tools: "Read, Bash, Write, Glob, Grep"
 disable-model-invocation: true
-x-source: skills-sync/commands/dream.md
-x-source-version: 8ede26c
+x-source: "skills-sync/commands/dream.md"
+x-source-version: "8ede26c"
 ---
 
 # /dream — on-demand memory curator pass
@@ -33,7 +33,21 @@ If `$ARGUMENTS` is empty or `rot`, proceed with rot. If anything else, check whe
 
 ### 2. Resolve and validate the explicit memory dir
 
-Read `.context-os/memory-directory` and require exactly one non-empty absolute path. Set that value as `MEMORY_DIR`. Require `MEMORY.md` and `.context-os-repository` inside it; require the marker's only line to equal `git rev-parse --show-toplevel`; require the memory git top level to equal `$MEMORY_DIR`; and refuse if that local memory repository has a remote. Only after every check passes, generate `TS`, create `$MEMORY_DIR/.dreams/$TS`, and continue.
+Run the executable validator before reading or writing memory state:
+
+```sh
+python3 scripts/dream/validate-memory.py resolve
+```
+
+Parse the returned JSON. Set `MEMORY_DIR` from `memory_dir` and treat `repository_identity` as the stable binding for this repository. The helper verifies `.context-os/memory-directory`, rejects non-canonical or symlinked paths, requires `MEMORY.md` and `.context-os-repository`, binds the marker to Git's resolved common directory identity (safe across linked worktrees), requires the memory dir to be its own git repo, and refuses any memory remote.
+
+Only after that succeeds, generate `TS` in exact `YYYY-MM-DDTHH-MM-SSZ` form and preflight the target artifact path:
+
+```sh
+python3 scripts/dream/validate-memory.py artifact "$TS" --for-create
+```
+
+Create only the validated `$MEMORY_DIR/.dreams/$TS` path returned by the helper, then continue.
 
 Do not create or guess a path when a check fails. Stop and direct the user to `docs/auto-memory.md` or the first-time local-git setup in `scripts/dream/README.md`.
 
@@ -88,12 +102,20 @@ Following the role + question + classification logic in the loaded prompt, walk 
 
 Schema is defined in the curator prompt and varies by curator class. Every proposal has `id`, `action`, `reasoning`, `evidence` (array, never empty), `confidence`. Beyond that:
 
-- **Content curators** (`rot`): `target`, `current_excerpt`, `proposed_excerpt`.
+- **Content curators** (`rot`): `modify` uses `target`, `current_excerpt`, and `proposed_excerpt`; `archive` uses `target` and `archive_reason`; `flag` uses `target` and `concern`.
 - **`merge`**: `targets` (array), `survivor`, `merged_body`, `index_changes` ({remove[], add}), `archive_tombstones`, `net_index_lines`.
 - **`split`**: `target`, `result_files` (array of {name, purpose, index_line, body}), `original_index_line`.
-- **`lint`**: content-curator shape (`target`, `current_excerpt`, `proposed_excerpt`) plus a `check` field naming which of its ten checks fired.
+- **`lint`**: `modify` uses the content-curator shape plus `check`; `flag` uses `target`, `concern`, and may include a non-authoritative `proposed_excerpt`, plus `check`.
 
 `/dream-apply` branches on `action` to apply each shape.
+
+After writing `proposals.json` and `REPORT.md`, validate the finished artifact before committing it:
+
+```sh
+python3 scripts/dream/validate-memory.py artifact "$TS"
+```
+
+If validation fails, do not commit the artifact. Fix the proposal schema/path issue or stop and surface the validator error.
 
 ### 8. Write `REPORT.md` to the dream dir
 

@@ -44,10 +44,19 @@ archive procedure exists to prevent.
 
 No remote. The memory dir often contains personal or confidential context.
 
+Validate the binding before the first curator run:
+
+```bash
+python3 scripts/dream/validate-memory.py resolve
+```
+
+The helper is the safety contract used by `/dream` and `/dream-apply`: it rejects non-canonical memory paths, symlinks, marker mismatches, memory remotes, unsafe artifact timestamps, and proposal paths that escape the memory root.
+
 ## Where things live
 
 - **Curator prompts:** `prompts/{name}.md` here
 - **Slash commands:** `.claude/commands/dream.md` + `.claude/commands/dream-apply.md` in the repo root
+- **Validator:** `validate-memory.py` here, called before artifact creation or apply
 - **Proposal artifacts:** `<configured-memory-directory>/.dreams/{ISO}/`
 - **Memory git repo:** `<configured-memory-directory>/.git/` (local-only, no remote)
 

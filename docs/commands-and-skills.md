@@ -27,7 +27,7 @@ These are the portable skills `.agents/skills/migrate-gemini` and `.agents/skill
 | Command | Job | Effects and prerequisites |
 |---|---|---|
 | `/today` | Morning heartbeat from repository state | Writes `state/heartbeat-log.md`; live data is skipped unless separately enabled and requested |
-| `/capture` | Triage reviewed inbox notes | May move content into canonical repository files |
+| `/capture` | Triage reviewed inbox notes | Writes only approved destinations, verifies them, and leaves each source for separate user-controlled cleanup |
 | `/find-context` | Find relevant repository context | Read-only |
 | `/reconcile` | Detect repository and session drift | Read-only report; does not pull, rebase, or repair |
 | `/recover` | Inspect orphaned worktrees/branches and offer cleanup | Cleanup is destructive and remains approval-gated |
@@ -41,14 +41,13 @@ These are the portable skills `.agents/skills/migrate-gemini` and `.agents/skill
 | `/dream` | Run one shipped curator: `rot`, `merge`, `split`, or `lint` | Requires the explicit local memory-directory contract; writes and commits proposal artifacts only |
 | `/dream-apply` | Review a proposal artifact item by item | Applies accepted live-memory changes and commits locally; refuses a memory remote |
 
-Auto-memory is not shared with Codex. See [`auto-memory.md`](auto-memory.md).
+Claude Code's ordinary auto-memory is enabled by default and may write automatically; `/dream` and `/dream-apply` add separate artifact/apply gates but do not govern that host behavior. Auto-memory is not shared with Codex. See [`auto-memory.md`](auto-memory.md).
 
 ## Claude Code customization
 
 | Command or skill | Job | Effects and prerequisites |
 |---|---|---|
-| `/skill-creator` | Scaffold or revise a Claude-native skill and optional adapter | Shows files and safety metadata for review before installation |
-| `.claude/skills/skill-creator` | Claude-native implementation of the creator | Claude Code only; not a portable lifecycle claim |
+| `.claude/skills/skill-creator` | Scaffold or revise a Claude-native skill and optional adapter | Claude Code only; shows files and safety metadata for review before installation |
 
 To create a provider-neutral workflow, start under `.agents/skills/` and follow [`first-skill.md`](first-skill.md).
 

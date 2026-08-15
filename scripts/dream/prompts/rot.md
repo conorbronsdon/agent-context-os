@@ -36,6 +36,8 @@ For each `memory/project_*.md` and `memory/reference_*.md` (skip `env_`, `feedba
 
 4. **Do NOT propose anything you can't cite evidence for.** Empty-evidence proposals get rejected at apply time.
 
+Use the apply validator's exact action fields: `modify` requires `target`, `current_excerpt`, and `proposed_excerpt`; `archive` requires `target` and a one-line `archive_reason`; `flag` requires `target` and a concrete `concern`. Do not invent path-bearing fields.
+
 ## Output schema
 
 Produce two files in `memory/.dreams/{ISO-timestamp}/`:

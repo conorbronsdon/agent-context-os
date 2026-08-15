@@ -52,7 +52,7 @@ The inverse defect counts too: one file holding two unrelated facts (the "and" t
 
 ### 5. Contradictions
 
-Two memories that cannot both be followed: one says "always X," another says "never X" or carves an exception the first does not acknowledge. Both are indexed, so both load, and the agent obeys whichever it read last. Detection is judgment, not grep: read `feedback` and `user` memories as a set and look for incompatible instructions about the same situation. Quote both files in the evidence. Action: always `flag`, per the curation contract (agent-memory-kit `docs/curation.md`): contradictions are never auto-resolved. You may sketch a reconciliation in `proposed_excerpt` (often the two rules merge into one rule with an explicit exception), but the human decides which memory is right, because the agent cannot know which one reflects what the user actually wants.
+Two memories that cannot both be followed: one says "always X," another says "never X" or carves an exception the first does not acknowledge. Both are indexed, so both load, and the agent obeys whichever it read last. Detection is judgment, not grep: read `feedback` and `user` memories as a set and look for incompatible instructions about the same situation. Quote both files in the evidence. Action: always `flag`, per the curation contract (agent-memory-kit `docs/curation.md`): contradictions are never auto-resolved. Set `target` to the primary memory under review and `concern` to the concrete conflict. You may sketch a reconciliation in `proposed_excerpt` (often the two rules merge into one rule with an explicit exception), but the human decides which memory is right, because the agent cannot know which one reflects what the user actually wants.
 
 ### 6. Unverifiable references
 
@@ -60,7 +60,7 @@ Memories that name local paths, scripts, or files: verify each with `test -e` / 
 
 ### 7. Type misfiles
 
-The four types drive curation (see the format spec): `user` is who the user is, `feedback` is how the agent should work, `project` is in-flight work, `reference` is pointers to external resources. A misfiled memory gets the wrong curation treatment; rot audits `project`/`reference` hardest and mostly skips `feedback`/`user`, so a project status filed as `feedback` escapes every rot pass. Common misfiles: a working rule filed as `reference`; in-flight status filed as `user` or `feedback`; an external pointer filed as `project`. Action: `modify` the frontmatter `type` line, confidence medium. Note in the reasoning the manual follow-ups the apply step cannot do: the filename keeps its old prefix until the human renames it, and the index line should move to the right section.
+The five types drive curation (see the format spec): `user` is who the user is, `feedback` is how the agent should work, `environment` is a non-obvious toolchain/platform behavior, `project` is in-flight work, and `reference` is pointers to external resources. A misfiled memory gets the wrong curation treatment; rot audits `project`/`reference` hardest and mostly skips `environment`/`feedback`/`user`, so a project status filed as `feedback` escapes every rot pass. Common misfiles: a working rule filed as `reference`; in-flight status filed as `user` or `feedback`; an external pointer filed as `project`. Action: `modify` the frontmatter `type` line, confidence medium. Note in the reasoning the manual follow-ups the apply step cannot do: the filename keeps its old prefix until the human renames it, and the index line should move to the right section.
 
 ### 8. Index-only content
 

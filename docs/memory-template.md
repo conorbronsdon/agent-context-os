@@ -46,7 +46,7 @@ See `docs/auto-memory.md` for the full spec (what to save, what NOT to save, bod
 
 ## Conventions
 
-- **One detail file per memory.** Frontmatter: `name`, `description`, `type`.
+- **One detail file per memory.** Frontmatter: `name`, `description`, and `type` (`user`, `feedback`, `environment`, `project`, or `reference`). Environment entries use the `env_` filename prefix.
 - **MEMORY.md is index-only.** One line per entry, under ~150 chars. No frontmatter on this file.
 - **Organize by type, then topic.** Not chronologically.
 - **Cap at ~100 lines.** When approaching, consolidate, or retire: tombstone row in `ARCHIVE.md` + `archived: <date>` stamp in the file + move it to `archive/`. All three, or the file keeps loading as live.

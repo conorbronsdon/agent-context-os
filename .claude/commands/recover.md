@@ -1,10 +1,10 @@
 ---
 name: recover
-description: Scan for orphaned worktrees and stale branches after crashes or abandoned agent sessions. Read-only scan; offers safe, approval-gated cleanup.
-allowed-tools: Read, Glob, Grep, Bash
+description: "Scan orphaned worktrees and stale branches, then offer explicit approval-gated cleanup."
+allowed-tools: "Read, Glob, Grep, Bash"
 disable-model-invocation: true
-x-source: skills-sync/skills/recover/SKILL.md
-x-source-version: 7ae9852
+x-source: "skills-sync/skills/recover/SKILL.md"
+x-source-version: "7ae9852"
 ---
 
 # /recover — Worktree & Branch Cleanup

@@ -75,6 +75,20 @@ echo "  claude-context-os — setup"
 echo "  ─────────────────────────"
 echo ""
 
+# Privacy comes before personalization. This warning is unconditional because
+# an existing non-template remote may also be public or broadly shared.
+echo "  This workspace can contain identity, project, state, and session data."
+echo "  A remote is optional. Keep it local-only or use a private remote by default. Before committing"
+echo "  or pushing, verify the repository's visibility and intended audience."
+echo "  Deleting a file later does not erase sensitive data from git history."
+echo "  Deleting a file later also does not remove sensitive data from git history."
+echo "  Setup never pushes; every commit and push requires separate review."
+echo ""
+if ! prompt_yn "  Continue after reviewing this storage and audience boundary?" "n"; then
+  echo "  → Setup stopped before collecting or writing personal context"
+  exit 0
+fi
+
 # ── 1. Your name ────────────────────────────────────────────────────────────
 
 read -rp "  Name to place in CLAUDE.md (or press Enter to skip): " USER_NAME
@@ -99,10 +113,7 @@ CURRENT_REMOTE=$(git remote get-url origin 2>/dev/null || echo "")
 
 if echo "$CURRENT_REMOTE" | grep -q "claude-context-os"; then
   echo "  Your git remote still points to the template repo."
-  echo "  A remote is optional. Keep this workspace local-only or use a private"
-  echo "  remote unless every tracked identity, project, state, and session file"
-  echo "  is deliberately safe to publish. Deleting a file later does not remove"
-  echo "  it from git history. Commit and push always require separate review."
+  echo "  A replacement remote is optional; the privacy boundary above still applies."
   echo ""
   read -rp "  Your repo URL (or press Enter to skip): " NEW_REMOTE
   if [ -n "$NEW_REMOTE" ]; then
@@ -174,7 +185,8 @@ if command -v claude &>/dev/null; then
   echo "    Found: claude"
   CLAUDE_FOUND=true
 else
-  echo "    Missing: claude — install with: npm install -g @anthropic-ai/claude-code"
+  echo "    Missing: claude — see https://code.claude.com/docs/en/installation"
+  echo "             Native install is recommended; npm is an advanced Node.js alternative."
 fi
 
 CODEX_FOUND=false
@@ -198,7 +210,8 @@ else
 fi
 
 echo "    Optional add-ons: see docs/integrations-guide.md (nothing is installed automatically)"
-echo "    Optional Claude memory: see docs/auto-memory.md (nothing is configured automatically)"
+echo "    Claude auto-memory may already be enabled by the host; inspect it with /memory."
+echo "    Optional /dream curation: see docs/auto-memory.md (setup does not configure it)."
 
 # ── 7. Initial commit ───────────────────────────────────────────────────────
 

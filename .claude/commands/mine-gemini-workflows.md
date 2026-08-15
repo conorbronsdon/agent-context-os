@@ -1,6 +1,7 @@
 ---
 name: mine-gemini-workflows
-description: Find repeated validated workflows in selected Gemini CLI sessions and draft portable skills after review.
+description: "Find repeated workflows in selected Gemini CLI sessions and draft portable skills after review."
+allowed-tools: "Read"
 disable-model-invocation: true
 ---
 

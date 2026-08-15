@@ -93,10 +93,11 @@ If a separately reviewed browser or retrieval integration is enabled, you may fe
 ### Existing claude.ai project files
 
 If you have PDFs or Word docs already uploaded to claude.ai projects:
-1. Open the project and ask Claude to output the full text of each uploaded file
-2. Run the conversion prompt on each output
-3. Save the result as a `.md` file in this repo
-4. Replace the original upload with the new `.md` file
+1. Inventory file names, types, dates, and sizes without requesting their bodies
+2. Review sensitivity, ownership/license, staleness, and the intended repository audience
+3. Select exact named files whose durable content is worth keeping
+4. Request only those selected files, run the conversion prompt, and review the result
+5. Save only the approved result as Markdown; keep the source until the destination is verified and backed up
 
 This is also covered in the migration workflow — see [migration-guide.md](migration-guide.md).
 
@@ -137,9 +138,7 @@ Context files grow. Every time you add something, it's easier than removing some
 Claude Code is the recommended interface for working with this repo — it reads files directly, can write and commit changes, and supports slash commands.
 
 **Install:**
-```bash
-npm install -g @anthropic-ai/claude-code
-```
+Use the [official installation guide](https://code.claude.com/docs/en/installation). The native installer is recommended; npm is an advanced alternative that requires Node.js.
 
 **Official docs:** https://docs.anthropic.com/en/docs/claude-code
 

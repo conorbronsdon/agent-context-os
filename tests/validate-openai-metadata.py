@@ -17,6 +17,8 @@ EXPECTED = {
 }
 COMMAND_KEY = re.compile(r"^[a-z][a-z0-9-]*$")
 START_TOOLS = "Read, Glob"
+REQUIRED_COMMAND_FIELDS = {"name", "description", "allowed-tools", "disable-model-invocation"}
+OPTIONAL_COMMAND_FIELDS = {"x-source", "x-source-version"}
 
 
 class MetadataError(ValueError):
@@ -128,16 +130,20 @@ def command_frontmatter(path: Path) -> dict[str, object]:
 
 def validate_command(path: Path, command_name: str) -> None:
     data = command_frontmatter(path)
-    expected = {"name", "description", "allowed-tools", "disable-model-invocation"}
-    if set(data) != expected:
-        raise MetadataError(f"command fields must be exactly {sorted(expected)}")
+    fields = set(data)
+    if not REQUIRED_COMMAND_FIELDS <= fields or not fields <= REQUIRED_COMMAND_FIELDS | OPTIONAL_COMMAND_FIELDS:
+        raise MetadataError(
+            "command fields must contain exactly the required fields and optional reviewed source metadata"
+        )
     if data["name"] != command_name:
         raise MetadataError(f"command name must be {command_name}")
     if not isinstance(data["description"], str) or not data["description"].strip():
         raise MetadataError("description must be a non-empty quoted string")
     if not isinstance(data["allowed-tools"], str) or not data["allowed-tools"].strip():
         raise MetadataError("allowed-tools must be a non-empty quoted string")
-    for field in ("description", "allowed-tools"):
+    for field in ("description", "allowed-tools", *sorted(OPTIONAL_COMMAND_FIELDS & fields)):
+        if not isinstance(data[field], str) or not data[field].strip():
+            raise MetadataError(f"{field} must be a non-empty quoted string")
         if any(unicodedata.category(character) in {"Cc", "Cf", "Cs", "Zl", "Zp"} for character in data[field]):
             raise MetadataError(f"{field} contains a control or format character")
     if data["disable-model-invocation"] is not True:

@@ -6,7 +6,7 @@ Repository `state/` and `sessions/` are the portable continuity layer. Auto-memo
 
 ## Inspect first
 
-In Claude Code, use `/memory` to inspect the active memory and its source. If you only want normal Claude auto-memory, no repository setup is required.
+In Claude Code, use `/memory` to inspect the active memory and its source. Claude Code enables auto-memory by default and may write it automatically during ordinary sessions. That host behavior is separate from this repository's approval-gated `/end`, `/dream`, and `/dream-apply` flows. If you do not want automatic host memory, set `autoMemoryEnabled` to `false` in the intended Claude settings scope and verify the result with `/memory`.
 
 The `/dream` and `/dream-apply` commands need a stable, explicit directory because they write proposal artifacts and maintain a separate local git history. Configure that directory only if you want those commands.
 
@@ -16,16 +16,16 @@ The `/dream` and `/dream-apply` commands need a stable, explicit directory becau
 2. Set Claude Code's `autoMemoryDirectory` to that exact absolute path in the project-local `.claude/settings.local.json`, which this repository ignores. Claude Code also supports other settings scopes, but a local file avoids changing unrelated repositories. Do not commit personal paths.
 3. Confirm with `/memory` that Claude Code is using the intended store and that its `MEMORY.md` belongs to this workspace.
 4. Record the same absolute path as the only line of the ignored local file `.context-os/memory-directory`.
-5. Put the canonical repository root as the only line of `<memory-directory>/.context-os-repository`.
+5. Put the resolved git common directory as the only line of `<memory-directory>/.context-os-repository`. That identity is stable across linked worktrees, unlike a checkout root.
 
 Example setup, after replacing the placeholder and reviewing every destination:
 
 ```bash
 MEMORY_DIR="/absolute/private/path/to/this-workspace-memory"
-REPO_ROOT=$(git rev-parse --show-toplevel)
+REPO_ID=$(realpath "$(git rev-parse --path-format=absolute --git-common-dir)")
 mkdir -p "$MEMORY_DIR/archive" .context-os
 printf '%s\n' "$MEMORY_DIR" > .context-os/memory-directory
-printf '%s\n' "$REPO_ROOT" > "$MEMORY_DIR/.context-os-repository"
+printf '%s\n' "$REPO_ID" > "$MEMORY_DIR/.context-os-repository"
 ```
 
 Separately add the reviewed absolute path to `.claude/settings.local.json`:
@@ -40,10 +40,10 @@ The command adapters fail closed unless all of these are true:
 
 - `.context-os/memory-directory` contains exactly one absolute path;
 - that directory contains `MEMORY.md` and `.context-os-repository`;
-- the repository marker equals the current canonical git root; and
+- the repository marker equals the resolved git common directory for the current repository; and
 - the memory directory is its own local git repository before a curator runs.
 
-Moving or renaming the checkout intentionally invalidates the marker. Re-open `/memory`, verify the intended store, and update both local records rather than assuming the old path migrated.
+Linked worktrees share the same git common-directory identity and may therefore use the same memory store, but each worktree needs its own ignored `.context-os/memory-directory` and applicable `autoMemoryDirectory` setting. Moving the repository's common git directory intentionally invalidates the marker. Re-open `/memory`, verify the intended store, and update local records rather than assuming the old path migrated.
 
 ## Storage layout
 
@@ -51,7 +51,7 @@ Moving or renaming the checkout intentionally invalidates the marker. Re-open `/
 <configured-memory-directory>/
 ├── MEMORY.md              # compact index, loaded by Claude Code
 ├── ARCHIVE.md             # tombstone rows for retired memories
-├── .context-os-repository # local checkout binding
+├── .context-os-repository # stable git common-directory identity
 ├── archive/               # retired detail files
 ├── .dreams/               # proposal and decision artifacts
 └── <topic>.md             # one live detail file per memory
@@ -61,10 +61,11 @@ Moving or renaming the checkout intentionally invalidates the marker. Re-open `/
 
 ## What to save
 
-Use four durable types:
+Use five durable types:
 
 - `user` — role, expertise, goals, and non-obvious preferences;
 - `feedback` — confirmed guidance about how to work and why;
+- `environment` — non-obvious toolchain or platform behavior that is not already documented in the repository;
 - `project` — motivation, deadlines, stakeholders, and decisions not derivable from the repository; and
 - `reference` — a pointer to an external system by purpose, without credentials.
 
@@ -89,7 +90,7 @@ If a user asks to remember a temporary list, ask which non-obvious lesson or dur
 ---
 name: {memory name}
 description: {specific one-line relevance hook}
-type: {user | feedback | project | reference}
+type: {user | feedback | environment | project | reference}
 ---
 
 {durable content}
@@ -101,7 +102,7 @@ Then add one line to `MEMORY.md`:
 - [Title](file.md) — one-line hook
 ```
 
-Before writing outside the repository, show the proposed detail file and index line and wait for an explicit `save`.
+For repository-defined `/end` memory proposals, show the detail file and index line and wait for an explicit `save` before writing outside the repository. This gate does not disable or govern Claude Code's default automatic host-memory writes; use `autoMemoryEnabled: false` if every host-memory write must be manual.
 
 ## Curation
 

@@ -1,10 +1,10 @@
 ---
 name: content-shipped
-description: Log a completed piece of content to content/log.md. Use after publishing a blog post, LinkedIn post, podcast episode, newsletter, clip, video, or article.
-allowed-tools: Read, Edit, Bash
+description: "Log a completed piece of content to content/log.md after the user confirms it was published."
+allowed-tools: "Read, Edit, Bash"
 disable-model-invocation: true
-x-source: skills-sync/skills/content-shipped/SKILL.md
-x-source-version: b85d60f
+x-source: "skills-sync/skills/content-shipped/SKILL.md"
+x-source-version: "b85d60f"
 ---
 
 # content-shipped — Log Shipped Content
