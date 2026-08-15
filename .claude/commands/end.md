@@ -12,7 +12,7 @@ Read and follow `.agents/skills/context-end/SKILL.md` as the canonical workflow.
 Before the portable workflow's final handoff, optionally propose zero to two durable Claude Code auto-memory additions:
 
 1. Read `docs/auto-memory.md` for the typed memory rules.
-2. Derive the project memory directory from the current working directory according to that document.
+2. Use the explicit `.context-os/memory-directory` contract from that document. Never derive a path from the current working directory. If it is absent or any binding check fails, skip host-local memory writes and explain how to configure them.
 3. Prefer confirmed environment quirks, durable working preferences, recurring fixes, or stable project facts.
 4. Exclude session-only status, duplicated repository state, credentials, and unverified conclusions.
 5. Ask whether a friction point from this session would have been prevented by a durable entry.

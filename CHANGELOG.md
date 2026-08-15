@@ -3,11 +3,15 @@
 ## [Unreleased]
 
 ### Added
+- Issue #22 documentation and positioning hardening: a privacy-first getting-started path, provider-neutral migration guide, task-oriented integration chooser, maintenance guide, host capability matrix, and current command/skill index.
 - A validated, opt-in integrations catalog with generated documentation, explicit credential/data/side-effect boundaries, and no automatic installation or activation. Initial links cover Agent Skills, Agent Workspace, AI Tools for Creators, and Substack MCP.
 - Reviewed optional entries for Tolaria MCP, the official Obsidian CLI, Beads for Gemini CLI, and Granola's hosted MCP, with conservative sensitive-read, remote-write, overwrite, deletion, arbitrary-execution, publish, destructive, OAuth, retention, residency, and transcript gates.
 - First-class Codex onboarding with a root `AGENTS.md`, four explicit-invocation lifecycle skills under `.agents/skills/`, generated skill UI metadata, `--agent codex` setup support, portability tests, and a host-boundary guide.
 
 ### Fixed
+- Removed the obsolete tracked Google Workspace MCP configuration and its broad pre-approved tools; replaced stale Google Workspace and Notion setup recipes with explicit legacy status notes.
+- Claude auto-memory guidance no longer derives an internal path from `pwd`; optional curation uses an explicit ignored local binding, repository marker, local-only git check, and user-invoked write gates.
+- Corrected native Gemini import syntax, Claude.ai manual-knowledge boundaries, fixed PDF token arithmetic, portable skill discovery paths, and shipped-versus-roadmap `/dream` claims.
 - Moved project slash commands from the undiscovered root `commands/` directory to `.claude/commands/`; moved the native meta-skill to `.claude/skills/`; renamed `/context` to `/find-context` to avoid the Claude Code built-in.
 - Added checked-in `.claude/settings.json` hook activation using the current nested hook schema. PreToolUse guards now parse Claude's JSON stdin, and blocking messages use stderr with exit code 2.
 - Gemini mining now folds current `$set`, `$rewindTo`, and message records into final session state; date filters fail closed on unknown dates, tool sequences preserve repetition, and only positively validated patterns become candidates.
@@ -23,6 +27,7 @@
 - `.claude/commands/dream-apply.md` — the moved file's own outbound links were never repointed, so every archived file's references silently broke on the move.
 
 ### Changed
+- Kept the established `claude-context-os` repository name while positioning it precisely as a Claude-first, Codex-compatible workspace harness rather than an agent runtime or universal host implementation.
 - Integration catalog schema v2 adds typed safety capabilities and matching confirmations/risk tags, structured uninstall data-loss declarations, non-empty auditable evidence links, a remote-write/sensitive-read summary, and hostile regression cases. CI validates internal claims and generated documentation; it does not certify upstream source truth.
 - `/setup`, `/start`, `/update`, and `/end` are now thin Claude Code adapters to provider-neutral lifecycle skills. Shared state stays in the repository; Claude hooks and auto-memory remain explicitly host-specific.
 - CI now runs one aggregate validator covering command discovery/name parity, links, shell syntax, hook behavior, JSON, and Python unit tests.

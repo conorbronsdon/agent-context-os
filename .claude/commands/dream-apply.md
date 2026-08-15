@@ -2,6 +2,7 @@
 name: dream-apply
 description: Walk a dream proposal artifact, review each item, apply accepted ones to memory and commit.
 allowed-tools: Read, Write, Edit, Bash, AskUserQuestion
+disable-model-invocation: true
 x-source: skills-sync/commands/dream-apply.md
 x-source-version: 8ede26c
 ---
@@ -21,11 +22,9 @@ Substrate background: `docs/dream-architecture.md`.
 
 ### 1. Resolve the dream dir
 
-```
-PROJECT_KEY=$(pwd | sed 's|[:\\/]|-|g')
-MEMORY_DIR="$HOME/.claude/projects/$PROJECT_KEY/memory"
-DREAMS_ROOT="$MEMORY_DIR/.dreams"
-```
+Read `.context-os/memory-directory` and require exactly one non-empty absolute path. Set that value as `MEMORY_DIR`. Require `MEMORY.md` and `.context-os-repository` inside it; require the marker's only line to equal `git rev-parse --show-toplevel`; require the memory git top level to equal `$MEMORY_DIR`; and refuse if that local repository has a remote. Then set `DREAMS_ROOT="$MEMORY_DIR/.dreams"`.
+
+Do not create or guess a memory directory when a check fails. Stop and direct the user to `docs/auto-memory.md`.
 
 If `$ARGUMENTS` is `latest` or empty: pick the most recent subdir by name (ISO timestamps sort lexically). Otherwise treat `$ARGUMENTS` as the ISO timestamp.
 

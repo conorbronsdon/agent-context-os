@@ -1,114 +1,119 @@
-# Auto-memory
+# Claude Code auto-memory
 
-Claude Code reads `~/.claude/projects/<encoded-cwd>/memory/MEMORY.md` automatically at the start of every conversation in that project. The starter uses this to give Claude a persistent, file-based memory that survives across sessions.
+Claude Code can maintain a host-local memory store for a git repository. It resolves the default store from the repository, so worktrees and subdirectories can share memory. Do not derive or guess its internal directory by encoding `pwd`; that convention is not this repository's API.
 
-This doc is the spec. Add it to your global `~/.claude/CLAUDE.md` (so every Claude session in this project follows it) or copy the relevant rules into this project's `CLAUDE.md`.
+Repository `state/` and `sessions/` are the portable continuity layer. Auto-memory and `/dream` are optional Claude Code extensions and may contain personal or confidential material.
+
+## Inspect first
+
+In Claude Code, use `/memory` to inspect the active memory and its source. If you only want normal Claude auto-memory, no repository setup is required.
+
+The `/dream` and `/dream-apply` commands need a stable, explicit directory because they write proposal artifacts and maintain a separate local git history. Configure that directory only if you want those commands.
+
+## Explicit directory contract for `/dream`
+
+1. Choose a private absolute directory outside this repository.
+2. Set Claude Code's `autoMemoryDirectory` to that exact absolute path in the project-local `.claude/settings.local.json`, which this repository ignores. Claude Code also supports other settings scopes, but a local file avoids changing unrelated repositories. Do not commit personal paths.
+3. Confirm with `/memory` that Claude Code is using the intended store and that its `MEMORY.md` belongs to this workspace.
+4. Record the same absolute path as the only line of the ignored local file `.context-os/memory-directory`.
+5. Put the canonical repository root as the only line of `<memory-directory>/.context-os-repository`.
+
+Example setup, after replacing the placeholder and reviewing every destination:
+
+```bash
+MEMORY_DIR="/absolute/private/path/to/this-workspace-memory"
+REPO_ROOT=$(git rev-parse --show-toplevel)
+mkdir -p "$MEMORY_DIR/archive" .context-os
+printf '%s\n' "$MEMORY_DIR" > .context-os/memory-directory
+printf '%s\n' "$REPO_ROOT" > "$MEMORY_DIR/.context-os-repository"
+```
+
+Separately add the reviewed absolute path to `.claude/settings.local.json`:
+
+```json
+{
+  "autoMemoryDirectory": "/absolute/private/path/to/this-workspace-memory"
+}
+```
+
+The command adapters fail closed unless all of these are true:
+
+- `.context-os/memory-directory` contains exactly one absolute path;
+- that directory contains `MEMORY.md` and `.context-os-repository`;
+- the repository marker equals the current canonical git root; and
+- the memory directory is its own local git repository before a curator runs.
+
+Moving or renaming the checkout intentionally invalidates the marker. Re-open `/memory`, verify the intended store, and update both local records rather than assuming the old path migrated.
 
 ## Storage layout
 
+```text
+<configured-memory-directory>/
+├── MEMORY.md              # compact index, loaded by Claude Code
+├── ARCHIVE.md             # tombstone rows for retired memories
+├── .context-os-repository # local checkout binding
+├── archive/               # retired detail files
+├── .dreams/               # proposal and decision artifacts
+└── <topic>.md             # one live detail file per memory
 ```
-~/.claude/projects/<encoded-cwd>/memory/
-├── MEMORY.md           ← index, loaded into every conversation (cap 100 lines)
-├── ARCHIVE.md          ← tombstone rows, one per retired memory
-├── archive/            ← the retired files themselves, each stamped `archived: YYYY-MM-DD`
-└── <topic>.md          ← one detail file per memory, loaded on demand
-```
 
-`<encoded-cwd>` is your current working directory with `:`, `/`, and `\` replaced by `-`. For example `C:\Users\you\my-context` becomes `C--Users-you-my-context`. Claude Code creates the directory automatically the first time a memory is written.
+`MEMORY.md` is an index, not a journal. Keep one short pointer per detail file and cap it at roughly 100 lines.
 
-`MEMORY.md` is an index, not a memory. Each entry is one line — a pointer to the detail file plus a short hook. Detail files load only when relevant.
+## What to save
 
-## What to save (four types)
+Use four durable types:
 
-### user
-Information about who the user is — role, goals, knowledge, preferences. Helps tailor responses.
+- `user` — role, expertise, goals, and non-obvious preferences;
+- `feedback` — confirmed guidance about how to work and why;
+- `project` — motivation, deadlines, stakeholders, and decisions not derivable from the repository; and
+- `reference` — a pointer to an external system by purpose, without credentials.
 
-**Save when:** you learn role, expertise, responsibilities, or non-obvious preferences.
+Convert relative dates to absolute dates. Treat every remembered fact as a claim that may need re-verification.
 
-**Example:** "Senior backend engineer, deep Go expertise, new to this repo's frontend — frame frontend explanations in terms of backend analogues."
+## What not to save
 
-### feedback
-Guidance the user gave you about *how to work* — corrections AND validated approaches.
+Do not save:
 
-**Save when:** the user corrects your approach ("don't do X") OR confirms a non-obvious choice worked ("yes, that was the right call"). Corrections are easy to spot; confirmations are quieter — watch for them.
+- credentials, tokens, recovery codes, or private keys;
+- code structure, paths, or conventions already visible in the repository;
+- git history or recent-change summaries;
+- debugging recipes already captured by the code and commit;
+- facts already in `CLAUDE.md`; or
+- ephemeral task status that belongs in `state/` or `sessions/`.
 
-**Body structure:**
-- The rule, in one sentence
-- **Why:** the reason the user gave (often a past incident)
-- **How to apply:** when this guidance kicks in
+If a user asks to remember a temporary list, ask which non-obvious lesson or durable preference is worth retaining.
 
-The *why* lets you judge edge cases instead of following rules blindly.
-
-**Example:** "Integration tests must hit a real database, not mocks. **Why:** prior incident where mock/prod divergence masked a broken migration. **How to apply:** any test touching the persistence layer."
-
-### project
-Context about ongoing work that isn't derivable from the code or git history — who's doing what, why, by when.
-
-**Save when:** you learn motivation, deadlines, stakeholder context, or decisions.
-
-**Important:** convert relative dates to absolute when saving. "Thursday" → "2026-03-05". Memories outlive the conversation that created them.
-
-**Body structure:** Fact / decision, then **Why:** and **How to apply:** lines.
-
-**Example:** "Merge freeze begins 2026-03-05 for mobile release cut. **Why:** mobile team is cutting a release branch. **How to apply:** flag any non-critical PR work scheduled after that date."
-
-### reference
-Pointers to where information lives in external systems.
-
-**Save when:** the user names a tracker, dashboard, channel, or doc by purpose.
-
-**Example:** "Pipeline bugs tracked in Linear project 'INGEST'." / "grafana.internal/d/api-latency is the oncall latency dashboard."
-
-## What NOT to save
-
-These belong in code, git history, or the conversation — not memory:
-
-- Code patterns, conventions, architecture, file paths, or project structure — these can be derived by reading the project.
-- Git history, recent changes, or who-changed-what — `git log` / `git blame` is authoritative.
-- Debugging solutions or fix recipes — the fix is in the code; the commit message has the context.
-- Anything already documented in `CLAUDE.md`.
-- Ephemeral state: in-progress work, current conversation context, today's plan.
-
-These exclusions apply even when the user explicitly asks you to save. If they ask you to save a PR list or activity summary, ask what was *surprising* or *non-obvious* about it — that is the part worth keeping.
-
-## How to save
-
-Two steps.
-
-**Step 1 — write the detail file** (e.g., `feedback_testing.md`) with frontmatter:
+## Detail-file format
 
 ```markdown
 ---
 name: {memory name}
-description: {one-line description — used to decide relevance in future conversations, so be specific}
+description: {specific one-line relevance hook}
 type: {user | feedback | project | reference}
 ---
 
-{memory content — for feedback/project, structure as: rule/fact, then **Why:** and **How to apply:** lines}
+{durable content}
 ```
 
-**Step 2 — add a pointer to `MEMORY.md`:**
+Then add one line to `MEMORY.md`:
 
 ```markdown
 - [Title](file.md) — one-line hook
 ```
 
-`MEMORY.md` has no frontmatter. It's a flat index, organized semantically by topic (not chronologically). Keep entries to one line under ~150 characters — the index loads on every conversation and excess truncates.
+Before writing outside the repository, show the proposed detail file and index line and wait for an explicit `save`.
 
-## When to access memories
+## Curation
 
-- When memories seem relevant, or the user references prior-conversation work.
-- You MUST access memory when the user explicitly asks you to check, recall, or remember.
-- If the user says to *ignore* or *not use* memory, don't apply remembered facts.
+`/dream` is user-invoked unless the user separately configures a scheduler. The shipped curators are:
 
-Memories can become stale. Before acting on a memory that names a specific file, function, or flag, verify it still exists. The memory is a claim about what was true when it was written — current state is the source of truth.
+- `rot` — compare project/reference memories with current repository evidence;
+- `merge` — consolidate overlapping memories;
+- `split` — separate multi-concern memories; and
+- `lint` — check index/file agreement, duplicates, contradictions, types, and archive integrity.
 
-## Memory budget
+Pattern, standalone contradiction, untapped-work, and audit curators are roadmap items.
 
-`MEMORY.md` loads on every conversation. Cap it at ~100 lines. When approaching the cap, consolidate, or retire a memory: write a tombstone row in `ARCHIVE.md`, stamp `archived: <date>` into the file's frontmatter, and move the file to `archive/`. Detail files are exempt from the cap — they load on demand.
+`/dream` writes and commits proposal artifacts to the local memory git repository before review. It does not modify live memory files. `/dream-apply` walks each proposal and requires a per-item decision before live-memory changes. Neither command may push the memory repository.
 
-An `ARCHIVE.md` row is not on its own an archive. A row without the stamp and the move leaves the file in the memory root, where every later session reads it as live.
-
-## Curation: /dream
-
-Memory accumulates faster than humans review it. The `/dream` substrate runs autonomous curator passes against the memory dir (rot detection, pattern surfacing, contradiction flagging) and produces a proposal artifact you review with `/dream-apply`. See `docs/dream-architecture.md`.
+See [`memory-template.md`](memory-template.md) for the starter index and [`dream-architecture.md`](dream-architecture.md) for the proposal protocol. Claude Code's current behavior and `autoMemoryDirectory` setting are documented in the official [memory documentation](https://code.claude.com/docs/en/memory).

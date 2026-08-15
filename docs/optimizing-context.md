@@ -1,6 +1,6 @@
 # Optimizing Context Files
 
-The format of your context files matters as much as their content. A PDF uploaded to claude.ai can consume 3–5x the tokens of the same content as clean markdown — before Claude has read a single word of your actual message. In Claude Code, bloated files slow down every session that loads them.
+The format of your context files matters as much as their content. PDF processing includes extracted text and page images, so cost varies with page content and layout. Clean Markdown is often smaller when visual layout is unnecessary, but there is no reliable fixed conversion ratio. Measure representative files instead of relying on an absolute estimate.
 
 This guide covers how to convert common file formats to markdown and how to trim files for maximum efficiency.
 
@@ -15,9 +15,9 @@ Claude reads everything in its context window as tokens. Different formats carry
 | `.md` / `.txt` | Low | Clean text, minimal overhead |
 | Word / Google Doc | Medium | Formatting markup adds noise |
 | HTML | Medium-high | Tag overhead, especially with complex layouts |
-| PDF | High | Layout data, fonts, and page structure all add tokens |
+| PDF | Variable | Extracted text plus page images; visual layout may be useful |
 
-A 10-page PDF might cost 4,000 tokens. The same content as clean markdown: 800–1,200. That difference compounds across every session that loads the file, and across every claude.ai project where it's uploaded.
+For PDFs, token use depends on extracted text and the rendered page images. Convert to Markdown when the durable value is textual and layout is irrelevant; keep the PDF when diagrams, forms, or spatial relationships matter. Compare the actual result for your representative documents.
 
 The goal: your context should be **as short as possible while remaining complete**. Every token Claude spends parsing formatting noise is a token not spent on your actual task.
 
@@ -85,7 +85,7 @@ include the first 5 rows as examples and describe the pattern of the remaining d
 
 ### Web page / article
 
-In Claude Code with gws MCP connected, you can fetch pages directly. Otherwise:
+If a separately reviewed browser or retrieval integration is enabled, you may fetch a page through that tool. Otherwise:
 - Use a browser's "Reader Mode" (Safari, Firefox) to strip navigation and ads, then copy the clean text
 - Use a service like [Reader](https://reader.readwise.io) to get clean markdown from any URL
 - Or just select the relevant section, copy, and paste into the conversion prompt — you rarely need the whole page

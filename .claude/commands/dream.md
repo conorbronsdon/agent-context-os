@@ -2,11 +2,12 @@
 name: dream
 description: Run a curator pass against the memory dir. Produces a proposal artifact for /dream-apply. Default curator: rot.
 allowed-tools: Read, Bash, Write, Glob, Grep
+disable-model-invocation: true
 x-source: skills-sync/commands/dream.md
 x-source-version: 8ede26c
 ---
 
-# /dream — autonomous memory curator pass
+# /dream — on-demand memory curator pass
 
 Substrate background: `docs/dream-architecture.md`. Curator prompts: `scripts/dream/prompts/`.
 
@@ -30,17 +31,11 @@ Substrate background: `docs/dream-architecture.md`. Curator prompts: `scripts/dr
 
 If `$ARGUMENTS` is empty or `rot`, proceed with rot. If anything else, check whether `scripts/dream/prompts/{name}.md` exists. If not, list available curators and stop.
 
-### 2. Resolve the memory dir + generate ISO timestamp
+### 2. Resolve and validate the explicit memory dir
 
-```
-PROJECT_KEY=$(pwd | sed 's|[:\\/]|-|g')
-MEMORY_DIR="$HOME/.claude/projects/$PROJECT_KEY/memory"
-TS=$(date -u +%Y-%m-%dT%H-%M-%SZ)
-DREAM_DIR="$MEMORY_DIR/.dreams/$TS"
-mkdir -p "$DREAM_DIR"
-```
+Read `.context-os/memory-directory` and require exactly one non-empty absolute path. Set that value as `MEMORY_DIR`. Require `MEMORY.md` and `.context-os-repository` inside it; require the marker's only line to equal `git rev-parse --show-toplevel`; require the memory git top level to equal `$MEMORY_DIR`; and refuse if that local memory repository has a remote. Only after every check passes, generate `TS`, create `$MEMORY_DIR/.dreams/$TS`, and continue.
 
-If `$MEMORY_DIR/.git` doesn't exist, stop and tell the user to run the first-time setup from `scripts/dream/README.md`.
+Do not create or guess a path when a check fails. Stop and direct the user to `docs/auto-memory.md` or the first-time local-git setup in `scripts/dream/README.md`.
 
 ### 3. Load the curator prompt
 

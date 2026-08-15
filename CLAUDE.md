@@ -9,7 +9,7 @@
 | Command | Does |
 |---------|------|
 | `/setup` | Interactive onboarding — builds identity, project, and state files conversationally |
-| `/start` | Load state, pull live data, get a session briefing |
+| `/start` | Load repository state and get a session briefing |
 | `/end` | Log session, update state and the decision log, propose memory updates, check git |
 | `/update` | Mid-session checkpoint — quick state save |
 | `/today` | Morning heartbeat — briefing, staleness check, deadlines |
@@ -19,7 +19,7 @@
 | `/reconcile` | Drift detection after parallel sessions |
 | `/recover` | Scan orphaned worktrees and stale branches, offer cleanup |
 | `/content-shipped` | Log a published piece of content |
-| `/dream` | Run an autonomous curator pass over the memory dir (default: rot detection) |
+| `/dream` | Run an on-demand curator pass over the configured memory dir (default: rot detection) |
 | `/dream-apply` | Walk a curator proposal artifact, accept/reject/edit per item |
 | `/skill-creator` | Generate a new skill and command routing file from a plain-language description |
 | `/migrate-gemini` | Migrate selected Gemini CLI workflows with dry-run review and parity checks |
@@ -49,9 +49,9 @@ This mode applies to career moves, strategy decisions, project bets, and any "he
 Actions that change external state or are hard to reverse require confirmation. See `docs/safety-contract.md` for the full policy, approval patterns, and design principles.
 
 ## Memory
-Claude Code auto-loads `~/.claude/projects/<encoded-cwd>/memory/MEMORY.md` on every conversation in this project. Use it as a persistent, file-based memory: typed entries (`user`, `feedback`, `project`, `reference`), one-line pointers in `MEMORY.md`, detail in `<topic>.md` files. See `docs/auto-memory.md` for the full spec — when to save, when NOT to save, body structure, the two-step write. `MEMORY.md` is capped at ~100 lines.
+Claude Code can maintain host-local memory for this git repository. Do not hand-derive its internal path from the current working directory. Use `/memory` to inspect it; the optional `/dream` workflow requires the explicit local path contract in `docs/auto-memory.md`. Typed entries use `user`, `feedback`, `project`, and `reference`; `MEMORY.md` stays an index capped at ~100 lines.
 
-Run `/dream` periodically to curate (rot, contradictions, untapped patterns). Run `/dream-apply` to review proposed changes. See `docs/dream-architecture.md`.
+Run `/dream` explicitly for shipped curators (`rot`, `merge`, `split`, `lint`), then `/dream-apply` to review live-memory changes. Proposal artifacts are written and committed before review; live memories are not. Pattern, standalone contradiction, and untapped curators are roadmap items. See `docs/dream-architecture.md`.
 
 ## Single Source of Truth
 

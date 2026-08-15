@@ -2,6 +2,7 @@
 name: content-shipped
 description: Log a completed piece of content to content/log.md. Use after publishing a blog post, LinkedIn post, podcast episode, newsletter, clip, video, or article.
 allowed-tools: Read, Edit, Bash
+disable-model-invocation: true
 x-source: skills-sync/skills/content-shipped/SKILL.md
 x-source-version: b85d60f
 ---
@@ -31,9 +32,6 @@ Append the row as the **last line of the table**.
 A fresh log has no data rows, so the table's last line is the dashed separator row —
 put the first entry directly beneath it. Every later row goes beneath the previous
 one. Never insert above the separator; that breaks the table.
-
-If your setup exposes an MCP tool that appends to the log, use it instead of
-editing the file by hand.
 
 ### 3. Confirm
 One line: "Logged: {type} — {title/description}"

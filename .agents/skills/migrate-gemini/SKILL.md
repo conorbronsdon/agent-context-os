@@ -32,15 +32,15 @@ Inventory only the presence, path, and type of:
 
 Write the inventory to `.context-os/migrations/<timestamp>/inventory.json`. This directory is gitignored.
 
-### 2. Run Claude's native dry run when available
+### 2. Offer Claude Code's native dry run when available
 
-Check `claude --version` and `claude import gemini --help`. If the installed version supports it, run:
+If the user is in Claude Code, offer an explicit handoff to the native interactive command:
 
-```bash
-claude import gemini --dry-run
+```text
+/import gemini --dry-run
 ```
 
-Capture only the proposed file map and warnings in the migration inventory. If the command is unavailable, continue with the manual mapping below; do not improvise a destructive import.
+Do not try to invoke another slash command from this skill. If the user chooses the native path, stop and let them invoke it directly, then review its proposed file map and warnings. If it is unavailable for the installed version/provider, continue with the manual mapping below; do not improvise a destructive import.
 
 ### 3. Build a reviewed mapping
 
@@ -50,7 +50,7 @@ Capture only the proposed file map and warnings in the migration inventory. If t
 | Reusable skill | `.agents/skills/<name>/SKILL.md` | Portable core; narrow trigger description |
 | Gemini command | `.claude/commands/<name>.md` or a thin adapter to a portable skill | Tool names and argument syntax |
 | Gemini hook | `.claude/settings.json` plus `.claude/hooks/` | Event schema, stdin JSON, exit codes, quoting |
-| MCP server | `.mcp.json` | Secret handling, server names, transport, approval posture |
+| MCP server | Reviewed host-local configuration; no direct copy | Current tool surface, secrets, transport, least privilege, approval posture |
 | Extension/headless automation | Manual migration item | Permissions, unattended execution, human gates |
 
 Do not copy provider-specific tool names into a portable skill. Put provider adapters in the provider-specific command or hook layer.

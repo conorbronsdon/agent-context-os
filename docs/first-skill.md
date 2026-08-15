@@ -1,98 +1,82 @@
-# Write your first skill in 5 minutes
+# Build your first portable skill
 
-A skill is a recurring task you've turned into a slash command — a short markdown file that tells Claude how to do one job, the same way every time. This starter ships a dozen (`/start`, `/end`, `/capture`, `/find-context`, and more). The fastest way to get your own is to copy one and change three things. Here's the whole thing, start to finish.
+A skill is a reusable workflow with a clear trigger, inputs, procedure, output, and safety boundary. Put provider-neutral workflow logic in `.agents/skills/<name>/SKILL.md`. Add a host adapter only when that host needs its own invocation or tools.
 
-We'll turn the included `/find-context` command into a new `/standup` — "what did I do yesterday, what's next, what's blocked." Same shape, different job. Swap in whatever recurring task you keep doing by hand; the steps are identical.
+This example builds a read-only standup skill. It reads repository state and returns a three-line briefing; it does not change files or call external services.
 
-> This builds a **command** (a slash command with no extra files). A full **skill** adds a `SKILL.md` under `projects/<project>/skills/` and a `CLAUDE.md` row so it loads in both Claude Code and claude.ai — see `projects/README.md` once you want that. Start with a command; promote it to a skill when you reach for it often.
-
-## 1. Look at the one you're copying — 30 sec
-
-Open `.claude/commands/find-context.md`. Every command has the same two parts:
-
-```markdown
----
-name: find-context
-description: Find relevant context files by topic. Use when you need to load files for a topic without a slash command.
-allowed-tools: Read, Glob, Grep, Bash
----
-
-# /find-context — Find Relevant Files by Topic
-
-## Instructions
-...
-```
-
-- The block between the `---` lines is the **frontmatter**. Its `description` is what shows up when you type `/` in Claude Code, and it's the trigger Claude uses to decide when the command applies — so make it concrete.
-- Everything below is the **prompt** — plain instructions, usually a short numbered list. That's the whole command.
-
-## 2. Copy it to a new name — 30 sec
-
-The file name *is* the command name. Copy it:
+## 1. Create the skill directory
 
 ```bash
-cp .claude/commands/find-context.md .claude/commands/standup.md
+mkdir -p .agents/skills/standup
 ```
 
-(No terminal handy? Duplicate the file in your editor and rename it.) `standup.md` becomes `/standup`. Lowercase, dashes for spaces.
-
-## 3. Rewrite the frontmatter — 1 min
-
-Open your new `standup.md`. Change `name` to match the file, and rewrite `description` to what this command actually does. Trim `allowed-tools` to only what the job needs:
+Create `.agents/skills/standup/SKILL.md`:
 
 ```markdown
 ---
 name: standup
-description: Daily standup — what I shipped yesterday, what's next, what's blocked. Use at the start of a working day.
-allowed-tools: Read, Glob
+description: Summarize the latest session and current state as a three-line standup when the user explicitly asks for a standup briefing.
 ---
+
+# Standup
+
+1. Read the latest dated file in `sessions/` and `state/current.md`.
+2. Return exactly three labeled lines:
+   - **Shipped** — the most important completed result.
+   - **Next** — the single most important next action.
+   - **Blocked** — the current blocker, or `nothing recorded`.
+3. Do not modify files, infer live external data, or list lower-priority work.
 ```
 
-## 4. Rewrite the steps — 2 min
+Keep project facts in `projects/<project>/context.md` and reference that path from the procedure. Do not duplicate changing project facts inside a reusable skill.
 
-Now the body. Keep the shape — a title and a short numbered list — and put your job in it. Tell Claude what to read, what to decide, and what to hand back:
+## 2. Add optional Codex presentation metadata
+
+Codex discovers repository skills under `.agents/skills/`. If you want explicit UI metadata, add `.agents/skills/standup/agents/openai.yaml` with a reviewed prompt that invokes the exact skill token and disables implicit invocation:
+
+```yaml
+interface:
+  display_name: Standup
+  short_description: Summarize repository state as a focused standup.
+  default_prompt: Use $standup to summarize the latest session and current state.
+policy:
+  allow_implicit_invocation: false
+```
+
+Run it in Codex by explicitly invoking `$standup`.
+
+## 3. Add an optional Claude Code adapter
+
+Claude Code project slash commands live in `.claude/commands/`. A thin adapter points to the portable skill rather than copying its body. Create `.claude/commands/standup.md`:
 
 ```markdown
-# /standup — Daily Standup
+---
+name: standup
+description: "Summarize the latest session and current state as a focused standup"
+allowed-tools: "Read, Glob"
+disable-model-invocation: true
+---
 
-## Instructions
-
-1. Read the most recent file in `sessions/` and `state/current.md`.
-2. Summarize in three lines:
-   - **Shipped** — what got done last session.
-   - **Next** — the one thing that matters most today.
-   - **Blocked** — anything waiting on someone else, or say "nothing."
-3. Keep it to those three lines. Don't list everything — just the top of each.
+Read and follow `.agents/skills/standup/SKILL.md`.
 ```
 
-Two things make a command work:
+Run it in Claude Code with `/standup`. `allowed-tools` is a pre-approval grant, not a restriction, so keep it narrow. The user-only invocation gate prevents a write-capable lifecycle command pattern from being triggered implicitly.
 
-- **Be specific about inputs and outputs.** "Read the most recent file in `sessions/`" beats "check my notes." A clear, specific `description` matters for the same reason — it's the trigger.
-- **Say what *not* to do.** "Don't list everything — just the top of each" keeps it from rambling.
-
-## 5. Run it — 30 sec
-
-In Claude Code, type `/` and you'll see `standup` in the list. Run it:
-
-```
-/standup
-```
-
-If it doesn't show up yet, start a fresh session so Claude Code picks up the new file.
-
-## 6. Validate and commit
-
-Run the checks, then commit so your command gets a history like everything else here:
+## 4. Validate and inspect
 
 ```bash
 bash scripts/validate-all.sh
-git add .claude/commands/standup.md && git commit -m "Add /standup command"
+git diff -- .agents/skills/standup .claude/commands/standup.md
 ```
 
-## 7. Make it a habit
+Test each host you claim. A portable file layout does not prove that another agent has equivalent discovery, invocation, permission, or tool behavior.
 
-One command, run daily for a week, beats ten you set up once and forget. When `/standup` feels automatic, copy it again for the next thing you keep doing by hand. When a command outgrows a single file — it needs its own context, or you want it in claude.ai too — promote it to a skill with `/skill-creator`, which scaffolds the `SKILL.md`, the command file, and the `CLAUDE.md` row for you.
+## 5. Add project routing only when needed
 
----
+If the workflow is project-specific, add a concise route to `ROUTING.md`, for example:
 
-Want it to reach your real calendar, email, or Drive? That's what MCP servers are for — see **Optional integrations** in the [README](../README.md).
+```markdown
+- Acme launch work → read `projects/acme/context.md`
+```
+
+One maintained skill used every week is more valuable than ten speculative ones. Start read-only, add writes only when the task requires them, and add a confirmation before every external or hard-to-reverse effect.

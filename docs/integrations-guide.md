@@ -1,0 +1,38 @@
+# Choose an optional integration
+
+Integrations are opt-in extensions, not part of the core session loop. Start with a concrete outcome, choose at most one new trust boundary at a time, and read its full generated entry in [`references/integrations.md`](../references/integrations.md).
+
+Nothing in this guide installs, activates, authenticates, or grants permissions to an integration.
+
+## Outcome chooser
+
+| I want to… | Candidate | First boundary to review |
+|---|---|---|
+| Browse and install reusable agent skills | [Agent Skills](../references/integrations.md#agent-skills) | Replacement or removal of an existing local skill |
+| Add a standalone lifecycle/workspace package | [Agent Workspace](../references/integrations.md#agent-workspace) | Local state writes and optional cleanup actions |
+| Discover creator-oriented tools without installing one | [AI Tools for Creators](../references/integrations.md#ai-tools-for-creators) | Listings can drift and are not endorsements |
+| Coordinate Gemini work with a persistent issue graph | [Beads for Gemini CLI](../references/integrations.md#beads-for-gemini-cli) | User-global defaults, remote sync, and force overwrite |
+| Search meeting notes or retrieve transcripts | [Granola MCP](../references/integrations.md#granola-mcp) | OAuth, sensitive reads, retention, and participant consent |
+| Let an agent work with an Obsidian vault | [Obsidian CLI](../references/integrations.md#obsidian-cli) | Broad command/eval surface and implicit vault/file targeting |
+| Manage Substack drafts or publish Notes | [Substack MCP](../references/integrations.md#substack-mcp) | Session credentials, sensitive analytics, and immediate public Notes |
+| Read or update a mounted Markdown vault | [Tolaria MCP](../references/integrations.md#tolaria-mcp) | Sensitive vault reads and full-note overwrite |
+
+Google Workspace is not currently shipped as a working integration. The [legacy status note](../references/gws-mcp-setup.md) explains why the obsolete tracked configuration was removed. Do not recreate it from old instructions.
+
+## Activation checklist
+
+For the selected entry:
+
+1. Read its current source and every linked evidence page.
+2. Confirm the supported host and whether installation is project- or user-scoped.
+3. List the exact credentials, local paths, accounts, vaults, or workspaces it can reach.
+4. Start with the least privilege and the narrowest read-only health check available.
+5. Require a separate confirmation for sensitive reads, writes, remote writes, publish, overwrite, deletion, arbitrary execution, OAuth, or destructive actions when the catalog marks them.
+6. Record how to disable or uninstall it before relying on it.
+7. Re-run `bash scripts/validate-all.sh` after changing tracked configuration.
+
+Do not infer safety from the word `verified`. In this repository it means the catalog metadata was checked against linked evidence on the stated date; it is not live authentication, an end-to-end test, or a guarantee about future upstream behavior.
+
+## When no integration is the right choice
+
+Keep the core filesystem workflow when a tool would duplicate data, widen access without a concrete task, require more credentials than the outcome warrants, or add a remote write where a local file is enough. Repository context, lifecycle skills, and manual links remain useful without any optional integration.

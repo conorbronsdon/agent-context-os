@@ -5,7 +5,7 @@ The goal is behavioral parity, not a byte-for-byte copy of Gemini configuration 
 ## Fast path
 
 1. Run `/migrate-gemini` to inventory instructions, commands, skills, hooks, and MCP configuration.
-2. Use Claude's native `claude import gemini --dry-run` when the installed CLI supports it.
+2. As an alternative, explicitly invoke Claude Code's interactive `/import gemini --dry-run` when the installed version/provider supports it. A custom skill cannot invoke that slash command for you.
 3. Define a parity case for each selected workflow before applying changes.
 4. Run `/mine-gemini-workflows` only when session evidence is needed to reconstruct the workflow.
 5. Migrate one workflow, validate it, and review the diff before moving to the next.

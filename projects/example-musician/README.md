@@ -13,15 +13,15 @@ The core workflow this covers:
 |------|--------------|
 | `artist-context.md` | Who you are as an artist — the permanent background Claude needs |
 | `promotion-strategy.md` | Current focus, platforms, goals, what's working |
-| `skills/social-post/SKILL.md` | Write platform-native social posts in your voice |
-| `skills/press-outreach/SKILL.md` | Draft cold pitches to blogs, playlists, and press |
+| `skills/social-post/SKILL.md` | Readable workflow example; not a natively discovered skill at this path |
+| `skills/press-outreach/SKILL.md` | Readable workflow example; not a natively discovered skill at this path |
 
 ## How to use this
 
 1. Fill in `artist-context.md` and `promotion-strategy.md` first — these are the foundation everything else draws from
 2. Add `projects/[your-project-name]/` to ROUTING.md so Claude knows when to load it
 3. Try `/clean-ai-writing` on any draft that sounds off — the avoid-ai-writing skill works for music content too
-4. Build new skills as you identify repeating tasks (e.g., writing EPK copy, drafting grant applications, creating set list announcements)
+4. Build new portable skills under `.agents/skills/` as you identify repeating tasks (e.g., writing EPK copy, drafting grant applications, creating set list announcements)
 
 ## Slash commands to add (optional)
 
@@ -32,4 +32,4 @@ Once you've filled in the context files, add these to the slash commands table i
 | `/press-pitch` | Draft an outreach email to a blog, playlist, or press contact |
 ```
 
-Then create a corresponding file in `.claude/commands/` for each one. The pattern is the same as `.claude/commands/start.md` — a frontmatter block declaring the skill name and which tools it needs, followed by instructions that tell Claude which skill file to load. Prompt 3 in `SETUP-PROMPTS.md` will handle this automatically if you ask for slash commands during setup.
+First move the provider-neutral procedure to `.agents/skills/example-musician-<task>/SKILL.md` and update its project-context paths. Then create an optional thin file in `.claude/commands/` that loads that portable skill. Prompt 3 in `SETUP-PROMPTS.md` follows this layout.

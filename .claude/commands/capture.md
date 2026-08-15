@@ -2,6 +2,7 @@
 name: capture
 description: Triage raw notes from inbox/ into the correct repo locations. Use when you drop unstructured content and need it routed.
 allowed-tools: Read, Write, Edit, Glob, Bash
+disable-model-invocation: true
 x-source: skills-sync/commands/capture.md
 x-source-version: 40f7149
 ---
@@ -24,7 +25,7 @@ For each item, determine its type and destination:
 | Decision or conclusion | `state/decisions.md` | Add as a new entry (newest first) |
 | Blocker | `state/blockers.md` | Add with context |
 | Priority change | `state/current.md` | Update priorities |
-| Writing idea or draft | project skill dir, or keep in `inbox/` | Move if ready, keep if raw |
+| Writing idea or draft | relevant project context/draft file, or keep in `inbox/` | Move if ready, keep if raw |
 | Reference link or note | relevant context file | Append to the appropriate section |
 | ⚠️ Secret (password, PIN, seed phrase, recovery code, API key) | **NEVER commit to the repo** | Flag it for the user's password manager; quarantine outside git |
 | Unknown / multi-category | ask the user | Don't guess — present 1–2 options |

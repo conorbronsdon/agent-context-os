@@ -1,6 +1,6 @@
 # Memory template
 
-Drop this into `~/.claude/projects/<encoded-cwd>/memory/MEMORY.md` to seed your auto-memory index. Claude Code will load it on every conversation in this project.
+Copy the fenced template below into the exact `MEMORY.md` that Claude Code shows through `/memory`, or into the explicit `autoMemoryDirectory` configured for this workspace. Do not derive the directory by encoding the current working path.
 
 See `docs/auto-memory.md` for the full spec (what to save, what NOT to save, body structure, the two-step write).
 
@@ -53,12 +53,6 @@ See `docs/auto-memory.md` for the full spec (what to save, what NOT to save, bod
 
 ## First-time setup
 
-```bash
-PROJECT_KEY=$(pwd | sed 's|[:\\/]|-|g')
-MEMORY_DIR="$HOME/.claude/projects/$PROJECT_KEY/memory"
-mkdir -p "$MEMORY_DIR"
-cp docs/memory-template.md "$MEMORY_DIR/MEMORY.md"
-# then edit out the docs preamble — keep only the markdown block under the rule
-```
+Use `/memory` first, then follow the explicit local-path and repository-binding steps in `docs/auto-memory.md`. Copy only the fenced Markdown template above; copying this entire documentation file would create an invalid index.
 
 For `/dream` curator support, also initialize the memory dir as a local-only git repo. See `scripts/dream/README.md`.

@@ -42,7 +42,11 @@ description: [One sentence, 60+ chars, what this skill does and when to use it]
 
 ---
 
-## Command Routing File Template
+## Portable location
+
+Place the workflow above at `.agents/skills/[skill-name]/SKILL.md`. Add `agents/openai.yaml` only when Codex UI metadata is useful. Keep changing project facts in `projects/` and reference them from the workflow.
+
+## Optional Claude command adapter
 
 Place in `.claude/commands/[skill-name].md`. This is what the slash command loads.
 
@@ -53,7 +57,7 @@ description: [Short description, 20+ chars]
 allowed-tools: [Read, Bash, Write, Edit, Glob — pre-approve only what's needed]
 ---
 
-Load `[path/to/SKILL.md]` and follow its instructions.
+Read and follow `.agents/skills/[skill-name]/SKILL.md`.
 ```
 
 ---
@@ -61,8 +65,9 @@ Load `[path/to/SKILL.md]` and follow its instructions.
 ## Checklist Before Shipping a New Skill
 
 - [ ] SKILL.md has YAML frontmatter with `name` and `description` (60+ chars)
-- [ ] Command routing file exists in `.claude/commands/` with 20+ char description
-- [ ] Slash command row added to CLAUDE.md command table
+- [ ] Provider-neutral workflow lives under `.agents/skills/`
+- [ ] Optional Claude adapter is thin, user-only when it writes, and grants only reviewed tools
+- [ ] Optional Codex metadata uses exact explicit invocation when the workflow writes
 - [ ] Routing rule added to ROUTING.md if appropriate
 - [ ] CHANGELOG.md updated with new files
 - [ ] Run `scripts/validate-all.sh` to verify structure
@@ -72,7 +77,7 @@ Load `[path/to/SKILL.md]` and follow its instructions.
 ## Directory Convention
 
 ```
-projects/your-project/skills/
+.agents/skills/
 └── [skill-name]/
     └── SKILL.md
 ```
@@ -85,6 +90,6 @@ For a Claude-only general-purpose skill:
     └── SKILL.md
 ```
 
-For a provider-neutral skill shared with Gemini CLI and Codex, use `.agents/skills/[skill-name]/SKILL.md` and add a thin `.claude/commands/[skill-name].md` adapter when a Claude slash command is wanted.
+Project-folder workflow documents are context, not natively discovered skills. Use `.agents/skills/[skill-name]/SKILL.md` for the portable source and add a thin `.claude/commands/[skill-name].md` adapter when a Claude slash command is wanted.
 
 Commands always live flat in `.claude/commands/[skill-name].md`.

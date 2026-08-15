@@ -2,7 +2,7 @@
 
 # claude-context-os
 
-An operating system for durable agent context — version-controlled files, reviewable memory, and a start → work → end session loop shared across Claude Code, Codex, and claude.ai.
+A Claude-first, Codex-compatible workspace harness for durable agent context — version-controlled files, reviewable memory, reusable workflows, and a start → work → end loop.
 
 [![GitHub stars](https://img.shields.io/github/stars/conorbronsdon/claude-context-os?style=social)](https://github.com/conorbronsdon/claude-context-os/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
@@ -15,11 +15,39 @@ An operating system for durable agent context — version-controlled files, revi
 
 ---
 
-Most people paste their context into Claude's project instructions and forget about it. It goes stale. They lose track of what's there. When something changes — a new job, a new project, a new workflow — updating it means hunting through UI fields with no version history. And if you use Claude in multiple places, you're maintaining the same context in multiple places.
+Most people paste context into an AI product and forget about it. It goes stale, gets duplicated across tools, and has no useful change history.
 
-This repo flips that. Your context lives in files. Claude Code and Codex use checked-in host adapters to read the same repository state; claude.ai projects can use selected files as uploaded knowledge. Update a canonical file once, and every configured interface can use the same source of truth. Provider-neutral workflows live in `.agents/skills/`, while host-only commands, hooks, and memory stay clearly labeled.
+This repository makes context an inspectable workspace. Claude Code and Codex use checked-in adapters to read the same canonical files; Claude.ai projects can use selected files as uploaded knowledge. Provider-neutral workflows live in `.agents/skills/`, while host-only commands, hooks, permissions, and memory stay labeled.
 
-It also gives Claude a persistent, file-based **auto-memory** that grows over time (typed entries for user/feedback/project/reference) plus a `/dream` curator that runs autonomous passes over the memory dir — rot detection, contradiction surfacing, pattern capture — and produces reviewable proposals before anything writes back. See [`docs/auto-memory.md`](docs/auto-memory.md) and [`docs/dream-architecture.md`](docs/dream-architecture.md). The design bet is trust infrastructure for agents, applied to your own context: version control for provenance, a curator for memory hygiene, and reviewable proposals so nothing writes back unreviewed.
+It is a workspace harness, not an agent runtime: it does not provide a model or agent loop. Your chosen host supplies execution. The repository supplies durable state, routing, workflows, validation, and confirmation boundaries.
+
+> **Name note:** the established repository name stays to preserve links and history. The shared lifecycle is provider-neutral, while support is stated per host instead of implying that every feature works everywhere.
+
+## What it helps you do
+
+| Goal | Path |
+|---|---|
+| Bring forward useful context from another AI system | Use the [migration guide](docs/migration-guide.md); import one reviewed source at a time |
+| Add a tool without guessing at its trust boundary | Use the [integration chooser](docs/integrations-guide.md) and generated safety catalog |
+| Work from the same state in Claude Code and Codex | Use the shared lifecycle and [Codex onboarding](docs/codex-onboarding.md) |
+| Keep context and memory useful over time | Follow the [maintenance guide](docs/maintenance.md) and current [command/skill index](docs/commands-and-skills.md) |
+
+Start with the core filesystem loop. Migration, integrations, and Claude-specific auto-memory are optional layers.
+
+## Before you add real context
+
+This repository can hold identity, goals, business plans, session logs, and links to private systems. Keep it local-only or use a private remote by default. Make a public repository only after deliberately sanitizing every tracked file. Never fork or push a personalized workspace publicly by accident.
+
+Review the exact diff before each commit and the destination before each push. A later deletion does not erase a secret or personal detail from git history; history cleanup is a separate operation. The setup script never pushes.
+
+## Host scope
+
+| Host | What is supported here | What is not implied |
+|---|---|---|
+| Claude Code | Full lifecycle plus checked-in Claude commands, hooks, and optional auto-memory curation | External integrations are not enabled by default |
+| Codex | Validated setup/start/update/end lifecycle through `AGENTS.md` and `.agents/skills/` | Claude hooks, commands, permissions, and auto-memory do not carry over |
+| Claude.ai Projects | Manually uploaded, selected knowledge files | No live sync, repository writes, slash-command activation, or lifecycle parity |
+| Gemini CLI | Portable skill layout plus reviewed migration/discovery helpers | No tested lifecycle adapter or permission parity is claimed |
 
 ---
 
@@ -48,13 +76,15 @@ Every line came from plain markdown in the repo—not a chat you rebuild from me
 
 ## Quick start
 
+Read the full [getting-started guide](docs/getting-started.md) before the repository holds personal or business-sensitive context.
+
 ```bash
 git clone https://github.com/conorbronsdon/claude-context-os.git my-context
 cd my-context
 bash scripts/setup.sh
 ```
 
-The setup script walks you through the basics, detects an installed host, and offers to launch it. Choose one explicitly when both are installed:
+The setup script walks through local template choices, detects an installed host, and offers to launch it. It does not import histories, install integrations, or authenticate services. Choose a host explicitly when both are installed:
 
 ```bash
 bash scripts/setup.sh --agent claude
@@ -74,16 +104,17 @@ Once you're in Claude Code, run:
 /setup
 ```
 
-Claude interviews you and builds your context files — identity, first project, weekly priorities. Takes about 10 minutes. No manual editing required.
+Claude interviews you, shows the proposed context changes, and builds the approved identity, project, and weekly-state files.
 
 In Codex, invoke `$context-setup` instead. The same portable workflow writes the same repository state. See [`docs/codex-onboarding.md`](docs/codex-onboarding.md) for the complete lifecycle and host-specific limits.
 
-**Using claude.ai instead?** Open `SETUP-PROMPTS.md` and paste the prompts there — same questions, same results, you just copy the output into files manually.
-_Note: you can give your claude.ai session this repo as project context after it's set up, and easily sync it_
+**Using Claude.ai instead?** Open [`SETUP-PROMPTS.md`](SETUP-PROMPTS.md). The browser workflow can draft content, but you review and copy changes back to the repository manually.
+
+Already have useful context elsewhere? Do not bulk-copy chat history. Follow the [migration guide](docs/migration-guide.md) before running onboarding so you can decide what is durable, current, and safe to track.
 
 ---
 
-## After setup
+## Core loop
 
 Run your first Claude Code session:
 
@@ -100,10 +131,10 @@ For Codex, launch `codex` in the repository and use `$context-start` → work �
 | Claude Code / Codex | When | What it does |
 |---|---|---|
 | `/setup` / `$context-setup` | First time | Interactive onboarding—builds the shared context files |
-| `/start` / `$context-start` | Beginning of session | Loads state and gives a briefing; Claude can also use its configured live-data adapter |
+| `/start` / `$context-start` | Beginning of session | Loads repository state and gives a briefing; no external data is pre-approved |
 | `/update` / `$context-update` | Mid-session | Saves a quick checkpoint without closing |
 | `/end` / `$context-end` | End of session | Records a reviewed handoff, updates shared state and decisions, and checks repository safety |
-| `/today` / — | Start of day | Claude-only heartbeat with staleness, calendar, and priorities |
+| `/today` / — | Start of day | Claude-only heartbeat with staleness, deadlines, priorities, and an audit-log write |
 | `/capture` / — | When inbox has items | Triages raw notes from `inbox/` into the right files |
 | `/find-context` / — | Any time | Finds relevant context files by topic keyword |
 | `/reconcile` / — | After parallel work | Detects drift between sessions and source-of-truth violations |
@@ -127,7 +158,7 @@ ROUTING.md                        # Context routing for tasks without a slash co
 TODO.md                           # Task backlog
 SETUP-PROMPTS.md                  # Setup prompts for claude.ai users
 identity/                         # Your bio, background, goals
-projects/                         # Project context and skills (with worked example)
+projects/                         # Project context (with a worked example)
 writing/skills/                   # Writing skills (avoid-ai-writing included)
 state/                            # Session state, priorities, decisions, blockers
 sessions/                         # Per-day session logs (created by /end)
@@ -140,13 +171,13 @@ content/log.md                    # Published content log
 scripts/                          # Setup, validation, repo map generation
 scripts/dream/                    # Curator prompts + how-to for the /dream substrate
 docs/                             # Architecture and onboarding guides, including Codex
-references/                       # Integration setup (Google Workspace, Notion)
+references/                       # Generated integration safety details and source notes
 integrations/                     # Machine-checked catalog of opt-in add-ons and risk boundaries
 .claude/hooks/                    # Session start + SSOT guard + parallel-session guards
 .github/                          # CI validation + PR template
 
-# Auto-memory lives outside the repo (per-machine, often confidential):
-~/.claude/projects/<encoded-cwd>/memory/
+# Auto-memory lives outside the repo (Claude-only, often confidential):
+<configured-memory-directory>/
   MEMORY.md                       # Index loaded into every conversation
   <topic>.md                      # Detail files loaded on demand
   .dreams/<ISO>/                  # Curator proposal artifacts
@@ -174,7 +205,7 @@ New here? **[docs/first-skill.md](docs/first-skill.md)** walks you through build
 
 ## Auto-memory
 
-Claude Code auto-loads `~/.claude/projects/<encoded-cwd>/memory/MEMORY.md` at the start of every conversation in this project. This is a Claude-only extension, not the portable memory layer. Shared continuity lives in the repository's `state/` and `sessions/` directories. claude-context-os also ships a spec ([`docs/auto-memory.md`](docs/auto-memory.md)) for what to save (and what NOT to save) across four typed Claude memory categories:
+Claude Code can maintain auto-memory for this git repository. This is a Claude-only extension, not the portable memory layer. Claude Code resolves its default store from the repository, not by a path formula this template should guess. The optional curation commands require one explicit local memory directory configured as described in [`docs/auto-memory.md`](docs/auto-memory.md). Shared continuity lives in `state/` and `sessions/`.
 
 - **user** — role, expertise, preferences
 - **feedback** — guidance about *how* to work, both corrections and validated approaches
@@ -183,11 +214,11 @@ Claude Code auto-loads `~/.claude/projects/<encoded-cwd>/memory/MEMORY.md` at th
 
 `MEMORY.md` is an index. Detail files load on demand. Cap the index at ~100 lines.
 
-`docs/memory-template.md` is the seed file. Copy it to the memory dir on first setup.
+`docs/memory-template.md` is the seed file. Copy its fenced template only after you have inspected or configured the exact Claude memory directory.
 
-### /dream — autonomous curator
+### /dream — on-demand curator
 
-Memory accumulates faster than humans review it. `/dream` runs an autonomous curator pass over the memory dir (default curator: **rot detection** — flags project memories that no longer match your state files or recent commits) and writes a reviewable proposal artifact. `/dream-apply` walks the artifact and applies accepted items, all under git on the memory dir so any pass is one `git revert` away.
+Memory accumulates faster than humans review it. `/dream` runs only when a user invokes it (unless they separately configure a scheduler). The shipped curators are **rot**, **merge**, **split**, and **lint**. A pass writes and commits proposal artifacts in the local memory repository; it does not change live memories. `/dream-apply` separately reviews every proposed live-memory change. Pattern, standalone contradiction, and untapped-work curators remain roadmap items.
 
 See [`docs/dream-architecture.md`](docs/dream-architecture.md) for the full design (curator catalog, proposal schema, scope guards).
 
@@ -208,26 +239,21 @@ Both hooks no-op until you list a repo basename in `.claude/hooks/guarded-repos.
 
 ## Optional integrations
 
-The generated [optional integrations catalog](references/integrations.md) links compatible add-ons without installing, activating, authenticating, or expanding permissions for any of them. Its source of truth is [`integrations/catalog.json`](integrations/catalog.json), enforced by `scripts/integrations.py`; CI rejects missing typed safety gates, contradictory declared capabilities, unsafe source metadata, empty evidence, and documentation drift. This is structural and semantic validation of the catalog entry—not proof that an upstream source remains correct. Follow each entry's dated evidence links before enabling it. `listed` and `experimental` entries are leads, not endorsements.
+Start with the task-oriented [integration chooser](docs/integrations-guide.md), then read the generated [optional integrations catalog](references/integrations.md). The catalog links compatible add-ons without installing, activating, authenticating, or expanding permissions for any of them. Its source of truth is [`integrations/catalog.json`](integrations/catalog.json), enforced by `scripts/integrations.py`; CI rejects missing typed safety gates, contradictory declared capabilities, unsafe source metadata, empty evidence, and documentation drift. This is structural and semantic validation of the catalog entry—not proof that an upstream source remains correct. Follow each entry's dated evidence links before enabling it. `listed` and `experimental` entries are leads, not endorsements.
 
 Current catalog entries include portable skills and workspace add-ons plus reviewed paths for [Tolaria MCP](https://github.com/refactoringhq/tolaria), [Obsidian CLI](https://obsidian.md/help/cli), [Beads for Gemini CLI](https://beads.gascity.com/integrations/gemini), and [Granola MCP](https://docs.granola.ai/help-center/sharing/integrations/mcp). Each entry distinguishes sensitive reads, local writes, remote writes, OAuth, overwrite, deletion, arbitrary execution, publish, and destructive boundaries where they apply.
 
-**Google Workspace MCP** — lets Claude read your calendar, email, Drive, and Sheets mid-session:
+**Google Workspace status:** the previous tracked configuration targeted a removed `gws mcp` subcommand and has been removed. No Google Workspace integration is currently shipped or pre-approved. See [`references/gws-mcp-setup.md`](references/gws-mcp-setup.md) before following older setup instructions.
 
-```bash
-npm install -g @googleworkspace/cli
-gws auth setup
-```
-
-The `.mcp.json` is already configured. See `references/gws-mcp-setup.md` for details.
-
-**claude.ai sync** — upload `CLAUDE.md`, `ROUTING.md`, and relevant skill files to claude.ai projects as knowledge. See `docs/claude-projects-sync.md` for the workflow.
+**Claude.ai knowledge copy** — upload a deliberately selected subset of files as project knowledge and manually replace them when the source changes. This is not live sync or command/runtime parity. See `docs/claude-projects-sync.md`.
 
 ---
 
-## Migrating from Gemini CLI
+## Bring context forward
 
-Run `/migrate-gemini` for a reviewed configuration migration, or `/mine-gemini-workflows` to discover repeated workflows in a user-selected session directory. Both flows are privacy-first: dry run before mutation, metadata before message content, no private reasoning export, and parity checks before a workflow is accepted.
+The [migration guide](docs/migration-guide.md) covers Claude Projects, Gemini CLI, Codex import, and manual extraction from other AI systems. The goal is durable context—not a bulk archive of conversations.
+
+For Gemini CLI specifically, run `/migrate-gemini` or `$migrate-gemini` for a reviewed configuration migration. Use `/mine-gemini-workflows` or `$mine-gemini-workflows` only to discover repeated workflows in an explicitly selected session directory. Both flows are privacy-first: dry run before mutation, metadata before message content, no private reasoning export, and parity checks before a workflow is accepted.
 
 See [`docs/gemini-migration.md`](docs/gemini-migration.md). [`0xSero/ai-data-extraction`](https://github.com/0xSero/ai-data-extraction) is credited as useful extraction prior art in [`references/ai-data-extraction.md`](references/ai-data-extraction.md); it is not installed as a dependency.
 
@@ -239,7 +265,7 @@ See [`docs/gemini-migration.md`](docs/gemini-migration.md). [`0xSero/ai-data-ext
 bash scripts/validate-all.sh
 ```
 
-The aggregate validator checks skill/command frontmatter, Codex portability and adapter mappings, CLAUDE.md size, committed secrets, stale files, local links, shell syntax, hook behavior, JSON, and Python tests. The harness needs Bash and Python 3. CI runs the same command on every push and PR.
+The aggregate validator checks skill/command frontmatter, Codex portability and adapter mappings, CLAUDE.md size, a limited set of common committed-secret signatures and filenames, stale files, local links, shell syntax, hook behavior, JSON, and Python tests. It is not DLP and cannot prove a repository is safe to publish. The harness needs Bash and Python 3. CI runs the same command on every push and PR.
 
 ---
 
@@ -249,12 +275,6 @@ The aggregate validator checks skill/command frontmatter, Codex portability and 
 - **CLAUDE.md stays small:** Under 100 lines. Detail goes in skills and ROUTING.md.
 - **Staleness dates:** `**Last Updated:**` near the top of context files. Validation flags 90+ days.
 - **TODO.md vs. current.md:** TODO is the full backlog; `state/current.md` is the top-of-mind view.
-
----
-
-## Migrating from existing Claude projects
-
-See [docs/migration-guide.md](docs/migration-guide.md) — includes an audit prompt, evaluation criteria, and restructuring guide.
 
 ---
 

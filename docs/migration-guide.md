@@ -1,141 +1,125 @@
-# Migration Guide
+# Bring context forward safely
 
-You have existing Claude projects with uploaded files, custom instructions, and conversation history. This guide walks through auditing them, deciding what to keep, moving it into this repo, and connecting the repo to claude.ai going forward.
+Migration means extracting a small set of durable facts, decisions, preferences, and proven workflows from a named source. It does not mean copying an account, bulk chat archive, or provider-specific tool configuration into this repository.
 
----
+Work on one source, one project, and one date range at a time. Keep inventories and excerpts under the ignored `.context-os/migrations/` staging directory until the destination diff is approved.
 
-## Overview
+## Supported source paths
 
-The process has three parts:
+| Source | Supported path | Important boundary |
+|---|---|---|
+| Claude Projects | Manual metadata-first inventory and selected knowledge-file review | Project uploads are not live repository sync; do not request all chat content |
+| Gemini CLI | `/migrate-gemini` or `$migrate-gemini`; optional explicit Claude Code `/import gemini --dry-run` handoff | Hooks, tools, MCP, and permissions require provider-specific review |
+| Codex | Optional Codex `/import` for supported instructions/configuration | This is configuration migration, not generic context or conversation ingestion |
+| Other AI systems | Manual, user-selected extraction into ignored staging | No universal importer is claimed; exports may contain credentials and sensitive history |
 
-1. **Audit** — run a prompt in each existing project to inventory what's there
-2. **Migrate** — move anything worth keeping into this repo
-3. **Connect** — upload the key repo files to claude.ai so your new projects read from the same source
+The included [`0xSero/ai-data-extraction` reference](../references/ai-data-extraction.md) is useful prior art for extraction design. It is not installed, executed, or treated as a dependency.
 
-Plan for 15–30 minutes per project, though most go faster.
+## The safe flow
 
----
+### 1. Scope the source
 
-## Part 1: Audit your existing projects
+Record:
 
-Open each Claude project and run this prompt. It works for any project regardless of what's in it.
+- the exact provider or local tool;
+- account, workspace, or project name;
+- an explicit date range;
+- the one to three outcomes worth preserving; and
+- whether the material belongs in a local-only or private repository.
 
----
+Do not start with an account-wide export. Do not bulk-commit any migration output.
 
-**Copy this prompt into each project:**
+### 2. Inventory metadata first
 
-```
-I'm consolidating my Claude context into a git-based personal context repo.
-The repo contains version-controlled files for my identity, projects, writing,
-and any custom skills — and it syncs to claude.ai projects going forward.
+List only names, types, dates, sizes, and locations. Do not emit message bodies, hidden reasoning, environment values, tool arguments, or credentials during inventory.
 
-Before I archive or delete this project, help me take inventory.
+Write the local inventory to:
 
-1. List every document or file uploaded to this project's knowledge, with a
-   one-sentence summary of what each contains.
-
-2. Show me the full text of any custom instructions set for this project.
-
-3. For each piece of content, flag whether it's:
-   - MIGRATE: contains context, preferences, or instructions I should carry forward
-   - SKIP: generic, outdated, or already captured elsewhere
-   - UNCLEAR: you're not sure — flag it and let me decide
-
-4. For anything flagged MIGRATE, output the raw content so I can evaluate it.
-
-5. Note any content that appears stale — outdated job titles, old company names,
-   superseded strategies, or anything likely out of date.
-
-Be thorough. I want to make a confident decision about this project when we're done.
+```text
+.context-os/migrations/<source>-<timestamp>/inventory.json
 ```
 
----
+Ignored files remain sensitive; gitignore is not encryption or access control.
 
-**What to do with the output:**
+### 3. Select named items
 
-Read through what it surfaces. Most projects fall into one of three buckets:
+Choose exact conversations, instructions, skills, or artifacts from the inventory. Retrieve content only for those named items and only after the user approves the selection.
 
-- **Delete after a quick scan.** Old projects built around a specific job, company, or one-time task. The custom instructions are usually outdated and the uploaded files have no forward value. Confirm, then delete.
+Classify each item before mapping it:
 
-- **Extract a few things, then delete.** The project has one or two documents worth migrating — a strategy framework, a research doc, a set of preferences you'd forgotten. Pull those, add them to the repo, then delete the project.
+- sensitivity and intended audience;
+- ownership or license restrictions;
+- staleness and last verified date;
+- whether it conflicts with current repository facts; and
+- whether it is a durable fact, decision, preference, workflow, or merely history.
 
-- **Carefully migrate.** A recently active project with working context — episode guides, client notes, an evolving strategy. These take more work but are worth doing right.
+Reject credentials, private reasoning, speculative model conclusions, redundant transcripts, and provider-specific noise.
 
----
+### 4. Normalize and map
 
-## Part 2: Move content into this repo
+Deduplicate repeated facts and surface conflicts instead of silently choosing a winner. Propose a destination map such as:
 
-Once you know what to keep, decide where each piece lives.
+| Durable content | Preferred destination |
+|---|---|
+| Identity or professional fact | `identity/` |
+| Project background or strategy | `projects/<project>/` |
+| Current priority, blocker, or decision | `state/` |
+| Reusable provider-neutral workflow | `.agents/skills/<name>/SKILL.md` |
+| Host-specific invocation or tool binding | A thin host adapter, reviewed separately |
+| Historical evidence only | Keep in ignored staging or the backed-up source; do not track by default |
 
-**Identity and background** → `identity/`
-Use `who-i-am.md` for personal context, `professional-background.md` for credentials. If neither fits, create a new file in the same directory.
+Never put credential values in a destination. Never copy a provider permission grant or MCP configuration without an independent least-privilege review.
 
-**Project-specific context** → `projects/your-project-name/`
-Copy the pattern from `projects/example-musician/`. Each project gets its own directory with a README, context files, and a `skills/` subdirectory for recurring workflows. Use Prompt 3 in `SETUP-PROMPTS.md` to have Claude build the folder structure interactively.
+### 5. Preview, scan, and approve
 
-**Converting non-markdown files** — if the project had PDFs, Word docs, or other uploaded files worth keeping, convert them to `.md` before adding them to the repo. See [optimizing-context.md](optimizing-context.md) for the conversion prompt and format guidance. Clean markdown uses 3–5x fewer tokens than a PDF of the same content.
+Before applying:
 
-**Skills** (recurring task instructions) → `projects/your-project/skills/skill-name/SKILL.md`
-If the project had a detailed system prompt for a specific task — writing in a particular format, analyzing a particular type of content — that's a skill. Extract it, clean it up, and file it here. Register it as a slash command in `CLAUDE.md`.
+1. show the complete source-to-destination map;
+2. show the proposed repository diff;
+3. run a secret scan, while stating that automated scans are limited and not proof of safety;
+4. call out replacements, conflicts, and deletions explicitly; and
+5. wait for approval of the exact files.
 
-**Career and financial context** → `career/` or a new top-level directory
-Long-term strategies, role context, financial planning notes. Create the directory if it doesn't exist.
+Apply one small batch, run `bash scripts/validate-all.sh`, and review the diff again. A migration command must not commit or push automatically.
 
-**State and current priorities** → `state/current.md` and `state/weekly-priorities.md`
-Anything about what you're actively working on goes here, not in identity files.
+### 6. Verify before retiring the source
 
----
+Use the migrated context in a representative task. Verify dates, links, routing, workflow outputs, and permission boundaries. Keep a separate backup of the source until the result is proven complete.
 
-**When you're not sure where something goes**, ask Claude Code:
+Never delete the source merely because files were written. Source deletion is a separate destructive action and requires explicit approval after verification and backup.
 
-```
-I'm migrating context from an old Claude project. Here's the content:
+## Claude Projects
 
-[paste content]
+Start from project names and uploaded knowledge-file names, not every chat. Ask for content only from files or conversations the user selects. Map uploaded instructions to current repository facts and portable skills; do not assume a browser Project can activate slash commands, tool grants, or repository writes.
 
-Where in this repo does it belong? If it needs a new file, suggest the path and filename.
-```
+For ongoing use, see [Using repo files in Claude.ai Projects](claude-projects-sync.md). It is a manual knowledge-copy workflow with no write-back.
 
----
+## Gemini CLI
 
-## Part 3: Connect the repo to claude.ai
+Use `/migrate-gemini` in Claude Code or `$migrate-gemini` in a compatible skill host. The workflow inventories configuration, proposes a mapping, and uses parity cases before writes. It does not bulk-ingest chat history.
 
-Claude Code reads this repo directly from the filesystem. claude.ai projects read from uploaded files in project knowledge. The migration step here is simple: upload your core files to each project you want to keep using.
+Current Claude Code versions may also expose `/import gemini --dry-run` as an explicit interactive alternative. Invoke it yourself in Claude Code; one custom skill cannot silently invoke another slash command. Review version/provider limitations and every proposed change. See [Gemini migration](gemini-migration.md).
 
-**At minimum, upload to each project:**
-- `CLAUDE.md` — your identity and routing instructions
-- `ROUTING.md` — the full context routing table
-- Any project-specific context or skill files relevant to that project's focus
+Use `/mine-gemini-workflows` or `$mine-gemini-workflows` only when a repeated workflow must be reconstructed from explicitly selected session recordings. It is metadata-first and keeps raw reasoning excluded.
 
-**How to upload:**
-In claude.ai, open the project → Project knowledge → Add content → Upload files.
+## Codex
 
-For ongoing sync — keeping projects current as you update the repo, using skills in claude.ai, running multiple focused projects from one source — see [claude-projects-sync.md](claude-projects-sync.md) for the full workflow.
+Codex `/import` can help migrate supported instruction and configuration files from another agent environment. It is optional and may duplicate this repository's existing `AGENTS.md` and `.agents/skills/` content. Preview and review the imported files; do not describe `/import` as a conversation or memory importer. See the official [Codex import documentation](https://developers.openai.com/codex/import).
 
----
+## Other AI systems
 
-## Checklist
+There is no universal context importer. Ask the source system for a metadata inventory first, then request exact named items. If an export is the only option, keep the raw archive outside the repository or in ignored staging, inspect it for secrets and private content, and extract only approved durable facts.
 
-- [ ] Ran the audit prompt in every existing project
-- [ ] Decided MIGRATE / SKIP for each piece of content
-- [ ] Moved all MIGRATE content into the appropriate place in this repo
-- [ ] Registered any extracted skills as slash commands in `CLAUDE.md`
-- [ ] Updated `identity/who-i-am.md` with anything that was missing
-- [ ] Uploaded the core files (`CLAUDE.md`, `ROUTING.md`, relevant project files) to each claude.ai project
-- [ ] Archived or deleted old projects you no longer need
+Unsupported or inaccessible sources should be reported as such. Do not fabricate parity, infer hidden history, or ask a user to paste an entire private archive into a chat.
 
----
+## Completion report
 
-## Common questions
+Every migration should end with:
 
-**Do I need Claude Code, or can I just use claude.ai?**
-You can use either. Claude Code can maintain the repo for you — updating files, committing changes, running slash commands. claude.ai can read from the uploaded files but can't write back to the repo. Most people use both: Claude Code for active work sessions and context maintenance, claude.ai for tasks in the browser. Install Claude Code: `npm install -g @anthropic-ai/claude-code` — full docs at https://docs.anthropic.com/en/docs/claude-code
-
-**What if a project has a lot of conversation history worth keeping?**
-Conversation history doesn't migrate cleanly. What you want is the *output* of those conversations — the decisions made, the documents produced, the strategies that emerged. Ask the project to summarize the key decisions and outputs from recent conversations, then save that summary as a reference file in the repo.
-
-**How often should I update these files?**
-Update them when something meaningfully changes — a new job, a new project, a strategy shift, a completed goal. Don't over-maintain. The `state/` files are worth touching most often; the `identity/` files should be stable for months at a time.
-
-**What's the ROUTING.md file for?**
-It's a lookup table for Claude: given a type of task, which files should it read? It reduces the chance of Claude answering a career question without reading your career context, or editing your writing without loading your voice guidelines. Update it whenever you add a new skill or project.
+- source, project, and date range inspected;
+- items selected and excluded;
+- source-to-destination map;
+- files changed and validation result;
+- conflicts or uncertainty still requiring a human decision;
+- what sensitive content was deliberately excluded; and
+- confirmation that the source remains intact and backed up.

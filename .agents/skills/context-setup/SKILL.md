@@ -15,6 +15,7 @@ Build useful context from the user's own words without silently overwriting exis
 - Show the proposed file map and summarize replacements before writing.
 - Require approval before overwriting populated files, creating broad batches of files, committing, or pushing.
 - Never request or store passwords, access tokens, recovery codes, or other credentials.
+- Before soliciting identity or project context, remind the user to keep the workspace local-only or private by default and to sanitize it deliberately before any public push.
 
 ## Procedure
 
@@ -30,6 +31,8 @@ Read:
 - `ROUTING.md`
 
 Classify each as missing, placeholder-only, or populated. Tell the user what can be filled safely and what would be updated.
+
+State that tracked identity, project, state, and session content may be sensitive; deleting it later does not remove it from git history. Ask the user to confirm that the current storage and intended collaborators are appropriate before continuing.
 
 ### 2. Gather identity context
 

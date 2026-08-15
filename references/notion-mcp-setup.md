@@ -1,60 +1,21 @@
-# Notion MCP Setup
+# Notion MCP legacy setup note
 
-Connect Claude Code to your Notion workspace using the official [notion-mcp-server](https://github.com/makenotion/notion-mcp-server).
+**Last verified:** 2026-08-15
 
-## 1. Create a Notion Integration
+This repository does not currently ship, install, authenticate, configure, or pre-approve a Notion integration. The older instructions on this page targeted the open-source `@notionhq/notion-mcp-server` package. Notion now directs new users to its hosted MCP endpoint at [`https://mcp.notion.com/mcp`](https://developers.notion.com/guides/mcp/get-started-with-mcp), and the open-source repository is no longer the recommended maintained path.
 
-1. Go to [notion.so/my-integrations](https://www.notion.so/my-integrations)
-2. Click **New integration**
-3. Name it (e.g., "Claude Code")
-4. Select your workspace
-5. Copy the **Internal Integration Secret** (starts with `ntn_`)
+The old install and credential instructions have been removed rather than presenting an uncataloged write-capable integration as ready to use.
 
-## 2. Share Pages with the Integration
+## Before a future Notion entry is added
 
-In Notion, open each page/database you want Claude to access:
-1. Click **···** (top right) → **Connections** → **Connect to** → select your integration
-2. This grants read/write access to that page and its children
+Add it to `integrations/catalog.json` first, with dated primary evidence and typed disclosures for:
 
-## 3. Install the MCP Server
+- OAuth and credential storage;
+- the exact workspace/page scope and sensitive reads;
+- create, update, move, archive, delete, comment, and publish-like effects;
+- remote writes and third-party data processing;
+- supported hosts and configuration destinations;
+- a least-privilege health check; and
+- concrete disable, revoke, and uninstall steps.
 
-```bash
-npm install -g @notionhq/notion-mcp-server
-```
-
-## 4. Configure Claude Code
-
-Add to `.claude/settings.local.json`:
-
-```json
-{
-  "mcpServers": {
-    "notion": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@notionhq/notion-mcp-server"],
-      "env": {
-        "NOTION_API_KEY": "ntn_YOUR_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-> **Security:** Don't commit your API key. Add `.claude/settings.local.json` to `.gitignore` or use an environment variable.
-
-## 5. Verify
-
-Start a Claude Code session and check that Notion tools are available:
-- `notion_search` — search pages and databases
-- `notion_retrieve_page` — read a page
-- `notion_query_database` — query a database
-- `notion_create_page` — create pages
-- `notion_update_page` — update page properties
-
-## Common Uses
-
-- **Meeting notes:** Search and read meeting notes from Notion databases
-- **Decision docs:** Read and reference internal decision documents
-- **Task tracking:** Query project databases for status updates
-- **Knowledge base:** Search internal docs for context during work sessions
+Then generate `references/integrations.md`, review the exact configuration diff, and enable it only after explicit approval. Until that catalog entry exists, follow the [integration chooser](../docs/integrations-guide.md) for the currently reviewed options.

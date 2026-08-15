@@ -1,10 +1,12 @@
 # Setup Prompts
 
-Paste these prompts to build out your context files interactively. Claude will ask you questions and write the files directly — no manual editing required.
+Use these prompts when the native `/setup` or `$context-setup` lifecycle is unavailable, or when working in a browser host that cannot edit the repository. The agent asks questions and drafts context; you still review every file before saving or committing it.
 
-**In Claude Code:** Run from this repo directory. Claude reads and writes files directly, commits changes, and maintains the repo for you. This is the recommended path.
+**In Claude Code:** Prefer `/setup` from the repository directory. It reads the portable workflow, proposes a file map, and waits before replacing populated content. It never assumes a commit or push.
 
-**In claude.ai:** These prompts work there too — Claude will generate the content, but you'll need to copy it into the files manually since claude.ai can't write to your local filesystem.
+**In Codex:** Prefer `$context-setup` from the repository directory. It uses the same portable workflow and writes the same shared state.
+
+**In Claude.ai:** These prompts can draft the content, but copy only reviewed output into the repository. Do not paste credentials, private exports, or context that every repository collaborator should not see.
 
 Run them in order the first time. After that, use them whenever you need to refresh a section.
 
@@ -104,10 +106,10 @@ After I've answered everything:
 1. Create a folder at `projects/[project-name]/`
 2. Write `projects/[project-name]/context.md` with the permanent background
 3. Write `projects/[project-name]/strategy.md` with goals and current focus
-4. For the top 1-2 recurring tasks I mentioned, create a basic skill file at `projects/[project-name]/skills/[task-name]/SKILL.md` — use the musician social post skill as a reference for structure
+4. For the top 1-2 recurring tasks I mentioned, create a portable skill at `.agents/skills/[project-name]-[task-name]/SKILL.md`. Keep project facts in the project files and reference them from the skill instead of copying them.
 5. Add a line to ROUTING.md under "Project tasks" pointing to the new context file
-6. Ask me if I want a slash command for any of the skills, and if yes, create the command file and add it to the slash commands table in CLAUDE.md
-7. Update CHANGELOG.md with what was added
+6. If I use Claude Code and want a slash command for a portable skill, offer a thin adapter in `.claude/commands/`; do not duplicate the workflow body
+7. Run `bash scripts/validate-all.sh`, show me the changed-file list, and wait before committing
 8. Tell me what you built and what to fill in next
 ```
 
@@ -133,7 +135,8 @@ Update both files with my answers. Update the dates. Keep it terse — these fil
 
 ## Tips
 
-- **Run these in Claude Code** from inside this repo directory — Claude will read and write files directly
+- **Prefer the native lifecycle** — `/setup` in Claude Code or `$context-setup` in Codex keeps the workflow and safety gates current
+- **Review repository visibility first** — identity and project context can be sensitive even when it contains no credentials
 - **Your words beat polished prose** — the prompts tell Claude to use your exact answers. Don't overthink your responses.
 - **Re-run anytime** — these aren't one-time setup. Run Prompt 2 or 3 again when a project evolves significantly. Run Prompt 4 every Monday.
 - **Add your own** — once you see the pattern, you can write prompts for anything. A prompt that builds your weekly review, drafts a specific type of email, or updates a specific context file on a schedule.

@@ -99,12 +99,20 @@ CURRENT_REMOTE=$(git remote get-url origin 2>/dev/null || echo "")
 
 if echo "$CURRENT_REMOTE" | grep -q "claude-context-os"; then
   echo "  Your git remote still points to the template repo."
-  echo "  You'll want your own repo so you can push your context."
+  echo "  A remote is optional. Keep this workspace local-only or use a private"
+  echo "  remote unless every tracked identity, project, state, and session file"
+  echo "  is deliberately safe to publish. Deleting a file later does not remove"
+  echo "  it from git history. Commit and push always require separate review."
   echo ""
   read -rp "  Your repo URL (or press Enter to skip): " NEW_REMOTE
   if [ -n "$NEW_REMOTE" ]; then
-    git remote set-url origin "$NEW_REMOTE"
-    echo "  → Remote updated to $NEW_REMOTE"
+    echo "  Proposed remote: $NEW_REMOTE"
+    if prompt_yn "  Have you verified its visibility and intended audience?" "n"; then
+      git remote set-url origin "$NEW_REMOTE"
+      echo "  → Remote updated to $NEW_REMOTE (nothing was pushed)"
+    else
+      echo "  → Remote unchanged"
+    fi
   else
     echo "  → Skipped. Run 'git remote set-url origin <your-repo>' later."
   fi
@@ -189,13 +197,8 @@ else
   echo "    Missing: python3 — required by safety hooks and Gemini workflow migration"
 fi
 
-if command -v gws &>/dev/null; then
-  echo "    Found: gws (Google Workspace CLI)"
-else
-  echo "    Optional: gws — see references/gws-mcp-setup.md for Google Workspace integration"
-fi
-
-echo "    Optional add-ons: see references/integrations.md (nothing is installed automatically)"
+echo "    Optional add-ons: see docs/integrations-guide.md (nothing is installed automatically)"
+echo "    Optional Claude memory: see docs/auto-memory.md (nothing is configured automatically)"
 
 # ── 7. Initial commit ───────────────────────────────────────────────────────
 
@@ -253,7 +256,7 @@ case "$SELECTED_AGENT" in
     printf '  1. cd %q && claude\n' "$REPO_ROOT"
     echo "  2. Type: /setup"
     echo "     Claude will interview you and build your context files."
-    echo "     (~10 minutes, fully conversational)"
+    echo "     Import and integration choices remain separate, review-gated steps."
     echo ""
     if [ "$CLAUDE_FOUND" = true ] && prompt_yn "  Launch Claude Code now?" "y"; then
       cd "$REPO_ROOT"
@@ -264,7 +267,7 @@ case "$SELECTED_AGENT" in
     printf '  1. cd %q && codex\n' "$REPO_ROOT"
     echo '  2. Type: $context-setup'
     echo "     Codex will interview you and build your context files."
-    echo "     See docs/codex-onboarding.md for the session loop and limitations."
+    echo "     See docs/getting-started.md for migration, integrations, and host limits."
     echo ""
     if [ "$CODEX_FOUND" = true ] && prompt_yn "  Launch Codex now?" "y"; then
       cd "$REPO_ROOT"
@@ -275,6 +278,7 @@ case "$SELECTED_AGENT" in
     printf '  Claude Code: cd %q && claude, then run /setup\n' "$REPO_ROOT"
     printf '  Codex:       cd %q && codex, then run $context-setup\n' "$REPO_ROOT"
     echo "  claude.ai:   open SETUP-PROMPTS.md and paste the prompts there"
+    echo "  Guide:       docs/getting-started.md"
     echo ""
     ;;
 esac

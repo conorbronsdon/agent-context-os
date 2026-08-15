@@ -16,12 +16,7 @@ EXPECTED = {
     "policy": {"allow_implicit_invocation"},
 }
 COMMAND_KEY = re.compile(r"^[a-z][a-z0-9-]*$")
-START_TOOLS = (
-    "Read, Glob, mcp__google-workspace__calendar_events_list, "
-    "mcp__google-workspace__gmail_users_messages_list, "
-    "mcp__google-workspace__drive_files_list, "
-    "mcp__google-workspace__sheets_spreadsheets_values_get"
-)
+START_TOOLS = "Read, Glob"
 
 
 class MetadataError(ValueError):

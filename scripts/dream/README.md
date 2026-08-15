@@ -1,6 +1,6 @@
-# /dream — autonomous memory curator
+# /dream — on-demand memory curator
 
-Substrate for curator passes against `~/.claude/projects/<encoded-cwd>/memory/`.
+Substrate for curator passes against the explicit local directory recorded in `.context-os/memory-directory`. See `docs/auto-memory.md`; never infer the directory from `pwd`.
 
 **Full architectural rationale: `docs/dream-architecture.md`.**
 
@@ -25,11 +25,10 @@ Curator catalog (build order):
 
 ## First-time setup
 
-The memory dir is created automatically by Claude Code, but the git repo on it is not. Initialize it once:
+After using `/memory` and completing the explicit directory contract in `docs/auto-memory.md`, initialize a local git repository there once:
 
 ```bash
-PROJECT_KEY=$(pwd | sed 's|[:\\/]|-|g')
-MEMORY_DIR="$HOME/.claude/projects/$PROJECT_KEY/memory"
+MEMORY_DIR=$(sed -n '1p' .context-os/memory-directory)
 mkdir -p "$MEMORY_DIR/archive"        # retired memories move here
 cd "$MEMORY_DIR"
 touch archive/.gitkeep                # git does not track empty dirs
@@ -49,8 +48,8 @@ No remote. The memory dir often contains personal or confidential context.
 
 - **Curator prompts:** `prompts/{name}.md` here
 - **Slash commands:** `.claude/commands/dream.md` + `.claude/commands/dream-apply.md` in the repo root
-- **Proposal artifacts:** `~/.claude/projects/<encoded-cwd>/memory/.dreams/{ISO}/`
-- **Memory git repo:** `~/.claude/projects/<encoded-cwd>/memory/.git/` (local-only, no remote)
+- **Proposal artifacts:** `<configured-memory-directory>/.dreams/{ISO}/`
+- **Memory git repo:** `<configured-memory-directory>/.git/` (local-only, no remote)
 
 ## Adding a new curator
 
@@ -61,7 +60,7 @@ No remote. The memory dir often contains personal or confidential context.
 
 ## Automation & backup (optional)
 
-The curator never auto-applies — it only produces a proposal artifact, so automating the *propose* step is safe. The apply step always stays human-gated.
+The curator never auto-applies. A run still writes and commits proposal artifacts, so scheduling the *propose* step is an advanced external-write choice, not a no-op. The apply step always stays human-gated.
 
 - **Nudge:** a `SessionStart` hook that warns when memory is stale-curated (days since the last `.dreams/` artifact) is the lowest-risk reminder. It surfaces; it never runs a curator.
 - **Unattended (advanced):** schedule a headless run on your platform's scheduler. Two gotchas worth knowing: (1) `claude -p "/dream rot"` does **not** invoke the slash command — print mode treats it as literal text, so pass a plain prompt that points Claude at `.claude/commands/dream.md` (the command file is the spec). (2) Run with `--permission-mode dontAsk` and an `--allowedTools` allowlist that includes the `Bash` tool wholesale (the command issues compound shell commands that prefix-pattern allowlists can't match) — never `bypassPermissions` for an unattended loop. Gate the run so it doesn't collide with an interactive session writing the same memory git.

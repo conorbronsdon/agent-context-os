@@ -1,4 +1,4 @@
-# Dream — autonomous memory curator
+# Dream — on-demand memory curator
 
 **Status:** v0.3. Curators: rot (content), merge + split + lint (structural).
 
@@ -13,7 +13,9 @@ Memory accumulates faster than humans review it. The only forcing functions are 
 5. **Adherence drift** — sessions ignoring rules they should have followed
 6. **Shape drift** — files that bundle unrelated concerns, or several files that say the same thing
 
-These are LLM-shaped tasks: pattern detection across 7-30 days of episodic memory, compression into semantic rules, contradiction detection, structural consolidation.
+The shipped curators cover rot, merge, split, and lint. Pattern, standalone contradiction, untapped-work, and audit passes below are roadmap designs rather than current capabilities.
+
+These are LLM-shaped tasks: comparing durable memory with current evidence, contradiction detection inside lint, and structural consolidation.
 
 The bet: compounding pattern-capture over months beats waiting for the perfect memory product. Curator file shapes (markdown + JSON proposals) stay portable even if the runner gets thrown away.
 
@@ -64,7 +66,7 @@ Tradeoff: can't run truly unattended without a headless run. See **Automation** 
 
 ### Why git on the memory dir
 
-Three load-bearing benefits once a curator runs autonomously:
+Three load-bearing benefits once a curator writes proposal artifacts:
 
 1. **Diff before/after.** "What changed in this dream pass" is the most-asked question after every run.
 2. **Revert path.** A bad accept-all on `/dream-apply` is one `git revert` away.
@@ -75,7 +77,7 @@ Three load-bearing benefits once a curator runs autonomously:
 ### Storage layout
 
 ```
-~/.claude/projects/<encoded-cwd>/memory/
+<configured-memory-directory>/
 ├── .git/                   ← local-only repo
 ├── MEMORY.md               ← index (cap 100 lines)
 ├── ARCHIVE.md              ← tombstone rows, one per retired file
@@ -215,5 +217,5 @@ Three distinct failure modes; only one needs new infra.
 | `scripts/dream/prompts/split.md` | Split curator prompt body (structural class). |
 | `.claude/commands/dream.md` | `/dream {curator}` slash command. Default: `rot`. |
 | `.claude/commands/dream-apply.md` | `/dream-apply {timestamp}` slash command. |
-| `~/.claude/projects/<encoded-cwd>/memory/.git/` | Local-only repo for memory dir. Run `git init` there on first use. |
-| `~/.claude/projects/<encoded-cwd>/memory/.dreams/` | Per-pass artifacts. Tracked. |
+| `<configured-memory-directory>/.git/` | Local-only repo for memory dir. Run `git init` there on first use. |
+| `<configured-memory-directory>/.dreams/` | Per-pass artifacts. Tracked. |

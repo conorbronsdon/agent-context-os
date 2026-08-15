@@ -1,7 +1,8 @@
 ---
 name: today
 description: Morning heartbeat — briefing, deadline check, and staleness scan. Run at the start of each day or after a 12+ hour gap
-allowed-tools: Read, Write, Bash, Glob, mcp__google-workspace__*
+allowed-tools: Read, Write, Bash, Glob
+disable-model-invocation: true
 x-source: skills-sync/commands/today.md
 x-source-version: 7ae9852
 ---
@@ -10,7 +11,7 @@ x-source-version: 7ae9852
 
 Lightweight daily check-in that catches staleness, surfaces deadlines, and proposes state updates — including gaps left by sessions that closed without `/end`. Run at the start of each day or after any long gap between sessions. Designed to finish in under 60 seconds — if it's slow, it won't get used.
 
-**Invocation:** user-timed. A home that packages this core as a skill should set `disable-model-invocation: true` — the heartbeat is timed by the user (mornings, or after a gap), and the flag keeps the description out of ambient context.
+**Invocation:** user-timed and explicitly user-invoked. The heartbeat writes its audit log, so it is not an ambient read-only helper.
 
 ## Configuration
 
@@ -55,8 +56,8 @@ List proposed updates. **Do not auto-update. Wait for approval.**
 
 This step reconciles *state files* against what actually shipped. It is not memory curation — see the boundary note at the bottom.
 
-### 7. Pull live data (if MCP available)
-Same as `/start` — calendar for the next 7 days, unread email count. Skip if MCP isn't connected.
+### 7. Optional live data
+This template ships without a live-data adapter or pre-approved external tools. Skip this step unless the user has separately enabled a reviewed read-only integration and explicitly asks to include it. Never authenticate, expand scopes, or call write-capable tools as part of the heartbeat.
 
 ### 8. Deliver the heartbeat
 
@@ -84,7 +85,7 @@ STALE ITEMS:
 STATE GAPS:
 - [proposed update]
 
-[Calendar highlights, if MCP available]
+[Scoped live-data highlights, only when explicitly requested]
 ```
 
 Skip any section that's clean — if everything's fresh and nothing's due, say so in one line.

@@ -1,10 +1,12 @@
 # Google Workspace References
 
-Store IDs and references for Google Workspace resources you want Claude to query during sessions. The `/start` command reads this file when the gws MCP server is connected.
+Legacy placeholder retained so existing users do not lose locally recorded IDs. The current template does not read this file or ship a Google Workspace adapter. See `references/gws-mcp-setup.md` before connecting a replacement.
+
+Treat every identifier below as sensitive metadata. Do not populate or commit it in a repository whose readers should not know the referenced accounts or resources.
 
 ## How to use
 
-Add a line for each resource you want to query. Then update `.claude/commands/start.md` to reference the relevant IDs.
+If you adopt a separately reviewed integration, add only the identifiers it needs and keep the integration's permissions narrower than the account as a whole.
 
 ## Sheets
 
