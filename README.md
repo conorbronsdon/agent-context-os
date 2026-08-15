@@ -129,7 +129,7 @@ scripts/                          # Setup, validation, repo map generation
 scripts/dream/                    # Curator prompts + how-to for the /dream substrate
 docs/                             # Architecture guides — auto-memory, dream, migration, safety
 references/                       # Integration setup (Google Workspace, Notion)
-integrations/                     # Validated catalog of opt-in add-ons and risk boundaries
+integrations/                     # Machine-checked catalog of opt-in add-ons and risk boundaries
 .claude/hooks/                    # Session start + SSOT guard + parallel-session guards
 .github/                          # CI validation + PR template
 
@@ -193,9 +193,9 @@ Both hooks no-op until you list a repo basename in `.claude/hooks/guarded-repos.
 
 ## Optional integrations
 
-The generated [optional integrations catalog](references/integrations.md) links compatible add-ons without installing, activating, authenticating, or expanding permissions for any of them. Its source of truth is [`integrations/catalog.json`](integrations/catalog.json), enforced by `scripts/integrations.py`; CI rejects missing safety fields, contradictory capability claims, unsafe source metadata, and documentation drift. `listed` and `experimental` entries are leads, not verified endorsements.
+The generated [optional integrations catalog](references/integrations.md) links compatible add-ons without installing, activating, authenticating, or expanding permissions for any of them. Its source of truth is [`integrations/catalog.json`](integrations/catalog.json), enforced by `scripts/integrations.py`; CI rejects missing typed safety gates, contradictory declared capabilities, unsafe source metadata, empty evidence, and documentation drift. This is structural and semantic validation of the catalog entry—not proof that an upstream source remains correct. Follow each entry's dated evidence links before enabling it. `listed` and `experimental` entries are leads, not endorsements.
 
-Current catalog entries include portable skills and workspace add-ons plus reviewed paths for [Tolaria](https://github.com/refactoringhq/tolaria), [Obsidian CLI](https://obsidian.md/help/cli), [Beads for Gemini CLI](https://beads.gascity.com/integrations/gemini), and [Granola MCP](https://docs.granola.ai/help-center/sharing/integrations/mcp). Each entry distinguishes local data, credentials, remote sync, overwrite, publish, destructive, and transcript boundaries where they apply.
+Current catalog entries include portable skills and workspace add-ons plus reviewed paths for [Tolaria MCP](https://github.com/refactoringhq/tolaria), [Obsidian CLI](https://obsidian.md/help/cli), [Beads for Gemini CLI](https://beads.gascity.com/integrations/gemini), and [Granola MCP](https://docs.granola.ai/help-center/sharing/integrations/mcp). Each entry distinguishes sensitive reads, local writes, remote writes, OAuth, overwrite, deletion, arbitrary execution, publish, and destructive boundaries where they apply.
 
 **Google Workspace MCP** — lets Claude read your calendar, email, Drive, and Sheets mid-session:
 

@@ -4,7 +4,7 @@
 
 ### Added
 - A validated, opt-in integrations catalog with generated documentation, explicit credential/data/side-effect boundaries, and no automatic installation or activation. Initial links cover Agent Skills, Agent Workspace, AI Tools for Creators, and Substack MCP.
-- Reviewed optional entries for Tolaria, the official Obsidian CLI, Beads for Gemini CLI, and Granola's hosted MCP, with conservative overwrite, publish, destructive, OAuth, remote-sync, and transcript gates.
+- Reviewed optional entries for Tolaria MCP, the official Obsidian CLI, Beads for Gemini CLI, and Granola's hosted MCP, with conservative sensitive-read, remote-write, overwrite, deletion, arbitrary-execution, publish, destructive, OAuth, retention, residency, and transcript gates.
 
 ### Fixed
 - Moved project slash commands from the undiscovered root `commands/` directory to `.claude/commands/`; moved the native meta-skill to `.claude/skills/`; renamed `/context` to `/find-context` to avoid the Claude Code built-in.
@@ -22,6 +22,7 @@
 - `.claude/commands/dream-apply.md` — the moved file's own outbound links were never repointed, so every archived file's references silently broke on the move.
 
 ### Changed
+- Integration catalog schema v2 adds typed safety capabilities and matching confirmations/risk tags, structured uninstall data-loss declarations, non-empty auditable evidence links, a remote-write/sensitive-read summary, and hostile regression cases. CI validates internal claims and generated documentation; it does not certify upstream source truth.
 - CI now runs one aggregate validator covering command discovery/name parity, links, shell syntax, hook behavior, JSON, and Python unit tests.
 - `.claude/commands/{start,end,update,today,reconcile,recover}.md` + `.claude/skills/skill-creator/SKILL.md` — republished from the shared core after it ingested its standalone upstreams (core @ `7ae9852`). What rides in: a `workspace.yaml` config layer with per-file staleness thresholds (`/start`, `/update`, `/today`), a decision log with a rejected-alternatives column and a git safety check (`/end`), "prefer evidence of intent over recency" (`/reconcile`), "recent activity means *unknown*, not orphaned" plus a working dirty-worktree removal path (`/recover`), and a never-silently-clobber-an-existing-`SKILL.md` guard (`skill-creator`). `x-source-version` restamped on all seven; `recover` keeps its downstream `allowed-tools` declaration. The republished `skill-creator` links a pinned frontmatter-spec snapshot, so `.claude/skills/skill-creator/references/claude-code-frontmatter.md` now ships alongside it (verbatim from the canonical agent-skill-builder copy).
 - `state/decisions.md` — starter rewritten from a `## [DATE]` prose template ("Newest first") to the four-column table `/end` step 5 actually appends (`| Date | Decision | Context / rationale | Rejected alternatives |`, oldest first). Same failure class #12 fixed for `content/log.md`: the starter and the command described two different formats, so anyone following the starter produced a log the command's table append would then break.

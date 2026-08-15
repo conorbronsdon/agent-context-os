@@ -15,39 +15,78 @@ class IntegrationCatalogTests(unittest.TestCase):
     def setUp(self) -> None:
         self.catalog = MODULE.load_catalog()
 
+    def entry(self, integration_id: str) -> dict:
+        return next(item for item in self.catalog["integrations"] if item["id"] == integration_id)
+
     def assert_invalid(self, mutate) -> None:
         catalog = copy.deepcopy(self.catalog)
         mutate(catalog)
         with self.assertRaises(MODULE.CatalogError):
             MODULE.validate_catalog(catalog)
 
-    def test_catalog_is_sorted_only_at_render_time_and_has_unique_ids(self) -> None:
+    def test_catalog_has_expected_entries_and_visible_safety_columns(self) -> None:
         rendered = MODULE.render_reference(self.catalog)
+        self.assertEqual(self.catalog["schema_version"], 2)
         self.assertEqual(len(self.catalog["integrations"]), 8)
-        self.assertIn("Substack MCP", rendered)
+        self.assertIn("Remote writes", rendered)
+        self.assertIn("Sensitive reads", rendered)
+        self.assertIn("Typed safety signals", rendered)
+        self.assertIn("Required confirmation gates", rendered)
         self.assertIn("immediate public publish action", rendered)
 
-    def test_issue_19_entries_have_expected_high_risk_gates(self) -> None:
-        entries = {item["id"]: item for item in self.catalog["integrations"]}
-        self.assertTrue(entries["tolaria"]["capabilities"]["destructive"])
-        self.assertIn("overwrite-capable", entries["tolaria"]["risk_tags"])
-        self.assertTrue(entries["obsidian"]["capabilities"]["publish"])
-        self.assertIn("arbitrary-eval", entries["obsidian"]["risk_tags"])
-        self.assertEqual(entries["beads-gemini"]["supported_agents"], ["gemini_cli"])
-        self.assertIn("destructive", entries["beads-gemini"]["confirmation"]["required_for"])
-        self.assertFalse(entries["granola-mcp"]["capabilities"]["write"])
-        self.assertEqual(entries["granola-mcp"]["data_boundary"]["writes"], [])
+    def test_issue_19_entries_have_typed_high_risk_gates(self) -> None:
+        tol = self.entry("tolaria")
+        self.assertEqual(tol["name"], "Tolaria MCP")
+        self.assertNotIn("codex", tol["supported_agents"])
+        self.assertTrue(tol["capabilities"]["sensitive_read"])
+        self.assertTrue(tol["capabilities"]["overwrite"])
+        self.assertFalse(tol["capabilities"]["remote_write"])
+        self.assertIn("AutoGit", " ".join(tol["capabilities"]["details"]))
+
+        obsidian = self.entry("obsidian")
+        for capability in ("sensitive_read", "remote_write", "publish", "overwrite", "delete", "arbitrary_execution", "destructive"):
+            self.assertTrue(obsidian["capabilities"][capability])
+        self.assertIn("An exact command allowlist enforced by the calling harness", obsidian["installation"]["prerequisites"])
+        self.assertIn("No enforcement wrapper ships here", " ".join(obsidian["capabilities"]["details"]))
+
+        beads = self.entry("beads-gemini")
+        self.assertEqual(beads["supported_agents"], ["gemini_cli"])
+        self.assertTrue(beads["capabilities"]["remote_write"])
+        self.assertTrue(beads["capabilities"]["overwrite"])
+        self.assertIn("write_remote", beads["confirmation"]["required_for"])
+        self.assertIn("--force", " ".join(beads["capabilities"]["details"]))
+        self.assertIn("--discard-remote", " ".join(beads["capabilities"]["details"]))
+
+        granola = self.entry("granola-mcp")
+        self.assertTrue(granola["capabilities"]["sensitive_read"])
+        self.assertTrue(granola["capabilities"]["oauth"])
+        self.assertFalse(granola["capabilities"]["write"])
+        details = " ".join(granola["capabilities"]["details"])
+        for boundary in ("indefinitely", "United States", "HIPAA", "FERPA", "consent", "30 days"):
+            self.assertIn(boundary, details)
+
+    def test_verified_entries_have_auditable_evidence(self) -> None:
+        for item in self.catalog["integrations"]:
+            self.assertGreaterEqual(len(item["evidence"]), 1)
+            self.assertTrue(all(url.startswith("https://") for url in item["evidence"]))
+        self.assertGreaterEqual(len(self.entry("tolaria")["evidence"]), 3)
+        self.assertGreaterEqual(len(self.entry("granola-mcp")["evidence"]), 3)
 
     def test_generated_reference_matches_catalog(self) -> None:
         expected = MODULE.render_reference(self.catalog)
         self.assertEqual((ROOT / "references" / "integrations.md").read_text(), expected)
 
-    def test_agent_skills_discloses_replacement_and_removal(self) -> None:
-        item = next(item for item in self.catalog["integrations"] if item["id"] == "agent-skills")
+    def test_empty_catalog_and_old_schema_are_rejected(self) -> None:
+        self.assert_invalid(lambda catalog: catalog.update({"integrations": []}))
+        self.assert_invalid(lambda catalog: catalog.update({"schema_version": 1}))
+
+    def test_agent_skills_discloses_replacement_removal_and_uninstall_loss(self) -> None:
+        item = self.entry("agent-skills")
         self.assertTrue(item["capabilities"]["destructive"])
+        self.assertTrue(item["capabilities"]["overwrite"])
+        self.assertTrue(item["capabilities"]["delete"])
         self.assertIn("destructive", item["confirmation"]["required_for"])
-        self.assertIn("replacement", item["risk_tags"])
-        self.assertIn("removal", item["risk_tags"])
+        self.assertTrue(item["uninstall"]["removes_user_data"])
 
     def test_duplicate_ids_are_rejected(self) -> None:
         self.assert_invalid(
@@ -58,9 +97,7 @@ class IntegrationCatalogTests(unittest.TestCase):
 
     def test_duplicate_normalized_names_and_source_urls_are_rejected(self) -> None:
         self.assert_invalid(
-            lambda catalog: catalog["integrations"][1].update(
-                {"name": "Ａgent Ｓkills"}
-            )
+            lambda catalog: catalog["integrations"][1].update({"name": "Ａgent Ｓkills"})
         )
         self.assert_invalid(
             lambda catalog: catalog["integrations"][1].update(
@@ -76,33 +113,13 @@ class IntegrationCatalogTests(unittest.TestCase):
 
     def test_unknown_fields_and_invalid_urls_are_rejected(self) -> None:
         self.assert_invalid(lambda catalog: catalog["integrations"][0].update({"surprise": True}))
-        self.assert_invalid(
-            lambda catalog: catalog["integrations"][0].update({"source_url": "http://example.com"})
-        )
-        self.assert_invalid(
-            lambda catalog: catalog["integrations"][0].update({"source_url": "https://"})
-        )
-        self.assert_invalid(
-            lambda catalog: catalog["integrations"][0].update(
-                {"source_url": "https://example.com/ok)\n| injected |"}
-            )
-        )
-        self.assert_invalid(
-            lambda catalog: catalog["integrations"][0].update(
-                {"source_url": "https://example.com:not-a-port/source"}
-            )
-        )
-        self.assert_invalid(
-            lambda catalog: catalog["integrations"][0].update(
-                {"source_url": "https://[::1"}
-            )
-        )
-        self.assert_invalid(
-            lambda catalog: catalog["integrations"][0].update(
-                {"source_url": "https://example.com／evil"}
-            )
-        )
         for source_url in (
+            "http://example.com",
+            "https://",
+            "https://example.com/ok)\n| injected |",
+            "https://example.com:not-a-port/source",
+            "https://[::1",
+            "https://example.com／evil",
             "https://example.com/path|forged",
             "https://example.com/[forged]",
             "https://example.com/path?utm=1",
@@ -113,25 +130,47 @@ class IntegrationCatalogTests(unittest.TestCase):
                     {"source_url": value}
                 )
             )
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][0].update({"evidence": []})
+        )
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][0].update(
+                {"evidence": ["https://example.com/ok|forged"]}
+            )
+        )
 
     def test_unhashable_enum_values_fail_as_catalog_errors(self) -> None:
+        self.assert_invalid(lambda catalog: catalog["integrations"][0].update({"kind": []}))
+        self.assert_invalid(lambda catalog: catalog["integrations"][0].update({"maturity": {}}))
         self.assert_invalid(
-            lambda catalog: catalog["integrations"][0].update({"kind": []})
+            lambda catalog: catalog["integrations"][0]["installation"].update({"scope": []})
         )
-        self.assert_invalid(
-            lambda catalog: catalog["integrations"][0].update({"maturity": {}})
-        )
+
+    def test_auto_install_and_boundary_parity_are_rejected(self) -> None:
         self.assert_invalid(
             lambda catalog: catalog["integrations"][0]["installation"].update(
-                {"scope": []}
+                {"automatic": True}
+            )
+        )
+        self.assert_invalid(
+            lambda catalog: next(
+                item for item in catalog["integrations"] if item["id"] == "granola-mcp"
+            )["data_boundary"].update({"reads": []})
+        )
+        self.assert_invalid(
+            lambda catalog: next(
+                item for item in catalog["integrations"] if item["id"] == "beads-gemini"
+            )["capabilities"].update({"write": False})
+        )
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][0]["capabilities"].update(
+                {"destructive": 1}
             )
         )
 
     def test_markdown_table_and_control_line_injection_is_rejected(self) -> None:
         self.assert_invalid(
-            lambda catalog: catalog["integrations"][0].update(
-                {"name": "Injected | Integration"}
-            )
+            lambda catalog: catalog["integrations"][0].update({"name": "Injected | Integration"})
         )
         catalog = copy.deepcopy(self.catalog)
         catalog["integrations"][0]["summary"] = "Uses *emphasis* and [links]"
@@ -156,44 +195,93 @@ class IntegrationCatalogTests(unittest.TestCase):
                 )
             )
 
-    def test_auto_install_and_missing_risk_boundaries_are_rejected(self) -> None:
-        self.assert_invalid(
-            lambda catalog: catalog["integrations"][0]["installation"].update({"automatic": True})
+    def test_capability_confirmation_and_risk_tags_are_required(self) -> None:
+        cases = (
+            ("granola-mcp", "sensitive_read", "read_sensitive", "sensitive-read"),
+            ("granola-mcp", "oauth", "oauth", "oauth"),
+            ("beads-gemini", "remote_write", "write_remote", "remote-write"),
+            ("tolaria", "overwrite", "overwrite", "overwrite-capable"),
+            ("obsidian", "delete", "delete", "delete-capable"),
+            ("obsidian", "arbitrary_execution", "arbitrary_execution", "arbitrary-execution"),
         )
-        self.assert_invalid(
-            lambda catalog: catalog["integrations"][3]["confirmation"].update(
-                {"required_for": ["credential_setup", "external_install", "write"]}
+        for integration_id, capability, gate, tag in cases:
+            self.assert_invalid(
+                lambda catalog, item_id=integration_id, field=capability: next(
+                    item for item in catalog["integrations"] if item["id"] == item_id
+                )["capabilities"].update({field: False})
             )
-        )
+            self.assert_invalid(
+                lambda catalog, item_id=integration_id, required=gate: next(
+                    item for item in catalog["integrations"] if item["id"] == item_id
+                )["confirmation"].update(
+                    {
+                        "required_for": [
+                            value
+                            for value in next(
+                                item for item in catalog["integrations"] if item["id"] == item_id
+                            )["confirmation"]["required_for"]
+                            if value != required
+                        ]
+                    }
+                )
+            )
+            self.assert_invalid(
+                lambda catalog, item_id=integration_id, risk_tag=tag: next(
+                    item for item in catalog["integrations"] if item["id"] == item_id
+                ).update(
+                    {
+                        "risk_tags": [
+                            value
+                            for value in next(
+                                item for item in catalog["integrations"] if item["id"] == item_id
+                            )["risk_tags"]
+                            if value != risk_tag
+                        ]
+                    }
+                )
+            )
 
-    def test_capability_and_data_boundary_contradictions_are_rejected(self) -> None:
+    def test_capability_relationships_are_enforced(self) -> None:
+        self.assert_invalid(
+            lambda catalog: next(
+                item for item in catalog["integrations"] if item["id"] == "substack-mcp"
+            )["capabilities"].update({"remote_write": False})
+        )
+        self.assert_invalid(
+            lambda catalog: next(
+                item for item in catalog["integrations"] if item["id"] == "obsidian"
+            )["capabilities"].update({"destructive": False})
+        )
+        self.assert_invalid(
+            lambda catalog: next(
+                item for item in catalog["integrations"] if item["id"] == "granola-mcp"
+            )["data_boundary"].update({"credentials": []})
+        )
         self.assert_invalid(
             lambda catalog: catalog["integrations"][2]["data_boundary"].update(
                 {"writes": ["Deletes all project files"]}
             )
         )
+
+    def test_uninstall_data_loss_is_typed(self) -> None:
         self.assert_invalid(
-            lambda catalog: catalog["integrations"][3]["capabilities"].update(
-                {"write": False}
-            )
+            lambda catalog: next(
+                item for item in catalog["integrations"] if item["id"] == "granola-mcp"
+            )["uninstall"].update({"instructions": "Delete all project files"})
         )
         self.assert_invalid(
-            lambda catalog: catalog["integrations"][3]["data_boundary"].update(
-                {"reads": []}
-            )
+            lambda catalog: next(
+                item for item in catalog["integrations"] if item["id"] == "granola-mcp"
+            )["uninstall"].update({"removes_user_data": True})
         )
 
     def test_future_verification_dates_are_rejected(self) -> None:
         self.assert_invalid(
-            lambda catalog: catalog["integrations"][0].update(
-                {"last_verified": "9999-12-31"}
-            )
+            lambda catalog: catalog["integrations"][0].update({"last_verified": "9999-12-31"})
         )
 
     def test_maturity_is_not_upgraded_by_rendering(self) -> None:
-        item = next(
-            item for item in self.catalog["integrations"] if item["id"] == "ai-tools-for-creators"
-        )
+        item = self.entry("ai-tools-for-creators")
         self.assertEqual(item["maturity"], "listed")
         self.assertIn("listed", MODULE.render_reference(self.catalog))
 

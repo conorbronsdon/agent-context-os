@@ -3,16 +3,16 @@
 
 These add-ons are **references, not bundled dependencies**. Setup does not install, activate, authenticate, or expand permissions for any entry. Review the current source, data boundary, and side effects before opting in. `verified` means the catalog metadata was checked against the linked source on the stated date; it is not a live authentication or end-to-end test. `listed` and `experimental` are leads, not endorsements.
 
-| Integration | Kind | Maturity | Writes | Publishes | Destructive | Last verified |
-|---|---|---|---:|---:|---:|---|
-| [Agent Skills](https://github.com/conorbronsdon/agent-skills) | `skill_catalog` | verified | Yes | No | Yes | 2026-08-15 |
-| [Agent Workspace](https://github.com/conorbronsdon/agent-workspace) | `workspace_template` | verified | Yes | No | Yes | 2026-08-15 |
-| [AI Tools for Creators](https://github.com/conorbronsdon/ai-tools-for-creators) | `resource_catalog` | listed | No | No | No | 2026-08-15 |
-| [Beads for Gemini CLI](https://beads.gascity.com/integrations/gemini) | `agent_extension` | verified | Yes | No | Yes | 2026-08-15 |
-| [Granola MCP](https://docs.granola.ai/help-center/sharing/integrations/mcp) | `mcp_server` | verified | No | No | No | 2026-08-15 |
-| [Obsidian CLI](https://obsidian.md/help/cli) | `editor_guide` | verified | Yes | Yes | Yes | 2026-08-15 |
-| [Substack MCP](https://github.com/conorbronsdon/substack-mcp) | `mcp_server` | verified | Yes | Yes | No | 2026-08-15 |
-| [Tolaria](https://github.com/refactoringhq/tolaria) | `local_workspace` | verified | Yes | No | Yes | 2026-08-15 |
+| Integration | Kind | Maturity | Writes | Remote writes | Publishes | Sensitive reads | Destructive | Last verified |
+|---|---|---|---:|---:|---:|---:|---:|---|
+| [Agent Skills](https://github.com/conorbronsdon/agent-skills) | `skill_catalog` | verified | Yes | No | No | No | Yes | 2026-08-15 |
+| [Agent Workspace](https://github.com/conorbronsdon/agent-workspace) | `workspace_template` | verified | Yes | No | No | No | Yes | 2026-08-15 |
+| [AI Tools for Creators](https://github.com/conorbronsdon/ai-tools-for-creators) | `resource_catalog` | listed | No | No | No | No | No | 2026-08-15 |
+| [Beads for Gemini CLI](https://beads.gascity.com/integrations/gemini) | `agent_extension` | verified | Yes | Yes | No | No | Yes | 2026-08-15 |
+| [Granola MCP](https://docs.granola.ai/help-center/sharing/integrations/mcp) | `mcp_server` | verified | No | No | No | Yes | No | 2026-08-15 |
+| [Obsidian CLI](https://obsidian.md/help/cli) | `editor_guide` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-15 |
+| [Substack MCP](https://github.com/conorbronsdon/substack-mcp) | `mcp_server` | verified | Yes | Yes | Yes | Yes | No | 2026-08-15 |
+| [Tolaria MCP](https://github.com/refactoringhq/tolaria) | `local_workspace` | verified | Yes | No | No | Yes | Yes | 2026-08-15 |
 
 ## Agent Skills
 
@@ -24,10 +24,13 @@ A source catalog and installer for portable agent skills.
 - **Credentials:** None
 - **Reads:** Selected public skill source files
 - **Writes / external effects:** Chosen skill files in an agent-specific project or user directory, including replacement or removal of an existing installation
+- **Typed safety signals:** overwrite, delete
+- **Required confirmation gates:** `external_install`, `write`, `overwrite`, `delete`, `destructive`
 - **Confirmation:** Review the selected skill, destination, diff, and local modifications before installation, replacement, or removal.
-- **Risk tags:** `external-install`, `project-files`, `replacement`, `removal`
+- **Risk tags:** `external-install`, `project-files`, `replacement`, `removal`, `overwrite-capable`, `delete-capable`, `destructive-capable`
+- **Evidence:** [1](https://github.com/conorbronsdon/agent-skills)
 - **Health check:** Use the repository's documented diff and validation workflow for the selected skill.
-- **Uninstall:** Remove only the installed skill directory after reviewing local modifications.
+- **Uninstall:** Remove only the installed skill directory after reviewing and preserving any local modifications. (removes user data: Yes)
 
 Capabilities and limits:
 
@@ -45,16 +48,19 @@ A slim standalone package for agent lifecycle, state, reconciliation, and recove
 - **Credentials:** None
 - **Reads:** Local workspace state, sessions, branches, and worktrees
 - **Writes / external effects:** Local workspace state and session files after workflow approval; Optional removal of explicitly approved stale worktrees or branches
+- **Typed safety signals:** delete
+- **Required confirmation gates:** `external_install`, `write`, `delete`, `destructive`
 - **Confirmation:** Recovery is read-only by default; require approval before cleanup or state mutation.
-- **Risk tags:** `local-state`, `git`, `cleanup`
+- **Risk tags:** `local-state`, `git`, `cleanup`, `delete-capable`, `destructive-capable`
+- **Evidence:** [1](https://github.com/conorbronsdon/agent-workspace)
 - **Health check:** Run the package's documented validation and a read-only start or reconcile workflow.
-- **Uninstall:** Remove the installed adapters only after preserving any workspace state the user wants to keep.
+- **Uninstall:** Remove the installed adapters only after preserving any workspace state the user wants to keep. (removes user data: No)
 
 Capabilities and limits:
 
 - Session lifecycle
 - State reconciliation
-- Optional stale worktree cleanup
+- Optional stale worktree cleanup and removal
 
 
 ## AI Tools for Creators
@@ -67,10 +73,13 @@ A discovery catalog for creator skills, MCP servers, benchmarks, and publishing 
 - **Credentials:** None
 - **Reads:** Public catalog documentation
 - **Writes / external effects:** None
+- **Typed safety signals:** None
+- **Required confirmation gates:** None
 - **Confirmation:** A listing is not verification. Re-check the linked source before installing or authorizing it.
 - **Risk tags:** `catalog`, `third-party-links`, `drift-prone`
+- **Evidence:** [1](https://github.com/conorbronsdon/ai-tools-for-creators)
 - **Health check:** Open the linked project's current source and verify its own installation and safety claims.
-- **Uninstall:** No installation is performed by this catalog entry.
+- **Uninstall:** No installation is performed by this catalog entry. (removes user data: No)
 
 Capabilities and limits:
 
@@ -79,7 +88,7 @@ Capabilities and limits:
 
 ## Beads for Gemini CLI
 
-A project-scoped Gemini integration for Beads issue graphs and persistent agent coordination state.
+A Gemini integration for Beads issue graphs and persistent coordination state; project scope is available, but the documented setup default is user-global.
 
 - **Supported agents:** `gemini_cli`
 - **Install scope:** `project_or_user`; never automatic
@@ -87,21 +96,24 @@ A project-scoped Gemini integration for Beads issue graphs and persistent agent 
 - **Credentials:** Optional Dolt, Git, or cloud remote credentials stay with their configured clients
 - **Reads:** Local issue descriptions, comments, dependencies, memories, readiness, and coordination state
 - **Writes / external effects:** The project Beads database; Project or user Gemini hooks and instructions; Optional remote issue-history sync or push; Issue deletion, purge, migration, repair, or reset when explicitly invoked
-- **Confirmation:** Confirm initialization and setup after showing the project diff; separately confirm remote sync, migrations, fixes, delete or purge, and every reset operation.
-- **Risk tags:** `local-state`, `hooks`, `project-config`, `remote-sync`, `destructive-capable`
+- **Typed safety signals:** remote write, overwrite, delete
+- **Required confirmation gates:** `credential_setup`, `external_install`, `write`, `write_remote`, `overwrite`, `delete`, `destructive`
+- **Confirmation:** Confirm initialization and setup after showing the project or user-config diff; separately confirm every remote sync or push, force push, discard-remote operation, migration, fix, delete, purge, and reset.
+- **Risk tags:** `local-state`, `hooks`, `project-config`, `remote-write`, `overwrite-capable`, `delete-capable`, `destructive-capable`
+- **Evidence:** [1](https://beads.gascity.com/integrations/gemini); [2](https://github.com/steveyegge/beads/blob/7505e173f2659ba6e1f955b86d81a4f9e21810ca/docs/cli-reference/dolt.md)
 - **Health check:** Run bd version, bd doctor, bd setup gemini --check, and a bounded bd ready --json query.
-- **Uninstall:** Remove only the Gemini integration with the documented project or user --remove command; back up first and require separate confirmation before a full project reset.
+- **Uninstall:** Remove only the Gemini integration with the documented project or user --remove command; preserve the Beads project database unless separate deletion is approved. (removes user data: No)
 
 Capabilities and limits:
 
-- Prefer project-scoped bd setup gemini --project over the global default
+- bd setup gemini writes user-global hooks by default; prefer bd setup gemini --project for repository scope
 - bd init can modify agent instructions and configure a remote
-- Remote sync and reset operations need separate review
+- bd dolt push --force can overwrite remote history, and bd init --discard-remote discards remote state
 
 
 ## Granola MCP
 
-Granola's official hosted, read-only MCP for meeting notes and plan-dependent transcripts.
+Granola's official hosted, read-only MCP for sensitive meeting notes and plan-dependent transcripts.
 
 - **Supported agents:** `claude_code`, `generic`
 - **Install scope:** `user`; never automatic
@@ -109,39 +121,47 @@ Granola's official hosted, read-only MCP for meeting notes and plan-dependent tr
 - **Credentials:** Per-user browser OAuth bearer token; never copy it into repository configuration or logs
 - **Reads:** Owned, directly shared, private-folder-shared, or workspace-public notes allowed by the active account and plan; Account information, meeting folders, meeting notes, searches, and plan-dependent transcripts that enter the connected model context
 - **Writes / external effects:** None
-- **Confirmation:** Require explicit OAuth, verify the active account and workspace, and ask before transcript retrieval, broad searches, or moving meeting content elsewhere.
-- **Risk tags:** `sensitive-read`, `oauth`, `hosted`, `transcripts`, `plan-limited`
+- **Typed safety signals:** sensitive read, oauth
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `oauth`
+- **Confirmation:** Require explicit OAuth, verify the active account and workspace, and ask before transcript retrieval, broad searches, or moving meeting content elsewhere; confirm participant-consent obligations before use.
+- **Risk tags:** `sensitive-read`, `oauth`, `hosted`, `transcripts`, `plan-limited`, `us-data-residency`, `indefinite-retention`, `consent-required`
+- **Evidence:** [1](https://docs.granola.ai/help-center/sharing/integrations/mcp); [2](https://docs.granola.ai/help-center/consent-security-privacy/security-privacy-data-faqs); [3](https://docs.granola.ai/help-center/getting-started/setting-up-granola-for-the-first-time)
 - **Health check:** After OAuth, call get\_account\_info to verify the exact account and workspace, then run a narrowly bounded list\_meetings request.
-- **Uninstall:** Disconnect Granola in the client and remove the MCP entry; do not claim token revocation unless the current client documents it.
+- **Uninstall:** Disconnect Granola in the client and remove the MCP entry; do not claim token revocation unless the current client documents it. (removes user data: No)
 
 Capabilities and limits:
 
-- Do not ingest meeting data automatically at startup
-- Ask before raw transcript retrieval or broad multi-meeting search
-- Free and Business plans may use anonymized data for Granola model improvement by default, with an account opt-out documented
-- Voice-memo transcript availability through MCP is not guaranteed by current documentation
+- Do not ingest meeting data automatically at startup; ask before raw transcript retrieval or broad multi-meeting search
+- Notes and transcripts are retained indefinitely by default and stored in AWS in the United States
+- Granola states it is not currently HIPAA or FERPA compliant, and meeting-participant consent remains the user's responsibility
+- Basic access is limited to personal notes from the last 30 days; folder, search, and transcript tools can require a paid plan
+- Free and Business plans may use anonymized data for model improvement by default, with an account opt-out documented
+- Granola can transcribe voice memos, but current MCP documentation guarantees meeting-note and transcript tools rather than voice-memo coverage
 
 
 ## Obsidian CLI
 
-Obsidian's official desktop CLI for scoped access to local Markdown vaults; no MCP server is required.
+Obsidian's official desktop CLI exposes broad local application and vault capabilities; scope is enforceable only through an exact external command allowlist.
 
 - **Supported agents:** `claude_code`, `codex`, `gemini_cli`, `generic`
 - **Install scope:** `project_or_user`; never automatic
-- **Prerequisites:** Obsidian desktop 1.12.7 or newer; The command line interface enabled on PATH; Obsidian running for CLI calls
+- **Prerequisites:** Obsidian desktop 1.12.7 or newer; The command line interface enabled on PATH; Obsidian running for CLI calls; An exact command allowlist enforced by the calling harness
 - **Credentials:** Optional Obsidian Sync or Publish credentials remain inside Obsidian
-- **Reads:** Explicitly selected local vault notes, properties, tasks, backlinks, and history
-- **Writes / external effects:** Vault notes, properties, tasks, moves, and renames; Trash or permanent deletion; Publish or unpublish actions; Plugin changes and arbitrary Obsidian command or eval execution
-- **Confirmation:** Confirm overwrites, bulk or link-affecting moves, sync control, deletion, publish or unpublish, plugin changes, arbitrary command, and eval; use the normal local-edit gate for a single bounded note edit.
-- **Risk tags:** `local-data`, `read-write`, `publish-capable`, `destructive-capable`, `arbitrary-eval`
-- **Health check:** Run obsidian version, resolve the exact vault path, then perform a bounded JSON search with limit 1.
-- **Uninstall:** Disable the CLI or remove the harness allowlist; do not delete, unregister, or alter the vault unless separately requested.
+- **Reads:** The active vault and active file by default, or explicitly targeted vault notes, properties, tasks, backlinks, history, workspaces, plugins, and themes
+- **Writes / external effects:** Vault notes, properties, tasks, moves, renames, overwrites, and link-aware mutations; Trash or permanent deletion, workspace deletion, and Sync restore or other mutating Sync actions; Publish or unpublish actions, plugin or theme installation and changes, URL opening, arbitrary registered command execution, and JavaScript eval
+- **Typed safety signals:** sensitive read, remote write, overwrite, delete, arbitrary execution
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `publish`, `overwrite`, `delete`, `arbitrary_execution`, `destructive`
+- **Confirmation:** Confirm broad reads, overwrites, bulk or link-affecting moves, Sync control or restore, deletion, publish or unpublish, URL opening, plugin or theme changes, arbitrary command, and eval; use the normal local-edit gate only for a single bounded note edit.
+- **Risk tags:** `local-data`, `sensitive-read`, `read-write`, `remote-write`, `publish-capable`, `overwrite-capable`, `delete-capable`, `arbitrary-execution`, `destructive-capable`, `open-world`, `network-capable`
+- **Evidence:** [1](https://obsidian.md/help/cli)
+- **Health check:** Run obsidian version, resolve the exact vault path, then perform a bounded JSON search with limit 1 through the enforced allowlist.
+- **Uninstall:** Disable the Obsidian CLI or remove its executable from the calling client's configuration or PATH; leave the vault, Sync, Publish, plugins, and themes unchanged. (removes user data: No)
 
 Capabilities and limits:
 
-- Prefer exact vault and path parameters over ambiguous file resolution
-- Use the Obsidian CLI for link-aware moves and renames
-- Deny arbitrary eval and command by default
+- No enforcement wrapper ships here; the calling harness must default-deny eval, command, plugin, theme, web, publish, permanent delete, and mutating sync operations
+- Prefer exact vault and path parameters because omitted targets can resolve to the active vault or file
+- Treat plugin commands and JavaScript eval as open-world execution with possible filesystem and network effects
 
 
 ## Substack MCP
@@ -154,36 +174,42 @@ An MCP server for reading Substack publication data, managing private drafts, an
 - **Credentials:** Publication URL; Session token; User ID; Optional machine-bound browser-login session file
 - **Reads:** Subscriber count, posts, drafts, comments, sections, analytics, and schedules
 - **Writes / external effects:** Private long-form drafts; Publicly fetchable image uploads; Immediately public Notes
-- **Confirmation:** Always confirm Note creation as an immediate public publish action; private draft writes use the normal external-write gate.
-- **Risk tags:** `credentials`, `external-data`, `public-publish`, `unofficial-api`
+- **Typed safety signals:** sensitive read, remote write
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `publish`
+- **Confirmation:** Always confirm Note creation as an immediate public publish action; private draft writes use the normal external-write gate, and broad analytics or subscriber reads require a sensitive-read gate.
+- **Risk tags:** `credentials`, `external-data`, `sensitive-read`, `remote-write`, `publish-capable`, `public-publish`, `unofficial-api`
+- **Evidence:** [1](https://github.com/conorbronsdon/substack-mcp)
 - **Health check:** After explicit authentication, run the documented subscriber-count read and verify the expected publication account.
-- **Uninstall:** Remove the MCP client entry and, if used, review then remove the local browser-login session file.
+- **Uninstall:** Remove the MCP client entry and, if used, review then remove the local browser-login session file. (removes user data: No)
 
 Capabilities and limits:
 
-- No long-form publish, delete, or schedule mutation
+- Long-form tooling is draft-only; scheduling and public-post mutation are unavailable
 - Note creation publishes immediately and has no server-side undo
 
 
-## Tolaria
+## Tolaria MCP
 
-A local-first Markdown vault desktop app with a bundled stdio MCP and embedded coding-agent interface.
+Tolaria's bundled stdio MCP for bounded Markdown-vault reads and note mutations; this entry excludes Tolaria's embedded agents, direct provider models, and AutoGit.
 
-- **Supported agents:** `claude_code`, `codex`, `opencode`, `generic`
+- **Supported agents:** `claude_code`, `cursor`, `opencode`, `generic`
 - **Install scope:** `project_or_user`; never automatic
-- **Prerequisites:** Tolaria for macOS, Windows, or Linux; A mounted local vault; The separately installed and authenticated agent CLI selected by the user
-- **Credentials:** Agent or API credentials remain with the selected CLI or provider; Optional Git remote credentials remain with system Git
-- **Reads:** Markdown and YAML frontmatter in explicitly mounted vaults
-- **Writes / external effects:** Create, append, or full-content update of notes in mounted vaults; Attach an additional vault or clone one through system Git
-- **Confirmation:** Use normal approval for a single create or append; show a diff or confirm full replacement, bulk edits, vault attachment or clone, Power User mode, Git push, and broader native-agent actions.
-- **Risk tags:** `local-data`, `read-write`, `optional-network`, `agent-execution`, `overwrite-capable`
+- **Prerequisites:** Tolaria for macOS, Windows, or Linux; A mounted local vault; A supported MCP client configured manually
+- **Credentials:** Optional Git credentials for cloning an additional vault remain with system Git
+- **Reads:** Markdown and YAML frontmatter in explicitly mounted local vaults
+- **Writes / external effects:** Create, append, or full-content update of notes in mounted vaults; Attach an existing vault or clone one into a local directory through system Git; Selected MCP client configuration during manual setup
+- **Typed safety signals:** sensitive read, overwrite
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `overwrite`, `destructive`
+- **Confirmation:** Use normal approval for a single create or append; confirm broad vault reads, show a diff before full replacement, and separately approve vault attachment, cloning, or MCP client-configuration writes.
+- **Risk tags:** `local-data`, `sensitive-read`, `read-write`, `overwrite-capable`, `destructive-capable`, `mcp-config`
+- **Evidence:** [1](https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/site/guides/use-ai-panel.md); [2](https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/mcp-server/index.js); [3](https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/docs/adr/0158-vault-write-mcp-tools-update-and-append.md)
 - **Health check:** Start Tolaria, list mounted vaults, read vault context, run a bounded search, then use a disposable note for any write smoke test.
-- **Uninstall:** Remove any manually added MCP entry and uninstall the app; preserve all vaults unless deletion is separately confirmed.
+- **Uninstall:** Remove the Tolaria MCP entry from each configured client; preserve the Tolaria application and every vault unless separate removal is requested. (removes user data: No)
 
 Capabilities and limits:
 
 - Treat full-content update\_note as overwrite-capable even though its MCP annotation says non-destructive
 - Prefer get\_note, diff review, and expectedMtime before update\_note
-- Git can replicate vault contents and direct cloud-agent targets may send selected note context to their provider
-- Bundled MCP documents no delete or publish tool, but a native agent can have broader file or shell access
+- The MCP mutation surface is limited to create, append, update, attach, and local clone operations
+- Review embedded agents, direct provider models, stored provider keys, and AutoGit as separate trust boundaries before enabling them
 
