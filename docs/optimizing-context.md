@@ -1,6 +1,6 @@
 # Optimizing Context Files
 
-The format of your context files matters as much as their content. A PDF uploaded to claude.ai can consume 3–5x the tokens of the same content as clean markdown — before Claude has read a single word of your actual message. In Claude Code, bloated files slow down every session that loads them.
+The format of context files affects both token use and retrieval quality. PDFs often carry layout, font, header, and footer noise that clean Markdown avoids. Large, noisy files slow any agent session that loads them.
 
 This guide covers how to convert common file formats to markdown and how to trim files for maximum efficiency.
 
@@ -17,7 +17,7 @@ Claude reads everything in its context window as tokens. Different formats carry
 | HTML | Medium-high | Tag overhead, especially with complex layouts |
 | PDF | High | Layout data, fonts, and page structure all add tokens |
 
-A 10-page PDF might cost 4,000 tokens. The same content as clean markdown: 800–1,200. That difference compounds across every session that loads the file, and across every claude.ai project where it's uploaded.
+Exact token cost depends on the parser, document, and host. The useful rule is qualitative: preserve the facts and structure an agent needs, and remove layout artifacts and repeated boilerplate.
 
 The goal: your context should be **as short as possible while remaining complete**. Every token Claude spends parsing formatting noise is a token not spent on your actual task.
 

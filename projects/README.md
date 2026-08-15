@@ -1,10 +1,10 @@
 # Projects
 
-This directory holds context and skills for recurring personal or professional projects. The pattern: one folder per project, with context files Claude loads and skills it can run.
+This directory holds context for recurring personal or professional projects. The pattern is one folder per project, with focused files that supported agents load when a route calls for them.
 
 ## Why this structure works
 
-Claude doesn't have memory between sessions — it reads files. The more specific and current your project files are, the better it performs on project-specific tasks. A well-built project folder turns a general assistant into something that actually knows your work.
+Product memory differs across hosts and can be stale or unavailable. Repository files are the shared, reviewable layer. The more specific and current your project files are, the better an agent can perform on project-specific tasks.
 
 ## How to build a project section
 
@@ -33,12 +33,12 @@ Keep this current. Out-of-date context is worse than no context.
 - Current focus and what you're NOT doing
 - What's working, what isn't
 
-### Step 4: Add skills (optional but high-value)
+### Step 4: Add portable skills (optional)
 
-Skills are instruction files Claude loads to perform a specific task consistently. Format:
+Skills are instruction files an agent loads to perform a specific task consistently. Provider-neutral skills live at:
 
 ```
-projects/your-project-name/skills/task-name/SKILL.md
+.agents/skills/your-project-name-task-name/SKILL.md
 ```
 
 Each skill file should contain:
@@ -80,7 +80,7 @@ allowed-tools: Read
 ---
 ```
 
-### Step 5: Wire it into ROUTING.md and CLAUDE.md
+### Step 5: Wire it into ROUTING.md and optional host adapters
 
 Add a line to `ROUTING.md` under "Project tasks":
 ```

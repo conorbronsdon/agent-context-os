@@ -34,6 +34,7 @@ For tasks without a slash command, use this table to determine which files to lo
 - Validating skill structure → run `scripts/validate-all.sh`
 
 ## Agent migration
+- Importing selected context from an assistant, project, memory export, or account export → read `docs/migration-guide.md`, then use Claude Code `/setup` or portable `$context-setup`
 - Migrating selected Gemini CLI configuration or workflows → Claude Code `/migrate-gemini`; portable skill `$migrate-gemini`
 - Discovering repeated workflows from selected Gemini sessions → Claude Code `/mine-gemini-workflows`; portable skill `$mine-gemini-workflows`
 - Running the workspace in Codex → read `docs/codex-onboarding.md`

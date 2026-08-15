@@ -44,6 +44,11 @@ case "$AGENT_TARGET" in
     ;;
 esac
 
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "Python 3 is required for setup and validation." >&2
+  exit 1
+fi
+
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
 prompt_yn() {
@@ -71,7 +76,7 @@ track_setup_path() {
 # ── Welcome ─────────────────────────────────────────────────────────────────
 
 echo ""
-echo "  claude-context-os — setup"
+echo "  Context OS: setup"
 echo "  ─────────────────────────"
 echo ""
 
@@ -81,10 +86,13 @@ read -rp "  Name to place in CLAUDE.md (or press Enter to skip): " USER_NAME
 
 if [ -n "$USER_NAME" ]; then
   if grep -Fq '[Your Name]' CLAUDE.md; then
-    # Escape the complete sed replacement so &, backslashes, and the delimiter
-    # remain literal user text rather than replacement syntax.
-    SAFE_USER_NAME=$(printf '%s' "$USER_NAME" | sed 's/[\\&|]/\\&/g')
-    sed -i "s|\[Your Name\]|$SAFE_USER_NAME|g" CLAUDE.md
+    python3 - "$USER_NAME" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path("CLAUDE.md")
+path.write_text(path.read_text(encoding="utf-8").replace("[Your Name]", sys.argv[1]), encoding="utf-8")
+PY
     track_setup_path "CLAUDE.md"
     echo "  → Updated CLAUDE.md with your name"
   else
@@ -116,8 +124,14 @@ echo ""
 if [ -d "projects/example-musician" ]; then
   if prompt_yn "  Remove the example musician project? (You can always reference it on GitHub)" "n"; then
     rm -rf projects/example-musician
-    # Clean ROUTING.md reference
-    sed -i '/example-musician/d' ROUTING.md 2>/dev/null || true
+    # Clean any explicit sample-project route without platform-specific sed flags.
+    python3 - <<'PY'
+from pathlib import Path
+
+path = Path("ROUTING.md")
+lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+path.write_text("".join(line for line in lines if "example-musician" not in line), encoding="utf-8")
+PY
     track_setup_path "projects/example-musician"
     track_setup_path "ROUTING.md"
     echo "  → Removed projects/example-musician/"
@@ -183,16 +197,12 @@ else
   echo "    Missing: git"
 fi
 
-if command -v python3 &>/dev/null; then
-  echo "    Found: python3"
-else
-  echo "    Missing: python3 — required by safety hooks and Gemini workflow migration"
-fi
+echo "    Found: python3"
 
 if command -v gws &>/dev/null; then
   echo "    Found: gws (Google Workspace CLI)"
 else
-  echo "    Optional: gws — see references/gws-mcp-setup.md for Google Workspace integration"
+  echo "    Optional: gws; see references/google-workspace-cli-setup.md"
 fi
 
 echo "    Optional add-ons: see references/integrations.md (nothing is installed automatically)"
@@ -235,6 +245,10 @@ fi
 echo ""
 echo "  ─────────────────────────────"
 echo "  Setup complete. Next:"
+echo ""
+echo "  Starting fresh: run the guided setup for your selected host."
+echo "  Bringing existing context: review docs/migration-guide.md first."
+echo "  Adding tools later: review references/integrations.md; nothing is enabled automatically."
 echo ""
 
 SELECTED_AGENT="$AGENT_TARGET"

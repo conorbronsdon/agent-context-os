@@ -1,10 +1,10 @@
-# Write your first skill in 5 minutes
+# Write your first Claude Code command in 5 minutes
 
-A skill is a recurring task you've turned into a slash command — a short markdown file that tells Claude how to do one job, the same way every time. This starter ships a dozen (`/start`, `/end`, `/capture`, `/find-context`, and more). The fastest way to get your own is to copy one and change three things. Here's the whole thing, start to finish.
+A command is a recurring task exposed as a Claude Code slash command. This starter ships several (`/start`, `/end`, `/capture`, `/find-context`, and more). The fastest way to add one is to copy an existing command and change three things.
 
 We'll turn the included `/find-context` command into a new `/standup` — "what did I do yesterday, what's next, what's blocked." Same shape, different job. Swap in whatever recurring task you keep doing by hand; the steps are identical.
 
-> This builds a **command** (a slash command with no extra files). A full **skill** adds a `SKILL.md` under `projects/<project>/skills/` and a `CLAUDE.md` row so it loads in both Claude Code and claude.ai — see `projects/README.md` once you want that. Start with a command; promote it to a skill when you reach for it often.
+> This builds a Claude Code-only command. A portable skill belongs in `.agents/skills/<name>/SKILL.md`, with a thin host adapter only when one is needed. See `projects/README.md` for the shared pattern.
 
 ## 1. Look at the one you're copying — 30 sec
 
@@ -95,4 +95,4 @@ One command, run daily for a week, beats ten you set up once and forget. When `/
 
 ---
 
-Want it to reach your real calendar, email, or Drive? That's what MCP servers are for — see **Optional integrations** in the [README](../README.md).
+Want it to reach your calendar, email, or Drive? Review the data and side-effect boundaries under **Optional integrations** in the [README](../README.md) before connecting a tool.

@@ -12,6 +12,7 @@ fail() {
 
 test -f AGENTS.md || fail "missing root AGENTS.md"
 test -f docs/codex-onboarding.md || fail "missing Codex onboarding guide"
+test -f state/current-log.md || fail "missing current.md history seed"
 
 skills=(context-setup context-start context-update context-end)
 commands=(setup start update end)

@@ -22,7 +22,6 @@ import json
 from pathlib import Path
 
 paths = [
-    Path(".mcp.json"),
     Path(".claude/settings.json"),
     Path("docs/templates/workflow-parity.json"),
     Path("integrations/catalog.json"),

@@ -1,11 +1,11 @@
 ---
 name: context-setup
-description: Build or refresh this workspace's identity, project, reusable-workflow, and weekly-state files through a conversational interview. Use only when the user explicitly asks to initialize or redo workspace context.
+description: Build, import, or refresh this workspace's identity, project, reusable-workflow, and weekly-state files through a guided review. Use only when the user explicitly asks to initialize or redo workspace context.
 ---
 
 # Set up workspace context
 
-Build useful context from the user's own words without silently overwriting existing material.
+Build useful context from the user's own words or selected migration material without silently overwriting existing files.
 
 ## Guardrails
 
@@ -15,10 +15,17 @@ Build useful context from the user's own words without silently overwriting exis
 - Show the proposed file map and summarize replacements before writing.
 - Require approval before overwriting populated files, creating broad batches of files, committing, or pushing.
 - Never request or store passwords, access tokens, recovery codes, or other credentials.
+- Never ingest a raw account export or complete conversation archive into tracked context.
 
 ## Procedure
 
-### 1. Inspect the workspace
+### 1. Choose the starting point
+
+Ask whether the user wants to start from their answers, selected existing material, or both.
+
+For existing material, read `docs/migration-guide.md`. Ask for one reviewed migration packet or a narrow set of source files. Inventory the selected input, mark claims that need verification, identify sensitive items that should stay out of the workspace, and propose destinations. Do not read beyond the scope the user selected.
+
+### 2. Inspect the workspace
 
 Read:
 
@@ -29,9 +36,9 @@ Read:
 - `state/weekly-priorities.md`
 - `ROUTING.md`
 
-Classify each as missing, placeholder-only, or populated. Tell the user what can be filled safely and what would be updated.
+Classify each as missing, placeholder-only, or populated. Tell the user what can be filled safely, what would be merged, and what would be updated.
 
-### 2. Gather identity context
+### 3. Gather identity context
 
 Ask for, one question at a time:
 
@@ -45,9 +52,9 @@ Ask for, one question at a time:
 8. verifiable credentials or proof points, and
 9. public links they want recorded.
 
-Draft updates to the two identity files, preserve the user's language, and use today's date for `**Last Updated:**`.
+Use approved migration items as candidate answers, then ask only for missing details or verification. Draft updates to the two identity files, preserve the user's language, and use today's date for `**Last Updated:**`.
 
-### 3. Gather the first project
+### 4. Gather the first project
 
 Ask for one recurring project, then gather:
 
@@ -62,7 +69,7 @@ Draft `projects/<project-slug>/context.md` and `projects/<project-slug>/strategy
 
 Offer to repeat this phase for another project.
 
-### 4. Gather weekly state
+### 5. Gather weekly state
 
 Ask for:
 
@@ -73,12 +80,14 @@ Ask for:
 
 Draft `state/current.md` and `state/weekly-priorities.md` with current dates.
 
-### 5. Review and apply
+### 6. Review and apply
 
 Present:
 
 - every file to create or edit,
 - populated content that would be replaced,
+- imported claims that remain unverified,
+- selected source material that will stay outside tracked files,
 - the proposed routing additions, and
 - any reusable workflow skills.
 

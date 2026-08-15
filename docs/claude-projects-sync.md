@@ -6,7 +6,7 @@ Claude Code reads this repo directly from the filesystem. claude.ai projects rea
 
 ## The model
 
-Think of this repo as the source. claude.ai projects are consumers. You upload files from the repo into a project's knowledge, and Claude reads them the same way Claude Code does.
+Think of this repo as the source. claude.ai projects are manual consumers. You upload selected files into project knowledge, but browser projects do not provide repository writes, checked-in hooks, or slash-command behavior.
 
 When you update a file in the repo, you re-upload it to the relevant projects. That's the whole sync workflow. It's manual, but it takes about a minute per changed file — and it means you're never editing system prompts in place or guessing what version of your context a project is running.
 
@@ -41,9 +41,9 @@ In claude.ai, you don't have slash commands — but you get the same behavior by
 
 > "Apply the avoid-ai-writing skill to this draft."
 
-Claude reads the skill file and follows the same instructions it would in Claude Code. No copy-pasting the skill content into the chat, no re-explaining the rules. The file is there; it reads it.
+Claude can follow provider-neutral instructions in the uploaded skill file. Host-specific tool grants, hooks, paths, and frontmatter do not carry over automatically.
 
-This works for any skill in the repo. Upload the `SKILL.md`, reference it by name in the conversation.
+Use this only for skills whose required context and tools are available in the browser project. Upload the `SKILL.md`, then reference it by name in the conversation.
 
 ---
 

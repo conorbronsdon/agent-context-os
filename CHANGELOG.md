@@ -3,11 +3,18 @@
 ## [Unreleased]
 
 ### Added
+- Source-neutral onboarding and migration docs for ChatGPT, Claude, Gemini, and other assistants, with a reviewed migration-packet format and optional import handling in `$context-setup`.
+- Context OS positioning, launch-copy drafts, a task-based getting-started guide, and a generated cross-agent social preview.
+- Safety-catalog entries and current setup guides for Google Workspace CLI and Notion MCP.
+- `state/current-log.md`, the seed file required by the shared checkpoint and close workflows.
 - A validated, opt-in integrations catalog with generated documentation, explicit credential/data/side-effect boundaries, and no automatic installation or activation. Initial links cover Agent Skills, Agent Workspace, AI Tools for Creators, and Substack MCP.
 - Reviewed optional entries for Tolaria MCP, the official Obsidian CLI, Beads for Gemini CLI, and Granola's hosted MCP, with conservative sensitive-read, remote-write, overwrite, deletion, arbitrary-execution, publish, destructive, OAuth, retention, residency, and transcript gates.
 - First-class Codex onboarding with a root `AGENTS.md`, four explicit-invocation lifecycle skills under `.agents/skills/`, generated skill UI metadata, `--agent codex` setup support, portability tests, and a host-boundary guide.
 
 ### Fixed
+- `scripts/setup.sh` no longer relies on GNU-only `sed -i`, so literal-name replacement and sample-route cleanup work on macOS and Linux through Python 3.
+- Replaced the deprecated Notion npm-server instructions with Notion's hosted OAuth MCP path for Claude Code and Codex.
+- Aligned manual claude.ai setup prompts with portable skill paths and approval-gated local setup instead of claiming slash-command or commit parity.
 - Moved project slash commands from the undiscovered root `commands/` directory to `.claude/commands/`; moved the native meta-skill to `.claude/skills/`; renamed `/context` to `/find-context` to avoid the Claude Code built-in.
 - Added checked-in `.claude/settings.json` hook activation using the current nested hook schema. PreToolUse guards now parse Claude's JSON stdin, and blocking messages use stderr with exit code 2.
 - Gemini mining now folds current `$set`, `$rewindTo`, and message records into final session state; date filters fail closed on unknown dates, tool sequences preserve repetition, and only positively validated patterns become candidates.
@@ -23,6 +30,10 @@
 - `.claude/commands/dream-apply.md` — the moved file's own outbound links were never repointed, so every archived file's references silently broke on the move.
 
 ### Changed
+- The public product name is Context OS; the existing `claude-context-os` repository slug remains for link continuity.
+- The README now follows the complete user journey: privacy-aware setup, selective import, honest host support, opt-in integrations, maintenance, and a task-based documentation map.
+- Repository maintenance now includes session, weekly, monthly, archive, privacy, browser-sync, and integration-review routines, all using `scripts/validate-all.sh`.
+- Project, command tutorial, browser-project sync, and context-optimization docs now distinguish portable files from host-specific behavior and remove unsupported token-ratio claims.
 - Integration catalog schema v2 adds typed safety capabilities and matching confirmations/risk tags, structured uninstall data-loss declarations, non-empty auditable evidence links, a remote-write/sensitive-read summary, and hostile regression cases. CI validates internal claims and generated documentation; it does not certify upstream source truth.
 - `/setup`, `/start`, `/update`, and `/end` are now thin Claude Code adapters to provider-neutral lifecycle skills. Shared state stays in the repository; Claude hooks and auto-memory remain explicitly host-specific.
 - CI now runs one aggregate validator covering command discovery/name parity, links, shell syntax, hook behavior, JSON, and Python unit tests.
@@ -33,12 +44,20 @@
   Ordering reversed: `/content-shipped` prepended (newest first); it now appends (oldest first). Existing logs keep their old rows; new rows land at the bottom. Re-sort by the Date column if you want one direction throughout.
 - `docs/auto-memory.md`, `docs/memory-template.md` — storage layout and retirement steps updated for `archive/`; these are not in the fanout manifest and were missed by the previous publish.
 - `scripts/dream/prompts/{rot,merge,split}.md`, `docs/dream-architecture.md` — curator inputs now exclude `memory/archive/`.
+
+### Removed
+- The obsolete checked-in `gws mcp` configuration and stale MCP setup guide. The current Google Workspace CLI no longer exposes that command; Claude's start adapter now allows only four current read-only CLI prefixes.
+
+---
+
+## [0.11.0]: Active harness and migration
+
 ### Added
 - Privacy-first Gemini migration: `/migrate-gemini`, `/mine-gemini-workflows`, portable `.agents/skills/` cores, a current JSON/JSONL session miner, workflow parity template, tests, and `docs/gemini-migration.md`.
 - `references/ai-data-extraction.md` credits [`0xSero/ai-data-extraction`](https://github.com/0xSero/ai-data-extraction) as extraction prior art while documenting format and privacy review boundaries.
 - `docs/assets/start-demo.gif` — animated `/start` demo embedded at the top of the README's "See it work" section. Representative VHS rendering of a `/start` session against the included example musician project (sample data): the state files load in the order `.claude/commands/start.md` specifies, then the session briefing comes back.
 - `scripts/check-links.sh` — deterministic broken-link checker. Walks every inline link in tracked markdown, skips fenced/inline code and external URLs, and fails on any local target that doesn't resolve. Pure bash + awk + git; catches SSOT drift when a cross-referenced file is renamed or moved. Wired into `.github/workflows/validate.yml`.
-- `docs/first-skill.md` — five-minute hand-held tutorial: copy a command, change three things, run it. Lowers the activation barrier for building your first skill.
+- `docs/first-skill.md`: five-minute Claude Code command tutorial: copy a command, change three things, run it.
 - `/end` step 6 — **Propose auto-memory updates.** `/end` now scans the session for durable, cross-conversation patterns and proposes 0–2 additions to Claude Code's auto-memory (`MEMORY.md`), with a friction-point check ("was there a friction point a memory entry would have prevented?"). Closes the capture→curate loop: the repo shipped the auto-memory spec and `/dream` curation, but nothing in the daily loop wrote to memory.
 - `/today` — upgraded from a thin staleness check to a proper heartbeat: a `git log` scan that catches work from sessions closed without `/end`, escalating staleness tiers (7d "still relevant?" / 14d "remove or convert"), deadline surfacing from `TODO.md`, a structured output block, and a `state/heartbeat-log.md` entry per run. Memory-gap detection deliberately left to `/dream` so two commands don't both edit memory.
 - `/capture` — now proposes a triage plan and waits for approval before moving anything (propose-don't-act), and gains a Design Principles section. Classification table kept generic.
@@ -47,6 +66,11 @@
 - `/start` — adds a "what changed since last session" `git log` scan so updates from a parallel session or manual edit surface before the briefing.
 ### Removed
 - **`REPO_MAP.md` is no longer committed or CI-gated.** It's now gitignored and generated on demand (`scripts/generate-repo-map.sh`) as a local overview for claude.ai uploads. The "REPO_MAP up to date" CI gate was structurally unsatisfiable — the file embeds the HEAD commit hash and a per-file date column that advances on every commit — so it had failed on every run. `fetch-depth: 0` and the PR-template checklist item dropped with it.
+
+---
+
+## [0.10.0]: Context OS rename and demo
+
 ### Added
 - `docs/assets/og-image.{svg,png}` — social-preview card (1280×640), updated to the `claude-context-os` name, the new "operating system" tagline, and the correct URL. The old preview still showed `claude-context-starter`. Upload the PNG via Settings → Social preview.
 ### Changed
