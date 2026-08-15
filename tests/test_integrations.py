@@ -56,6 +56,12 @@ class IntegrationCatalogTests(unittest.TestCase):
                 {"source_url": catalog["integrations"][0]["source_url"] + "/"}
             )
         )
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][1].update({"name": "Agent  Skills"})
+        )
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][1].update({"name": "Agent\u200b Skills"})
+        )
 
     def test_unknown_fields_and_invalid_urls_are_rejected(self) -> None:
         self.assert_invalid(lambda catalog: catalog["integrations"][0].update({"surprise": True}))
@@ -75,6 +81,27 @@ class IntegrationCatalogTests(unittest.TestCase):
                 {"source_url": "https://example.com:not-a-port/source"}
             )
         )
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][0].update(
+                {"source_url": "https://[::1"}
+            )
+        )
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][0].update(
+                {"source_url": "https://example.com／evil"}
+            )
+        )
+        for source_url in (
+            "https://example.com/path|forged",
+            "https://example.com/[forged]",
+            "https://example.com/path?utm=1",
+            "https://example.com/path#readme",
+        ):
+            self.assert_invalid(
+                lambda catalog, value=source_url: catalog["integrations"][0].update(
+                    {"source_url": value}
+                )
+            )
 
     def test_unhashable_enum_values_fail_as_catalog_errors(self) -> None:
         self.assert_invalid(
@@ -100,11 +127,23 @@ class IntegrationCatalogTests(unittest.TestCase):
         MODULE.validate_catalog(catalog)
         rendered = MODULE.render_reference(catalog)
         self.assertIn(r"Uses \*emphasis\* and \[links\]", rendered)
+        for summary in ("# Forged heading", "---", "1. Forged list"):
+            catalog = copy.deepcopy(self.catalog)
+            catalog["integrations"][0]["summary"] = summary
+            MODULE.validate_catalog(catalog)
+            rendered = MODULE.render_reference(catalog)
+            self.assertIn("\\" + summary, rendered)
         self.assert_invalid(
             lambda catalog: catalog["integrations"][0].update(
                 {"summary": "First line\n## Injected section"}
             )
         )
+        for summary in ("Contains\u2028separator", "Contains\x1bescape"):
+            self.assert_invalid(
+                lambda catalog, value=summary: catalog["integrations"][0].update(
+                    {"summary": value}
+                )
+            )
 
     def test_auto_install_and_missing_risk_boundaries_are_rejected(self) -> None:
         self.assert_invalid(

@@ -67,25 +67,33 @@ def require_string_list(value: Any, location: str, *, nonempty: bool = False) ->
 def require_safe_text(value: Any, location: str) -> None:
     if not isinstance(value, str) or not value.strip():
         raise CatalogError(f"{location}: expected a non-empty string")
-    if value != value.strip() or any(character in value for character in "\r\n\x00"):
-        raise CatalogError(f"{location}: surrounding whitespace and control lines are not allowed")
+    if value != value.strip() or any(
+        unicodedata.category(character) in {"Cc", "Cf", "Zl", "Zp"}
+        for character in value
+    ):
+        raise CatalogError(f"{location}: surrounding whitespace and control/format characters are not allowed")
 
 
 def require_https_url(value: Any, location: str) -> None:
     require_safe_text(value, location)
-    if any(character.isspace() for character in value) or any(character in value for character in "()"):
+    if any(character.isspace() for character in value) or any(
+        character in value for character in "()|[]<>\\`"
+    ):
         raise CatalogError(f"{location}: URL contains unsafe Markdown characters")
-    parsed = urlsplit(value)
     try:
+        parsed = urlsplit(value)
+        host = parsed.hostname
         port = parsed.port
     except ValueError:
-        raise CatalogError(f"{location}: URL has an invalid port") from None
+        raise CatalogError(f"{location}: URL is malformed") from None
     if (
         parsed.scheme != "https"
-        or not parsed.hostname
+        or not host
         or parsed.username is not None
         or parsed.password is not None
         or (port is not None and not 1 <= port <= 65535)
+        or parsed.query
+        or parsed.fragment
     ):
         raise CatalogError(f"{location}: expected an HTTPS URL with a host and no credentials")
 
@@ -129,7 +137,9 @@ def validate_catalog(catalog: Any) -> None:
         if item["id"] in ids:
             raise CatalogError(f"{location}.id: duplicate ID {item['id']!r}")
         ids.add(item["id"])
-        normalized_name = unicodedata.normalize("NFKC", item["name"]).strip().casefold()
+        normalized_name = re.sub(
+            r"\s+", " ", unicodedata.normalize("NFKC", item["name"]).strip()
+        ).casefold()
         if normalized_name in names:
             raise CatalogError(f"{location}.name: duplicate name {item['name']!r}")
         names.add(normalized_name)
@@ -217,6 +227,13 @@ def markdown_text(value: str) -> str:
     return escaped
 
 
+def markdown_paragraph(value: str) -> str:
+    escaped = markdown_text(value)
+    if value.startswith(("#", "-", "+")) or re.match(r"^\d+[.)]\s", value):
+        return "\\" + escaped
+    return escaped
+
+
 def render_reference(catalog: dict[str, Any]) -> str:
     rows = []
     sections = []
@@ -236,7 +253,7 @@ def render_reference(catalog: dict[str, Any]) -> str:
         details = "\n".join(f"- {markdown_text(detail)}" for detail in caps["details"])
         sections.append(
             f"## {name}\n\n"
-            f"{markdown_text(item['summary'])}\n\n"
+            f"{markdown_paragraph(item['summary'])}\n\n"
             f"- **Supported agents:** {agents}\n"
             f"- **Install scope:** `{item['installation']['scope']}`; never automatic\n"
             f"- **Prerequisites:** {prerequisites}\n"
