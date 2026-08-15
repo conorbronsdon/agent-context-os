@@ -164,7 +164,7 @@ def validate_scratchpad(value: Any) -> str | None:
         for key in ("validationStatus", "validation_status")
         if key in value
     ]
-    if any(status not in VALIDATION_STATUSES for status in statuses):
+    if any(not isinstance(status, str) or status not in VALIDATION_STATUSES for status in statuses):
         return "memoryScratchpad.validationStatus must be passed, failed, or unknown"
     if len(statuses) == 2 and statuses[0] != statuses[1]:
         return "memoryScratchpad validation status aliases conflict"

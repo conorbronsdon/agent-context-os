@@ -403,6 +403,22 @@ class GeminiWorkflowMinerTests(unittest.TestCase):
                     }
                 }
             },
+            {
+                "$set": {
+                    "memoryScratchpad": {
+                        "version": 1,
+                        "validationStatus": [],
+                    }
+                }
+            },
+            {
+                "$set": {
+                    "memory_scratchpad": {
+                        "version": 1,
+                        "validation_status": {},
+                    }
+                }
+            },
             {"$set": {"sessionId": "", "projectHash": ""}},
         ]
         with tempfile.TemporaryDirectory() as temp:
