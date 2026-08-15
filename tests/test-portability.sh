@@ -30,7 +30,7 @@ for index in "${!skills[@]}"; do
   grep -qx "name: $skill" "$skill_file" || fail "$skill_file name does not match its directory"
   python3 tests/validate-openai-metadata.py "$metadata_file" "$skill" || fail "$metadata_file failed schema validation"
   grep -Fq ".agents/skills/$skill/SKILL.md" "$command_file" || fail "$command_file does not route to $skill"
-  grep -Eq '^disable-model-invocation: true$' "$command_file" || fail "$command_file must be user-invoked"
+  python3 tests/validate-openai-metadata.py --command "$command_file" "$command" || fail "$command_file failed frontmatter validation"
 
   lines=$(wc -l < "$skill_file")
   [ "$lines" -le 180 ] || fail "$skill_file is too long to remain a focused workflow core"
@@ -39,10 +39,6 @@ for index in "${!skills[@]}"; do
     fail "$skill_file contains a provider-specific adapter detail"
   fi
 done
-
-if grep -Eq '^allowed-tools:.*(mcp__google-workspace__\*|(^|[,[:space:]])Bash([,[:space:]]|$))' .claude/commands/start.md; then
-  fail ".claude/commands/start.md must not pre-approve wildcard MCP or unrestricted Bash tools"
-fi
 
 for command in "${commands[@]}"; do
   lines=$(wc -l < ".claude/commands/$command.md")
@@ -58,7 +54,7 @@ grep -Fq 'hooks and settings' docs/codex-onboarding.md || fail "Codex guide must
 grep -Fq 'auto-memory' docs/codex-onboarding.md || fail "Codex guide must disclose the auto-memory boundary"
 grep -Fq '/import' docs/codex-onboarding.md || fail "Codex guide must explain optional import"
 
-test ! -e '.codex/config.toml' || fail "this template intentionally ships without project-level Codex overrides"
+grep -Fq 'trusted repository-scoped' docs/codex-onboarding.md || fail "Codex guide must describe supported project configuration accurately"
 
 portability_tmp=$(mktemp -d)
 trap 'rm -rf "$portability_tmp"' EXIT
@@ -74,6 +70,33 @@ sed 's/allow_implicit_invocation: false/allow_implicit_invocation: "false"/' \
   .agents/skills/context-start/agents/openai.yaml > "$invalid_policy"
 if python3 tests/validate-openai-metadata.py "$invalid_policy" context-start >/dev/null 2>&1; then
   fail "string-valued invocation policy passed validation"
+fi
+
+invalid_prompt="$portability_tmp/prefixed-skill-openai.yaml"
+sed 's/\$context-start /\$context-started /' \
+  .agents/skills/context-start/agents/openai.yaml > "$invalid_prompt"
+if python3 tests/validate-openai-metadata.py "$invalid_prompt" context-start >/dev/null 2>&1; then
+  fail "prefixed skill token passed metadata validation"
+fi
+
+control_prompt="$portability_tmp/control-prompt-openai.yaml"
+sed 's/brief me/brief\\u000a me/' \
+  .agents/skills/context-start/agents/openai.yaml > "$control_prompt"
+if python3 tests/validate-openai-metadata.py "$control_prompt" context-start >/dev/null 2>&1; then
+  fail "escaped control character passed metadata validation"
+fi
+
+body_only_command="$portability_tmp/body-only-start.md"
+sed '/^disable-model-invocation: true$/d' .claude/commands/start.md > "$body_only_command"
+printf '\ndisable-model-invocation: true\n' >> "$body_only_command"
+if python3 tests/validate-openai-metadata.py --command "$body_only_command" start >/dev/null 2>&1; then
+  fail "body-only invocation gate passed command validation"
+fi
+
+unrestricted_start="$portability_tmp/unrestricted-start.md"
+sed 's/^allowed-tools:.*/allowed-tools: [Read, Bash]/' .claude/commands/start.md > "$unrestricted_start"
+if python3 tests/validate-openai-metadata.py --command "$unrestricted_start" start >/dev/null 2>&1; then
+  fail "unrestricted inline Bash grant passed command validation"
 fi
 
 help_output=$(bash scripts/setup.sh --help)
@@ -126,6 +149,7 @@ git -C "$commit_fixture" status --short | grep -Fq '?? unrelated-user-work.txt' 
 for skill in context-update context-end; do
   grep -Fq 'current-log.md' ".agents/skills/$skill/SKILL.md" || fail "$skill lacks current.md history handling"
   grep -Fq '**Last Updated:**' ".agents/skills/$skill/SKILL.md" || fail "$skill lacks current.md timestamp handling"
+  grep -Fq 'old_date != today && old_date != newest_history_date' ".agents/skills/$skill/SKILL.md" || fail "$skill lacks the same-day history invariant"
 done
 
 echo "Portability checks passed"

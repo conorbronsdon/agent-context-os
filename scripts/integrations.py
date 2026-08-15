@@ -396,7 +396,7 @@ def render_reference(catalog: dict[str, Any]) -> str:
         "|---|---|---|---:|---:|---:|---:|---:|---|\n"
         + "\n".join(rows)
         + "\n\n"
-        + "\n\n".join(sections)
+        + "\n\n".join(section.rstrip("\n") for section in sections)
         + "\n"
     )
 

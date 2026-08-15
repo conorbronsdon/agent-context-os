@@ -33,6 +33,8 @@ class IntegrationCatalogTests(unittest.TestCase):
         self.assertIn("Typed safety signals", rendered)
         self.assertIn("Required confirmation gates", rendered)
         self.assertIn("immediate public publish action", rendered)
+        self.assertTrue(rendered.endswith("\n"))
+        self.assertFalse(rendered.endswith("\n\n"))
 
     def test_issue_19_entries_have_typed_high_risk_gates(self) -> None:
         tol = self.entry("tolaria")

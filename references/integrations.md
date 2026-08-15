@@ -37,7 +37,6 @@ Capabilities and limits:
 - Install and diff explicitly selected skills
 - Update can replace an installed skill directory; uninstall removes it
 
-
 ## Agent Workspace
 
 A slim standalone package for agent lifecycle, state, reconciliation, and recovery workflows.
@@ -62,7 +61,6 @@ Capabilities and limits:
 - State reconciliation
 - Optional stale worktree cleanup and removal
 
-
 ## AI Tools for Creators
 
 A discovery catalog for creator skills, MCP servers, benchmarks, and publishing tools.
@@ -84,7 +82,6 @@ A discovery catalog for creator skills, MCP servers, benchmarks, and publishing 
 Capabilities and limits:
 
 - Discovery links only; every linked tool needs separate review
-
 
 ## Beads for Gemini CLI
 
@@ -110,7 +107,6 @@ Capabilities and limits:
 - bd init can modify agent instructions and configure a remote
 - bd dolt push --force can overwrite remote history
 - bd init --discard-remote authorizes a divergent local initialization; a later Dolt push is the separate remote-history replacement
-
 
 ## Granola MCP
 
@@ -139,7 +135,6 @@ Capabilities and limits:
 - Free and Business plans may use anonymized data for model improvement by default, with an account opt-out documented
 - Granola can transcribe voice memos, but current MCP documentation guarantees meeting-note and transcript tools rather than voice-memo coverage
 
-
 ## Obsidian CLI
 
 Obsidian's official desktop CLI exposes broad local application and vault capabilities; scope is enforceable only through an exact external command-and-argument policy.
@@ -164,7 +159,6 @@ Capabilities and limits:
 - For bounded file operations require explicit vault= plus path= and reject dangerous flags such as overwrite unless separately approved
 - Treat plugin commands and JavaScript eval as open-world execution with possible filesystem and network effects
 
-
 ## Substack MCP
 
 An MCP server for reading Substack publication data, managing private drafts, and publishing short-form Notes.
@@ -187,7 +181,6 @@ Capabilities and limits:
 
 - Long-form tooling is draft-only; scheduling and public-post mutation are unavailable
 - Note creation publishes immediately and has no server-side undo
-
 
 ## Tolaria MCP
 
@@ -213,4 +206,3 @@ Capabilities and limits:
 - Prefer get\_note, diff review, and expectedMtime before update\_note
 - The MCP content-mutation surface is limited to create, append, update, attach, and local clone operations; open, highlight, and refresh also change transient UI state
 - Review embedded agents, direct provider models, stored provider keys, and AutoGit as separate trust boundaries before enabling them
-

@@ -148,9 +148,8 @@ fi
 # ── 5. Generate REPO_MAP.md ─────────────────────────────────────────────────
 
 if [ -f "scripts/generate-repo-map.sh" ]; then
-  if prompt_yn "  Regenerate tracked REPO_MAP.md from the current tree?" "n"; then
+  if prompt_yn "  Regenerate the local, gitignored REPO_MAP.md from the current tree?" "n"; then
     bash scripts/generate-repo-map.sh
-    track_setup_path "REPO_MAP.md"
     echo "  → Generated REPO_MAP.md"
   else
     echo "  → Kept the existing REPO_MAP.md"

@@ -49,7 +49,7 @@ If the file exists, append `## Session <HH:MM>` and the three subsections instea
 ### 3. Update state
 
 - Update `<state_dir>/current.md` with approved active threads, completions, and a brief recent-context note.
-- Keep exactly one `**Last Updated:**` line in `current.md` and set it to today's date. If that line already has a real prior date, prepend a separate line containing that value under `# current.md update log` in `<state_dir>/current-log.md`; do not log a placeholder or duplicate the newest existing history entry.
+- Keep exactly one `**Last Updated:**` line in `current.md` and set it to today's date. Let `old_date` be the prior real date and `newest_history_date` be the newest date already in the log; archive only when `old_date != today && old_date != newest_history_date`. When that invariant passes, prepend a separate line containing `old_date` under `# current.md update log` in `<state_dir>/current-log.md`. Never log a placeholder; a second checkpoint or close on the same day leaves both the current date and history unchanged.
 - Update `<state_dir>/blockers.md` only for a new, changed, or resolved dependency.
 - Update `<state_dir>/weekly-priorities.md` only when meaningful progress changed the weekly view.
 - Preserve unrelated content in every file.
