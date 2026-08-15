@@ -125,6 +125,8 @@ else
   echo "    Optional: gws — see references/gws-mcp-setup.md for Google Workspace integration"
 fi
 
+echo "    Optional add-ons: see references/integrations.md (nothing is installed automatically)"
+
 # ── 8. Initial commit ───────────────────────────────────────────────────────
 
 echo ""

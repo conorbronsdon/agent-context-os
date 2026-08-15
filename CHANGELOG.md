@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- A validated, opt-in integrations catalog with generated documentation, explicit credential/data/side-effect boundaries, and no automatic installation or activation. Initial links cover Agent Skills, Agent Workspace, AI Tools for Creators, and Substack MCP.
+
 ### Fixed
 - Moved project slash commands from the undiscovered root `commands/` directory to `.claude/commands/`; moved the native meta-skill to `.claude/skills/`; renamed `/context` to `/find-context` to avoid the Claude Code built-in.
 - Added checked-in `.claude/settings.json` hook activation using the current nested hook schema. PreToolUse guards now parse Claude's JSON stdin, and blocking messages use stderr with exit code 2.

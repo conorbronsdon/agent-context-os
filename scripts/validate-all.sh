@@ -14,6 +14,7 @@ while IFS= read -r -d '' script; do
 done < <(find .claude/hooks scripts tests -name '*.sh' -print0)
 
 python3 -m unittest discover -s tests -p 'test_*.py'
+python3 scripts/integrations.py check
 
 python3 - <<'PY'
 import json
@@ -23,6 +24,8 @@ paths = [
     Path(".mcp.json"),
     Path(".claude/settings.json"),
     Path("docs/templates/workflow-parity.json"),
+    Path("integrations/catalog.json"),
+    Path("integrations/schema.json"),
 ]
 for path in paths:
     with path.open(encoding="utf-8") as handle:

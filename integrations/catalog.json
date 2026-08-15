@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "integrations": [
+    {
+      "id": "agent-skills",
+      "name": "Agent Skills",
+      "summary": "A source catalog and installer for portable agent skills.",
+      "source_url": "https://github.com/conorbronsdon/agent-skills",
+      "kind": "skill_catalog",
+      "supported_agents": ["claude_code", "codex", "cursor", "opencode"],
+      "installation": {
+        "automatic": false,
+        "scope": "project_or_user",
+        "prerequisites": ["Git", "A supported agent client"]
+      },
+      "data_boundary": {
+        "credentials": [],
+        "reads": ["Selected public skill source files"],
+        "writes": ["Chosen skill files in an agent-specific project or user directory"]
+      },
+      "capabilities": {
+        "read": true,
+        "write": true,
+        "publish": false,
+        "destructive": false,
+        "details": ["Install, diff, and update explicitly selected skills"]
+      },
+      "confirmation": {
+        "required_for": ["external_install", "write"],
+        "notes": "Review the selected skill and destination before installation or update."
+      },
+      "risk_tags": ["external-install", "project-files"],
+      "maturity": "verified",
+      "last_verified": "2026-08-15",
+      "health_check": "Use the repository's documented diff and validation workflow for the selected skill.",
+      "uninstall": "Remove only the installed skill directory after reviewing local modifications."
+    },
+    {
+      "id": "agent-workspace",
+      "name": "Agent Workspace",
+      "summary": "A slim standalone package for agent lifecycle, state, reconciliation, and recovery workflows.",
+      "source_url": "https://github.com/conorbronsdon/agent-workspace",
+      "kind": "workspace_template",
+      "supported_agents": ["claude_code", "codex", "generic"],
+      "installation": {
+        "automatic": false,
+        "scope": "project",
+        "prerequisites": ["Git", "A repository where workspace state may be stored"]
+      },
+      "data_boundary": {
+        "credentials": [],
+        "reads": ["Local workspace state, sessions, branches, and worktrees"],
+        "writes": ["Local workspace state and session files after workflow approval"]
+      },
+      "capabilities": {
+        "read": true,
+        "write": true,
+        "publish": false,
+        "destructive": true,
+        "details": ["Session lifecycle", "State reconciliation", "Optional stale worktree cleanup"]
+      },
+      "confirmation": {
+        "required_for": ["external_install", "write", "destructive"],
+        "notes": "Recovery is read-only by default; require approval before cleanup or state mutation."
+      },
+      "risk_tags": ["local-state", "git", "cleanup"],
+      "maturity": "verified",
+      "last_verified": "2026-08-15",
+      "health_check": "Run the package's documented validation and a read-only start or reconcile workflow.",
+      "uninstall": "Remove the installed adapters only after preserving any workspace state the user wants to keep."
+    },
+    {
+      "id": "ai-tools-for-creators",
+      "name": "AI Tools for Creators",
+      "summary": "A discovery catalog for creator skills, MCP servers, benchmarks, and publishing tools.",
+      "source_url": "https://github.com/conorbronsdon/ai-tools-for-creators",
+      "kind": "resource_catalog",
+      "supported_agents": ["generic"],
+      "installation": {
+        "automatic": false,
+        "scope": "none",
+        "prerequisites": []
+      },
+      "data_boundary": {
+        "credentials": [],
+        "reads": ["Public catalog documentation"],
+        "writes": []
+      },
+      "capabilities": {
+        "read": true,
+        "write": false,
+        "publish": false,
+        "destructive": false,
+        "details": ["Discovery links only; every linked tool needs separate review"]
+      },
+      "confirmation": {
+        "required_for": [],
+        "notes": "A listing is not verification. Re-check the linked source before installing or authorizing it."
+      },
+      "risk_tags": ["catalog", "third-party-links", "drift-prone"],
+      "maturity": "listed",
+      "last_verified": "2026-08-15",
+      "health_check": "Open the linked project's current source and verify its own installation and safety claims.",
+      "uninstall": "No installation is performed by this catalog entry."
+    },
+    {
+      "id": "substack-mcp",
+      "name": "Substack MCP",
+      "summary": "An MCP server for reading Substack publication data, managing private drafts, and publishing short-form Notes.",
+      "source_url": "https://github.com/conorbronsdon/substack-mcp",
+      "kind": "mcp_server",
+      "supported_agents": ["claude_code", "codex", "generic"],
+      "installation": {
+        "automatic": false,
+        "scope": "project",
+        "prerequisites": ["Node.js with npm/npx", "A Substack publication account"]
+      },
+      "data_boundary": {
+        "credentials": ["Publication URL", "Session token", "User ID", "Optional machine-bound browser-login session file"],
+        "reads": ["Subscriber count, posts, drafts, comments, sections, analytics, and schedules"],
+        "writes": ["Private long-form drafts", "Publicly fetchable image uploads", "Immediately public Notes"]
+      },
+      "capabilities": {
+        "read": true,
+        "write": true,
+        "publish": true,
+        "destructive": false,
+        "details": ["No long-form publish, delete, or schedule mutation", "Note creation publishes immediately and has no server-side undo"]
+      },
+      "confirmation": {
+        "required_for": ["credential_setup", "external_install", "write", "publish"],
+        "notes": "Always confirm Note creation as an immediate public publish action; private draft writes use the normal external-write gate."
+      },
+      "risk_tags": ["credentials", "external-data", "public-publish", "unofficial-api"],
+      "maturity": "verified",
+      "last_verified": "2026-08-15",
+      "health_check": "After explicit authentication, run the documented subscriber-count read and verify the expected publication account.",
+      "uninstall": "Remove the MCP client entry and, if used, review then remove the local browser-login session file."
+    }
+  ]
+}
