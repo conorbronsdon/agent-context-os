@@ -112,7 +112,7 @@ Capabilities and limits:
 
 ## Google Workspace CLI
 
-Google's pre-1.0 command-line interface and Agent Skills for scoped access to Workspace APIs; this repository grants only four read methods to the Claude session-start adapter.
+Google's pre-1.0 command-line interface and Agent Skills for scoped access to Workspace APIs; optional session-start reads require read-only OAuth scopes and per-invocation approval.
 
 - **Supported agents:** `claude_code`, `codex`, `gemini_cli`, `generic`
 - **Install scope:** `project_or_user`; never automatic
@@ -125,14 +125,15 @@ Google's pre-1.0 command-line interface and Agent Skills for scoped access to Wo
 - **Confirmation:** Confirm the exact Google account, Cloud project, services, and OAuth scopes; ask before broad sensitive reads, and separately confirm every send, upload, event creation, remote update, replacement, or deletion after showing the exact target and payload.
 - **Risk tags:** `sensitive-read`, `remote-write`, `overwrite-capable`, `delete-capable`, `oauth`, `destructive-capable`, `pre-v1`, `dynamic-api-surface`, `external-messages`
 - **Evidence:** [1](https://github.com/googleworkspace/cli/blob/a3768d0e82ad83cca2da97724e46bea4ff0e6dbd/README.md); [2](https://github.com/googleworkspace/cli/blob/a3768d0e82ad83cca2da97724e46bea4ff0e6dbd/docs/skills.md)
-- **Health check:** Run gws --version, verify the active account and selected scopes, then perform one bounded read with a single-result limit; do not use a write for the initial check.
+- **Health check:** Run gws --version and gws auth status, verify the active account and read-only scope list, then perform one approval-gated read with a single-result limit and no --page-all or --output; do not use a write for the initial check.
 - **Uninstall:** Remove installed gws skills or extensions, uninstall the CLI if desired, review then remove its local configuration, and revoke the Google OAuth grant; leave Workspace content unchanged. (removes user data: No)
 
 Capabilities and limits:
 
 - The CLI builds commands from current Google Discovery documents, so enabled services can expose a wider method surface than a static guide lists
-- Context OS does not install or authenticate gws and no longer ships the removed gws mcp configuration
-- The Claude session-start adapter pre-approves only bounded calendar list, Gmail message list, Drive file list, and Sheets value get command prefixes
+- Context OS does not install or authenticate gws; at the pinned upstream revision verified here, the CLI does not expose the older gws mcp command
+- The Claude session-start adapter does not pre-approve Bash; every proposed CLI read goes through normal approval with its exact identifiers, limits, fields, and output flags visible
+- The documented login uses --readonly for the selected services and verifies the resulting account and scopes with gws auth status
 - OAuth scopes limit account access but do not provide per-action review; use narrow scopes and separate confirmation for every send, remote write, overwrite, and deletion
 - gws auth setup requires gcloud; the documented manual OAuth path is the fallback, and testing-mode apps can hit scope-count limits
 - Upstream supports dry-run for API methods and many mutating helpers, but availability must be checked for the exact command

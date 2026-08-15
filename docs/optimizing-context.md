@@ -85,10 +85,9 @@ include the first 5 rows as examples and describe the pattern of the remaining d
 
 ### Web page / article
 
-In Claude Code with gws MCP connected, you can fetch pages directly. Otherwise:
-- Use a browser's "Reader Mode" (Safari, Firefox) to strip navigation and ads, then copy the clean text
+Use a browser's "Reader Mode" (Safari, Firefox) to strip navigation and ads, then copy the clean text. You can also:
 - Use a service like [Reader](https://reader.readwise.io) to get clean markdown from any URL
-- Or just select the relevant section, copy, and paste into the conversion prompt — you rarely need the whole page
+- Select the relevant section, copy, and paste it into the conversion prompt — you rarely need the whole page
 
 ### Existing claude.ai project files
 

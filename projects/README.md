@@ -18,7 +18,7 @@ Name it something short and clear. This becomes how you refer to it in ROUTING.m
 
 ### Step 2: Add a context file
 
-`your-project-name/context.md` — the permanent background Claude should know about this project:
+`your-project-name/context.md` — the permanent background a supported agent should know about this project:
 - What the project is and what you're trying to accomplish
 - Audience, tone, platform (if relevant)
 - Key constraints or decisions already made
@@ -47,16 +47,14 @@ Each skill file should contain:
 - Output format
 - Examples or calibration notes
 
-**Frontmatter fields:**
+**Portable frontmatter:**
 
 | Field | Required | Purpose |
 |-------|----------|---------|
 | `name` | Yes | Identifier used to reference the skill |
-| `description` | Yes | When to load this skill — Claude uses this to decide whether it applies |
-| `requires.context` | No | List of context files to read before running |
-| `requires.skills` | No | List of other skill files to load alongside this one |
-| `allowed-tools` | No | Pre-approve narrowly scoped Claude Code tools while active; this is a grant, not a restriction |
-| `upstream` | No | URL of the canonical source if the skill is maintained externally |
+| `description` | Yes | What the skill does and when an agent should use it |
+
+Keep context dependencies, related skills, provenance, and tool requirements in the Markdown body. Do not put host-specific permission fields such as `allowed-tools` or nonstandard dependency fields such as `requires` in a provider-neutral skill. A thin host adapter may declare its own permissions.
 
 Minimal example:
 ```
@@ -66,18 +64,17 @@ description: What this skill does and when to invoke it
 ---
 ```
 
-Full example:
+Example with explicit dependencies in the body:
 ```
 ---
 name: my-skill
 description: What this skill does and when to invoke it
-requires:
-  context:
-    - projects/my-project/context.md
-  skills:
-    - writing/skills/avoid-ai-writing/SKILL.md
-allowed-tools: Read
 ---
+
+# My skill
+
+Before starting, read `projects/my-project/context.md` and the related
+`writing/skills/avoid-ai-writing/SKILL.md` instructions.
 ```
 
 ### Step 5: Wire it into ROUTING.md and optional host adapters
@@ -87,28 +84,28 @@ Add a line to `ROUTING.md` under "Project tasks":
 - [Project name] work → read `projects/your-project-name/context.md`
 ```
 
-If you want a slash command:
+If you want an optional Claude Code slash command:
 ```
 | `/your-command` | brief description |
 ```
-...in the slash commands table in `CLAUDE.md`, and a corresponding file in `.claude/commands/your-command.md`.
+...in the slash commands table in `CLAUDE.md`, and a thin corresponding adapter in `.claude/commands/your-command.md`. Keep tool grants and Claude-only behavior in that adapter, not in `.agents/skills/`.
 
 ---
 
 ## Example
 
-See `example-musician/` for a worked example — a musician building out a promotion workflow with Claude. It covers:
+See `example-musician/` for a worked example of a musician promotion workspace. It covers:
 - Artist context and strategy files
-- A social post skill for consistent platform-native content
-- A press outreach skill for pitching blogs and playlists
+- A reference-only social post workflow for consistent platform-native content
+- A reference-only press outreach workflow for pitching blogs and playlists
 
-Use it as a reference, not a template to copy wholesale. Build what's actually useful for your project.
+The workflows live under `workflow-examples/` so agents do not discover them as active skills. Copy an example to `.agents/skills/<unique-name>/SKILL.md`, replace the sample paths, and add a host adapter only if needed. Use it as a reference, not a template to copy wholesale.
 
 ---
 
 ## Tips
 
-- **Start with context, add skills later.** A good context file immediately improves Claude's output. Skills take more time to write and are worth it once you have a repeating task.
+- **Start with context, add skills later.** A good context file immediately improves an agent's output. Skills take more time to write and are worth it once you have a repeating task.
 - **Update context as the project evolves.** A file that accurately reflects where you are beats a comprehensive file that's two months old.
 - **One skill per task.** Don't build a skill that does three things. Build three skills.
 - **Write skills for tasks you do at least weekly.** If you're only doing something once, just explain it in the conversation.

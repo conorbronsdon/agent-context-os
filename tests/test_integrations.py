@@ -63,6 +63,17 @@ class IntegrationCatalogTests(unittest.TestCase):
             ):
                 self.assertIn(gate, item["confirmation"]["required_for"])
 
+        gws_guide = (ROOT / "references" / "google-workspace-cli-setup.md").read_text()
+        self.assertIn(
+            "gws auth login --readonly -s drive,gmail,calendar,sheets", gws_guide
+        )
+        self.assertIn("gws auth status", gws_guide)
+        self.assertNotIn("gws auth login -s drive,gmail,calendar,sheets", gws_guide)
+        self.assertIn("does not pre-approve Bash", gws_guide)
+        gws = self.entry("google-workspace-cli")
+        self.assertNotIn("pre-approves", " ".join(gws["capabilities"]["details"]))
+        self.assertIn("gws auth status", gws["health_check"])
+
     def test_issue_19_entries_have_typed_high_risk_gates(self) -> None:
         tol = self.entry("tolaria")
         self.assertEqual(tol["name"], "Tolaria MCP")

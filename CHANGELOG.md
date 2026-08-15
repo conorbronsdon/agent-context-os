@@ -12,7 +12,7 @@
 - First-class Codex onboarding with a root `AGENTS.md`, four explicit-invocation lifecycle skills under `.agents/skills/`, generated skill UI metadata, `--agent codex` setup support, portability tests, and a host-boundary guide.
 
 ### Fixed
-- `scripts/setup.sh` no longer relies on GNU-only `sed -i`, so literal-name replacement and sample-route cleanup work on macOS and Linux through Python 3.
+- `scripts/setup.sh` no longer relies on GNU-only `sed -i`; literal-name replacement and sample-route cleanup now use the documented Python 3 dependency.
 - Replaced the deprecated Notion npm-server instructions with Notion's hosted OAuth MCP path for Claude Code and Codex.
 - Aligned manual claude.ai setup prompts with portable skill paths and approval-gated local setup instead of claiming slash-command or commit parity.
 - Moved project slash commands from the undiscovered root `commands/` directory to `.claude/commands/`; moved the native meta-skill to `.claude/skills/`; renamed `/context` to `/find-context` to avoid the Claude Code built-in.
@@ -46,11 +46,11 @@
 - `scripts/dream/prompts/{rot,merge,split}.md`, `docs/dream-architecture.md` — curator inputs now exclude `memory/archive/`.
 
 ### Removed
-- The obsolete checked-in `gws mcp` configuration and stale MCP setup guide. The current Google Workspace CLI no longer exposes that command; Claude's start adapter now allows only four current read-only CLI prefixes.
+- The obsolete checked-in `gws mcp` configuration and stale MCP setup guide. The pinned upstream revision no longer exposes that command; optional live reads now use read-only OAuth scopes and per-invocation approval instead of wildcard Bash pre-approval.
 
 ---
 
-## [0.11.0]: Active harness and migration
+## [0.11.0] — Active harness and migration
 
 ### Added
 - Privacy-first Gemini migration: `/migrate-gemini`, `/mine-gemini-workflows`, portable `.agents/skills/` cores, a current JSON/JSONL session miner, workflow parity template, tests, and `docs/gemini-migration.md`.
@@ -69,7 +69,7 @@
 
 ---
 
-## [0.10.0]: Context OS rename and demo
+## [0.10.0] — `claude-context-os` slug rename and demo
 
 ### Added
 - `docs/assets/og-image.{svg,png}` — social-preview card (1280×640), updated to the `claude-context-os` name, the new "operating system" tagline, and the correct URL. The old preview still showed `claude-context-starter`. Upload the PNG via Settings → Social preview.

@@ -30,7 +30,7 @@ Ask me the following questions one at a time — wait for my answer before movin
 9. What are your key credentials or social proof — the things that establish your credibility?
 10. Where are you online? (Website, social handles, etc.)
 
-After I've answered all of them, write the files. Use my exact words where possible — don't polish or generalize. Update the Last Updated date to today. Tell me what you wrote.
+After I've answered all of them, produce two clearly labeled Markdown drafts for `identity/who-i-am.md` and `identity/professional-background.md`. Use my exact words where possible — don't polish or generalize. Use today for the proposed Last Updated date. Do not claim to create or update local files; tell me where to copy each approved draft.
 ```
 
 ---
@@ -39,7 +39,7 @@ After I've answered all of them, write the files. Use my exact words where possi
 
 The example project in this repo is built for a musician — so the questions below are tailored for that. If your project is something else entirely, skip to Prompt 3, which is generic and works for any project type.
 
-This prompt fills in `projects/example-musician/artist-context.md` and `projects/example-musician/promotion-strategy.md`, then renames the folder to match your artist name.
+This prompt drafts replacements for `projects/example-musician/artist-context.md` and `projects/example-musician/promotion-strategy.md`, plus a manual rename plan for the folder.
 
 ```
 Read projects/example-musician/artist-context.md and projects/example-musician/promotion-strategy.md so you understand the structure. Then interview me to fill them in.
@@ -72,12 +72,12 @@ Ask me the following questions one at a time — wait for my answer before movin
 15. What are you specifically trying to accomplish in the next 3 months?
 16. Where do you want to be as an artist in 1-2 years?
 
-After I've answered everything, do the following:
-1. Rename the folder from `projects/example-musician` to `projects/[artist-name-lowercase-hyphenated]`
-2. Write artist-context.md and promotion-strategy.md with my answers — use my words, not polished versions
-3. Update ROUTING.md to point to the new folder name
-4. Update the Last Updated dates to today
-5. Tell me what changed and what to do next
+After I've answered everything, draft the following artifacts without claiming to change local files:
+1. A proposed folder name: `projects/[artist-name-lowercase-hyphenated]`
+2. Complete Markdown for `artist-context.md` and `promotion-strategy.md` using my words, not polished versions
+3. The exact replacement line for `ROUTING.md`
+4. Today's proposed Last Updated dates
+5. A short copy-and-rename checklist for me to apply locally after review
 ```
 
 ---
@@ -100,15 +100,14 @@ Ask me the following questions one at a time:
 7. What tasks do you do repeatedly for this project? List them — even rough descriptions are fine.
 8. Of those recurring tasks, which ones take the most time or feel the most inconsistent?
 
-After I've answered everything:
-1. Create a folder at `projects/[project-name]/`
-2. Write `projects/[project-name]/context.md` with the permanent background
-3. Write `projects/[project-name]/strategy.md` with goals and current focus
-4. For the top 1-2 recurring tasks I mentioned, draft a provider-neutral skill for `.agents/skills/[project-name]-[task-name]/SKILL.md`; keep project facts in the project files and reference them from the skill
-5. Add a line to ROUTING.md under "Project tasks" pointing to the new context file
-6. Ask whether I want a Claude Code slash command for any skill; if yes, draft a thin `.claude/commands/[task-name].md` adapter and the matching `CLAUDE.md` table row
-7. Update CHANGELOG.md with what was added
-8. Tell me what you built and what to fill in next
+After I've answered everything, produce a review packet without claiming to change local files:
+1. The proposed folder path `projects/[project-name]/`
+2. Complete Markdown drafts for `context.md` and `strategy.md`
+3. For the top 1-2 recurring tasks I mentioned, a provider-neutral skill draft for `.agents/skills/[project-name]-[task-name]/SKILL.md`; keep project facts in the project files and reference them from the skill body
+4. The exact proposed line for `ROUTING.md` under "Project tasks"
+5. A proposed `CHANGELOG.md` bullet
+6. Ask whether I want a Claude Code slash command for any skill; if yes, draft a separate thin `.claude/commands/[task-name].md` adapter and matching `CLAUDE.md` table row
+7. Label every draft with its destination path and finish with a manual copy checklist
 ```
 
 ---
@@ -126,7 +125,7 @@ Read state/current.md and state/weekly-priorities.md. Then ask me:
 4. Any open threads or things you're waiting on?
 5. Anything that changed since last week that I should know about?
 
-Update both files with my answers. Update the dates. Keep it terse — these files are read at the start of every session, so clarity beats completeness. Tell me what changed.
+Draft complete replacements for both files with my answers and proposed current dates. Keep them terse — these files are read at the start of every session, so clarity beats completeness. Do not claim to update local files; label each draft with its destination path.
 ```
 
 ---

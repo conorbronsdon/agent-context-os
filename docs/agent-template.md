@@ -1,6 +1,6 @@
-# Agent Template
+# Portable skill template
 
-Reusable scaffold for building new skills. Use this as a reference when creating skills for your projects.
+Reusable scaffold for provider-neutral skills. Put the canonical workflow under `.agents/skills/`; add a host adapter only when that host needs one.
 
 ---
 
@@ -42,15 +42,16 @@ description: [One sentence, 60+ chars, what this skill does and when to use it]
 
 ---
 
-## Command Routing File Template
+## Optional Claude Code adapter
 
-Place in `.claude/commands/[skill-name].md`. This is what the slash command loads.
+Place this thin adapter in `.claude/commands/[skill-name].md` only when a Claude slash command is useful. Host permissions belong here, not in the portable skill.
 
 ```markdown
 ---
 name: [skill-name]
 description: [Short description, 20+ chars]
-allowed-tools: [Read, Bash, Write, Edit, Glob — pre-approve only what's needed]
+allowed-tools: "Read"
+disable-model-invocation: true
 ---
 
 Load `[path/to/SKILL.md]` and follow its instructions.
@@ -58,21 +59,27 @@ Load `[path/to/SKILL.md]` and follow its instructions.
 
 ---
 
-## Checklist Before Shipping a New Skill
+## Checklist before shipping a portable skill
 
 - [ ] SKILL.md has YAML frontmatter with `name` and `description` (60+ chars)
-- [ ] Command routing file exists in `.claude/commands/` with 20+ char description
-- [ ] Slash command row added to CLAUDE.md command table
+- [ ] Context dependencies and related workflows are named in the body
+- [ ] Host-specific tools, permission grants, hooks, and commands stay out of `.agents/skills/`
 - [ ] Routing rule added to ROUTING.md if appropriate
 - [ ] CHANGELOG.md updated with new files
 - [ ] Run `scripts/validate-all.sh` to verify structure
+
+If you add the optional Claude adapter:
+
+- [ ] The command routes to the canonical `.agents/skills/` file
+- [ ] Any `allowed-tools` grant is the smallest reviewed set
+- [ ] The slash command row is added to the `CLAUDE.md` command table
 
 ---
 
 ## Directory Convention
 
 ```
-projects/your-project/skills/
+.agents/skills/
 └── [skill-name]/
     └── SKILL.md
 ```
@@ -85,6 +92,6 @@ For a Claude-only general-purpose skill:
     └── SKILL.md
 ```
 
-For a provider-neutral skill shared with Gemini CLI and Codex, use `.agents/skills/[skill-name]/SKILL.md` and add a thin `.claude/commands/[skill-name].md` adapter when a Claude slash command is wanted.
+For a provider-neutral skill shared with compatible agents, use `.agents/skills/[skill-name]/SKILL.md` and add a thin `.claude/commands/[skill-name].md` adapter when a Claude slash command is wanted.
 
 Commands always live flat in `.claude/commands/[skill-name].md`.

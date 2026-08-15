@@ -1,12 +1,6 @@
 ---
 name: press-outreach
 description: Draft a cold pitch email to a music blog, playlist curator, or press contact. Load artist-context.md and promotion-strategy.md before running. Use when asked to "pitch [outlet]," "draft an email to [curator/blog]," or "write a press pitch."
-requires:
-  context:
-    - projects/example-musician/artist-context.md
-    - projects/example-musician/promotion-strategy.md
-  skills:
-    - writing/skills/avoid-ai-writing/SKILL.md
 ---
 
 # Press Outreach — Musician
@@ -15,9 +9,10 @@ Draft a pitch email to a blog, playlist curator, or press contact. Load artist c
 
 ## Before writing
 
-1. Read `artist-context.md` — catalog, sound, audience, any existing press
-2. Read `promotion-strategy.md` — what's being pitched, current release, target outlets
-3. Ask (or check the conversation) for: the specific outlet/contact, what you're pitching (release, tour, story), and any context about why this contact is a fit
+1. Read `projects/example-musician/artist-context.md` — catalog, sound, audience, any existing press
+2. Read `projects/example-musician/promotion-strategy.md` — what's being pitched, current release, target outlets
+3. Read `writing/skills/avoid-ai-writing/SKILL.md` — apply its writing audit
+4. Ask (or check the conversation) for: the specific outlet/contact, what you're pitching (release, tour, story), and any context about why this contact is a fit
 
 ## Email types
 

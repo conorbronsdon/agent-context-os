@@ -1,6 +1,6 @@
 # Example Project: Musician Promotion
 
-This is a worked example of a project section for a musician using Claude to accelerate their promotion workflow. Replace everything in brackets with your own details.
+This is a worked example of a project section for a musician using coding agents to accelerate a promotion workflow. Replace everything in brackets with your own details.
 
 The core workflow this covers:
 1. Writing social content that sounds like you (not AI) across Instagram, TikTok, and Twitter/X
@@ -13,17 +13,19 @@ The core workflow this covers:
 |------|--------------|
 | `artist-context.md` | Who you are as an artist — the permanent background Claude needs |
 | `promotion-strategy.md` | Current focus, platforms, goals, what's working |
-| `skills/social-post/SKILL.md` | Write platform-native social posts in your voice |
-| `skills/press-outreach/SKILL.md` | Draft cold pitches to blogs, playlists, and press |
+| `workflow-examples/social-post/SKILL.md` | Reference workflow for platform-native social posts |
+| `workflow-examples/press-outreach/SKILL.md` | Reference workflow for cold pitches to blogs, playlists, and press |
 
 ## How to use this
 
 1. Fill in `artist-context.md` and `promotion-strategy.md` first — these are the foundation everything else draws from
-2. Add `projects/[your-project-name]/` to ROUTING.md so Claude knows when to load it
-3. Try `/clean-ai-writing` on any draft that sounds off — the avoid-ai-writing skill works for music content too
-4. Build new skills as you identify repeating tasks (e.g., writing EPK copy, drafting grant applications, creating set list announcements)
+2. Add `projects/[your-project-name]/` to `ROUTING.md` so supported agents know when to load it
+3. Apply `writing/skills/avoid-ai-writing/SKILL.md` to any draft that sounds off
+4. Copy a useful reference workflow to `.agents/skills/<unique-name>/SKILL.md`, replace the sample paths, and build new skills as repeated tasks become clear
 
-## Slash commands to add (optional)
+The files under `workflow-examples/` are not active or auto-discovered. They use portable frontmatter and keep context dependencies in the body.
+
+## Claude Code slash commands (optional)
 
 Once you've filled in the context files, add these to the slash commands table in `CLAUDE.md`:
 
@@ -32,4 +34,4 @@ Once you've filled in the context files, add these to the slash commands table i
 | `/press-pitch` | Draft an outreach email to a blog, playlist, or press contact |
 ```
 
-Then create a corresponding file in `.claude/commands/` for each one. The pattern is the same as `.claude/commands/start.md` — a frontmatter block declaring the skill name and which tools it needs, followed by instructions that tell Claude which skill file to load. Prompt 3 in `SETUP-PROMPTS.md` will handle this automatically if you ask for slash commands during setup.
+Then create a thin corresponding file in `.claude/commands/` for each one. The adapter may declare narrowly scoped Claude tools and should route to the canonical skill under `.agents/skills/`. Prompt 3 in `SETUP-PROMPTS.md` can draft this adapter when requested.

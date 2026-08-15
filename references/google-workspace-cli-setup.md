@@ -4,7 +4,7 @@
 
 [`gws`](https://github.com/googleworkspace/cli) is an actively developed, pre-1.0 CLI for Google Workspace APIs. It builds its command surface from Google Discovery documents and includes Agent Skills for supported services. It is not an officially supported Google product.
 
-This repository does not install `gws`, authenticate an account, or ship an MCP configuration. An older `gws mcp` integration was removed because the current CLI no longer exposes that command. The Claude Code `/start` adapter can use four narrowly allowlisted read commands when `gws` is already installed and authenticated.
+This repository does not install `gws`, authenticate an account, or ship an MCP configuration. At the pinned upstream revision verified on the date above, the CLI no longer exposes the older `gws mcp` command. Installed releases can differ, so check `gws --version`; this guide does not configure that legacy path. Optional `/start` reads require review of each exact CLI invocation.
 
 ## Install
 
@@ -29,16 +29,19 @@ Check the current [upstream installation guide](https://github.com/googleworkspa
 
 ```bash
 gws auth setup
-gws auth login -s drive,gmail,calendar,sheets
+gws auth login --readonly -s drive,gmail,calendar,sheets
+gws auth status
 ```
 
-Choose only the services you need. The upstream documentation warns that unverified OAuth apps in testing mode can fail when requesting a large preset of scopes. OAuth scope limits control what the CLI may access; they do not replace per-action review.
+Choose only the services you need. `--readonly` selects the read-only scopes for those services; `-s` by itself only filters the service picker and does not make its selected scopes read-only. Review the account and scope list printed by `gws auth status` before continuing. If any scope permits writes, log out and repeat login with the intended read-only selection.
+
+The upstream documentation warns that unverified OAuth apps in testing mode can fail when requesting a large preset of scopes. OAuth scope limits control what the CLI may access; they do not replace per-action review.
 
 Interactive credentials are encrypted with a key kept in the OS keyring when available. Exported credentials, service-account files, access-token environment variables, client secrets, and file-backed key material must stay outside the repository and logs.
 
-## Read-only session-start access
+## Approval-gated session-start reads
 
-The Claude Code `/start` adapter pre-approves only these command prefixes:
+The Claude Code `/start` adapter may propose these read methods:
 
 ```text
 gws calendar events list
@@ -47,9 +50,9 @@ gws drive files list
 gws sheets spreadsheets values get
 ```
 
-The adapter uses narrow date windows, result limits, field selection, and identifiers from `state/gws-references.md`. If the CLI or selected identifiers are unavailable, it falls back to repository state.
+The adapter uses narrow date windows, result limits, field selection, and identifiers from `state/gws-references.md`. It does not pre-approve Bash. The user reviews every exact invocation through the normal tool approval flow. If the CLI or selected identifiers are unavailable, the workflow falls back to repository state.
 
-This allowlist does not grant send, create, update, upload, overwrite, delete, or authentication commands. Other `gws` use requires the normal tool approval flow.
+Do not approve `--page-all`, `--output`, an identifier outside `state/gws-references.md`, or a command that sends, creates, updates, uploads, overwrites, deletes, authenticates, or changes configuration as part of `/start`.
 
 ## Agent Skills and Gemini extension
 
@@ -76,6 +79,6 @@ The complete data and side-effect boundary is in the generated [integration cata
 
 ## Verify and remove
 
-After authentication, run `gws --version`, verify the active account, and perform one bounded read such as a single Drive file listing. Do not use a write as the initial health check.
+After authentication, run `gws --version` and `gws auth status`, verify the active account and read-only scope list, and perform one bounded read such as a single Drive file listing. Do not use a write as the initial health check.
 
 To disconnect, remove any installed skills or extension, uninstall the CLI if desired, remove its local configuration only after review, and revoke the OAuth grant in the Google account. These actions do not delete Workspace content.
