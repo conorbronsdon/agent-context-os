@@ -43,6 +43,12 @@ The command adapters fail closed unless all of these are true:
 - the repository marker equals the resolved git common directory for the current repository; and
 - the memory directory is its own local git repository before a curator runs.
 
+They also require the memory repository to be clean before `/dream` or
+`/dream-apply` starts. Proposal creation stages only the three validated
+artifact files. Apply stages only the exact reviewed change list. Both flows
+rerun the executable allowlist check immediately before committing, so a
+tracked, staged, untracked, or concurrent unrelated change stops the commit.
+
 Linked worktrees share the same git common-directory identity and may therefore use the same memory store, but each worktree needs its own ignored `.context-os/memory-directory` and applicable `autoMemoryDirectory` setting. Moving the repository's common git directory intentionally invalidates the marker. Re-open `/memory`, verify the intended store, and update local records rather than assuming the old path migrated.
 
 ## Storage layout
@@ -115,6 +121,6 @@ For repository-defined `/end` memory proposals, show the detail file and index l
 
 Pattern, standalone contradiction, untapped-work, and audit curators are roadmap items.
 
-`/dream` writes and commits proposal artifacts to the local memory git repository before review. It does not modify live memory files. `/dream-apply` walks each proposal and requires a per-item decision before live-memory changes. Neither command may push the memory repository.
+`/dream` writes and commits proposal artifacts to the local memory git repository before review. It does not modify live memory files. `/dream-apply` walks each proposal and requires a per-item decision before live-memory changes. Structural proposal targets are limited to detail files: `MEMORY.md` and `ARCHIVE.md` cannot be archived, merged, split, or created as detail files. Proposal IDs and mutation targets must be unique across an artifact. Neither command may push the memory repository.
 
 See [`memory-template.md`](memory-template.md) for the starter index and [`dream-architecture.md`](dream-architecture.md) for the proposal protocol. Claude Code's current behavior and `autoMemoryDirectory` setting are documented in the official [memory documentation](https://code.claude.com/docs/en/memory).

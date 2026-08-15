@@ -29,7 +29,7 @@ These are the portable skills `.agents/skills/migrate-gemini` and `.agents/skill
 | `/today` | Morning heartbeat from repository state | Writes `state/heartbeat-log.md`; live data is skipped unless separately enabled and requested |
 | `/capture` | Triage reviewed inbox notes | Writes only approved destinations, verifies them, and leaves each source for separate user-controlled cleanup |
 | `/find-context` | Find relevant repository context | Read-only |
-| `/reconcile` | Detect repository and session drift | Read-only report; does not pull, rebase, or repair |
+| `/reconcile` | Detect repository and session drift | Read-only report by default; explicit fix mode may edit and commit individually approved repairs |
 | `/recover` | Inspect orphaned worktrees/branches and offer cleanup | Cleanup is destructive and remains approval-gated |
 | `/content-shipped` | Record a confirmed published item | Writes `content/log.md`; it does not publish the item |
 | `/clean-ai-writing` | Apply the included writing workflow | Edits only the reviewed draft target |

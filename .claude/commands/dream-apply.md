@@ -28,7 +28,7 @@ Run the executable validator before reading or applying any artifact:
 python3 scripts/dream/validate-memory.py artifact "${ARGUMENTS:-latest}"
 ```
 
-Parse the returned JSON. Set `MEMORY_DIR` from `memory_dir`, `TS` from `timestamp`, and the dream dir from `dream_dir`. The helper rejects malformed timestamps, path traversal, absolute or control-character arguments, symlinked artifact components, missing `proposals.json`/`REPORT.md`, malformed proposal schemas, unknown actions, empty evidence, and any proposal filename that is not a safe memory `.md` basename under the validated memory root.
+Parse the returned JSON. Set `MEMORY_DIR` from `memory_dir`, `TS` from `timestamp`, and the dream dir from `dream_dir`. The helper rejects malformed timestamps, path traversal, absolute or control-character arguments, symlinked artifact components, missing `proposals.json`/`REPORT.md`, malformed or colliding proposal schemas, unknown/roadmap actions, empty evidence, unsafe control-file targets, and any proposal filename outside the validated memory root. It also requires the memory repository to be clean before review; stop so any host auto-memory change can be reviewed or snapshotted separately.
 
 Do not create or guess a memory directory when a check fails. Stop and direct the user to `docs/auto-memory.md`.
 
@@ -112,6 +112,8 @@ e. On `Reject`: skip, log to `applied.json` as `rejected`.
 
 f. On `Skip rest`: break the loop, log remaining as `deferred`.
 
+Maintain an exact, deduplicated list of every memory-relative path this accepted set actually changes: each edited/created/removed detail file, archive destination, `MEMORY.md`, `ARCHIVE.md`, every link-bearing file edited, and `.dreams/$TS/applied.json`. Never add a path merely because a proposal mentioned it.
+
 ### 5. Write `applied.json` to the dream dir
 
 Write this file only at the already validated `$dream_dir/applied.json`; do not reconstruct its path from user input.
@@ -129,11 +131,23 @@ Write this file only at the already validated `$dream_dir/applied.json`; do not 
 
 ### 6. Commit to memory git
 
+Pass every path in that reviewed list to the executable allowlist check as a repeated `--allow` argument. Then stage only those same paths:
+
 ```
-cd "$MEMORY_DIR"
-git add -A
-git commit -m "dream-apply($TS): N accepted / M rejected / K deferred"
+python3 scripts/dream/validate-memory.py changes \
+  --allow ".dreams/$TS/applied.json" \
+  --allow "<each other exact changed memory-relative path>"
+git -C "$MEMORY_DIR" add -A -- \
+  ".dreams/$TS/applied.json" \
+  "<each other exact changed memory-relative path>"
+python3 scripts/dream/validate-memory.py changes \
+  --allow ".dreams/$TS/applied.json" \
+  --allow "<each other exact changed memory-relative path>"
+git -C "$MEMORY_DIR" diff --quiet
+git -C "$MEMORY_DIR" commit -m "dream-apply($TS): N accepted / M rejected / K deferred"
 ```
+
+Both helper calls must report only the reviewed paths, and the unstaged diff must be empty. If an unrelated tracked, staged, or untracked path appears, or a concurrent write lands after staging, stop without committing. Never replace the exact path list with bare `git add -A`.
 
 If no proposals were accepted, still commit `applied.json` so the audit trail is complete.
 

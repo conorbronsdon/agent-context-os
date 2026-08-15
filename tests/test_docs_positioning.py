@@ -68,10 +68,17 @@ class DocumentationPositioningTests(unittest.TestCase):
             text=True,
         ).stdout.strip()
         self.assertEqual("", tracked_mcp, "the template must not track a live MCP configuration")
-        for command_path in sorted((ROOT / ".claude/commands").glob("*.md")):
-            command = command_path.read_text(encoding="utf-8")
-            self.assertNotIn("mcp__google-workspace", command)
-            self.assertNotIn("gws mcp", command)
+        tracked_claude = subprocess.run(
+            ["git", "ls-files", "--", ".claude"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+        for relative_path in tracked_claude:
+            host_config = self.text(relative_path)
+            self.assertNotIn("mcp__google-workspace", host_config, relative_path)
+            self.assertNotIn("gws mcp", host_config, relative_path)
         notion = self.text("references/notion-mcp-setup.md")
         self.assertIn("does not currently ship", notion)
         self.assertNotIn("npm install -g @notionhq/notion-mcp-server", notion)
@@ -146,6 +153,33 @@ class DocumentationPositioningTests(unittest.TestCase):
         self.assertIn("environment", spec)
         self.assertIn(".claude/settings.local.json", self.text(".gitignore"))
 
+    def test_memory_type_definitions_match_exactly(self) -> None:
+        expected = {"user", "feedback", "environment", "project", "reference"}
+        readme_section = self.text("README.md").split("## Auto-memory", 1)[1].split(
+            "`MEMORY.md` is an index", 1
+        )[0]
+        readme_types = set(
+            re.findall(r"^- \*\*([a-z]+)\*\*", readme_section, re.MULTILINE)
+        )
+        self.assertEqual(expected, readme_types)
+
+        spec_section = self.text("docs/auto-memory.md").split(
+            "Use five durable types:", 1
+        )[1].split("Convert relative dates", 1)[0]
+        spec_types = set(re.findall(r"^- `([a-z]+)`", spec_section, re.MULTILINE))
+        self.assertEqual(expected, spec_types)
+
+        claude = self.text("CLAUDE.md")
+        self.assertIn(
+            "Typed entries use `user`, `feedback`, `environment`, `project`, and `reference`",
+            claude,
+        )
+        template = self.text("docs/memory-template.md")
+        self.assertIn(
+            "(`user`, `feedback`, `environment`, `project`, or `reference`)",
+            template,
+        )
+
     def test_dream_commands_delegate_path_safety_to_executable_validator(self) -> None:
         dream = self.text(".claude/commands/dream.md")
         apply = self.text(".claude/commands/dream-apply.md")
@@ -155,6 +189,17 @@ class DocumentationPositioningTests(unittest.TestCase):
         self.assertIn('validate-memory.py artifact "$TS" --for-create', dream)
         self.assertIn('validate-memory.py artifact "$TS"', dream)
         self.assertIn('validate-memory.py artifact "${ARGUMENTS:-latest}"', apply)
+        self.assertLess(
+            dream.index("### 8. Write `REPORT.md`"),
+            dream.index('validate-memory.py artifact "$TS" --for-commit'),
+        )
+        self.assertIn("validate-memory.py changes", apply)
+        self.assertIn('git -C "$MEMORY_DIR" add -A --', apply)
+        self.assertNotIn('git -C "$MEMORY_DIR" add -A\n', apply)
+        self.assertNotIn('git -C "$MEMORY_DIR" add ".dreams/$TS/"', dream)
+        for text in (dream, apply):
+            self.assertIn("untracked", text)
+            self.assertIn("unrelated", text)
         for obsolete in (
             "require the marker's only line to equal `git rev-parse --show-toplevel`",
             "treat `$ARGUMENTS` as the ISO timestamp",
@@ -179,13 +224,14 @@ class DocumentationPositioningTests(unittest.TestCase):
     def test_setup_remote_preflight_is_private_by_default(self) -> None:
         setup = self.text("scripts/setup.sh")
         self.assertIn("This workspace can contain identity", setup)
-        self.assertIn("does not remove sensitive data from git history", setup)
+        self.assertIn("does not erase sensitive data from git history", setup)
         self.assertIn("Continue after reviewing this storage and audience boundary?", setup)
         self.assertIn("Have you verified its visibility and intended audience?", setup)
         self.assertIn(
             'prompt_yn "  Have you verified its visibility and intended audience?" "n"',
             setup,
         )
+        self.assertEqual(1, setup.count("does not erase sensitive data from git history"))
 
     def test_copied_adapter_template_is_narrow_and_user_invoked(self) -> None:
         template = self.text("docs/agent-template.md")
@@ -227,6 +273,7 @@ class DocumentationPositioningTests(unittest.TestCase):
             "dream-apply",
             "migrate-gemini",
             "mine-gemini-workflows",
+            "reconcile",
             "recover",
             "setup",
             "today",
@@ -246,6 +293,10 @@ class DocumentationPositioningTests(unittest.TestCase):
                 text=True,
             )
             self.assertEqual(0, result.returncode, result.stderr)
+        reconcile = self.text(".claude/commands/reconcile.md")
+        self.assertIn("this command is user-only", reconcile)
+        self.assertNotIn("safely model-invocable", reconcile)
+        self.assertIn("scoped staged diff", reconcile)
 
 
 if __name__ == "__main__":

@@ -205,6 +205,7 @@ Claude Code enables auto-memory by default and may write it automatically during
 
 - **user** — role, expertise, preferences
 - **feedback** — guidance about *how* to work, both corrections and validated approaches
+- **environment** — non-obvious toolchain or platform behavior not already documented in the repository
 - **project** — in-flight work, decisions, the *why* behind them
 - **reference** — pointers to external systems (trackers, dashboards, channels)
 

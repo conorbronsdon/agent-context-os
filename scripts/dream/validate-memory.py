@@ -4,7 +4,9 @@
 The slash commands are prose, so the safety-critical filesystem checks live
 here.  This helper intentionally accepts only a small, explicit proposal
 surface: no path separators in memory filenames, no symlinked binding/artifact
-components, no remotes in the memory git repository, and no empty evidence.
+components, no remotes or unrelated changes in the memory git repository,
+reserved control files for structural actions, no proposal collisions, and no
+empty evidence.
 """
 
 from __future__ import annotations
@@ -27,6 +29,13 @@ COMMON_FIELDS = {"id", "action", "reasoning", "evidence", "confidence"}
 ALLOWED_ACTIONS = {"modify", "archive", "merge", "split", "add", "flag"}
 ALLOWED_CONFIDENCE = {"high", "medium", "low", "flag"}
 SHIPPED_CURATORS = {"rot", "merge", "split", "lint"}
+CURATOR_ACTIONS = {
+    "rot": {"modify", "archive", "flag"},
+    "merge": {"merge", "flag"},
+    "split": {"split", "flag"},
+    "lint": {"modify", "archive", "flag"},
+}
+CONTROL_FILES = {"MEMORY.md", "ARCHIVE.md"}
 ALLOWED_TOP_LEVEL = {"curator", "ran_at", "inputs_summary", "proposals", "skipped"}
 REQUIRED_TOP_LEVEL = {"curator", "ran_at", "proposals"}
 ACTION_FIELDS = {
@@ -79,6 +88,27 @@ def run_git(args: list[str], *, cwd: Path) -> str:
         detail = (exc.stderr or exc.stdout or "").strip()
         raise ValidationError(f"git {' '.join(args)} failed: {detail}") from exc
     return completed.stdout.strip()
+
+
+def run_git_paths(args: list[str], *, cwd: Path) -> set[str]:
+    try:
+        completed = subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        return {
+            item.decode("utf-8")
+            for item in completed.stdout.split(b"\0")
+            if item
+        }
+    except (subprocess.CalledProcessError, UnicodeError) as exc:
+        detail = getattr(exc, "stderr", b"")
+        if isinstance(detail, bytes):
+            detail = detail.decode("utf-8", errors="replace")
+        raise ValidationError(f"cannot inspect memory git changes: {str(detail).strip()}") from exc
 
 
 def repository_identity(repo: Path) -> str:
@@ -149,7 +179,17 @@ def ensure_no_symlink_components(path: Path, stop_at: Path, label: str) -> None:
             raise ValidationError(f"{label} contains a symlink component: {current}")
 
 
-def validate_memory_binding(repo: Path) -> dict[str, str]:
+def changed_memory_paths(memory_dir: Path) -> set[str]:
+    return set().union(
+        run_git_paths(["diff", "--name-only", "-z"], cwd=memory_dir),
+        run_git_paths(["diff", "--cached", "--name-only", "-z"], cwd=memory_dir),
+        run_git_paths(
+            ["ls-files", "--others", "--exclude-standard", "-z"], cwd=memory_dir
+        ),
+    )
+
+
+def validate_memory_binding(repo: Path, *, require_clean: bool = False) -> dict[str, str]:
     repo = repo.resolve(strict=True)
     identity = repository_identity(repo)
     binding = repo / ".context-os" / "memory-directory"
@@ -173,6 +213,13 @@ def validate_memory_binding(repo: Path) -> dict[str, str]:
         raise ValidationError("memory directory must be its own git top-level")
     if run_git(["remote"], cwd=memory_dir):
         raise ValidationError("memory git repository must not have remotes")
+    if require_clean:
+        dirty = changed_memory_paths(memory_dir)
+        if dirty:
+            raise ValidationError(
+                "memory git repository must be clean; review or snapshot these paths first: "
+                + ", ".join(sorted(dirty))
+            )
     return {"memory_dir": str(memory_dir), "repository_identity": identity}
 
 
@@ -204,6 +251,54 @@ def safe_memory_filename(
     if target.exists() and target.is_symlink():
         raise ValidationError(f"{label} must not point at a symlink")
     return value
+
+
+def safe_detail_filename(
+    value: Any,
+    *,
+    memory_dir: Path,
+    label: str,
+    require_existing: bool = False,
+    require_absent: bool = False,
+) -> str:
+    filename = safe_memory_filename(
+        value,
+        memory_dir=memory_dir,
+        label=label,
+        require_existing=require_existing,
+        require_absent=require_absent,
+    )
+    if filename in CONTROL_FILES:
+        raise ValidationError(f"{label} must be a detail file, not a memory control file")
+    return filename
+
+
+def safe_relative_change(value: Any, *, memory_dir: Path, label: str) -> str:
+    if not isinstance(value, str) or not value or CONTROL.search(value):
+        raise ValidationError(f"{label} must be a non-empty path without control characters")
+    path = Path(value)
+    if (
+        path.is_absolute()
+        or "\\" in value
+        or value != path.as_posix()
+        or any(part in {"", ".", ".."} for part in path.parts)
+    ):
+        raise ValidationError(f"{label} must be a canonical relative path")
+    candidate = memory_dir / path
+    ensure_inside(memory_dir, candidate, label)
+    ensure_no_symlink_components(candidate, memory_dir, label)
+    return path.as_posix()
+
+
+def require_allowed_changes(memory_dir: Path, allowed: set[str]) -> set[str]:
+    changed = changed_memory_paths(memory_dir)
+    unexpected = changed - allowed
+    if unexpected:
+        raise ValidationError(
+            "memory git has changes outside the reviewed allowlist: "
+            + ", ".join(sorted(unexpected))
+        )
+    return changed
 
 
 def valid_timestamp(value: str) -> bool:
@@ -274,6 +369,8 @@ def validate_common(proposal: dict[str, Any], index: int) -> str:
     for field in ("id", "reasoning"):
         if not isinstance(proposal[field], str) or not proposal[field].strip():
             raise ValidationError(f"proposal {index}: {field} must be non-empty")
+    if CONTROL.search(proposal["id"]):
+        raise ValidationError(f"proposal {index}: id must be a single safe line")
     evidence = proposal["evidence"]
     if not isinstance(evidence, list) or not evidence:
         raise ValidationError(f"proposal {index}: evidence must be a non-empty array")
@@ -300,20 +397,33 @@ def require_string_fields(
             raise ValidationError(f"proposal {index}: {field} must be a non-empty string")
 
 
+def require_single_line_string(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not value.strip() or CONTROL.search(value):
+        raise ValidationError(f"{label} must be a non-empty single-line string")
+    return value
+
+
 def validate_proposal(proposal: Any, index: int, *, memory_dir: Path) -> None:
     if not isinstance(proposal, dict):
         raise ValidationError(f"proposal {index}: must be an object")
     action = validate_common(proposal, index)
 
-    if action in {"modify", "archive", "flag"}:
+    if action in {"modify", "flag"}:
         safe_memory_filename(
             proposal["target"],
             memory_dir=memory_dir,
             label=f"proposal {index} target",
             require_existing=True,
         )
+    if action == "archive":
+        safe_detail_filename(
+            proposal["target"],
+            memory_dir=memory_dir,
+            label=f"proposal {index} target",
+            require_existing=True,
+        )
     if action == "split":
-        original_target = safe_memory_filename(
+        original_target = safe_detail_filename(
             proposal["target"],
             memory_dir=memory_dir,
             label=f"proposal {index} target",
@@ -322,7 +432,7 @@ def validate_proposal(proposal: Any, index: int, *, memory_dir: Path) -> None:
     else:
         original_target = None
     if action == "add":
-        safe_memory_filename(
+        safe_detail_filename(
             proposal["target"],
             memory_dir=memory_dir,
             label=f"proposal {index} target",
@@ -335,7 +445,7 @@ def validate_proposal(proposal: Any, index: int, *, memory_dir: Path) -> None:
         normalized_targets = []
         for target_index, target in enumerate(targets):
             normalized_targets.append(
-                safe_memory_filename(
+                safe_detail_filename(
                     target,
                     memory_dir=memory_dir,
                     label=f"proposal {index} targets[{target_index}]",
@@ -344,7 +454,7 @@ def validate_proposal(proposal: Any, index: int, *, memory_dir: Path) -> None:
             )
         if len(set(normalized_targets)) != len(normalized_targets):
             raise ValidationError(f"proposal {index}: merge targets must be unique")
-        survivor = safe_memory_filename(
+        survivor = safe_detail_filename(
             proposal["survivor"],
             memory_dir=memory_dir,
             label=f"proposal {index} survivor",
@@ -358,23 +468,42 @@ def validate_proposal(proposal: Any, index: int, *, memory_dir: Path) -> None:
             raise ValidationError(f"proposal {index}: index_changes fields must be remove and add")
         if (
             not isinstance(index_changes["remove"], list)
-            or any(not isinstance(item, str) or not item.strip() for item in index_changes["remove"])
+            or not index_changes["remove"]
+            or any(
+                not isinstance(item, str) or not item.strip() or CONTROL.search(item)
+                for item in index_changes["remove"]
+            )
             or not isinstance(index_changes["add"], str)
             or not index_changes["add"].strip()
+            or CONTROL.search(index_changes["add"])
         ):
             raise ValidationError(f"proposal {index}: index_changes must contain string remove[] and add")
+        if len(set(index_changes["remove"])) != len(index_changes["remove"]):
+            raise ValidationError(f"proposal {index}: index_changes.remove must be unique")
         tombstones = proposal.get("archive_tombstones")
         if not isinstance(tombstones, list) or not tombstones:
             raise ValidationError(f"proposal {index}: archive_tombstones must be an array")
-        if any(not isinstance(item, str) or not item.strip() for item in tombstones):
+        if any(
+            not isinstance(item, str) or not item.strip() or CONTROL.search(item)
+            for item in tombstones
+        ):
             raise ValidationError(f"proposal {index}: archive_tombstones must be non-empty strings")
+        expected_tombstones = len(normalized_targets) - int(survivor in normalized_targets)
+        if len(tombstones) != expected_tombstones:
+            raise ValidationError(
+                f"proposal {index}: archive_tombstones must contain one row per absorbed target"
+            )
         if type(proposal.get("net_index_lines")) is not int:
             raise ValidationError(f"proposal {index}: net_index_lines must be an integer")
+        if proposal["net_index_lines"] != 1 - len(index_changes["remove"]):
+            raise ValidationError(
+                f"proposal {index}: net_index_lines must match the proposed index changes"
+            )
         require_string_fields(proposal, index, {"merged_body"})
     elif action == "split":
         results = proposal["result_files"]
-        if not isinstance(results, list) or not results:
-            raise ValidationError(f"proposal {index}: result_files must be a non-empty array")
+        if not isinstance(results, list) or len(results) < 2:
+            raise ValidationError(f"proposal {index}: result_files must contain 2+ files")
         result_names = []
         for result_index, result in enumerate(results):
             if not isinstance(result, dict):
@@ -387,7 +516,7 @@ def validate_proposal(proposal: Any, index: int, *, memory_dir: Path) -> None:
                     f"proposal {index}: result_files[{result_index}] fields must be {sorted(expected)}"
                 )
             result_names.append(
-                safe_memory_filename(
+                safe_detail_filename(
                     result["name"],
                     memory_dir=memory_dir,
                     label=f"proposal {index} result_files[{result_index}].name",
@@ -400,9 +529,16 @@ def validate_proposal(proposal: Any, index: int, *, memory_dir: Path) -> None:
                     raise ValidationError(
                         f"proposal {index}: result_files[{result_index}].{field} must be non-empty"
                     )
+            require_single_line_string(
+                result["index_line"],
+                f"proposal {index} result_files[{result_index}].index_line",
+            )
         if len(set(result_names)) != len(result_names):
             raise ValidationError(f"proposal {index}: result file names must be unique")
         require_string_fields(proposal, index, {"original_index_line"})
+        require_single_line_string(
+            proposal["original_index_line"], f"proposal {index} original_index_line"
+        )
     elif action == "modify":
         require_string_fields(
             proposal,
@@ -425,9 +561,32 @@ def validate_proposal(proposal: Any, index: int, *, memory_dir: Path) -> None:
             },
             allow_empty={"proposed_excerpt"},
         )
+        if action == "archive":
+            require_single_line_string(
+                proposal["archive_reason"], f"proposal {index} archive_reason"
+            )
+        if action == "add":
+            require_single_line_string(
+                proposal["index_line"], f"proposal {index} index_line"
+            )
 
 
-def validate_proposals(path: Path, *, memory_dir: Path) -> int:
+def proposal_mutation_claims(proposal: dict[str, Any]) -> set[str]:
+    action = proposal["action"]
+    if action in {"modify", "archive", "add"}:
+        return {proposal["target"]}
+    if action == "merge":
+        return set(proposal["targets"]) | {proposal["survivor"]}
+    if action == "split":
+        return {proposal["target"]} | {
+            result["name"] for result in proposal["result_files"]
+        }
+    return set()
+
+
+def validate_proposals(
+    path: Path, *, memory_dir: Path, artifact_timestamp: str
+) -> int:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
@@ -445,9 +604,12 @@ def validate_proposals(path: Path, *, memory_dir: Path) -> int:
     if not isinstance(data["ran_at"], str):
         raise ValidationError("proposals.json ran_at must be a UTC timestamp string")
     try:
-        datetime.strptime(data["ran_at"], "%Y-%m-%dT%H:%M:%SZ")
+        ran_at = datetime.strptime(data["ran_at"], "%Y-%m-%dT%H:%M:%SZ")
     except ValueError as exc:
         raise ValidationError("proposals.json ran_at must match YYYY-MM-DDTHH:MM:SSZ") from exc
+    artifact_time = datetime.strptime(artifact_timestamp, "%Y-%m-%dT%H-%M-%SZ")
+    if ran_at != artifact_time:
+        raise ValidationError("proposals.json ran_at must match its artifact directory timestamp")
     if "inputs_summary" in data and not isinstance(data["inputs_summary"], dict):
         raise ValidationError("proposals.json inputs_summary must be an object")
     if "skipped" in data and not isinstance(data["skipped"], list):
@@ -455,23 +617,81 @@ def validate_proposals(path: Path, *, memory_dir: Path) -> int:
     proposals = data.get("proposals")
     if not isinstance(proposals, list):
         raise ValidationError("proposals.json must contain a proposals array")
+    ids: set[str] = set()
+    mutation_claims: set[str] = set()
+    curator = data["curator"]
     for index, proposal in enumerate(proposals):
         validate_proposal(proposal, index, memory_dir=memory_dir)
+        if proposal["action"] not in CURATOR_ACTIONS[curator]:
+            raise ValidationError(
+                f"proposal {index}: action {proposal['action']!r} is not allowed for curator {curator!r}"
+            )
+        if proposal["id"] in ids:
+            raise ValidationError(f"proposal {index}: duplicate proposal id {proposal['id']!r}")
+        ids.add(proposal["id"])
+
+        claims = proposal_mutation_claims(proposal)
+        overlap = claims & mutation_claims
+        mutation_claims |= claims
+        if overlap:
+            raise ValidationError(
+                f"proposal {index}: mutation target collides with another proposal: {sorted(overlap)}"
+            )
     return len(proposals)
 
 
 def cmd_resolve(_: argparse.Namespace) -> dict[str, Any]:
-    return validate_memory_binding(Path.cwd())
+    return validate_memory_binding(Path.cwd(), require_clean=True)
 
 
 def cmd_artifact(args: argparse.Namespace) -> dict[str, Any]:
-    binding = validate_memory_binding(Path.cwd())
+    binding = validate_memory_binding(
+        Path.cwd(), require_clean=not args.for_commit
+    )
     memory_dir = Path(binding["memory_dir"])
     ts, path = resolve_artifact(memory_dir, args.timestamp, for_create=args.for_create)
     result: dict[str, Any] = {**binding, "timestamp": ts, "dream_dir": str(path)}
     if not args.for_create:
-        result["proposal_count"] = validate_proposals(path / "proposals.json", memory_dir=memory_dir)
+        result["proposal_count"] = validate_proposals(
+            path / "proposals.json", memory_dir=memory_dir, artifact_timestamp=ts
+        )
+    if args.for_commit:
+        require_regular_file(path / "inputs.json", "inputs.json")
+        artifact_paths = {
+            f".dreams/{ts}/inputs.json",
+            f".dreams/{ts}/proposals.json",
+            f".dreams/{ts}/REPORT.md",
+        }
+        changed = require_allowed_changes(memory_dir, artifact_paths)
+        if changed != artifact_paths:
+            raise ValidationError(
+                "new dream artifact must change exactly inputs.json, proposals.json, and REPORT.md"
+            )
+        result["changed_paths"] = sorted(changed)
     return result
+
+
+def cmd_changes(args: argparse.Namespace) -> dict[str, Any]:
+    binding = validate_memory_binding(Path.cwd(), require_clean=False)
+    memory_dir = Path(binding["memory_dir"])
+    allowed = {
+        safe_relative_change(
+            value, memory_dir=memory_dir, label=f"allow[{index}]"
+        )
+        for index, value in enumerate(args.allow)
+    }
+    if not allowed:
+        raise ValidationError("changes requires at least one reviewed --allow path")
+    changed = require_allowed_changes(memory_dir, allowed)
+    if not changed:
+        raise ValidationError("memory git has no reviewed changes to commit")
+    omitted = allowed - changed
+    if omitted:
+        raise ValidationError(
+            "reviewed allowlist includes paths that did not change: "
+            + ", ".join(sorted(omitted))
+        )
+    return {**binding, "changed_paths": sorted(changed), "allowed_paths": sorted(allowed)}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -486,6 +706,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="validate a new timestamp path without requiring files to exist",
     )
+    artifact.add_argument(
+        "--for-commit",
+        action="store_true",
+        help="validate a newly written artifact and reject unrelated memory changes",
+    )
+
+    changes = subcommands.add_parser(
+        "changes", help="reject memory changes outside an exact reviewed allowlist"
+    )
+    changes.add_argument(
+        "--allow", action="append", default=[], help="reviewed memory-relative path"
+    )
     return parser
 
 
@@ -496,7 +728,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "resolve":
             result = cmd_resolve(args)
         elif args.command == "artifact":
+            if args.for_create and args.for_commit:
+                raise ValidationError("--for-create and --for-commit are mutually exclusive")
             result = cmd_artifact(args)
+        elif args.command == "changes":
+            result = cmd_changes(args)
         else:  # pragma: no cover - argparse prevents this.
             parser.error("unknown command")
     except ValidationError as exc:

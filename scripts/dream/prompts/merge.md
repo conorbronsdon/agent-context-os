@@ -30,7 +30,7 @@ Scan the memory set for clusters where 2+ files (or 2+ `MEMORY.md` lines) cover 
    - The files **rot at different rates** (a stable `reference_` + a volatile `project_` status) — keep them separate so one's churn doesn't destabilize the other.
    - They're recalled in **genuinely different contexts** (an `env_` setup quirk vs. a `project_` decision) even if they name the same thing.
    - Merging would create an unfocused catch-all the `split` curator would immediately re-split.
-   - One is already historical and belongs in `ARCHIVE.md`, not folded into a live entry — propose `archive` for it instead.
+   - One is already historical and belongs in `ARCHIVE.md`, not folded into a live entry — skip it and recommend a separate `rot` pass. This curator emits only `merge` or `flag` actions.
 
 4. For each merge, draft: the **unified body** (single narrative, frontmatter `name` = the surviving file's slug, all `[[wikilinks]]` deduped and preserved), the **surviving file** name, the list of **absorbed** files (their content now lives in the survivor), and the resulting **index changes** (lines to remove, the single line to keep/rewrite). Absorbed files go to `ARCHIVE.md` as a one-line "merged into [[survivor]]" tombstone — never hard-deleted (the content lives in the survivor + git history).
 

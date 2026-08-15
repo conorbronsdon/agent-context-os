@@ -81,7 +81,6 @@ echo "  This workspace can contain identity, project, state, and session data."
 echo "  A remote is optional. Keep it local-only or use a private remote by default. Before committing"
 echo "  or pushing, verify the repository's visibility and intended audience."
 echo "  Deleting a file later does not erase sensitive data from git history."
-echo "  Deleting a file later also does not remove sensitive data from git history."
 echo "  Setup never pushes; every commit and push requires separate review."
 echo ""
 if ! prompt_yn "  Continue after reviewing this storage and audience boundary?" "n"; then

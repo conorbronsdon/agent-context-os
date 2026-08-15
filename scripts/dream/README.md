@@ -50,7 +50,7 @@ Validate the binding before the first curator run:
 python3 scripts/dream/validate-memory.py resolve
 ```
 
-The helper is the safety contract used by `/dream` and `/dream-apply`: it rejects non-canonical memory paths, symlinks, marker mismatches, memory remotes, unsafe artifact timestamps, and proposal paths that escape the memory root.
+The helper is the safety contract used by `/dream` and `/dream-apply`: it rejects non-canonical memory paths, symlinks, marker mismatches, memory remotes, dirty memory state, unsafe artifact timestamps, control-file targets, duplicate IDs or mutation targets, curator/action mismatches, and proposal paths that escape the memory root. Creation and apply each pass an exact changed-path allowlist before committing; unrelated tracked, staged, untracked, or concurrent changes stop the operation.
 
 ## Where things live
 

@@ -1,9 +1,10 @@
 ---
 name: reconcile
-description: Tripwire check for multi-session drift. Read-only scan — reports sync status, uncommitted work, cross-branch collisions, and SSOT/state-file inconsistencies from parallel sessions; proposes fixes, applies nothing without approval. Run after parallel work, or when something feels off.
-allowed-tools: Read, Bash, Glob, Grep
-x-source: skills-sync/commands/reconcile.md
-x-source-version: 7ae9852
+description: "Scan multi-session drift and offer individually reviewed fixes only after explicit approval."
+allowed-tools: "Read, Bash, Glob, Grep"
+disable-model-invocation: true
+x-source: "skills-sync/commands/reconcile.md"
+x-source-version: "7ae9852"
 ---
 
 # /reconcile — Multi-Session Drift Check
@@ -12,7 +13,7 @@ When multiple agent sessions run in parallel (especially with worktrees), files 
 
 > This is the generic core. A consuming repo with single-source-of-truth rules (e.g. a pipeline file that other files reference) adds those specific cross-checks as its own overlay — see step 4.
 
-**Invocation:** the scan is read-only, so this core is safely model-invocable. It never pulls, rebases, or moves the working tree — sync divergence is reported, not fixed. A home that wants a sync-first reconcile adds a pull step in its own overlay, and should weigh the cost first: an auto-rebase in a shared checkout can strand other sessions' worktree bases, which is the exact situation this core is run to diagnose. Everything that changes *files* is proposed, never applied.
+**Invocation:** this command is user-only because its optional fix mode can write and commit. The default scan remains read-only. It never pulls, rebases, or moves the working tree — sync divergence is reported, not fixed. A home that wants a sync-first reconcile adds a pull step in its own overlay, and should weigh the cost first: an auto-rebase in a shared checkout can strand other sessions' worktree bases, which is the exact situation this core is run to diagnose. Everything that changes *files* is proposed and separately approved before it is applied.
 
 ## Configuration
 
@@ -108,7 +109,7 @@ List each issue with the file, the line, and a proposed fix. Wait for approval b
 
 ### 7. Fix mode (with approval only)
 
-Present each fix individually. On explicit "fix all" / "clean it up", apply the proposed fixes and commit:
+Present each fix individually. Show the exact affected paths and intended edits, then wait for explicit approval of that reviewed set. Apply only approved fixes. Before committing, show `git status --short` and the scoped staged diff; never stage unrelated work, and wait for a separate explicit commit approval:
 
 ```
 reconcile: fix [N] drift issues from parallel sessions
@@ -118,7 +119,7 @@ Common fixes: merge the newer version of a conflicting file, remove duplicate en
 
 ## Design Principles
 
-- **Read-only.** The scan changes nothing; fixes exist only in fix mode, with explicit approval.
+- **Read-only by default and user-invoked.** The scan changes nothing; fix mode can edit and commit, so each fix needs explicit approval and the command is never ambiently invoked.
 - **Prefer evidence of intent over recency.** When two versions conflict, look at which change the surrounding work depends on (commit messages, linked edits, whether other files reference the new value). A stale session can easily produce the *newer* timestamp. Use recency only as a tie-breaker when intent is unreadable.
 - **Preserve intent.** Don't auto-resolve — different sessions may have had different goals.
 - **Fast.** Targeted checks only — under 30 seconds. Don't deep-read every file.

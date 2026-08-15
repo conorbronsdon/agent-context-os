@@ -47,7 +47,7 @@ done
 
 side_effecting_commands=(
   capture content-shipped dream dream-apply migrate-gemini mine-gemini-workflows
-  recover setup today update end
+  reconcile recover setup today update end
 )
 for command in "${side_effecting_commands[@]}"; do
   python3 tests/validate-openai-metadata.py --command ".claude/commands/$command.md" "$command" \
