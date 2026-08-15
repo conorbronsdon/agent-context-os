@@ -127,12 +127,12 @@ class IntegrationCatalogTests(unittest.TestCase):
         MODULE.validate_catalog(catalog)
         rendered = MODULE.render_reference(catalog)
         self.assertIn(r"Uses \*emphasis\* and \[links\]", rendered)
-        for summary in ("# Forged heading", "---", "1. Forged list"):
+        for summary in ("# Forged heading", "---", "1. Forged list", "~~~", "~~~python"):
             catalog = copy.deepcopy(self.catalog)
             catalog["integrations"][0]["summary"] = summary
             MODULE.validate_catalog(catalog)
             rendered = MODULE.render_reference(catalog)
-            self.assertIn("\\" + summary, rendered)
+            self.assertIn(MODULE.markdown_paragraph(summary), rendered)
         self.assert_invalid(
             lambda catalog: catalog["integrations"][0].update(
                 {"summary": "First line\n## Injected section"}

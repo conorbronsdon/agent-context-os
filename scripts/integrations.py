@@ -99,6 +99,7 @@ def require_https_url(value: Any, location: str) -> None:
 
 
 def canonical_url(value: str) -> str:
+    """Normalize obvious syntactic duplicates without resolving remote URL semantics."""
     parsed = urlsplit(value)
     host = parsed.hostname.lower()
     port = f":{parsed.port}" if parsed.port and parsed.port != 443 else ""
@@ -222,7 +223,7 @@ def yes_no(value: bool) -> str:
 
 def markdown_text(value: str) -> str:
     escaped = value.replace("\\", "\\\\")
-    for character in "`*_[]<>|":
+    for character in "`~*_[]<>|":
         escaped = escaped.replace(character, "\\" + character)
     return escaped
 
