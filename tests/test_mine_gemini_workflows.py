@@ -385,6 +385,25 @@ class GeminiWorkflowMinerTests(unittest.TestCase):
                     }
                 }
             },
+            {
+                "$set": {
+                    "memoryScratchpad": {
+                        "version": True,
+                        "toolSequence": ["read_file"],
+                        "validationStatus": "passed",
+                    }
+                }
+            },
+            {
+                "$set": {
+                    "memoryScratchpad": {
+                        "version": 1,
+                        "validationStatus": "passed",
+                        "validation_status": "failed",
+                    }
+                }
+            },
+            {"$set": {"sessionId": "", "projectHash": ""}},
         ]
         with tempfile.TemporaryDirectory() as temp:
             for index, invalid in enumerate(invalid_records):
@@ -394,6 +413,54 @@ class GeminiWorkflowMinerTests(unittest.TestCase):
                 self.assertFalse(session["recording_complete"])
                 self.assertFalse(session["validation_passed"])
                 self.assertTrue(warnings)
+
+    def test_incomplete_recordings_do_not_affect_candidate_metrics(self) -> None:
+        valid = [
+            MODULE.session_summary(self._write_temp_session("one"))[0],
+            MODULE.session_summary(self._write_temp_session("two"))[0],
+        ]
+        invalid = []
+        for index in range(5):
+            session = dict(valid[0])
+            session.update(
+                {
+                    "session_id": f"invalid-{index}",
+                    "session_fingerprint": f"invalid-fingerprint-{index}",
+                    "recording_complete": False,
+                    "validation_passed": False,
+                }
+            )
+            invalid.append(session)
+
+        candidates = MODULE.build_candidates([*valid, *invalid], 2)
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["occurrences"], 2)
+        self.assertEqual(candidates[0]["validation_ratio"], 1.0)
+
+    def _write_temp_session(self, session_id: str) -> Path:
+        directory = Path(tempfile.mkdtemp())
+        path = directory / f"{session_id}.jsonl"
+        self.write_jsonl(path, self.current_records(session_id))
+        self.addCleanup(lambda: __import__("shutil").rmtree(directory))
+        return path
+
+    def test_invalid_utf8_is_incomplete_and_cannot_export_content(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            path = root / "invalid-utf8.jsonl"
+            raw = "\n".join(json.dumps(record) for record in self.current_records("bad-utf8"))
+            path.write_bytes(raw.encode("utf-8") + b"\xff\n")
+
+            session, warnings = MODULE.session_summary(path)
+            self.assertFalse(session["recording_complete"])
+            self.assertFalse(session["validation_passed"])
+            self.assertTrue(any("not valid UTF-8" in warning for warning in warnings))
+
+            status, _, stderr = self.run_main(
+                [str(root), "--include-content", "--session-id", "bad-utf8"]
+            )
+            self.assertEqual(status, 2)
+            self.assertIn("not found", stderr)
 
     def test_sensitive_summary_opt_in_does_not_change_candidate_grouping(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -427,7 +494,7 @@ class GeminiWorkflowMinerTests(unittest.TestCase):
                 [str(Path(temp)), "--include-content", "--session-id", "missing-meta"]
             )
             self.assertEqual(status, 2)
-            self.assertIn("incomplete or malformed", stderr)
+            self.assertIn("not found", stderr)
 
 
 if __name__ == "__main__":

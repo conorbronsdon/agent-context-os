@@ -99,7 +99,11 @@ def load_records(path: Path) -> tuple[list[Any], str, list[str], str]:
     warnings: list[str] = []
     raw = path.read_bytes()
     digest = hashlib.sha256(raw).hexdigest()
-    text = raw.decode("utf-8", errors="replace")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        warnings.append(f"{path.name}: recording is not valid UTF-8")
+        return [], "invalid", warnings, digest
     if not text.strip():
         return [], "empty", warnings, digest
 
@@ -136,19 +140,34 @@ def is_message_record(value: Any) -> bool:
 def validate_scratchpad(value: Any) -> str | None:
     if value is None:
         return None
-    if not isinstance(value, dict) or value.get("version") != 1:
+    if not isinstance(value, dict) or type(value.get("version")) is not int or value["version"] != 1:
         return "memoryScratchpad must be a version 1 object or null"
-    for key in ("workflowSummary", "workflow_summary"):
-        if key in value and not isinstance(value[key], str):
-            return f"memoryScratchpad.{key} must be a string"
-    for key in ("toolSequence", "tool_sequence", "touchedPaths", "touched_paths"):
-        if key in value and (
-            not isinstance(value[key], list) or not all(isinstance(item, str) for item in value[key])
-        ):
-            return f"memoryScratchpad.{key} must be a string array"
-    status = value.get("validationStatus", value.get("validation_status"))
-    if status is not None and status not in VALIDATION_STATUSES:
+
+    alias_groups = (
+        (("workflowSummary", "workflow_summary"), str, "a string"),
+        (("toolSequence", "tool_sequence"), list, "a string array"),
+        (("touchedPaths", "touched_paths"), list, "a string array"),
+    )
+    for aliases, expected_type, expected_label in alias_groups:
+        present = [key for key in aliases if key in value]
+        for key in present:
+            field = value[key]
+            if not isinstance(field, expected_type) or (
+                expected_type is list and not all(isinstance(item, str) for item in field)
+            ):
+                return f"memoryScratchpad.{key} must be {expected_label}"
+        if len(present) == 2 and value[present[0]] != value[present[1]]:
+            return f"memoryScratchpad aliases {present[0]} and {present[1]} conflict"
+
+    statuses = [
+        value[key]
+        for key in ("validationStatus", "validation_status")
+        if key in value
+    ]
+    if any(status not in VALIDATION_STATUSES for status in statuses):
         return "memoryScratchpad.validationStatus must be passed, failed, or unknown"
+    if len(statuses) == 2 and statuses[0] != statuses[1]:
+        return "memoryScratchpad validation status aliases conflict"
     return None
 
 
@@ -183,7 +202,10 @@ def validate_metadata(value: dict[str, Any], *, initial: bool) -> str | None:
             return "initial metadata requires sessionId"
         if not isinstance(value.get("projectHash"), str) or not value["projectHash"]:
             return "initial metadata requires projectHash"
-    for key in ("sessionId", "projectHash", "startTime", "lastUpdated", "summary", "kind"):
+    for key in ("sessionId", "projectHash"):
+        if key in value and (not isinstance(value[key], str) or not value[key]):
+            return f"metadata.{key} must be a non-empty string"
+    for key in ("startTime", "lastUpdated", "summary", "kind"):
         if key in value and value[key] is not None and not isinstance(value[key], str):
             return f"metadata.{key} must be a string"
     if "directories" in value and value["directories"] is not None and (
@@ -196,6 +218,12 @@ def validate_metadata(value: dict[str, Any], *, initial: bool) -> str | None:
             problem = validate_scratchpad(value[key])
             if problem:
                 return problem
+    if (
+        "memoryScratchpad" in value
+        and "memory_scratchpad" in value
+        and value["memoryScratchpad"] != value["memory_scratchpad"]
+    ):
+        return "metadata memory scratchpad aliases conflict"
     if "messages" in value:
         if not isinstance(value["messages"], list):
             return "metadata.messages must be an array"
@@ -298,7 +326,12 @@ def fold_records(
             metadata.update(record)
 
     metadata.pop("messages", None)
-    if not isinstance(metadata.get("sessionId"), str) or not isinstance(metadata.get("projectHash"), str):
+    if (
+        not isinstance(metadata.get("sessionId"), str)
+        or not metadata["sessionId"]
+        or not isinstance(metadata.get("projectHash"), str)
+        or not metadata["projectHash"]
+    ):
         schema_warnings.append("recording is missing required sessionId/projectHash metadata")
     return metadata, [messages[message_id] for message_id in order], scratchpad_stale, schema_warnings
 
@@ -396,9 +429,9 @@ def session_summary(
     metadata, messages, scratchpad_stale, schema_warnings = fold_records(records)
     warnings.extend(f"{path.name}: {warning}" for warning in schema_warnings)
     scratchpad = scratchpad_from(metadata)
-    raw_session_id = metadata.get("sessionId") or metadata.get("session_id")
-    session_id = str(raw_session_id or path.stem)
-    project_hash = str(metadata.get("projectHash") or metadata.get("project_hash") or "")
+    raw_session_id = metadata.get("sessionId")
+    session_id = str(raw_session_id or "<missing-session-id>")
+    project_hash = str(metadata.get("projectHash") or "")
     is_selected = session_id in (selected_ids or set())
     recording_complete = not warnings
 
@@ -463,6 +496,8 @@ def build_candidates(sessions: list[dict[str, Any]], minimum: int) -> list[dict[
         fingerprint for fingerprint, count in fingerprint_counts.items() if count > 1
     }
     for session in sessions:
+        if not session["recording_complete"]:
+            continue
         if session["session_fingerprint"] in duplicate_fingerprints:
             continue
         keyed = candidate_key(session)
