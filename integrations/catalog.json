@@ -161,16 +161,16 @@
         "arbitrary_execution": false,
         "oauth": false,
         "destructive": true,
-        "details": ["bd setup gemini writes user-global hooks by default; prefer bd setup gemini --project for repository scope", "bd init can modify agent instructions and configure a remote", "bd dolt push --force can overwrite remote history, and bd init --discard-remote discards remote state"]
+        "details": ["bd setup gemini writes user-global hooks by default; prefer bd setup gemini --project for repository scope", "bd init can modify agent instructions and configure a remote", "bd dolt push --force can overwrite remote history", "bd init --discard-remote authorizes a divergent local initialization; a later Dolt push is the separate remote-history replacement"]
       },
       "confirmation": {
         "required_for": ["credential_setup", "external_install", "write", "write_remote", "overwrite", "delete", "destructive"],
-        "notes": "Confirm initialization and setup after showing the project or user-config diff; separately confirm every remote sync or push, force push, discard-remote operation, migration, fix, delete, purge, and reset."
+        "notes": "Confirm initialization and setup after showing the project or user-config diff; separately confirm divergent local initialization with discard-remote and any later remote sync or push, especially force push, plus migration, fix, delete, purge, and reset."
       },
       "risk_tags": ["local-state", "hooks", "project-config", "remote-write", "overwrite-capable", "delete-capable", "destructive-capable"],
       "maturity": "verified",
       "last_verified": "2026-08-15",
-      "evidence": ["https://beads.gascity.com/integrations/gemini", "https://github.com/steveyegge/beads/blob/7505e173f2659ba6e1f955b86d81a4f9e21810ca/docs/cli-reference/dolt.md"],
+      "evidence": ["https://beads.gascity.com/integrations/gemini", "https://github.com/steveyegge/beads/blob/7505e173f2659ba6e1f955b86d81a4f9e21810ca/docs/cli-reference/dolt.md", "https://github.com/steveyegge/beads/blob/7505e173f2659ba6e1f955b86d81a4f9e21810ca/docs/recovery/init-safety.md"],
       "health_check": "Run bd version, bd doctor, bd setup gemini --check, and a bounded bd ready --json query.",
       "uninstall": {
         "instructions": "Remove only the Gemini integration with the documented project or user --remove command; preserve the Beads project database unless separate deletion is approved.",
@@ -190,7 +190,7 @@
         "prerequisites": ["A Granola account with notes", "An MCP client supporting Streamable HTTP and browser OAuth"]
       },
       "data_boundary": {
-        "credentials": ["Per-user browser OAuth bearer token; never copy it into repository configuration or logs"],
+        "credentials": ["Per-user browser OAuth bearer token stays outside repository configuration and logs"],
         "reads": ["Owned, directly shared, private-folder-shared, or workspace-public notes allowed by the active account and plan", "Account information, meeting folders, meeting notes, searches, and plan-dependent transcripts that enter the connected model context"],
         "writes": []
       },
@@ -224,18 +224,18 @@
     {
       "id": "obsidian",
       "name": "Obsidian CLI",
-      "summary": "Obsidian's official desktop CLI exposes broad local application and vault capabilities; scope is enforceable only through an exact external command allowlist.",
+      "summary": "Obsidian's official desktop CLI exposes broad local application and vault capabilities; scope is enforceable only through an exact external command-and-argument policy.",
       "source_url": "https://obsidian.md/help/cli",
       "kind": "editor_guide",
       "supported_agents": ["claude_code", "codex", "gemini_cli", "generic"],
       "installation": {
         "automatic": false,
         "scope": "project_or_user",
-        "prerequisites": ["Obsidian desktop 1.12.7 or newer", "The command line interface enabled on PATH", "Obsidian running for CLI calls", "An exact command allowlist enforced by the calling harness"]
+        "prerequisites": ["Obsidian desktop 1.12.7 or newer", "The command line interface enabled on PATH", "Obsidian running for CLI calls", "An exact command-and-argument policy enforced by the calling harness"]
       },
       "data_boundary": {
         "credentials": ["Optional Obsidian Sync or Publish credentials remain inside Obsidian"],
-        "reads": ["The active vault and active file by default, or explicitly targeted vault notes, properties, tasks, backlinks, history, workspaces, plugins, and themes"],
+        "reads": ["The current-working-directory vault when the shell is inside a vault, otherwise the active vault; many file commands then default to the active file unless vault= and path= are explicit", "Explicitly targeted notes, properties, tasks, backlinks, history, workspaces, plugins, and themes"],
         "writes": ["Vault notes, properties, tasks, moves, renames, overwrites, and link-aware mutations", "Trash or permanent deletion, workspace deletion, and Sync restore or other mutating Sync actions", "Publish or unpublish actions, plugin or theme installation and changes, URL opening, arbitrary registered command execution, and JavaScript eval"]
       },
       "capabilities": {
@@ -249,11 +249,11 @@
         "arbitrary_execution": true,
         "oauth": false,
         "destructive": true,
-        "details": ["No enforcement wrapper ships here; the calling harness must default-deny eval, command, plugin, theme, web, publish, permanent delete, and mutating sync operations", "Prefer exact vault and path parameters because omitted targets can resolve to the active vault or file", "Treat plugin commands and JavaScript eval as open-world execution with possible filesystem and network effects"]
+        "details": ["No enforcement wrapper ships here; the calling harness must constrain commands, arguments, and flags, and default-deny eval, command, plugin, theme, web, publish, permanent delete, and mutating sync operations", "For bounded file operations require explicit vault= plus path= and reject dangerous flags such as overwrite unless separately approved", "Treat plugin commands and JavaScript eval as open-world execution with possible filesystem and network effects"]
       },
       "confirmation": {
         "required_for": ["credential_setup", "external_install", "read_sensitive", "write", "write_remote", "publish", "overwrite", "delete", "arbitrary_execution", "destructive"],
-        "notes": "Confirm broad reads, overwrites, bulk or link-affecting moves, Sync control or restore, deletion, publish or unpublish, URL opening, plugin or theme changes, arbitrary command, and eval; use the normal local-edit gate only for a single bounded note edit."
+        "notes": "Confirm broad or implicit-target reads, overwrites or overwrite flags, bulk or link-affecting moves, Sync control or restore, deletion, publish or unpublish, URL opening, plugin or theme changes, arbitrary command, and eval; use the normal local-edit gate only when vault= and path= bound a single note edit."
       },
       "risk_tags": ["local-data", "sensitive-read", "read-write", "remote-write", "publish-capable", "overwrite-capable", "delete-capable", "arbitrary-execution", "destructive-capable", "open-world", "network-capable"],
       "maturity": "verified",
@@ -319,12 +319,12 @@
       "installation": {
         "automatic": false,
         "scope": "project_or_user",
-        "prerequisites": ["Tolaria for macOS, Windows, or Linux", "A mounted local vault", "A supported MCP client configured manually"]
+        "prerequisites": ["Tolaria for macOS, Windows, or Linux", "A mounted local vault", "A supported external MCP client configured manually"]
       },
       "data_boundary": {
         "credentials": ["Optional Git credentials for cloning an additional vault remain with system Git"],
         "reads": ["Markdown and YAML frontmatter in explicitly mounted local vaults"],
-        "writes": ["Create, append, or full-content update of notes in mounted vaults", "Attach an existing vault or clone one into a local directory through system Git", "Selected MCP client configuration during manual setup"]
+        "writes": ["Create, append, or full-content update of notes in mounted vaults", "Attach an existing vault or clone one into a local directory through system Git", "Transient Tolaria UI state through open_note, highlight_editor, and refresh_vault", "Selected MCP client configuration during manual setup"]
       },
       "capabilities": {
         "read": true,
@@ -337,7 +337,7 @@
         "arbitrary_execution": false,
         "oauth": false,
         "destructive": true,
-        "details": ["Treat full-content update_note as overwrite-capable even though its MCP annotation says non-destructive", "Prefer get_note, diff review, and expectedMtime before update_note", "The MCP mutation surface is limited to create, append, update, attach, and local clone operations", "Review embedded agents, direct provider models, stored provider keys, and AutoGit as separate trust boundaries before enabling them"]
+        "details": ["Treat full-content update_note as overwrite-capable even though its MCP annotation says non-destructive", "Prefer get_note, diff review, and expectedMtime before update_note", "The MCP content-mutation surface is limited to create, append, update, attach, and local clone operations; open, highlight, and refresh also change transient UI state", "Review embedded agents, direct provider models, stored provider keys, and AutoGit as separate trust boundaries before enabling them"]
       },
       "confirmation": {
         "required_for": ["credential_setup", "external_install", "read_sensitive", "write", "overwrite", "destructive"],
@@ -346,7 +346,7 @@
       "risk_tags": ["local-data", "sensitive-read", "read-write", "overwrite-capable", "destructive-capable", "mcp-config"],
       "maturity": "verified",
       "last_verified": "2026-08-15",
-      "evidence": ["https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/site/guides/use-ai-panel.md", "https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/mcp-server/index.js", "https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/docs/adr/0158-vault-write-mcp-tools-update-and-append.md"],
+      "evidence": ["https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/site/concepts/ai.md", "https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/mcp-server/index.js", "https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/docs/adr/0158-vault-write-mcp-tools-update-and-append.md"],
       "health_check": "Start Tolaria, list mounted vaults, read vault context, run a bounded search, then use a disposable note for any write smoke test.",
       "uninstall": {
         "instructions": "Remove the Tolaria MCP entry from each configured client; preserve the Tolaria application and every vault unless separate removal is requested.",

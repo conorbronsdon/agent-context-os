@@ -42,12 +42,16 @@ class IntegrationCatalogTests(unittest.TestCase):
         self.assertTrue(tol["capabilities"]["overwrite"])
         self.assertFalse(tol["capabilities"]["remote_write"])
         self.assertIn("AutoGit", " ".join(tol["capabilities"]["details"]))
+        self.assertIn("open_note", " ".join(tol["data_boundary"]["writes"]))
+        self.assertIn("content-mutation surface", " ".join(tol["capabilities"]["details"]))
 
         obsidian = self.entry("obsidian")
         for capability in ("sensitive_read", "remote_write", "publish", "overwrite", "delete", "arbitrary_execution", "destructive"):
             self.assertTrue(obsidian["capabilities"][capability])
-        self.assertIn("An exact command allowlist enforced by the calling harness", obsidian["installation"]["prerequisites"])
+        self.assertIn("An exact command-and-argument policy enforced by the calling harness", obsidian["installation"]["prerequisites"])
         self.assertIn("No enforcement wrapper ships here", " ".join(obsidian["capabilities"]["details"]))
+        self.assertIn("current-working-directory vault", " ".join(obsidian["data_boundary"]["reads"]))
+        self.assertIn("explicit vault= plus path=", " ".join(obsidian["capabilities"]["details"]))
 
         beads = self.entry("beads-gemini")
         self.assertEqual(beads["supported_agents"], ["gemini_cli"])
@@ -56,6 +60,8 @@ class IntegrationCatalogTests(unittest.TestCase):
         self.assertIn("write_remote", beads["confirmation"]["required_for"])
         self.assertIn("--force", " ".join(beads["capabilities"]["details"]))
         self.assertIn("--discard-remote", " ".join(beads["capabilities"]["details"]))
+        self.assertNotIn("discards remote state", " ".join(beads["capabilities"]["details"]))
+        self.assertTrue(any(url.endswith("/docs/recovery/init-safety.md") for url in beads["evidence"]))
 
         granola = self.entry("granola-mcp")
         self.assertTrue(granola["capabilities"]["sensitive_read"])
@@ -273,6 +279,46 @@ class IntegrationCatalogTests(unittest.TestCase):
             lambda catalog: next(
                 item for item in catalog["integrations"] if item["id"] == "granola-mcp"
             )["uninstall"].update({"removes_user_data": True})
+        )
+        self.assert_invalid(
+            lambda catalog: next(
+                item for item in catalog["integrations"] if item["id"] == "granola-mcp"
+            )["uninstall"].update(
+                {"instructions": "Erase every meeting note and its history."}
+            )
+        )
+
+    def test_hostile_free_text_cannot_waive_typed_safety(self) -> None:
+        self.assert_invalid(
+            lambda catalog: next(
+                item for item in catalog["integrations"] if item["id"] == "granola-mcp"
+            )["confirmation"].update(
+                {"notes": "No confirmation is needed before broad transcript retrieval."}
+            )
+        )
+        self.assert_invalid(
+            lambda catalog: next(
+                item for item in catalog["integrations"] if item["id"] == "tolaria"
+            )["capabilities"].update(
+                {
+                    "details": next(
+                        item for item in catalog["integrations"] if item["id"] == "tolaria"
+                    )["capabilities"]["details"]
+                    + ["Sync changed notes to a cloud repository."]
+                }
+            )
+        )
+        self.assert_invalid(
+            lambda catalog: next(
+                item for item in catalog["integrations"] if item["id"] == "tolaria"
+            )["capabilities"].update(
+                {
+                    "details": next(
+                        item for item in catalog["integrations"] if item["id"] == "tolaria"
+                    )["capabilities"]["details"]
+                    + ["Run any JavaScript supplied by the model."]
+                }
+            )
         )
 
     def test_future_verification_dates_are_rejected(self) -> None:

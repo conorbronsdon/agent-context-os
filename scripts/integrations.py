@@ -238,6 +238,12 @@ def validate_catalog(catalog: Any) -> None:
         if not set(confirmation["required_for"]) <= CONFIRMATIONS:
             raise CatalogError(f"{location}.confirmation.required_for: unsupported boundary")
         require_safe_text(confirmation["notes"], f"{location}.confirmation.notes")
+        if re.search(
+            r"\b(?:no|without) (?:confirmation|approval|review|permission)\b|"
+            r"\b(?:confirmation|approval|review|permission) (?:is |are )?not (?:needed|required)\b",
+            confirmation["notes"].casefold(),
+        ):
+            raise CatalogError(f"{location}.confirmation.notes: may not waive structured confirmation gates")
         for capability, confirmation_name in CONFIRMATION_BY_CAPABILITY.items():
             if capabilities[capability] and confirmation_name not in confirmation["required_for"]:
                 raise CatalogError(
@@ -279,10 +285,10 @@ def validate_catalog(catalog: Any) -> None:
         ).casefold()
         semantic_requirements = {
             "sensitive_read": r"\btranscripts?\b|\bsensitive-read\b",
-            "remote_write": r"\b(?:git|dolt) push\b|\bremote (?:sync|push|write)\b|\bunattended pushes?\b|\bpublish(?:es|ing)?\b|\bunpublish\b|\bpublicly fetchable\b|\bimmediately public\b",
+            "remote_write": r"\b(?:git|dolt) push\b|\bremote (?:sync|push|write)\b|\bunattended pushes?\b|\bpublish(?:es|ing)?\b|\bunpublish\b|\bpublicly fetchable\b|\bimmediately public\b|\b(?:sync|upload|send|push|write|copy)\b.{0,80}\b(?:cloud|remote|server|repository)\b",
             "overwrite": r"\boverwrite\b|\breplacement\b|\bfull-content\b|--force\b|\bdiscard-remote\b|\breset operations?\b",
             "delete": r"\bdelet(?:e|ion)\b|\bpurge\b|\btrash\b|\bremoval\b|\buninstall removes\b",
-            "arbitrary_execution": r"\barbitrary (?:registered )?(?:command|eval|execution)\b|\barbitrary-(?:eval|execution)\b|\bshell access\b",
+            "arbitrary_execution": r"\barbitrary (?:registered )?(?:command|eval|execution)\b|\barbitrary-(?:eval|execution)\b|\bshell access\b|\b(?:run|execute) any (?:javascript|js|code|command)\b|\bjavascript supplied by\b",
             "oauth": r"\boauth\b",
         }
         for capability, pattern in semantic_requirements.items():
@@ -297,7 +303,7 @@ def validate_catalog(catalog: Any) -> None:
         if type(uninstall["removes_user_data"]) is not bool:
             raise CatalogError(f"{location}.uninstall.removes_user_data: expected a boolean")
         data_loss_language = re.search(
-            r"\b(?:delete|purge|reset) (?:all |the )?(?:data|history|notes|project|vault)\b|\bremove all (?:project |user )?files\b",
+            r"\b(?:delete|erase|wipe|destroy|purge|reset)\b.{0,80}\b(?:data|history|notes|project|vault|files|records)\b|\bremove all (?:project |user )?files\b",
             uninstall["instructions"].casefold(),
         )
         if data_loss_language and not uninstall["removes_user_data"]:

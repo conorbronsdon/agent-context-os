@@ -98,9 +98,9 @@ A Gemini integration for Beads issue graphs and persistent coordination state; p
 - **Writes / external effects:** The project Beads database; Project or user Gemini hooks and instructions; Optional remote issue-history sync or push; Issue deletion, purge, migration, repair, or reset when explicitly invoked
 - **Typed safety signals:** remote write, overwrite, delete
 - **Required confirmation gates:** `credential_setup`, `external_install`, `write`, `write_remote`, `overwrite`, `delete`, `destructive`
-- **Confirmation:** Confirm initialization and setup after showing the project or user-config diff; separately confirm every remote sync or push, force push, discard-remote operation, migration, fix, delete, purge, and reset.
+- **Confirmation:** Confirm initialization and setup after showing the project or user-config diff; separately confirm divergent local initialization with discard-remote and any later remote sync or push, especially force push, plus migration, fix, delete, purge, and reset.
 - **Risk tags:** `local-state`, `hooks`, `project-config`, `remote-write`, `overwrite-capable`, `delete-capable`, `destructive-capable`
-- **Evidence:** [1](https://beads.gascity.com/integrations/gemini); [2](https://github.com/steveyegge/beads/blob/7505e173f2659ba6e1f955b86d81a4f9e21810ca/docs/cli-reference/dolt.md)
+- **Evidence:** [1](https://beads.gascity.com/integrations/gemini); [2](https://github.com/steveyegge/beads/blob/7505e173f2659ba6e1f955b86d81a4f9e21810ca/docs/cli-reference/dolt.md); [3](https://github.com/steveyegge/beads/blob/7505e173f2659ba6e1f955b86d81a4f9e21810ca/docs/recovery/init-safety.md)
 - **Health check:** Run bd version, bd doctor, bd setup gemini --check, and a bounded bd ready --json query.
 - **Uninstall:** Remove only the Gemini integration with the documented project or user --remove command; preserve the Beads project database unless separate deletion is approved. (removes user data: No)
 
@@ -108,7 +108,8 @@ Capabilities and limits:
 
 - bd setup gemini writes user-global hooks by default; prefer bd setup gemini --project for repository scope
 - bd init can modify agent instructions and configure a remote
-- bd dolt push --force can overwrite remote history, and bd init --discard-remote discards remote state
+- bd dolt push --force can overwrite remote history
+- bd init --discard-remote authorizes a divergent local initialization; a later Dolt push is the separate remote-history replacement
 
 
 ## Granola MCP
@@ -118,7 +119,7 @@ Granola's official hosted, read-only MCP for sensitive meeting notes and plan-de
 - **Supported agents:** `claude_code`, `generic`
 - **Install scope:** `user`; never automatic
 - **Prerequisites:** A Granola account with notes; An MCP client supporting Streamable HTTP and browser OAuth
-- **Credentials:** Per-user browser OAuth bearer token; never copy it into repository configuration or logs
+- **Credentials:** Per-user browser OAuth bearer token stays outside repository configuration and logs
 - **Reads:** Owned, directly shared, private-folder-shared, or workspace-public notes allowed by the active account and plan; Account information, meeting folders, meeting notes, searches, and plan-dependent transcripts that enter the connected model context
 - **Writes / external effects:** None
 - **Typed safety signals:** sensitive read, oauth
@@ -141,17 +142,17 @@ Capabilities and limits:
 
 ## Obsidian CLI
 
-Obsidian's official desktop CLI exposes broad local application and vault capabilities; scope is enforceable only through an exact external command allowlist.
+Obsidian's official desktop CLI exposes broad local application and vault capabilities; scope is enforceable only through an exact external command-and-argument policy.
 
 - **Supported agents:** `claude_code`, `codex`, `gemini_cli`, `generic`
 - **Install scope:** `project_or_user`; never automatic
-- **Prerequisites:** Obsidian desktop 1.12.7 or newer; The command line interface enabled on PATH; Obsidian running for CLI calls; An exact command allowlist enforced by the calling harness
+- **Prerequisites:** Obsidian desktop 1.12.7 or newer; The command line interface enabled on PATH; Obsidian running for CLI calls; An exact command-and-argument policy enforced by the calling harness
 - **Credentials:** Optional Obsidian Sync or Publish credentials remain inside Obsidian
-- **Reads:** The active vault and active file by default, or explicitly targeted vault notes, properties, tasks, backlinks, history, workspaces, plugins, and themes
+- **Reads:** The current-working-directory vault when the shell is inside a vault, otherwise the active vault; many file commands then default to the active file unless vault= and path= are explicit; Explicitly targeted notes, properties, tasks, backlinks, history, workspaces, plugins, and themes
 - **Writes / external effects:** Vault notes, properties, tasks, moves, renames, overwrites, and link-aware mutations; Trash or permanent deletion, workspace deletion, and Sync restore or other mutating Sync actions; Publish or unpublish actions, plugin or theme installation and changes, URL opening, arbitrary registered command execution, and JavaScript eval
 - **Typed safety signals:** sensitive read, remote write, overwrite, delete, arbitrary execution
 - **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `publish`, `overwrite`, `delete`, `arbitrary_execution`, `destructive`
-- **Confirmation:** Confirm broad reads, overwrites, bulk or link-affecting moves, Sync control or restore, deletion, publish or unpublish, URL opening, plugin or theme changes, arbitrary command, and eval; use the normal local-edit gate only for a single bounded note edit.
+- **Confirmation:** Confirm broad or implicit-target reads, overwrites or overwrite flags, bulk or link-affecting moves, Sync control or restore, deletion, publish or unpublish, URL opening, plugin or theme changes, arbitrary command, and eval; use the normal local-edit gate only when vault= and path= bound a single note edit.
 - **Risk tags:** `local-data`, `sensitive-read`, `read-write`, `remote-write`, `publish-capable`, `overwrite-capable`, `delete-capable`, `arbitrary-execution`, `destructive-capable`, `open-world`, `network-capable`
 - **Evidence:** [1](https://obsidian.md/help/cli)
 - **Health check:** Run obsidian version, resolve the exact vault path, then perform a bounded JSON search with limit 1 through the enforced allowlist.
@@ -159,8 +160,8 @@ Obsidian's official desktop CLI exposes broad local application and vault capabi
 
 Capabilities and limits:
 
-- No enforcement wrapper ships here; the calling harness must default-deny eval, command, plugin, theme, web, publish, permanent delete, and mutating sync operations
-- Prefer exact vault and path parameters because omitted targets can resolve to the active vault or file
+- No enforcement wrapper ships here; the calling harness must constrain commands, arguments, and flags, and default-deny eval, command, plugin, theme, web, publish, permanent delete, and mutating sync operations
+- For bounded file operations require explicit vault= plus path= and reject dangerous flags such as overwrite unless separately approved
 - Treat plugin commands and JavaScript eval as open-world execution with possible filesystem and network effects
 
 
@@ -194,15 +195,15 @@ Tolaria's bundled stdio MCP for bounded Markdown-vault reads and note mutations;
 
 - **Supported agents:** `claude_code`, `cursor`, `opencode`, `generic`
 - **Install scope:** `project_or_user`; never automatic
-- **Prerequisites:** Tolaria for macOS, Windows, or Linux; A mounted local vault; A supported MCP client configured manually
+- **Prerequisites:** Tolaria for macOS, Windows, or Linux; A mounted local vault; A supported external MCP client configured manually
 - **Credentials:** Optional Git credentials for cloning an additional vault remain with system Git
 - **Reads:** Markdown and YAML frontmatter in explicitly mounted local vaults
-- **Writes / external effects:** Create, append, or full-content update of notes in mounted vaults; Attach an existing vault or clone one into a local directory through system Git; Selected MCP client configuration during manual setup
+- **Writes / external effects:** Create, append, or full-content update of notes in mounted vaults; Attach an existing vault or clone one into a local directory through system Git; Transient Tolaria UI state through open\_note, highlight\_editor, and refresh\_vault; Selected MCP client configuration during manual setup
 - **Typed safety signals:** sensitive read, overwrite
 - **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `overwrite`, `destructive`
 - **Confirmation:** Use normal approval for a single create or append; confirm broad vault reads, show a diff before full replacement, and separately approve vault attachment, cloning, or MCP client-configuration writes.
 - **Risk tags:** `local-data`, `sensitive-read`, `read-write`, `overwrite-capable`, `destructive-capable`, `mcp-config`
-- **Evidence:** [1](https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/site/guides/use-ai-panel.md); [2](https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/mcp-server/index.js); [3](https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/docs/adr/0158-vault-write-mcp-tools-update-and-append.md)
+- **Evidence:** [1](https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/site/concepts/ai.md); [2](https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/mcp-server/index.js); [3](https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/docs/adr/0158-vault-write-mcp-tools-update-and-append.md)
 - **Health check:** Start Tolaria, list mounted vaults, read vault context, run a bounded search, then use a disposable note for any write smoke test.
 - **Uninstall:** Remove the Tolaria MCP entry from each configured client; preserve the Tolaria application and every vault unless separate removal is requested. (removes user data: No)
 
@@ -210,6 +211,6 @@ Capabilities and limits:
 
 - Treat full-content update\_note as overwrite-capable even though its MCP annotation says non-destructive
 - Prefer get\_note, diff review, and expectedMtime before update\_note
-- The MCP mutation surface is limited to create, append, update, attach, and local clone operations
+- The MCP content-mutation surface is limited to create, append, update, attach, and local clone operations; open, highlight, and refresh also change transient UI state
 - Review embedded agents, direct provider models, stored provider keys, and AutoGit as separate trust boundaries before enabling them
 
