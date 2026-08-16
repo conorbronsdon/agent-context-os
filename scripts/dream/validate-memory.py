@@ -120,6 +120,24 @@ def repository_identity(repo: Path) -> str:
     return str(resolved)
 
 
+def head_identity(memory_dir: Path) -> str:
+    completed = subprocess.run(
+        ["git", "symbolic-ref", "-q", "HEAD"],
+        cwd=memory_dir,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if completed.returncode == 1:
+        return "DETACHED"
+    if completed.returncode != 0:
+        raise ValidationError("cannot inspect the memory repository HEAD identity")
+    value = completed.stdout.strip()
+    if not re.fullmatch(r"refs/heads/[A-Za-z0-9._/-]+", value) or ".." in value:
+        raise ValidationError("memory HEAD must be detached or name a canonical local branch")
+    return value
+
+
 def read_single_line(path: Path, label: str) -> str:
     if path.is_symlink():
         raise ValidationError(f"{label} must not be a symlink: {path}")
@@ -265,6 +283,8 @@ def safe_detail_filename(
     require_existing: bool = False,
     require_absent: bool = False,
 ) -> str:
+    if isinstance(value, str) and value in CONTROL_FILES:
+        raise ValidationError(f"{label} must be a detail file, not a memory control file")
     filename = safe_memory_filename(
         value,
         memory_dir=memory_dir,
@@ -272,8 +292,6 @@ def safe_detail_filename(
         require_existing=require_existing,
         require_absent=require_absent,
     )
-    if filename in CONTROL_FILES:
-        raise ValidationError(f"{label} must be a detail file, not a memory control file")
     return filename
 
 
@@ -316,6 +334,14 @@ def require_no_unstaged_changes(memory_dir: Path) -> None:
         raise ValidationError("memory git has unstaged changes after reviewed staging")
     if completed.returncode != 0:
         raise ValidationError("cannot compare the memory worktree with its index")
+    untracked = run_git_paths(
+        ["ls-files", "--others", "--exclude-standard", "-z"], cwd=memory_dir
+    )
+    if untracked:
+        raise ValidationError(
+            "memory git has untracked paths after final review: "
+            + ", ".join(sorted(untracked))
+        )
 
 
 def staged_entry(memory_dir: Path, relative: str) -> tuple[str, bytes] | None:
@@ -802,14 +828,26 @@ def archive_rows(archive_index: Path, target: str) -> list[str]:
         lines = archive_index.read_text(encoding="utf-8").splitlines()
     except (OSError, UnicodeError) as exc:
         raise ValidationError(f"cannot read archive index: {exc}") from exc
+    target_link = f"archive/{target}"
     pattern = re.compile(
-        r"^\|\s*(\d{4}-\d{2}-\d{2})\s*\|\s*\["
-        + re.escape(target)
-        + r"\]\(archive/"
+        r"^\|\s*(\d{4}-\d{2}-\d{2})\s*\|\s*\[[^\]\r\n]+\]\(archive/"
         + re.escape(target)
         + r"\)\s*\|"
     )
-    return [match.group(1) for line in lines if (match := pattern.match(line))]
+    dates = []
+    for line in lines:
+        if target_link not in line:
+            continue
+        match = pattern.match(line)
+        if not match:
+            raise ValidationError("archive index has a malformed row for target")
+        dates.append(match.group(1))
+    for value in dates:
+        try:
+            datetime.strptime(value, "%Y-%m-%d")
+        except ValueError as exc:
+            raise ValidationError("archive index has a malformed row date") from exc
+    return dates
 
 
 def archived_stamps(path: Path) -> list[str]:
@@ -820,8 +858,20 @@ def archived_stamps(path: Path) -> list[str]:
         lines = path.read_text(encoding="utf-8").splitlines()
     except (OSError, UnicodeError) as exc:
         raise ValidationError(f"cannot read archive target: {exc}") from exc
+    if not lines or lines[0] != "---":
+        raise ValidationError("archive target must begin with YAML frontmatter")
+    try:
+        closing = lines.index("---", 1)
+    except ValueError as exc:
+        raise ValidationError("archive target has unterminated YAML frontmatter") from exc
+
     stamps = []
-    for line in lines:
+    for line in lines[1:closing]:
+        if (
+            re.match(r'''^\s*(?:archived|["']archived["'])\s*:''', line)
+            and not line.startswith("archived:")
+        ):
+            raise ValidationError("archive target has a malformed archived field")
         if line.startswith("archived:"):
             value = line.partition(":")[2].strip()
             try:
@@ -982,7 +1032,11 @@ def cmd_changes(args: argparse.Namespace) -> dict[str, Any]:
         if tree_digest != digest:
             raise ValidationError("captured tree does not match the validated index")
         result["tree_sha"] = tree_sha
+        reviewed_ref = head_identity(memory_dir)
         result["base_head"] = run_git(["rev-parse", "HEAD"], cwd=memory_dir)
+        if head_identity(memory_dir) != reviewed_ref:
+            raise ValidationError("memory HEAD identity changed while capturing the tree")
+        result["head_ref"] = reviewed_ref
     return result
 
 
@@ -991,8 +1045,15 @@ def cmd_commit(args: argparse.Namespace) -> dict[str, Any]:
     memory_dir = Path(binding["memory_dir"])
     tree_sha = require_object_sha(args.tree, "--tree")
     base_head = require_object_sha(args.base_head, "--base-head")
+    if args.head_ref != "DETACHED" and (
+        not re.fullmatch(r"refs/heads/[A-Za-z0-9._/-]+", args.head_ref)
+        or ".." in args.head_ref
+    ):
+        raise ValidationError("--head-ref must be DETACHED or a canonical local branch")
     if run_git(["cat-file", "-t", tree_sha], cwd=memory_dir) != "tree":
         raise ValidationError("--tree must identify a Git tree object")
+    if head_identity(memory_dir) != args.head_ref:
+        raise ValidationError("memory HEAD identity changed after final review")
     if run_git(["rev-parse", "HEAD"], cwd=memory_dir) != base_head:
         raise ValidationError("memory HEAD changed after final review")
     if not re.fullmatch(r"[0-9a-f]{64}", args.expect_digest):
@@ -1036,12 +1097,14 @@ def cmd_commit(args: argparse.Namespace) -> dict[str, Any]:
         ["commit-tree", tree_sha, "-p", base_head, "-m", args.message],
         cwd=memory_dir,
     )
-    run_git(["update-ref", "HEAD", new_commit, base_head], cwd=memory_dir)
+    reviewed_ref = "HEAD" if args.head_ref == "DETACHED" else args.head_ref
+    run_git(["update-ref", reviewed_ref, new_commit, base_head], cwd=memory_dir)
     return {
         **binding,
         "commit_sha": new_commit,
         "tree_sha": tree_sha,
         "base_head": base_head,
+        "head_ref": args.head_ref,
         "change_digest": digest,
         "changed_paths": sorted(changed),
     }
@@ -1086,6 +1149,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     commit.add_argument("--tree", required=True, help="approved Git tree SHA")
     commit.add_argument("--base-head", required=True, help="HEAD reviewed with the tree")
+    commit.add_argument(
+        "--head-ref", required=True, help="reviewed local branch ref or DETACHED"
+    )
     commit.add_argument(
         "--expect-digest", required=True, help="approved change-content digest"
     )

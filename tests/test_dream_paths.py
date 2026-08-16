@@ -48,8 +48,16 @@ class DreamMemoryPathTests(unittest.TestCase):
         ).stdout.strip()
         (self.memory / ".context-os-repository").write_text(f"{identity}\n", encoding="utf-8")
         (self.memory / "MEMORY.md").write_text("# Memory\n", encoding="utf-8")
-        (self.memory / "project_alpha.md").write_text("alpha\n", encoding="utf-8")
-        (self.memory / "project_beta.md").write_text("beta\n", encoding="utf-8")
+        (self.memory / "ARCHIVE.md").write_text(
+            "# Archive\n\n| Date | Memory | Reason |\n|---|---|---|\n",
+            encoding="utf-8",
+        )
+        (self.memory / "project_alpha.md").write_text(
+            "---\nname: Project Alpha\ntype: project\n---\nalpha\n", encoding="utf-8"
+        )
+        (self.memory / "project_beta.md").write_text(
+            "---\nname: Project Beta\ntype: project\n---\nbeta\n", encoding="utf-8"
+        )
         run(["git", "add", "-A"], self.memory)
         run(["git", "commit", "-qm", "baseline"], self.memory)
 
@@ -605,12 +613,37 @@ class DreamMemoryPathTests(unittest.TestCase):
         self.assertEqual(staged.returncode, 0, staged.stderr)
         snapshot = json.loads(staged.stdout)
         self.assertEqual(snapshot["source"], "index")
+        (self.memory / "project_alpha.md").write_text(
+            "concurrent live resurrection\n", encoding="utf-8"
+        )
+        resurrected = self.helper(
+            "commit",
+            "--tree",
+            snapshot["tree_sha"],
+            "--base-head",
+            snapshot["base_head"],
+            "--head-ref",
+            snapshot["head_ref"],
+            "--expect-digest",
+            payload["change_digest"],
+            "--allow",
+            "project_alpha.md",
+            "--allow",
+            "archive/project_alpha.md",
+            "--message",
+            "reviewed archive move",
+        )
+        self.assertNotEqual(resurrected.returncode, 0)
+        self.assertIn("untracked paths", resurrected.stderr)
+        (self.memory / "project_alpha.md").unlink()
         committed = self.helper(
             "commit",
             "--tree",
             snapshot["tree_sha"],
             "--base-head",
             snapshot["base_head"],
+            "--head-ref",
+            snapshot["head_ref"],
             "--expect-digest",
             payload["change_digest"],
             "--allow",
@@ -735,6 +768,8 @@ class DreamMemoryPathTests(unittest.TestCase):
             payload["tree_sha"],
             "--base-head",
             payload["base_head"],
+            "--head-ref",
+            payload["head_ref"],
             "--expect-digest",
             digest,
             "--allow",
@@ -744,6 +779,48 @@ class DreamMemoryPathTests(unittest.TestCase):
         )
         self.assertNotEqual(rejected.returncode, 0)
         self.assertIn("index changed", rejected.stderr)
+        self.assertEqual(
+            run(["git", "rev-parse", "HEAD"], self.memory).stdout.strip(),
+            payload["base_head"],
+        )
+
+    def test_tree_bound_commit_rejects_post_snapshot_untracked_path(self) -> None:
+        target = self.memory / "project_alpha.md"
+        target.write_text("USER-REVIEWED RESULT\n", encoding="utf-8")
+        candidate = self.helper("changes", "--allow", "project_alpha.md")
+        digest = json.loads(candidate.stdout)["change_digest"]
+        run(["git", "add", "--", "project_alpha.md"], self.memory)
+        snapshot = self.helper(
+            "changes",
+            "--staged",
+            "--expect-digest",
+            digest,
+            "--allow",
+            "project_alpha.md",
+        )
+        payload = json.loads(snapshot.stdout)
+
+        (self.memory / "unrelated-private.md").write_text(
+            "must remain uncommitted\n", encoding="utf-8"
+        )
+        rejected = self.helper(
+            "commit",
+            "--tree",
+            payload["tree_sha"],
+            "--base-head",
+            payload["base_head"],
+            "--head-ref",
+            payload["head_ref"],
+            "--expect-digest",
+            digest,
+            "--allow",
+            "project_alpha.md",
+            "--message",
+            "reviewed memory update",
+        )
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn("untracked paths", rejected.stderr)
+        self.assertIn("unrelated-private.md", rejected.stderr)
         self.assertEqual(
             run(["git", "rev-parse", "HEAD"], self.memory).stdout.strip(),
             payload["base_head"],
@@ -770,6 +847,8 @@ class DreamMemoryPathTests(unittest.TestCase):
             payload["tree_sha"],
             "--base-head",
             payload["base_head"],
+            "--head-ref",
+            payload["head_ref"],
             "--expect-digest",
             digest,
             "--allow",
@@ -787,6 +866,45 @@ class DreamMemoryPathTests(unittest.TestCase):
         self.assertEqual(
             run(["git", "show", "HEAD:project_alpha.md"], self.memory).stdout,
             "USER-REVIEWED RESULT\n",
+        )
+
+    def test_tree_bound_commit_rejects_changed_symbolic_head(self) -> None:
+        target = self.memory / "project_alpha.md"
+        target.write_text("USER-REVIEWED RESULT\n", encoding="utf-8")
+        candidate = self.helper("changes", "--allow", "project_alpha.md")
+        digest = json.loads(candidate.stdout)["change_digest"]
+        run(["git", "add", "--", "project_alpha.md"], self.memory)
+        snapshot = self.helper(
+            "changes",
+            "--staged",
+            "--expect-digest",
+            digest,
+            "--allow",
+            "project_alpha.md",
+        )
+        payload = json.loads(snapshot.stdout)
+        run(["git", "branch", "alternate", payload["base_head"]], self.memory)
+        run(["git", "symbolic-ref", "HEAD", "refs/heads/alternate"], self.memory)
+        rejected = self.helper(
+            "commit",
+            "--tree",
+            payload["tree_sha"],
+            "--base-head",
+            payload["base_head"],
+            "--head-ref",
+            payload["head_ref"],
+            "--expect-digest",
+            digest,
+            "--allow",
+            "project_alpha.md",
+            "--message",
+            "reviewed memory update",
+        )
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn("HEAD identity changed", rejected.stderr)
+        self.assertEqual(
+            run(["git", "rev-parse", "refs/heads/alternate"], self.memory).stdout.strip(),
+            payload["base_head"],
         )
 
     def test_archive_state_handles_stamped_and_unstamped_resume(self) -> None:
@@ -824,6 +942,95 @@ class DreamMemoryPathTests(unittest.TestCase):
         )
         self.assertIn(
             "duplicate archived stamps",
+            self.assert_rejects(
+                "archive-state", "project_alpha.md", "--today", "2026-08-15"
+            ),
+        )
+
+    def test_archive_state_ignores_archived_examples_outside_frontmatter(self) -> None:
+        (self.memory / "project_alpha.md").write_text(
+            "---\nname: Project Alpha\ntype: project\n---\n\n"
+            "Example body text:\narchived: 2026-08-15\n\n"
+            "```yaml\narchived: 2026-08-09\n```\n",
+            encoding="utf-8",
+        )
+        state = self.helper(
+            "archive-state", "project_alpha.md", "--today", "2026-08-15"
+        )
+        self.assertEqual(state.returncode, 0, state.stderr)
+        payload = json.loads(state.stdout)
+        self.assertEqual(payload["status"], "fresh")
+        self.assertTrue(payload["insert_stamp"])
+
+        (self.memory / "archive").mkdir()
+        (self.memory / "project_alpha.md").replace(
+            self.memory / "archive" / "project_alpha.md"
+        )
+        (self.memory / "ARCHIVE.md").write_text(
+            "| 2026-08-15 | [Project Alpha](archive/project_alpha.md) | retired |\n",
+            encoding="utf-8",
+        )
+        completed = self.helper(
+            "archive-state", "project_alpha.md", "--today", "2026-08-15"
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("completed archive stamp", completed.stderr)
+
+    def test_archive_state_requires_closed_leading_frontmatter(self) -> None:
+        for content, expected in (
+            ("alpha\narchived: 2026-08-15\n", "must begin with YAML frontmatter"),
+            ("---\nname: Alpha\narchived: 2026-08-15\n", "unterminated YAML frontmatter"),
+            (
+                "---\nname: Alpha\n\"archived\": 2026-08-15\n---\nalpha\n",
+                "malformed archived field",
+            ),
+        ):
+            with self.subTest(content=content):
+                (self.memory / "project_alpha.md").write_text(
+                    content, encoding="utf-8"
+                )
+                self.assertIn(
+                    expected,
+                    self.assert_rejects(
+                        "archive-state", "project_alpha.md", "--today", "2026-08-15"
+                    ),
+                )
+
+    def test_archive_state_matches_row_by_destination_and_validates_date(self) -> None:
+        (self.memory / "project_alpha.md").write_text(
+            "---\nname: Project Alpha\ntype: project\n---\nalpha\n",
+            encoding="utf-8",
+        )
+        (self.memory / "ARCHIVE.md").write_text(
+            "| 2026-08-10 | [Human-readable label](archive/project_alpha.md) | retired |\n",
+            encoding="utf-8",
+        )
+        state = self.helper(
+            "archive-state", "project_alpha.md", "--today", "2026-08-15"
+        )
+        self.assertEqual(state.returncode, 0, state.stderr)
+        payload = json.loads(state.stdout)
+        self.assertEqual(payload["status"], "resume")
+        self.assertEqual(payload["archive_date"], "2026-08-10")
+
+        (self.memory / "ARCHIVE.md").write_text(
+            "| 2026-08-10 | [Project Alpha](archive/project_alpha.md) | retired |\n"
+            "| 2026-08-10 | [Another label](archive/project_alpha.md) | duplicate |\n",
+            encoding="utf-8",
+        )
+        self.assertIn(
+            "duplicate rows",
+            self.assert_rejects(
+                "archive-state", "project_alpha.md", "--today", "2026-08-15"
+            ),
+        )
+
+        (self.memory / "ARCHIVE.md").write_text(
+            "| 2026-02-30 | [Project Alpha](archive/project_alpha.md) | retired |\n",
+            encoding="utf-8",
+        )
+        self.assertIn(
+            "malformed row date",
             self.assert_rejects(
                 "archive-state", "project_alpha.md", "--today", "2026-08-15"
             ),

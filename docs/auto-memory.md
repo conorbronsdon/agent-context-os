@@ -46,10 +46,12 @@ The command adapters fail closed unless all of these are true:
 They also require the memory repository to be clean before `/dream` or
 `/dream-apply` starts. Proposal creation stages only the three validated
 artifact files. Apply stages only the exact reviewed change list, binds its
-paths, modes, and bytes to an immutable Git tree, shows that tree's diff for a
-separate final approval, and commits that exact tree through the validator.
-Tracked, staged, untracked, or concurrent unrelated changes stop the operation
-or remain outside the approved commit.
+paths, modes, and bytes to an immutable Git tree and records the reviewed local
+branch (or detached-HEAD state). It shows that tree's diff for a separate final
+approval, then advances only that reviewed ref to the exact tree through the
+validator. Detected tracked, staged, untracked, ref, or concurrent unrelated
+changes stop the operation; the commit itself cannot absorb anything outside
+the approved tree.
 
 Linked worktrees share the same git common-directory identity and may therefore use the same memory store, but each worktree needs its own ignored `.context-os/memory-directory` and applicable `autoMemoryDirectory` setting. Moving the repository's common git directory intentionally invalidates the marker. Re-open `/memory`, verify the intended store, and update local records rather than assuming the old path migrated.
 
