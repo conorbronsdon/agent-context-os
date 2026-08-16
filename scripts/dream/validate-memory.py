@@ -840,10 +840,83 @@ def validate_proposals(
     return len(proposals)
 
 
+def first_markdown_table_cells(line: str, count: int) -> list[str] | None:
+    if not line.startswith("|") or count < 1:
+        return None
+    cells: list[str] = []
+    current: list[str] = []
+    escaped = False
+    for character in line[1:]:
+        if character == "|" and not escaped:
+            cells.append("".join(current).strip())
+            current = []
+            if len(cells) == count:
+                return cells
+            continue
+        current.append(character)
+        if escaped:
+            escaped = False
+        elif character == "\\":
+            escaped = True
+    return None
+
+
+def visible_markdown_lines(lines: list[str]) -> list[str]:
+    visible_lines: list[str] = []
+    in_comment = False
+    fence_character: str | None = None
+    fence_length = 0
+    for original in lines:
+        if fence_character is not None:
+            closing_fence = re.fullmatch(
+                rf"\s{{0,3}}{re.escape(fence_character)}{{{fence_length},}}\s*",
+                original,
+            )
+            if closing_fence:
+                fence_character = None
+                fence_length = 0
+            continue
+
+        line = original
+        visible = ""
+        cursor = 0
+        while cursor < len(line):
+            if in_comment:
+                closing = line.find("-->", cursor)
+                if closing < 0:
+                    cursor = len(line)
+                    break
+                in_comment = False
+                cursor = closing + 3
+                continue
+            opening = line.find("<!--", cursor)
+            if opening < 0:
+                visible += line[cursor:]
+                break
+            visible += line[cursor:opening]
+            in_comment = True
+            cursor = opening + 4
+
+        opening_fence = re.match(r"^\s{0,3}(`{3,}|~{3,})(?:[^`~].*)?$", visible)
+        if opening_fence:
+            marker = opening_fence.group(1)
+            fence_character = marker[0]
+            fence_length = len(marker)
+            continue
+        visible_lines.append(visible)
+    if in_comment:
+        raise ValidationError("archive index contains an unterminated HTML comment")
+    if fence_character is not None:
+        raise ValidationError("archive index contains an unterminated fenced block")
+    return visible_lines
+
+
 def archive_rows(archive_index: Path, target: str) -> list[str]:
     require_regular_file(archive_index, "archive index")
     try:
-        lines = archive_index.read_text(encoding="utf-8").splitlines()
+        lines = visible_markdown_lines(
+            archive_index.read_text(encoding="utf-8").splitlines()
+        )
     except (OSError, UnicodeError) as exc:
         raise ValidationError(f"cannot read archive index: {exc}") from exc
     header = re.compile(r"^\|\s*Date\s*\|\s*Memory\s*\|\s*Reason\s*\|\s*$")
@@ -861,10 +934,10 @@ def archive_rows(archive_index: Path, target: str) -> list[str]:
     for line in lines[header_index + 2 :]:
         if not line.startswith("|"):
             break
-        cells = line[1:].split("|", 2)
-        if len(cells) < 2:
+        cells = first_markdown_table_cells(line, 2)
+        if cells is None:
             raise ValidationError("archive index table contains a malformed row")
-        date_cell, memory_cell = (cell.strip() for cell in cells[:2])
+        date_cell, memory_cell = cells
         link = link_pattern.fullmatch(memory_cell)
         if link and link.group(1) == target_link:
             dates.append(require_iso_date(date_cell, "archive index row date"))

@@ -1042,6 +1042,28 @@ class DreamMemoryPathTests(unittest.TestCase):
         self.assertEqual(payload["archive_date"], "2026-08-10")
 
         self.write_archive(
+            "| 2026-08-10 | [Alpha \\| historical](archive/project_alpha.md) | first |\n",
+        )
+        escaped_label = self.helper(
+            "archive-state", "project_alpha.md", "--today", "2026-08-15"
+        )
+        self.assertEqual(escaped_label.returncode, 0, escaped_label.stderr)
+        escaped_payload = json.loads(escaped_label.stdout)
+        self.assertEqual(escaped_payload["status"], "resume")
+        self.assertFalse(escaped_payload["append_row"])
+
+        self.write_archive(
+            "| 2026-08-10 | [Alpha \\| historical](archive/project_alpha.md) | first |\n"
+            "| 2026-08-15 | [Project Alpha](archive/project_alpha.md) | second |\n",
+        )
+        self.assertIn(
+            "duplicate rows",
+            self.assert_rejects(
+                "archive-state", "project_alpha.md", "--today", "2026-08-15"
+            ),
+        )
+
+        self.write_archive(
             "| 2026-08-10 | [Beta](archive/project_beta.md) | "
             "see archive/project_alpha.md for context |\n",
         )
@@ -1061,6 +1083,26 @@ class DreamMemoryPathTests(unittest.TestCase):
         )
         self.assertEqual(fenced_row.returncode, 0, fenced_row.stderr)
         self.assertEqual(json.loads(fenced_row.stdout)["status"], "fresh")
+
+        for hidden_table in (
+            "# Archive\n\n```md\n| Date | Memory | Reason |\n|---|---|---|\n"
+            "| 2026-08-10 | [A](archive/project_alpha.md) | example |\n```\n",
+            "# Archive\n\n<!--\n| Date | Memory | Reason |\n|---|---|---|\n"
+            "| 2026-08-10 | [A](archive/project_alpha.md) | example |\n-->\n",
+        ):
+            with self.subTest(hidden_table=hidden_table):
+                (self.memory / "ARCHIVE.md").write_text(
+                    hidden_table, encoding="utf-8"
+                )
+                self.assertIn(
+                    "canonical archive table",
+                    self.assert_rejects(
+                        "archive-state",
+                        "project_alpha.md",
+                        "--today",
+                        "2026-08-15",
+                    ),
+                )
 
         self.write_archive(
             "| 2026-08-10 | [Project Alpha](archive/project_alpha.md) | retired |\n"
