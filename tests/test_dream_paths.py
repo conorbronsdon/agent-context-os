@@ -603,7 +603,28 @@ class DreamMemoryPathTests(unittest.TestCase):
             "archive/project_alpha.md",
         )
         self.assertEqual(staged.returncode, 0, staged.stderr)
-        self.assertEqual(json.loads(staged.stdout)["source"], "index")
+        snapshot = json.loads(staged.stdout)
+        self.assertEqual(snapshot["source"], "index")
+        committed = self.helper(
+            "commit",
+            "--tree",
+            snapshot["tree_sha"],
+            "--base-head",
+            snapshot["base_head"],
+            "--expect-digest",
+            payload["change_digest"],
+            "--allow",
+            "project_alpha.md",
+            "--allow",
+            "archive/project_alpha.md",
+            "--message",
+            "reviewed archive move",
+        )
+        self.assertEqual(committed.returncode, 0, committed.stderr)
+        self.assertEqual(
+            run(["git", "rev-parse", "HEAD^{tree}"], self.memory).stdout.strip(),
+            snapshot["tree_sha"],
+        )
 
     def test_staged_digest_rejects_same_path_replacement(self) -> None:
         target = self.memory / "project_alpha.md"
@@ -663,6 +684,165 @@ class DreamMemoryPathTests(unittest.TestCase):
         )
         self.assertNotEqual(replaced.returncode, 0)
         self.assertIn("staged bytes do not match", replaced.stderr)
+
+    def test_immutable_tree_surfaces_pre_snapshot_replacement(self) -> None:
+        target = self.memory / "project_alpha.md"
+        target.write_text("USER-REVIEWED RESULT\n", encoding="utf-8")
+        target.write_text("UNREVIEWED PRE-SNAPSHOT REPLACEMENT\n", encoding="utf-8")
+        candidate = self.helper("changes", "--allow", "project_alpha.md")
+        self.assertEqual(candidate.returncode, 0, candidate.stderr)
+        digest = json.loads(candidate.stdout)["change_digest"]
+        run(["git", "add", "--", "project_alpha.md"], self.memory)
+        snapshot = self.helper(
+            "changes",
+            "--staged",
+            "--expect-digest",
+            digest,
+            "--allow",
+            "project_alpha.md",
+        )
+        self.assertEqual(snapshot.returncode, 0, snapshot.stderr)
+        payload = json.loads(snapshot.stdout)
+        immutable_diff = run(
+            ["git", "diff", payload["base_head"], payload["tree_sha"], "--"],
+            self.memory,
+        ).stdout
+        self.assertIn("UNREVIEWED PRE-SNAPSHOT REPLACEMENT", immutable_diff)
+        self.assertNotIn("USER-REVIEWED RESULT", immutable_diff)
+
+    def test_tree_bound_commit_rejects_post_snapshot_index_replacement(self) -> None:
+        target = self.memory / "project_alpha.md"
+        target.write_text("USER-REVIEWED RESULT\n", encoding="utf-8")
+        candidate = self.helper("changes", "--allow", "project_alpha.md")
+        digest = json.loads(candidate.stdout)["change_digest"]
+        run(["git", "add", "--", "project_alpha.md"], self.memory)
+        snapshot = self.helper(
+            "changes",
+            "--staged",
+            "--expect-digest",
+            digest,
+            "--allow",
+            "project_alpha.md",
+        )
+        self.assertEqual(snapshot.returncode, 0, snapshot.stderr)
+        payload = json.loads(snapshot.stdout)
+
+        target.write_text("UNREVIEWED POST-SNAPSHOT REPLACEMENT\n", encoding="utf-8")
+        run(["git", "add", "--", "project_alpha.md"], self.memory)
+        rejected = self.helper(
+            "commit",
+            "--tree",
+            payload["tree_sha"],
+            "--base-head",
+            payload["base_head"],
+            "--expect-digest",
+            digest,
+            "--allow",
+            "project_alpha.md",
+            "--message",
+            "reviewed memory update",
+        )
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn("index changed", rejected.stderr)
+        self.assertEqual(
+            run(["git", "rev-parse", "HEAD"], self.memory).stdout.strip(),
+            payload["base_head"],
+        )
+
+    def test_tree_bound_commit_writes_exact_approved_tree(self) -> None:
+        target = self.memory / "project_alpha.md"
+        target.write_text("USER-REVIEWED RESULT\n", encoding="utf-8")
+        candidate = self.helper("changes", "--allow", "project_alpha.md")
+        digest = json.loads(candidate.stdout)["change_digest"]
+        run(["git", "add", "--", "project_alpha.md"], self.memory)
+        snapshot = self.helper(
+            "changes",
+            "--staged",
+            "--expect-digest",
+            digest,
+            "--allow",
+            "project_alpha.md",
+        )
+        payload = json.loads(snapshot.stdout)
+        committed = self.helper(
+            "commit",
+            "--tree",
+            payload["tree_sha"],
+            "--base-head",
+            payload["base_head"],
+            "--expect-digest",
+            digest,
+            "--allow",
+            "project_alpha.md",
+            "--message",
+            "reviewed memory update",
+        )
+        self.assertEqual(committed.returncode, 0, committed.stderr)
+        result = json.loads(committed.stdout)
+        self.assertEqual(result["tree_sha"], payload["tree_sha"])
+        self.assertEqual(
+            run(["git", "rev-parse", "HEAD^{tree}"], self.memory).stdout.strip(),
+            payload["tree_sha"],
+        )
+        self.assertEqual(
+            run(["git", "show", "HEAD:project_alpha.md"], self.memory).stdout,
+            "USER-REVIEWED RESULT\n",
+        )
+
+    def test_archive_state_handles_stamped_and_unstamped_resume(self) -> None:
+        (self.memory / "ARCHIVE.md").write_text(
+            "# Archive\n\n| Date | Memory | Reason |\n"
+            "|---|---|---|\n"
+            "| 2026-08-10 | [project_alpha.md](archive/project_alpha.md) | retired |\n",
+            encoding="utf-8",
+        )
+        unstamped = self.helper(
+            "archive-state", "project_alpha.md", "--today", "2026-08-15"
+        )
+        self.assertEqual(unstamped.returncode, 0, unstamped.stderr)
+        first = json.loads(unstamped.stdout)
+        self.assertEqual(first["status"], "resume")
+        self.assertEqual(first["archive_date"], "2026-08-10")
+        self.assertFalse(first["append_row"])
+        self.assertTrue(first["insert_stamp"])
+
+        (self.memory / "project_alpha.md").write_text(
+            "---\narchived: 2026-08-10\n---\nalpha\n", encoding="utf-8"
+        )
+        stamped = self.helper(
+            "archive-state", "project_alpha.md", "--today", "2026-08-15"
+        )
+        self.assertEqual(stamped.returncode, 0, stamped.stderr)
+        second = json.loads(stamped.stdout)
+        self.assertEqual(second["status"], "resume")
+        self.assertFalse(second["append_row"])
+        self.assertFalse(second["insert_stamp"])
+
+        (self.memory / "project_alpha.md").write_text(
+            "---\narchived: 2026-08-10\narchived: 2026-08-10\n---\nalpha\n",
+            encoding="utf-8",
+        )
+        self.assertIn(
+            "duplicate archived stamps",
+            self.assert_rejects(
+                "archive-state", "project_alpha.md", "--today", "2026-08-15"
+            ),
+        )
+
+    def test_archive_state_rejects_mismatched_stamp(self) -> None:
+        (self.memory / "ARCHIVE.md").write_text(
+            "| 2026-08-10 | [project_alpha.md](archive/project_alpha.md) | retired |\n",
+            encoding="utf-8",
+        )
+        (self.memory / "project_alpha.md").write_text(
+            "---\narchived: 2026-08-09\n---\nalpha\n", encoding="utf-8"
+        )
+        self.assertIn(
+            "does not match",
+            self.assert_rejects(
+                "archive-state", "project_alpha.md", "--today", "2026-08-15"
+            ),
+        )
 
 
 if __name__ == "__main__":

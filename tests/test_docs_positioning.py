@@ -200,6 +200,10 @@ class DocumentationPositioningTests(unittest.TestCase):
         self.assertIn("--expect-digest", apply)
         self.assertIn("--staged", apply)
         self.assertIn("disables rename detection", apply)
+        self.assertIn("validate-memory.py commit", apply)
+        self.assertIn("separate explicit final commit approval", apply)
+        self.assertIn('git -C "$MEMORY_DIR" diff "$BASE_HEAD" "$REVIEWED_TREE" --', apply)
+        self.assertNotIn('git -C "$MEMORY_DIR" commit ', apply)
         self.assertIn('git -C "$MEMORY_DIR" add -A --', apply)
         self.assertNotIn('git -C "$MEMORY_DIR" add -A\n', apply)
         self.assertNotIn('git -C "$MEMORY_DIR" add ".dreams/$TS/"', dream)
@@ -211,9 +215,11 @@ class DocumentationPositioningTests(unittest.TestCase):
             "treat `$ARGUMENTS` as the ISO timestamp",
         ):
             self.assertNotIn(obsolete, dream + apply)
-        self.assertIn("Root present + exactly one row is a resumable crashed run", apply)
+        self.assertIn("archive-state", apply)
+        self.assertIn("Stamp the file only when `insert_stamp` is true", apply)
         lint = self.text("scripts/dream/prompts/lint.md")
         self.assertIn("root present + one row resumes", lint)
+        self.assertIn("inserts a stamp only when absent", lint)
 
     def test_gws_safety_claims_have_direct_pinned_evidence(self) -> None:
         catalog = json.loads(self.text("integrations/catalog.json"))

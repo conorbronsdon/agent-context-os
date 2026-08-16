@@ -30,6 +30,9 @@ After using `/memory` and completing the explicit directory contract in `docs/au
 ```bash
 MEMORY_DIR=$(sed -n '1p' .context-os/memory-directory)
 mkdir -p "$MEMORY_DIR/archive"        # retired memories move here
+if [ ! -e "$MEMORY_DIR/ARCHIVE.md" ]; then
+  printf '# Archive\n\n| Date | Memory | Reason |\n|---|---|---|\n' > "$MEMORY_DIR/ARCHIVE.md"
+fi
 cd "$MEMORY_DIR"
 touch archive/.gitkeep                # git does not track empty dirs
 git init
@@ -50,7 +53,7 @@ Validate the binding before the first curator run:
 python3 scripts/dream/validate-memory.py resolve
 ```
 
-The helper is the safety contract used by `/dream` and `/dream-apply`: it rejects non-canonical memory paths, symlinks, marker mismatches, memory remotes, dirty memory state, unsafe artifact timestamps, control-file targets, duplicate IDs or mutation targets, curator/action mismatches, and proposal paths that escape the memory root. Creation and apply each pass an exact changed-path allowlist before committing; unrelated tracked, staged, untracked, or concurrent changes stop the operation.
+The helper is the safety contract used by `/dream` and `/dream-apply`: it rejects non-canonical memory paths, symlinks, marker mismatches, memory remotes, dirty memory state, unsafe artifact timestamps, control-file targets, duplicate IDs or mutation targets, curator/action mismatches, and proposal paths that escape the memory root. Apply requires an exact changed-path allowlist, binds file modes and bytes to an immutable Git tree shown for final approval, and commits that exact tree. Unrelated tracked, staged, untracked, or concurrent changes stop the operation or remain outside the approved commit.
 
 ## Where things live
 

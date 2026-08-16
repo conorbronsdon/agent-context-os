@@ -354,16 +354,64 @@ def staged_entry(memory_dir: Path, relative: str) -> tuple[str, bytes] | None:
     return fields[0].decode("ascii"), blob.stdout
 
 
-def change_digest(memory_dir: Path, paths: set[str], *, staged: bool) -> str:
+def tree_entry(memory_dir: Path, tree_sha: str, relative: str) -> tuple[str, bytes] | None:
+    completed = subprocess.run(
+        ["git", "ls-tree", "-z", tree_sha, "--", relative],
+        cwd=memory_dir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if completed.returncode != 0:
+        raise ValidationError(f"cannot inspect approved tree path: {relative}")
+    entries = [entry for entry in completed.stdout.split(b"\0") if entry]
+    if not entries:
+        return None
+    if len(entries) != 1:
+        raise ValidationError(f"approved tree path is ambiguous: {relative}")
+    metadata, separator, encoded_path = entries[0].partition(b"\t")
+    fields = metadata.split()
+    try:
+        decoded_path = encoded_path.decode("utf-8")
+    except UnicodeError as exc:
+        raise ValidationError(f"approved tree path is not UTF-8: {relative}") from exc
+    if (
+        not separator
+        or len(fields) != 3
+        or fields[1] != b"blob"
+        or decoded_path != relative
+    ):
+        raise ValidationError(f"malformed approved tree entry for path: {relative}")
+    blob = subprocess.run(
+        ["git", "cat-file", "blob", fields[2].decode("ascii")],
+        cwd=memory_dir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if blob.returncode != 0:
+        raise ValidationError(f"cannot read approved tree blob for path: {relative}")
+    return fields[0].decode("ascii"), blob.stdout
+
+
+def change_digest(
+    memory_dir: Path,
+    paths: set[str],
+    *,
+    source: str,
+    tree_sha: str | None = None,
+) -> str:
     digest = hashlib.sha256()
     digest.update(b"context-os-dream-change-v1\0")
     for relative in sorted(paths):
         encoded = relative.encode("utf-8")
         digest.update(len(encoded).to_bytes(8, "big"))
         digest.update(encoded)
-        if staged:
+        if source == "index":
             entry = staged_entry(memory_dir, relative)
-        else:
+        elif source == "tree":
+            if tree_sha is None:
+                raise ValidationError("approved tree digest requires a tree SHA")
+            entry = tree_entry(memory_dir, tree_sha, relative)
+        elif source == "worktree":
             candidate = memory_dir / relative
             if candidate.is_symlink() or (candidate.exists() and not candidate.is_file()):
                 raise ValidationError(f"reviewed path must be a regular file or deletion: {relative}")
@@ -374,6 +422,8 @@ def change_digest(memory_dir: Path, paths: set[str], *, staged: bool) -> str:
                 ) if candidate.exists() else None
             except OSError as exc:
                 raise ValidationError(f"cannot read reviewed path {relative}: {exc}") from exc
+        else:  # pragma: no cover - internal callers use constants.
+            raise ValidationError(f"unknown digest source: {source}")
         if entry is None:
             digest.update(b"D")
         else:
@@ -383,6 +433,28 @@ def change_digest(memory_dir: Path, paths: set[str], *, staged: bool) -> str:
             digest.update(len(content).to_bytes(8, "big"))
             digest.update(content)
     return digest.hexdigest()
+
+
+def require_object_sha(value: str, label: str) -> str:
+    if not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", value):
+        raise ValidationError(f"{label} must be a lowercase Git object SHA")
+    return value
+
+
+def tree_changed_paths(memory_dir: Path, base_head: str, tree_sha: str) -> set[str]:
+    return run_git_paths(
+        [
+            "diff-tree",
+            "--no-commit-id",
+            "-r",
+            "--no-renames",
+            "--name-only",
+            "-z",
+            base_head,
+            tree_sha,
+        ],
+        cwd=memory_dir,
+    )
 
 
 def valid_timestamp(value: str) -> bool:
@@ -724,6 +796,105 @@ def validate_proposals(
     return len(proposals)
 
 
+def archive_rows(archive_index: Path, target: str) -> list[str]:
+    require_regular_file(archive_index, "archive index")
+    try:
+        lines = archive_index.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as exc:
+        raise ValidationError(f"cannot read archive index: {exc}") from exc
+    pattern = re.compile(
+        r"^\|\s*(\d{4}-\d{2}-\d{2})\s*\|\s*\["
+        + re.escape(target)
+        + r"\]\(archive/"
+        + re.escape(target)
+        + r"\)\s*\|"
+    )
+    return [match.group(1) for line in lines if (match := pattern.match(line))]
+
+
+def archived_stamps(path: Path) -> list[str]:
+    if not path.exists():
+        return []
+    require_regular_file(path, "archive target")
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as exc:
+        raise ValidationError(f"cannot read archive target: {exc}") from exc
+    stamps = []
+    for line in lines:
+        if line.startswith("archived:"):
+            value = line.partition(":")[2].strip()
+            try:
+                datetime.strptime(value, "%Y-%m-%d")
+            except ValueError as exc:
+                raise ValidationError("archive target has a malformed archived date") from exc
+            stamps.append(value)
+    return stamps
+
+
+def cmd_archive_state(args: argparse.Namespace) -> dict[str, Any]:
+    binding = validate_memory_binding(Path.cwd(), require_clean=False)
+    memory_dir = Path(binding["memory_dir"])
+    try:
+        datetime.strptime(args.today, "%Y-%m-%d")
+    except ValueError as exc:
+        raise ValidationError("--today must match YYYY-MM-DD") from exc
+    target = safe_detail_filename(
+        args.target,
+        memory_dir=memory_dir,
+        label="archive target",
+    )
+    root = memory_dir / target
+    destination = memory_dir / "archive" / target
+    ensure_inside(memory_dir, destination, "archive destination")
+    ensure_no_symlink_components(destination, memory_dir, "archive destination")
+    if root.is_symlink() or destination.is_symlink():
+        raise ValidationError("archive target and destination must not be symlinks")
+    root_exists = root.is_file()
+    destination_exists = destination.is_file()
+    if root.exists() and not root_exists:
+        raise ValidationError("archive root target must be a regular file")
+    if destination.exists() and not destination_exists:
+        raise ValidationError("archive destination must be a regular file")
+
+    rows = archive_rows(memory_dir / "ARCHIVE.md", target)
+    if len(rows) > 1:
+        raise ValidationError("archive index contains duplicate rows for target")
+    if root_exists and destination_exists:
+        raise ValidationError("archive target exists at both root and destination")
+    if not root_exists and not destination_exists:
+        raise ValidationError("archive target exists at neither root nor destination")
+    if destination_exists:
+        if len(rows) != 1:
+            raise ValidationError("archive destination requires exactly one archive row")
+        stamps = archived_stamps(destination)
+        if stamps != rows:
+            raise ValidationError("completed archive stamp must match its single row date")
+        return {
+            **binding,
+            "target": target,
+            "status": "complete",
+            "archive_date": rows[0],
+            "append_row": False,
+            "insert_stamp": False,
+        }
+
+    archive_date = rows[0] if rows else args.today
+    stamps = archived_stamps(root)
+    if len(stamps) > 1:
+        raise ValidationError("archive target contains duplicate archived stamps")
+    if stamps and stamps[0] != archive_date:
+        raise ValidationError("archive target stamp does not match the required archive date")
+    return {
+        **binding,
+        "target": target,
+        "status": "resume" if rows else "fresh",
+        "archive_date": archive_date,
+        "append_row": not rows,
+        "insert_stamp": not stamps,
+    }
+
+
 def cmd_resolve(_: argparse.Namespace) -> dict[str, Any]:
     return validate_memory_binding(Path.cwd(), require_clean=True)
 
@@ -781,7 +952,11 @@ def cmd_changes(args: argparse.Namespace) -> dict[str, Any]:
         require_no_unstaged_changes(memory_dir)
     elif args.expect_digest:
         raise ValidationError("--expect-digest is valid only with --staged")
-    digest = change_digest(memory_dir, changed, staged=args.staged)
+    digest = change_digest(
+        memory_dir,
+        changed,
+        source="index" if args.staged else "worktree",
+    )
     if args.expect_digest:
         if not re.fullmatch(r"[0-9a-f]{64}", args.expect_digest):
             raise ValidationError("--expect-digest must be a lowercase SHA-256 digest")
@@ -789,12 +964,86 @@ def cmd_changes(args: argparse.Namespace) -> dict[str, Any]:
             raise ValidationError(
                 "staged bytes do not match the reviewed change digest; inspect and re-approve the final diff"
             )
-    return {
+    result = {
         **binding,
         "changed_paths": sorted(changed),
         "allowed_paths": sorted(allowed),
         "change_digest": digest,
         "source": "index" if args.staged else "worktree",
+    }
+    if args.staged:
+        tree_sha = run_git(["write-tree"], cwd=memory_dir)
+        tree_digest = change_digest(
+            memory_dir,
+            changed,
+            source="tree",
+            tree_sha=tree_sha,
+        )
+        if tree_digest != digest:
+            raise ValidationError("captured tree does not match the validated index")
+        result["tree_sha"] = tree_sha
+        result["base_head"] = run_git(["rev-parse", "HEAD"], cwd=memory_dir)
+    return result
+
+
+def cmd_commit(args: argparse.Namespace) -> dict[str, Any]:
+    binding = validate_memory_binding(Path.cwd(), require_clean=False)
+    memory_dir = Path(binding["memory_dir"])
+    tree_sha = require_object_sha(args.tree, "--tree")
+    base_head = require_object_sha(args.base_head, "--base-head")
+    if run_git(["cat-file", "-t", tree_sha], cwd=memory_dir) != "tree":
+        raise ValidationError("--tree must identify a Git tree object")
+    if run_git(["rev-parse", "HEAD"], cwd=memory_dir) != base_head:
+        raise ValidationError("memory HEAD changed after final review")
+    if not re.fullmatch(r"[0-9a-f]{64}", args.expect_digest):
+        raise ValidationError("--expect-digest must be a lowercase SHA-256 digest")
+    if not isinstance(args.message, str) or not args.message.strip() or CONTROL.search(args.message):
+        raise ValidationError("--message must be a non-empty single line")
+
+    allowed = {
+        safe_relative_change(value, memory_dir=memory_dir, label=f"allow[{index}]")
+        for index, value in enumerate(args.allow)
+    }
+    if not allowed:
+        raise ValidationError("commit requires at least one reviewed --allow path")
+    changed = tree_changed_paths(memory_dir, base_head, tree_sha)
+    unexpected = changed - allowed
+    omitted = allowed - changed
+    if unexpected:
+        raise ValidationError(
+            "approved tree changes paths outside the reviewed allowlist: "
+            + ", ".join(sorted(unexpected))
+        )
+    if omitted:
+        raise ValidationError(
+            "reviewed allowlist includes paths absent from the approved tree diff: "
+            + ", ".join(sorted(omitted))
+        )
+    digest = change_digest(
+        memory_dir,
+        changed,
+        source="tree",
+        tree_sha=tree_sha,
+    )
+    if digest != args.expect_digest:
+        raise ValidationError("approved tree bytes do not match the reviewed digest")
+
+    require_no_unstaged_changes(memory_dir)
+    if run_git(["write-tree"], cwd=memory_dir) != tree_sha:
+        raise ValidationError("memory index changed after final tree review")
+
+    new_commit = run_git(
+        ["commit-tree", tree_sha, "-p", base_head, "-m", args.message],
+        cwd=memory_dir,
+    )
+    run_git(["update-ref", "HEAD", new_commit, base_head], cwd=memory_dir)
+    return {
+        **binding,
+        "commit_sha": new_commit,
+        "tree_sha": tree_sha,
+        "base_head": base_head,
+        "change_digest": digest,
+        "changed_paths": sorted(changed),
     }
 
 
@@ -831,6 +1080,25 @@ def build_parser() -> argparse.ArgumentParser:
         "--expect-digest",
         help="reviewed worktree digest that the staged blobs must match",
     )
+
+    commit = subcommands.add_parser(
+        "commit", help="commit one explicitly approved immutable tree"
+    )
+    commit.add_argument("--tree", required=True, help="approved Git tree SHA")
+    commit.add_argument("--base-head", required=True, help="HEAD reviewed with the tree")
+    commit.add_argument(
+        "--expect-digest", required=True, help="approved change-content digest"
+    )
+    commit.add_argument(
+        "--allow", action="append", default=[], help="reviewed memory-relative path"
+    )
+    commit.add_argument("--message", required=True, help="single-line commit message")
+
+    archive = subcommands.add_parser(
+        "archive-state", help="classify an archive target before applying it"
+    )
+    archive.add_argument("target", help="plain detail filename")
+    archive.add_argument("--today", required=True, help="current date as YYYY-MM-DD")
     return parser
 
 
@@ -846,6 +1114,10 @@ def main(argv: list[str] | None = None) -> int:
             result = cmd_artifact(args)
         elif args.command == "changes":
             result = cmd_changes(args)
+        elif args.command == "commit":
+            result = cmd_commit(args)
+        elif args.command == "archive-state":
+            result = cmd_archive_state(args)
         else:  # pragma: no cover - argparse prevents this.
             parser.error("unknown command")
     except ValidationError as exc:

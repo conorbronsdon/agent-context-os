@@ -71,14 +71,14 @@ b. Ask via `AskUserQuestion`:
 c. On `Accept`: apply the change.
    - For `modify` action: use Edit tool on `$MEMORY_DIR/{target}`, replacing `current_excerpt` with `proposed_excerpt`.
    - For `archive` action, all five steps — an archive that stops early leaves the file reading as live:
-     1. **Classify fresh, resumable, or complete from the filesystem.** Check the root target, `archive/{target}`, and the exact matching row count in `ARCHIVE.md`.
-        - Destination present + root absent + exactly one row means complete: stop as already retired.
-        - Destination and root both present, destination without a row, or duplicate rows are inconsistent: stop for manual review.
-        - Root present + exactly one row is a resumable crashed run, whether or not the stamp was written. Reuse the row's date, skip step 2, then finish stamp + move + links + index.
-        - Root present + no row is a fresh archive: continue through all steps.
+     1. **Classify fresh, resumable, or complete with the executable guard:** run `python3 scripts/dream/validate-memory.py archive-state "{target}" --today "{today}"` and parse its JSON.
+        - `complete` means destination present + root absent + exactly one matching row and stamp: stop as already retired.
+        - `resume` means root present + exactly one row. Reuse `archive_date`; append no row.
+        - `fresh` means root present + no row. Use today's `archive_date`; append one row.
+        - Root/destination collisions, missing targets, duplicate rows or stamps, and mismatched stamp dates fail closed for manual review.
         **Do not grep `ARCHIVE.md` for the bare filename.** Merge tombstones name the *surviving* file and split tombstones name the *children*; those files are live, so a bare-name grep refuses legitimate archives.
-     2. For a fresh archive only, append one row to `$MEMORY_DIR/ARCHIVE.md`: `| {today} | [{target}](archive/{target}) | {one-line reason} |`.
-     3. **Stamp the file**: insert `archived: {archive_date}` as the last line of its frontmatter block, using today's date for a fresh archive or the existing row date for a resumed one. This is what stops a future session reading it as a live memory.
+     2. Append a row only when `append_row` is true: `| {archive_date} | [{target}](archive/{target}) | {one-line reason} |`.
+     3. **Stamp the file only when `insert_stamp` is true**: insert `archived: {archive_date}` as the last line of its frontmatter block. If false, retain the one matching stamp. Never insert a second key. This is what stops a future session reading it as a live memory.
      4. **Move it.** `git mv` does **not** create the destination, and `$MEMORY_DIR` is its own git repo — so run both, from inside it:
         ```sh
         mkdir -p "$MEMORY_DIR/archive"
@@ -151,10 +151,19 @@ python3 scripts/dream/validate-memory.py changes \
   --allow "<each other exact changed memory-relative path>"
 git -C "$MEMORY_DIR" diff --quiet
 git -C "$MEMORY_DIR" diff --cached --check
-git -C "$MEMORY_DIR" commit -m "dream-apply($TS): N accepted / M rejected / K deferred"
+# Parse tree_sha as REVIEWED_TREE and base_head as BASE_HEAD.
+git -C "$MEMORY_DIR" diff "$BASE_HEAD" "$REVIEWED_TREE" --
+# Show that immutable diff and ask for separate explicit final commit approval.
+python3 scripts/dream/validate-memory.py commit \
+  --tree "$REVIEWED_TREE" \
+  --base-head "$BASE_HEAD" \
+  --expect-digest "$REVIEWED_DIGEST" \
+  --allow ".dreams/$TS/applied.json" \
+  --allow "<each other exact changed memory-relative path>" \
+  --message "dream-apply($TS): N accepted / M rejected / K deferred"
 ```
 
-The second helper hashes the index rather than trusting path names and refuses any unstaged change. It must report the same digest and only the reviewed paths. If a rename omits its source, staged bytes differ, an unrelated tracked/staged/untracked path appears, or a concurrent write lands, stop without committing and show the final staged diff for renewed approval. Never replace the exact path list with bare `git add -A`.
+The second helper hashes the index rather than trusting path names, refuses unstaged changes, and captures an immutable Git tree. The user reviews that tree's exact diff—not a mutable working copy. The commit helper revalidates its paths, modes, bytes, base HEAD, current index, and digest, then creates and advances HEAD to a commit containing that exact tree. A later index write cannot enter that commit. If a rename omits its source, content or mode differs, an unrelated tracked, staged, or untracked path appears, or HEAD/index/worktree moves, stop without committing and show a newly captured immutable diff for renewed approval. Never replace the exact path list with bare `git add -A` or the tree-bound helper with porcelain `git commit`.
 
 If no proposals were accepted, still commit `applied.json` so the audit trail is complete.
 
