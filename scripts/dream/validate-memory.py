@@ -897,9 +897,11 @@ def visible_markdown_lines(lines: list[str]) -> list[str]:
             in_comment = True
             cursor = opening + 4
 
-        opening_fence = re.match(r"^\s{0,3}(`{3,}|~{3,})(?:[^`~].*)?$", visible)
+        opening_fence = re.fullmatch(
+            r"\s{0,3}(?:(`{3,})([^`]*)|(~{3,})(.*))", visible
+        )
         if opening_fence:
-            marker = opening_fence.group(1)
+            marker = opening_fence.group(1) or opening_fence.group(3)
             fence_character = marker[0]
             fence_length = len(marker)
             continue

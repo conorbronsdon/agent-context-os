@@ -1104,6 +1104,26 @@ class DreamMemoryPathTests(unittest.TestCase):
                     ),
                 )
 
+        for mixed_fence in (
+            "# Archive\n\n```~example\n| Date | Memory | Reason |\n|---|---|---|\n"
+            "| 2026-08-10 | [A](archive/project_alpha.md) | example |\n```\n```\n",
+            "# Archive\n\n~~~`example\n| Date | Memory | Reason |\n|---|---|---|\n"
+            "| 2026-08-10 | [A](archive/project_alpha.md) | example |\n~~~\n~~~\n",
+        ):
+            with self.subTest(mixed_fence=mixed_fence):
+                (self.memory / "ARCHIVE.md").write_text(
+                    mixed_fence, encoding="utf-8"
+                )
+                self.assertIn(
+                    "unterminated fenced block",
+                    self.assert_rejects(
+                        "archive-state",
+                        "project_alpha.md",
+                        "--today",
+                        "2026-08-15",
+                    ),
+                )
+
         self.write_archive(
             "| 2026-08-10 | [Project Alpha](archive/project_alpha.md) | retired |\n"
             "| 2026-08-10 | [Another label](archive/project_alpha.md) | duplicate |\n",
