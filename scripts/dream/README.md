@@ -53,7 +53,7 @@ Validate the binding before the first curator run:
 python3 scripts/dream/validate-memory.py resolve
 ```
 
-The helper is the safety contract used by `/dream` and `/dream-apply`: it rejects non-canonical memory paths, symlinks, marker mismatches, memory remotes, dirty memory state, unsafe artifact timestamps, control-file targets, duplicate IDs or mutation targets, curator/action mismatches, and proposal paths that escape the memory root. Apply requires an exact changed-path allowlist, binds file modes and bytes to an immutable Git tree and exact local branch identity shown for final approval, and advances only that reviewed ref to the exact tree. Detected tracked, staged, untracked, ref, or concurrent changes stop the operation; the commit cannot absorb anything outside the approved tree.
+The helper is the safety contract used by `/dream` and `/dream-apply`: it rejects non-canonical memory paths, symlinks, marker mismatches, memory remotes, dirty memory state, unsafe artifact timestamps, control-file targets, duplicate IDs or mutation targets, curator/action mismatches, and proposal paths that escape the memory root. Apply requires an attached local branch and exact changed-path allowlist, binds file modes and bytes to an immutable Git tree and branch identity shown for final approval, and advances only that reviewed ref to the exact tree. Detected tracked, staged, unignored untracked, ref, or concurrent changes stop the operation, and every approved deletion must remain absent even if ignored; the commit cannot absorb anything outside the approved tree.
 
 ## Where things live
 

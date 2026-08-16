@@ -151,7 +151,7 @@ python3 scripts/dream/validate-memory.py changes \
   --allow "<each other exact changed memory-relative path>"
 git -C "$MEMORY_DIR" diff --quiet
 git -C "$MEMORY_DIR" diff --cached --check
-# Parse tree_sha as REVIEWED_TREE, base_head as BASE_HEAD, and head_ref as HEAD_REF.
+# Parse tree_sha as REVIEWED_TREE, base_head as BASE_HEAD, and the attached local branch as HEAD_REF. Detached HEAD is rejected.
 git -C "$MEMORY_DIR" diff "$BASE_HEAD" "$REVIEWED_TREE" --
 # Show that immutable diff and ask for separate explicit final commit approval.
 python3 scripts/dream/validate-memory.py commit \
@@ -164,7 +164,7 @@ python3 scripts/dream/validate-memory.py commit \
   --message "dream-apply($TS): N accepted / M rejected / K deferred"
 ```
 
-The second helper hashes the index rather than trusting path names, refuses unstaged changes, and captures an immutable Git tree plus the exact symbolic HEAD identity. The user reviews that tree's exact diff—not a mutable working copy. The commit helper revalidates its paths, modes, bytes, base HEAD, branch identity, current index, untracked set, and digest, then creates and advances only the reviewed ref to a commit containing that exact tree. A later index write cannot enter that commit. If a rename omits its source, content or mode differs, an unrelated tracked, staged, or untracked path appears, or HEAD/ref/index/worktree moves, stop without committing and show a newly captured immutable diff for renewed approval. Never replace the exact path list with bare `git add -A` or the tree-bound helper with porcelain `git commit`.
+The second helper hashes the index rather than trusting path names, refuses unstaged changes or detached HEAD, and captures an immutable Git tree plus the exact local branch identity. The user reviews that tree's exact diff—not a mutable working copy. The commit helper revalidates its paths, modes, bytes, base HEAD, branch identity, current index, unignored untracked set, every reviewed deletion's continued absence (even when ignored), and digest, then creates and advances only the reviewed ref to a commit containing that exact tree. A later index write cannot enter that commit. If a rename omits its source, content or mode differs, an unrelated tracked, staged, or unignored untracked path appears, a deleted path reappears, or HEAD/ref/index/worktree moves, stop without committing and show a newly captured immutable diff for renewed approval. Never replace the exact path list with bare `git add -A` or the tree-bound helper with porcelain `git commit`.
 
 If no proposals were accepted, still commit `applied.json` so the audit trail is complete.
 

@@ -48,10 +48,7 @@ class DreamMemoryPathTests(unittest.TestCase):
         ).stdout.strip()
         (self.memory / ".context-os-repository").write_text(f"{identity}\n", encoding="utf-8")
         (self.memory / "MEMORY.md").write_text("# Memory\n", encoding="utf-8")
-        (self.memory / "ARCHIVE.md").write_text(
-            "# Archive\n\n| Date | Memory | Reason |\n|---|---|---|\n",
-            encoding="utf-8",
-        )
+        self.write_archive()
         (self.memory / "project_alpha.md").write_text(
             "---\nname: Project Alpha\ntype: project\n---\nalpha\n", encoding="utf-8"
         )
@@ -74,6 +71,13 @@ class DreamMemoryPathTests(unittest.TestCase):
         ):
             normalized.append("--for-commit")
         return run(["python3", str(HELPER), *normalized], cwd or self.repo, check=False)
+
+    def write_archive(self, *rows: str) -> None:
+        (self.memory / "ARCHIVE.md").write_text(
+            "# Archive\n\n| Date | Memory | Reason |\n|---|---|---|\n"
+            + "".join(rows),
+            encoding="utf-8",
+        )
 
     def write_artifact(
         self, proposals: list[dict[str, object]] | object, *, curator: str = "rot"
@@ -613,8 +617,16 @@ class DreamMemoryPathTests(unittest.TestCase):
         self.assertEqual(staged.returncode, 0, staged.stderr)
         snapshot = json.loads(staged.stdout)
         self.assertEqual(snapshot["source"], "index")
+        with (self.memory / ".git" / "info" / "exclude").open(
+            "a", encoding="utf-8"
+        ) as exclude:
+            exclude.write("project_alpha.md\n")
         (self.memory / "project_alpha.md").write_text(
             "concurrent live resurrection\n", encoding="utf-8"
+        )
+        self.assertEqual(
+            run(["git", "check-ignore", "project_alpha.md"], self.memory).returncode,
+            0,
         )
         resurrected = self.helper(
             "commit",
@@ -634,7 +646,7 @@ class DreamMemoryPathTests(unittest.TestCase):
             "reviewed archive move",
         )
         self.assertNotEqual(resurrected.returncode, 0)
-        self.assertIn("untracked paths", resurrected.stderr)
+        self.assertIn("reviewed deleted paths reappeared", resurrected.stderr)
         (self.memory / "project_alpha.md").unlink()
         committed = self.helper(
             "commit",
@@ -827,6 +839,7 @@ class DreamMemoryPathTests(unittest.TestCase):
         )
 
     def test_tree_bound_commit_writes_exact_approved_tree(self) -> None:
+        run(["git", "branch", "-m", "feature@local+safe"], self.memory)
         target = self.memory / "project_alpha.md"
         target.write_text("USER-REVIEWED RESULT\n", encoding="utf-8")
         candidate = self.helper("changes", "--allow", "project_alpha.md")
@@ -841,6 +854,7 @@ class DreamMemoryPathTests(unittest.TestCase):
             "project_alpha.md",
         )
         payload = json.loads(snapshot.stdout)
+        self.assertEqual(payload["head_ref"], "refs/heads/feature@local+safe")
         committed = self.helper(
             "commit",
             "--tree",
@@ -907,12 +921,28 @@ class DreamMemoryPathTests(unittest.TestCase):
             payload["base_head"],
         )
 
+    def test_staged_snapshot_rejects_detached_head(self) -> None:
+        run(["git", "checkout", "--detach"], self.memory)
+        (self.memory / "project_alpha.md").write_text(
+            "reviewed replacement\n", encoding="utf-8"
+        )
+        candidate = self.helper("changes", "--allow", "project_alpha.md")
+        digest = json.loads(candidate.stdout)["change_digest"]
+        run(["git", "add", "--", "project_alpha.md"], self.memory)
+        staged = self.helper(
+            "changes",
+            "--staged",
+            "--expect-digest",
+            digest,
+            "--allow",
+            "project_alpha.md",
+        )
+        self.assertNotEqual(staged.returncode, 0)
+        self.assertIn("requires HEAD to name a local branch", staged.stderr)
+
     def test_archive_state_handles_stamped_and_unstamped_resume(self) -> None:
-        (self.memory / "ARCHIVE.md").write_text(
-            "# Archive\n\n| Date | Memory | Reason |\n"
-            "|---|---|---|\n"
+        self.write_archive(
             "| 2026-08-10 | [project_alpha.md](archive/project_alpha.md) | retired |\n",
-            encoding="utf-8",
         )
         unstamped = self.helper(
             "archive-state", "project_alpha.md", "--today", "2026-08-15"
@@ -966,9 +996,8 @@ class DreamMemoryPathTests(unittest.TestCase):
         (self.memory / "project_alpha.md").replace(
             self.memory / "archive" / "project_alpha.md"
         )
-        (self.memory / "ARCHIVE.md").write_text(
+        self.write_archive(
             "| 2026-08-15 | [Project Alpha](archive/project_alpha.md) | retired |\n",
-            encoding="utf-8",
         )
         completed = self.helper(
             "archive-state", "project_alpha.md", "--today", "2026-08-15"
@@ -1001,9 +1030,8 @@ class DreamMemoryPathTests(unittest.TestCase):
             "---\nname: Project Alpha\ntype: project\n---\nalpha\n",
             encoding="utf-8",
         )
-        (self.memory / "ARCHIVE.md").write_text(
+        self.write_archive(
             "| 2026-08-10 | [Human-readable label](archive/project_alpha.md) | retired |\n",
-            encoding="utf-8",
         )
         state = self.helper(
             "archive-state", "project_alpha.md", "--today", "2026-08-15"
@@ -1013,10 +1041,30 @@ class DreamMemoryPathTests(unittest.TestCase):
         self.assertEqual(payload["status"], "resume")
         self.assertEqual(payload["archive_date"], "2026-08-10")
 
-        (self.memory / "ARCHIVE.md").write_text(
+        self.write_archive(
+            "| 2026-08-10 | [Beta](archive/project_beta.md) | "
+            "see archive/project_alpha.md for context |\n",
+        )
+        unrelated_reason = self.helper(
+            "archive-state", "project_alpha.md", "--today", "2026-08-15"
+        )
+        self.assertEqual(unrelated_reason.returncode, 0, unrelated_reason.stderr)
+        self.assertEqual(json.loads(unrelated_reason.stdout)["status"], "fresh")
+
+        self.write_archive(
+            "```markdown\n"
+            "| 2026-08-10 | [Project Alpha](archive/project_alpha.md) | example |\n"
+            "```\n"
+        )
+        fenced_row = self.helper(
+            "archive-state", "project_alpha.md", "--today", "2026-08-15"
+        )
+        self.assertEqual(fenced_row.returncode, 0, fenced_row.stderr)
+        self.assertEqual(json.loads(fenced_row.stdout)["status"], "fresh")
+
+        self.write_archive(
             "| 2026-08-10 | [Project Alpha](archive/project_alpha.md) | retired |\n"
             "| 2026-08-10 | [Another label](archive/project_alpha.md) | duplicate |\n",
-            encoding="utf-8",
         )
         self.assertIn(
             "duplicate rows",
@@ -1025,21 +1073,51 @@ class DreamMemoryPathTests(unittest.TestCase):
             ),
         )
 
-        (self.memory / "ARCHIVE.md").write_text(
+        self.write_archive(
             "| 2026-02-30 | [Project Alpha](archive/project_alpha.md) | retired |\n",
-            encoding="utf-8",
         )
         self.assertIn(
-            "malformed row date",
+            "not a valid calendar date",
             self.assert_rejects(
                 "archive-state", "project_alpha.md", "--today", "2026-08-15"
             ),
         )
 
-    def test_archive_state_rejects_mismatched_stamp(self) -> None:
-        (self.memory / "ARCHIVE.md").write_text(
-            "| 2026-08-10 | [project_alpha.md](archive/project_alpha.md) | retired |\n",
+    def test_archive_state_rejects_noncanonical_dates(self) -> None:
+        self.assertIn(
+            "must match YYYY-MM-DD",
+            self.assert_rejects(
+                "archive-state", "project_alpha.md", "--today", "2026-8-5"
+            ),
+        )
+
+        (self.memory / "project_alpha.md").write_text(
+            "---\nname: Project Alpha\narchived: 2026-8-5\n---\nalpha\n",
             encoding="utf-8",
+        )
+        self.assertIn(
+            "archive target archived date must match YYYY-MM-DD",
+            self.assert_rejects(
+                "archive-state", "project_alpha.md", "--today", "2026-08-05"
+            ),
+        )
+
+        (self.memory / "project_alpha.md").write_text(
+            "---\nname: Project Alpha\n---\nalpha\n", encoding="utf-8"
+        )
+        self.write_archive(
+            "| 2026-8-5 | [Project Alpha](archive/project_alpha.md) | retired |\n",
+        )
+        self.assertIn(
+            "archive index row date must match YYYY-MM-DD",
+            self.assert_rejects(
+                "archive-state", "project_alpha.md", "--today", "2026-08-05"
+            ),
+        )
+
+    def test_archive_state_rejects_mismatched_stamp(self) -> None:
+        self.write_archive(
+            "| 2026-08-10 | [project_alpha.md](archive/project_alpha.md) | retired |\n",
         )
         (self.memory / "project_alpha.md").write_text(
             "---\narchived: 2026-08-09\n---\nalpha\n", encoding="utf-8"
