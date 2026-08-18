@@ -9,10 +9,13 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [Agent Workspace](https://github.com/conorbronsdon/agent-workspace) | `workspace_template` | verified | Yes | No | No | No | Yes | 2026-08-15 |
 | [AI Tools for Creators](https://github.com/conorbronsdon/ai-tools-for-creators) | `resource_catalog` | listed | No | No | No | No | No | 2026-08-15 |
 | [Beads for Gemini CLI](https://beads.gascity.com/integrations/gemini) | `agent_extension` | verified | Yes | Yes | No | No | Yes | 2026-08-15 |
+| [GitHub MCP](https://github.com/github/github-mcp-server) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-18 |
 | [Google Workspace CLI](https://github.com/googleworkspace/cli) | `connector` | verified | Yes | Yes | No | Yes | Yes | 2026-08-15 |
 | [Granola MCP](https://docs.granola.ai/help-center/sharing/integrations/mcp) | `mcp_server` | verified | No | No | No | Yes | No | 2026-08-15 |
+| [Linear MCP](https://linear.app/docs/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-18 |
 | [Notion MCP](https://developers.notion.com/guides/mcp/get-started-with-mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-15 |
 | [Obsidian CLI](https://obsidian.md/help/cli) | `editor_guide` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-15 |
+| [Readwise MCP](https://docs.readwise.io/tools/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-18 |
 | [Substack MCP](https://github.com/conorbronsdon/substack-mcp) | `mcp_server` | verified | Yes | Yes | Yes | Yes | No | 2026-08-15 |
 | [Tolaria MCP](https://github.com/refactoringhq/tolaria) | `local_workspace` | verified | Yes | No | No | Yes | Yes | 2026-08-15 |
 
@@ -110,6 +113,30 @@ Capabilities and limits:
 - bd dolt push --force can overwrite remote history
 - bd init --discard-remote authorizes a divergent local initialization; a later Dolt push is the separate remote-history replacement
 
+## GitHub MCP
+
+GitHub's official MCP server exposes repository, issue, pull-request, Actions, security, and administration toolsets with granular allowlists and an enforced read-only mode.
+
+- **Supported agents:** `claude_code`, `codex`, `gemini_cli`, `cursor`, `opencode`, `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** An MCP-compatible client; A GitHub account; Docker or a current native release for the local server; hosted-server availability depends on the client
+- **Credentials:** Browser OAuth token held by the client, or a fine-grained personal access token or GitHub App credentials kept outside repository files
+- **Reads:** Private or public repository contents and metadata, issues, pull requests, users, Actions, security findings, notifications, and other explicitly enabled toolsets allowed by the authenticated account
+- **Writes / external effects:** Remote GitHub writes exposed by enabled toolsets, including issue and pull-request comments, branch or file changes, workflow operations, labels, notifications, and repository administration where the credential permits; Publicly visible posts, overwrite-capable file or branch changes, and resource deletion when the corresponding write tools are enabled
+- **Typed safety signals:** sensitive read, remote write, overwrite, delete, oauth
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `publish`, `overwrite`, `delete`, `oauth`, `destructive`
+- **Confirmation:** Confirm the exact GitHub identity, host, repositories, credential scopes, and enabled toolsets; ask before private-repository reads, and separately show the exact target and payload before comments, branch or file writes, workflow actions, publication, overwrite, deletion, or administration.
+- **Risk tags:** `credentials`, `private-repositories`, `sensitive-read`, `remote-write`, `publish-capable`, `public-publish`, `overwrite-capable`, `delete-capable`, `oauth`, `destructive-capable`, `broad-api-surface`, `ci-cd`, `prompt-injection`
+- **Evidence:** [1](https://github.com/github/github-mcp-server); [2](https://github.com/github/github-mcp-server/blob/main/docs/server-configuration.md); [3](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md)
+- **Health check:** Start the server in read-only mode with only context, repos, issues, and pull\_requests enabled, verify the authenticated identity and host, then read one explicitly named repository and issue without performing a write.
+- **Uninstall:** Remove the MCP client entry, stop or uninstall the local server if used, and revoke the OAuth grant, personal access token, or GitHub App installation used for the connection; leave repositories and GitHub content unchanged. (removes user data: No)
+
+Capabilities and limits:
+
+- Start with --read-only and only the context, repos, issues, and pull\_requests toolsets; read-only mode takes priority even if a write tool is requested explicitly
+- Toolsets and individual tools are allowlisted independently, so enabling all or the default surface can expose materially more data and actions than a bounded project workflow needs
+- Treat workflow dispatch, branch or file mutation, repository administration, and public comments as separate high-impact remote actions
+
 ## Google Workspace CLI
 
 Google's pre-1.0 command-line interface and Agent Skills for scoped access to Workspace APIs; optional session-start reads require read-only OAuth scopes and per-invocation approval.
@@ -165,6 +192,30 @@ Capabilities and limits:
 - Free and Business plans may use anonymized data for model improvement by default, with an account opt-out documented
 - Granola can transcribe voice memos, but current MCP documentation guarantees meeting-note and transcript tools rather than voice-memo coverage
 
+## Linear MCP
+
+Linear's official hosted MCP provides authenticated search and read access plus optional creation and updates for issues, projects, and comments, with a dedicated read-only endpoint.
+
+- **Supported agents:** `claude_code`, `codex`, `cursor`, `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** A Linear workspace account; An MCP client supporting remote Streamable HTTP and browser OAuth, or a compatible remote-server bridge
+- **Credentials:** OAuth 2.1 token managed by the MCP client, or an optional bearer token or Linear API key kept outside repository files
+- **Reads:** Sensitive Linear workspace identity, teams, issues, projects, initiatives, cycles, comments, and related metadata available to the connected user
+- **Writes / external effects:** Remote creation and updates of Linear issues, projects, comments, milestones, relationships, status, assignment, descriptions, and other fields exposed by the current tool surface; Overwrite-capable updates to existing project-management fields and content
+- **Typed safety signals:** sensitive read, remote write, overwrite, oauth
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `overwrite`, `oauth`, `destructive`
+- **Confirmation:** Confirm the exact Linear user, workspace, teams, and OAuth scope; ask before broad workspace reads, and show the exact issue, project, field changes, relationships, or comment before every remote creation or overwrite-capable update.
+- **Risk tags:** `credentials`, `hosted`, `project-management`, `sensitive-read`, `remote-write`, `overwrite-capable`, `oauth`, `destructive-capable`, `prompt-injection`
+- **Evidence:** [1](https://linear.app/docs/mcp)
+- **Health check:** Connect through the dedicated read-only endpoint, verify the expected user and workspace, then fetch one explicitly named team and issue without creating or updating anything.
+- **Uninstall:** Remove the Linear MCP entry from the client and revoke the authorized connection or API key; preserve every issue, project, comment, and workspace setting. (removes user data: No)
+
+Capabilities and limits:
+
+- Use https://mcp.linear.app/mcp/readonly or request only the read OAuth scope for session briefings and investigation
+- The default https://mcp.linear.app/mcp endpoint is read-write and can create or update issues, projects, and comments
+- Before turning notes or repository state into Linear work, show the proposed project, milestones, issues, relationships, and exact comments and do not invent dependencies
+
 ## Notion MCP
 
 Notion's hosted, actively maintained OAuth MCP for searching, reading, and changing content available to the connected user.
@@ -214,6 +265,30 @@ Capabilities and limits:
 - No enforcement wrapper ships here; the calling harness must constrain commands, arguments, and flags, and default-deny eval, command, plugin, theme, web, publish, permanent delete, and mutating sync operations
 - For bounded file operations require explicit vault= plus path= and reject dangerous flags such as overwrite unless separately approved
 - Treat plugin commands and JavaScript eval as open-world execution with possible filesystem and network effects
+
+## Readwise MCP
+
+Readwise's official hosted MCP searches highlights, notes, and Reader documents across an indexed personal library and can optionally organize documents or change highlights.
+
+- **Supported agents:** `claude_code`, `codex`, `cursor`, `generic`
+- **Install scope:** `user`; never automatic
+- **Prerequisites:** A Readwise account; An MCP client supporting remote Streamable HTTP and browser OAuth
+- **Credentials:** Per-user browser OAuth token managed by the MCP client and hosted service
+- **Reads:** Sensitive indexed Readwise highlights, notes, Daily Review content, Reader documents, document metadata, tags, and reading history available to the connected account
+- **Writes / external effects:** Remote creation, update, and deletion of highlights; creation of Reader documents; bulk document-metadata edits; moves between inbox, archive, and shortlist; and tag or note changes; Overwrite-capable highlight and metadata updates plus permanent highlight deletion
+- **Typed safety signals:** sensitive read, remote write, overwrite, delete, oauth
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `overwrite`, `delete`, `oauth`, `destructive`
+- **Confirmation:** Confirm the exact Readwise account and the full-library indexing boundary; ask before broad searches or exporting content elsewhere, and show the exact document, highlight, tags, metadata, destination, or deletion before every remote change.
+- **Risk tags:** `credentials`, `hosted`, `personal-library`, `semantic-index`, `sensitive-read`, `remote-write`, `overwrite-capable`, `delete-capable`, `oauth`, `destructive-capable`
+- **Evidence:** [1](https://docs.readwise.io/tools/mcp); [2](https://docs.readwise.io/tools)
+- **Health check:** After OAuth, run one narrowly scoped search for a known title or highlight and inspect a single result without moving, tagging, creating, updating, or deleting content.
+- **Uninstall:** Disconnect Readwise in the MCP client and revoke the authorization in Readwise if available; leave all Reader documents, highlights, notes, and tags unchanged. (removes user data: No)
+
+Capabilities and limits:
+
+- Use the current https://mcp2.readwise.io/mcp endpoint; the older Readwise-only MCP is deprecated
+- The server indexes both Readwise highlights and Reader documents, so connecting it exposes a broader personal knowledge boundary than a single selected document
+- No separate read-only endpoint is documented; treat organizing, bulk editing, updating, and deleting tools as disabled by policy until the user requests a specific change
 
 ## Substack MCP
 
