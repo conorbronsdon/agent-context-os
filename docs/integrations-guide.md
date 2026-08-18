@@ -11,6 +11,9 @@ Nothing in this guide installs, activates, authenticates, or grants permissions 
 | Browse and install reusable agent skills | [Agent Skills](../references/integrations.md#agent-skills) | Replacement or removal of an existing local skill |
 | Add a standalone lifecycle/workspace package | [Agent Workspace](../references/integrations.md#agent-workspace) | Local state writes and optional cleanup actions |
 | Discover creator-oriented tools without installing one | [AI Tools for Creators](../references/integrations.md#ai-tools-for-creators) | Listings can drift and are not endorsements |
+| Inspect repositories, issues, pull requests, or CI context | [GitHub MCP](../references/integrations.md#github-mcp) | Private-repository reads, public comments, branch or file changes, and enabled toolsets |
+| Read or update product work in Linear | [Linear MCP](../references/integrations.md#linear-mcp) | Workspace-wide reads and remote issue, project, relationship, or comment changes |
+| Search a personal reading library or organize highlights | [Readwise MCP](../references/integrations.md#readwise-mcp) | Full-library indexing, sensitive reading history, bulk edits, and highlight deletion |
 | Read calendar, email, Drive, or Sheets data | [Google Workspace CLI](../references/integrations.md#google-workspace-cli) | OAuth identity, sensitive reads, and the CLI's broader write-capable surface |
 | Search or change a Notion workspace | [Notion MCP](../references/integrations.md#notion-mcp) | OAuth, sensitive and connected-source reads, remote writes, and overwrite-capable updates |
 | Coordinate Gemini work with a persistent issue graph | [Beads for Gemini CLI](../references/integrations.md#beads-for-gemini-cli) | User-global defaults, remote sync, and force overwrite |
