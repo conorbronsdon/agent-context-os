@@ -27,9 +27,15 @@ class IntegrationCatalogTests(unittest.TestCase):
     def test_catalog_has_expected_entries_and_visible_safety_columns(self) -> None:
         rendered = MODULE.render_reference(self.catalog)
         self.assertEqual(self.catalog["schema_version"], 2)
-        self.assertEqual(len(self.catalog["integrations"]), 10)
+        self.assertEqual(len(self.catalog["integrations"]), 13)
         self.assertTrue(
-            {"google-workspace-cli", "notion-mcp"}.issubset(
+            {
+                "github-mcp",
+                "google-workspace-cli",
+                "linear-mcp",
+                "notion-mcp",
+                "readwise-mcp",
+            }.issubset(
                 {item["id"] for item in self.catalog["integrations"]}
             )
         )
