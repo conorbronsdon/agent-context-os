@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- Reviewed optional entries for the official GitHub, Linear, and Readwise MCP servers, including read-only starting profiles and explicit sensitive-read, remote-write, publish, overwrite, deletion, OAuth, and destructive confirmation gates.
 - Source-neutral onboarding and migration docs for ChatGPT, Claude, Gemini, and other assistants, with a reviewed migration-packet format and optional import handling in `$context-setup`.
 - Context OS positioning, launch-copy drafts, a task-based getting-started guide, and a generated cross-agent social preview.
 - Safety-catalog entries and current setup guides for Google Workspace CLI and Notion MCP.
