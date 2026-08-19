@@ -1714,5 +1714,156 @@ class RecordedPathHardeningTests(unittest.TestCase):
         self.assertIsNotNone(self.vm.find_cygpath())
 
 
+class MountContainmentTests(unittest.TestCase):
+    """A bind mount publishes one directory at a second path. The alias is not a
+    symlink, so resolve() cannot see through it and a store sitting inside the
+    repository passes a purely lexical containment check.
+
+    Reproduced on Linux with `unshare --user --map-root-user --mount`, then
+    fixed. These pin the algorithm with synthetic mountinfo so they run
+    everywhere, including Windows, where /proc does not exist -- the real
+    bind-mount integration case needs user namespaces and is exercised by hand.
+    """
+
+    def setUp(self) -> None:
+        spec = importlib.util.spec_from_file_location("validate_memory", HELPER)
+        self.vm = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.vm)
+
+    # Field order: device, root, mount_point
+    ORDINARY = ("8:48", "/", "/")
+    BIND_ALIAS = ("8:48", "/tmp/x/repo/private-memory", "/tmp/x/alias")
+
+    def test_unescapes_only_the_four_characters_mountinfo_escapes(self) -> None:
+        u = self.vm._unescape_mountinfo
+        self.assertEqual(u(r"/tmp/od\040d"), "/tmp/od d")
+        self.assertEqual(u(r"/tmp/ta\011b"), "/tmp/ta\tb")
+        self.assertEqual(u(r"/tmp/nl\012x"), "/tmp/nl\nx")
+        self.assertEqual(u(r"/tmp/bs\134x"), "/tmp/bs\\x")
+        # A backslash that is not one of those four sequences is literal, not an
+        # escape -- mangling it would misname a legitimate directory.
+        self.assertEqual(u(r"/tmp/keep\999"), r"/tmp/keep\999")
+
+    def test_missing_mountinfo_reads_as_unknown_not_as_nothing_mounted(self) -> None:
+        self.assertEqual(self.vm.read_mountinfo(Path("/definitely/not/here")), [])
+
+    def test_a_bind_alias_resolves_to_its_source_location(self) -> None:
+        entries = [self.ORDINARY, self.BIND_ALIAS]
+        device, fs_path = self.vm.filesystem_location(Path("/tmp/x/alias"), entries)
+        self.assertEqual(device, "8:48")
+        self.assertEqual(str(fs_path), "/tmp/x/repo/private-memory")
+
+    def test_a_path_under_a_bind_alias_maps_through_the_alias(self) -> None:
+        entries = [self.ORDINARY, self.BIND_ALIAS]
+        _, fs_path = self.vm.filesystem_location(Path("/tmp/x/alias/notes"), entries)
+        self.assertEqual(str(fs_path), "/tmp/x/repo/private-memory/notes")
+
+    def test_the_longest_matching_mount_point_wins(self) -> None:
+        entries = [self.ORDINARY, ("8:48", "/src", "/tmp/x"), self.BIND_ALIAS]
+        _, fs_path = self.vm.filesystem_location(Path("/tmp/x/alias"), entries)
+        self.assertEqual(str(fs_path), "/tmp/x/repo/private-memory",
+                         "a shorter mount point shadowed the more specific one")
+
+    def test_the_last_of_two_equal_mount_points_wins(self) -> None:
+        """Over-mounting the same directory twice leaves both in mountinfo; the
+        LAST is the one you see through. Verified by mounting twice and reading
+        the file back."""
+        entries = [self.ORDINARY,
+                   ("8:48", "/first", "/tmp/over"),
+                   ("8:48", "/second", "/tmp/over")]
+        _, fs_path = self.vm.filesystem_location(Path("/tmp/over"), entries)
+        self.assertEqual(str(fs_path), "/second")
+
+    def test_a_bind_alias_of_a_nested_store_is_detected(self) -> None:
+        entries = [self.ORDINARY, self.BIND_ALIAS]
+        self.assertTrue(self.vm.shares_underlying_location(
+            Path("/tmp/x/alias"), Path("/tmp/x/repo"), entries))
+
+    def test_an_outside_store_is_not_flagged(self) -> None:
+        """The failure that actually hurts users is rejecting a working setup."""
+        entries = [self.ORDINARY, ("8:48", "/tmp/x/outside-src", "/tmp/x/outside-alias")]
+        self.assertFalse(self.vm.shares_underlying_location(
+            Path("/tmp/x/outside-alias"), Path("/tmp/x/repo"), entries))
+
+    def test_a_different_device_is_never_nested(self) -> None:
+        entries = [self.ORDINARY, ("0:42", "/", "/tmp/x/tmpfs")]
+        self.assertFalse(self.vm.shares_underlying_location(
+            Path("/tmp/x/tmpfs/memory"), Path("/tmp/x/repo"), entries))
+
+    def test_nested_paths_on_different_devices_are_not_contained(self) -> None:
+        """Path nesting alone is not containment. Without the device check this
+        returns True for two directories that merely happen to share a prefix
+        inside their own filesystems -- e.g. /data on two separate disks."""
+        entries = [("8:48", "/", "/"),
+                   ("0:99", "/repo/x", "/mnt/other")]
+        self.assertFalse(
+            self.vm.shares_underlying_location(
+                Path("/mnt/other"), Path("/repo"), entries),
+            "a path on a different device was reported as nested",
+        )
+
+    def test_require_outside_repository_actually_consults_the_mount_check(self) -> None:
+        """The guard has to be WIRED IN, not merely present. Nothing else here
+        would notice if require_outside_repository stopped calling it: the
+        lexical check still passes every existing case on its own."""
+        entries = [("8:48", "/", "/"),
+                   ("8:48", "/srv/repo/private-memory", "/srv/alias")]
+        original = self.vm.read_mountinfo
+        self.vm.read_mountinfo = lambda *a, **k: entries
+        try:
+            with self.assertRaises(self.vm.ValidationError) as ctx:
+                self.vm.require_outside_repository(
+                    Path("/srv/alias"), Path("/srv/repo"), "/srv/repo/.git"
+                )
+        finally:
+            self.vm.read_mountinfo = original
+        self.assertIn("bind mount", str(ctx.exception))
+
+    def test_a_literal_backslash_sequence_is_not_decoded_twice(self) -> None:
+        r"""A directory literally named \040 is emitted as \134040. One pass
+        yields a backslash then "040". A decoder that re-applies replacements
+        turns it into a space and silently names a different directory."""
+        self.assertEqual(self.vm._unescape_mountinfo(r"/tmp/\134040"), r"/tmp/\040")
+
+    def test_containment_is_component_wise_not_string_prefix(self) -> None:
+        """/repo must not swallow /repository."""
+        entries = [("8:48", "/", "/"), ("8:48", "/", "/repository")]
+        self.assertFalse(self.vm.shares_underlying_location(
+            Path("/repository/memory"), Path("/repo"), entries))
+
+    def test_a_store_on_a_filesystem_mounted_INSIDE_the_repo_is_caught(self) -> None:
+        """A repository is not one region. With another filesystem mounted at
+        /repo/vendor, a store on THAT device aliased outside is visibly under the
+        repository while sharing no device with the worktree root -- so comparing
+        against the worktree's own region alone accepts it."""
+        entries = [
+            ("8:48", "/", "/"),                        # root filesystem
+            ("0:99", "/", "/repo/vendor"),             # another fs mounted INSIDE the repo
+            ("0:99", "/private-memory", "/outside"),   # bind alias of a dir on that fs
+        ]
+        self.assertTrue(
+            self.vm.shares_underlying_location(Path("/outside"), Path("/repo"), entries),
+            "a store on a filesystem mounted inside the repo escaped containment",
+        )
+
+    def test_a_sibling_filesystem_outside_the_repo_is_still_accepted(self) -> None:
+        """The mirror of the case above: another filesystem NOT under the repo
+        must not be dragged in by the same logic."""
+        entries = [
+            ("8:48", "/", "/"),
+            ("0:99", "/", "/mnt/data"),                # mounted OUTSIDE the repo
+            ("0:99", "/memory", "/outside"),
+        ]
+        self.assertFalse(
+            self.vm.shares_underlying_location(Path("/outside"), Path("/repo"), entries))
+
+    def test_no_mountinfo_answers_unknown_rather_than_contained(self) -> None:
+        """This check runs ALONGSIDE the lexical one, never instead of it, so an
+        inconclusive answer must leave the existing guarantee where it was.
+        Failing closed would reject every store on any platform without /proc."""
+        self.assertFalse(self.vm.shares_underlying_location(
+            Path("/tmp/x/alias"), Path("/tmp/x/repo"), []))
+
+
 if __name__ == "__main__":
     unittest.main()

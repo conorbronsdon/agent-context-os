@@ -20,7 +20,7 @@ import shutil
 import subprocess
 import sys
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 
@@ -423,6 +423,167 @@ def changed_memory_paths(memory_dir: Path) -> set[str]:
     )
 
 
+MOUNTINFO = Path("/proc/self/mountinfo")
+
+# mountinfo octal-escapes exactly these four characters in the root and
+# mount-point fields, which is what makes a plain whitespace split safe.
+_MOUNTINFO_ESCAPES = {"040": " ", "011": "\t", "012": "\n", "134": "\\"}
+
+
+def _unescape_mountinfo(field: str) -> str:
+    """Decode one field, in a single left-to-right pass.
+
+    The pass matters. A directory literally named `\\040` is emitted as
+    `\\134040`; decoding once yields a backslash followed by "040", which is
+    right. A decoder that applies replacements repeatedly (or str.replace in a
+    loop) turns that same input into a space and silently names a different
+    directory.
+    """
+    out = []
+    i = 0
+    while i < len(field):
+        if field[i] == "\\" and field[i + 1:i + 4] in _MOUNTINFO_ESCAPES:
+            out.append(_MOUNTINFO_ESCAPES[field[i + 1:i + 4]])
+            i += 4
+        else:
+            out.append(field[i])
+            i += 1
+    return "".join(out)
+
+
+def read_mountinfo(source: Path = MOUNTINFO) -> list[tuple[str, str, str]]:
+    """Parse /proc/self/mountinfo into (device, root, mount_point) triples.
+
+    Split first, decode the two path fields individually afterwards -- never the
+    other way round. Unescaping the whole line before splitting would turn a
+    `\\040` inside a directory name into a field separator and a `\\012` into a
+    record boundary, which is a parsing bypass rather than a cosmetic bug.
+
+    Read with surrogateescape, not errors="replace": Linux pathnames are byte
+    strings, so a non-UTF-8 directory name is legal. Replacing those bytes with
+    U+FFFD would make two different paths compare equal, and collapsing several
+    distinct names onto one string is exactly the shape of a bypass.
+
+    Returns [] when the file is absent or unreadable (Windows, macOS, a
+    container with a restricted /proc). Callers treat that as "cannot tell",
+    never as "nothing is mounted".
+    """
+    try:
+        text = source.read_text(encoding="utf-8", errors="surrogateescape")
+    except OSError:
+        return []
+    entries = []
+    for line in text.splitlines():
+        fields = line.split(" ")
+        if len(fields) < 5:
+            continue
+        entries.append(
+            (fields[2], _unescape_mountinfo(fields[3]), _unescape_mountinfo(fields[4]))
+        )
+    return entries
+
+
+def _is_at_or_under(path: PurePosixPath, root: PurePosixPath) -> bool:
+    """Component-wise containment. `/repo` must not swallow `/repository`."""
+    return path == root or root in path.parents
+
+
+def filesystem_location(path: Path, entries: list[tuple[str, str, str]]):
+    """Map a visible path to the (device, path-within-that-filesystem) it names.
+
+    This is what sees through a bind mount. `resolve()` cannot: a bind alias is
+    not a symlink, so a store sitting inside the repository can be published at
+    an outside path and pass a purely lexical containment check. Reproduced.
+
+    The mount whose mount point is the longest component-prefix wins; among
+    equal-length matches the last listed wins, which is how a stacked mount
+    behaves on current kernels. NOTE that line order is an implementation
+    property, not the documented rule -- the documented way to identify the
+    visible mount among several at one point is the parent-ID graph. Adversarial
+    stacking can therefore mis-select. That is an accepted limit: someone able
+    to stack mounts can also unshare a namespace, which defeats any check based
+    on a recorded pathname. This guards against accidents, not attackers.
+
+    `root` is the source's path within its own filesystem -- `/` for an ordinary
+    mount, the source directory for a bind. Chained binds need no iteration: the
+    kernel already reports the ORIGINAL filesystem path for a bind of a bind
+    (verified by mounting one, not assumed).
+
+    Returns None when nothing matches.
+    """
+    target = PurePosixPath(path.as_posix())
+    best = None
+    best_depth = -1
+    for device, root, mount_point in entries:
+        mp = PurePosixPath(mount_point)
+        if not _is_at_or_under(target, mp):
+            continue
+        depth = len(mp.parts)
+        if depth >= best_depth:            # >= so a later equal-depth mount wins
+            best_depth = depth
+            best = (device, root, mp)
+    if best is None:
+        return None
+    device, root, mp = best
+    relative = target.relative_to(mp)
+    if str(relative) == ".":
+        return device, PurePosixPath(root)
+    return device, PurePosixPath(root) / relative
+
+
+def repository_regions(roots, entries):
+    """Every (device, filesystem-path) region reachable at or beneath the repo.
+
+    A repository is not one region. If a separate filesystem is mounted inside
+    it -- `/repo/vendor` on another device, common in containers and dev setups
+    -- then a store on THAT device, aliased to an outside path, is visibly under
+    the repository while sharing no device with the worktree root. Comparing
+    against the worktree's own region alone accepts it.
+
+    So collect the region for each root plus the region of every mount whose
+    mount point falls at or beneath a root. O(mounts), not O(files).
+    """
+    regions = []
+    for root in roots:
+        root_posix = PurePosixPath(Path(root).as_posix())
+        here = filesystem_location(Path(root), entries)
+        if here is not None:
+            regions.append(here)
+        for device, mroot, mount_point in entries:
+            if _is_at_or_under(PurePosixPath(mount_point), root_posix):
+                regions.append((device, PurePosixPath(mroot)))
+    return regions
+
+
+def shares_underlying_location(inner: Path, outer: Path, entries=None) -> bool:
+    """Is `inner` physically at or under `outer`, seeing through bind mounts?
+
+    False when it cannot be determined -- no mountinfo, or the path is not
+    covered by any mount entry. Deliberate: this runs ALONGSIDE the lexical
+    containment check, never instead of it, so an inconclusive answer leaves the
+    existing guarantee exactly where it was. Failing closed would reject every
+    store on every platform without /proc, and rejecting a working setup is the
+    failure users actually hit. Rejection happens only on positive evidence.
+
+    Known limits, none of which this pretends to cover: a mount namespace the
+    helper cannot see, an overlayfs backing directory reached through its upper
+    layer (different device identity from the overlay path), and a mount created
+    after the check. statx(STATX_MNT_ID)/statmount would narrow the first and
+    last, but neither is exposed by the Python standard library.
+    """
+    entries = read_mountinfo() if entries is None else entries
+    if not entries:
+        return False
+    here = filesystem_location(inner, entries)
+    if here is None:
+        return False
+    device, fs_path = here
+    for region_device, region_path in repository_regions([outer], entries):
+        if device == region_device and _is_at_or_under(fs_path, region_path):
+            return True
+    return False
+
+
 def require_outside_repository(memory_dir: Path, repo: Path, identity: str) -> None:
     """Refuse a memory directory that lives inside the repository.
 
@@ -450,7 +611,15 @@ def require_outside_repository(memory_dir: Path, repo: Path, identity: str) -> N
         try:
             inside = memory_dir == root or memory_dir.is_relative_to(root)
         except (OSError, ValueError):
-            continue
+            inside = False
+        # A bind mount publishes one directory at a second path. The alias is not
+        # a symlink, so resolve() cannot see through it and the check above reads
+        # "outside" for a store sitting in the repository. Reproduced, then fixed
+        # by asking the kernel where each path actually lives.
+        if not inside:
+            inside = shares_underlying_location(memory_dir, root)
+            if inside:
+                what = f"{what} (reached through a bind mount)"
         if inside:
             raise ValidationError(
                 f"memory directory must live outside this repository; it is inside the {what} "
