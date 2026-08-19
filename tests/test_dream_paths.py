@@ -84,7 +84,15 @@ def run(command: list[str], cwd: Path, *, check: bool = True) -> subprocess.Comp
     return completed
 
 
-class DreamMemoryPathTests(unittest.TestCase):
+class MemoryFixture(unittest.TestCase):
+    """Fixture only -- deliberately holds NO tests.
+
+    Split out because subclassing a class that carries tests re-runs every
+    one of them under the subclass's name: two subclasses turned an 97-test
+    suite into 182 and roughly tripled the runtime, for eleven new cases.
+    Anything needing the repo+memory pair inherits this instead.
+    """
+
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         # .resolve() matters: on Windows the temp root can come back as an 8.3
@@ -154,52 +162,6 @@ class DreamMemoryPathTests(unittest.TestCase):
         drive, rest = str(path).split(":", 1)
         return f"/{drive.lower()}{rest.replace(chr(92), '/')}"
 
-    @unittest.skipUnless(os.name == "nt", "the binding is already native on POSIX")
-    def test_msys_spelled_binding_is_accepted(self) -> None:
-        (self.repo / ".context-os" / "memory-directory").write_text(
-            self.msys(self.memory) + "\n", encoding="utf-8"
-        )
-        resolved = self.helper("resolve")
-        self.assertEqual(resolved.returncode, 0, resolved.stderr)
-        self.assertEqual(json.loads(resolved.stdout)["memory_dir"], str(self.memory))
-
-    @unittest.skipUnless(os.name == "nt", "the marker is already native on POSIX")
-    def test_msys_spelled_marker_is_accepted(self) -> None:
-        identity = run(
-            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], self.repo
-        ).stdout.strip()
-        (self.memory / ".context-os-repository").write_text(
-            self.msys(Path(identity).resolve()) + "\n", encoding="utf-8"
-        )
-        # resolve also demands a clean memory repo, so commit the rewritten marker
-        # or this asserts on the wrong failure.
-        run(["git", "add", "-A"], self.memory)
-        run(["git", "commit", "-qm", "msys marker"], self.memory)
-        resolved = self.helper("resolve")
-        self.assertEqual(resolved.returncode, 0, resolved.stderr)
-
-    @unittest.skipUnless(os.name == "nt", "Windows-only spelling")
-    def test_a_wrong_marker_is_still_rejected_when_msys_spelled(self) -> None:
-        """Translating the spelling must not become a way to smuggle a
-        mismatched identity past the check."""
-        (self.memory / ".context-os-repository").write_text(
-            "/c/definitely/not/this/repo/.git\n", encoding="utf-8"
-        )
-        self.assertIn("marker", self.assert_rejects("resolve"))
-
-    @unittest.skipUnless(os.name == "nt", "Windows-only spelling")
-    def test_a_noncanonical_msys_path_is_still_rejected(self) -> None:
-        """Translating the spelling must not translate away the '..' check.
-
-        Uses <memory>/../memory, which RESOLVES to a real directory -- so it gets
-        past the existence gate and has to be caught by the canonical check
-        itself, rather than incidentally failing because the path is missing.
-        """
-        (self.repo / ".context-os" / "memory-directory").write_text(
-            self.msys(self.memory) + "/../" + self.memory.name + "\n", encoding="utf-8"
-        )
-        self.assertIn("canonical", self.assert_rejects("resolve"))
-
     def helper(self, *args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
         normalized = list(args)
         if (
@@ -254,6 +216,54 @@ class DreamMemoryPathTests(unittest.TestCase):
         completed = self.helper(*args, cwd=cwd)
         self.assertNotEqual(completed.returncode, 0, completed.stdout)
         return completed.stderr
+
+
+class DreamMemoryPathTests(MemoryFixture):
+    @unittest.skipUnless(os.name == "nt", "the binding is already native on POSIX")
+    def test_msys_spelled_binding_is_accepted(self) -> None:
+        (self.repo / ".context-os" / "memory-directory").write_text(
+            self.msys(self.memory) + "\n", encoding="utf-8"
+        )
+        resolved = self.helper("resolve")
+        self.assertEqual(resolved.returncode, 0, resolved.stderr)
+        self.assertEqual(json.loads(resolved.stdout)["memory_dir"], str(self.memory))
+
+    @unittest.skipUnless(os.name == "nt", "the marker is already native on POSIX")
+    def test_msys_spelled_marker_is_accepted(self) -> None:
+        identity = run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], self.repo
+        ).stdout.strip()
+        (self.memory / ".context-os-repository").write_text(
+            self.msys(Path(identity).resolve()) + "\n", encoding="utf-8"
+        )
+        # resolve also demands a clean memory repo, so commit the rewritten marker
+        # or this asserts on the wrong failure.
+        run(["git", "add", "-A"], self.memory)
+        run(["git", "commit", "-qm", "msys marker"], self.memory)
+        resolved = self.helper("resolve")
+        self.assertEqual(resolved.returncode, 0, resolved.stderr)
+
+    @unittest.skipUnless(os.name == "nt", "Windows-only spelling")
+    def test_a_wrong_marker_is_still_rejected_when_msys_spelled(self) -> None:
+        """Translating the spelling must not become a way to smuggle a
+        mismatched identity past the check."""
+        (self.memory / ".context-os-repository").write_text(
+            "/c/definitely/not/this/repo/.git\n", encoding="utf-8"
+        )
+        self.assertIn("marker", self.assert_rejects("resolve"))
+
+    @unittest.skipUnless(os.name == "nt", "Windows-only spelling")
+    def test_a_noncanonical_msys_path_is_still_rejected(self) -> None:
+        """Translating the spelling must not translate away the '..' check.
+
+        Uses <memory>/../memory, which RESOLVES to a real directory -- so it gets
+        past the existence gate and has to be caught by the canonical check
+        itself, rather than incidentally failing because the path is missing.
+        """
+        (self.repo / ".context-os" / "memory-directory").write_text(
+            self.msys(self.memory) + "/../" + self.memory.name + "\n", encoding="utf-8"
+        )
+        self.assertIn("canonical", self.assert_rejects("resolve"))
 
     def test_resolve_accepts_real_repo_and_linked_worktree_identity(self) -> None:
         resolved = self.helper("resolve")
@@ -1334,6 +1344,7 @@ class DreamMemoryPathTests(unittest.TestCase):
         )
 
 
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -1371,3 +1382,154 @@ class NativePathTests(unittest.TestCase):
         """Untranslatable input must come back unchanged so the caller's own
         checks reject it, rather than being guessed into something plausible."""
         self.assertEqual(self.vm.native_path("relative/not/absolute"), "relative/not/absolute")
+
+
+class OutsideRepositoryTests(MemoryFixture):
+    """docs/auto-memory.md step 1 requires the memory directory to live OUTSIDE
+    the repository. Until this guard existed nothing enforced it: a nested store
+    is its own git top-level, which satisfied the closest existing check."""
+
+    def rebind(self, path: Path) -> None:
+        (self.repo / ".context-os" / "memory-directory").write_text(
+            str(path) + "\n", encoding="utf-8"
+        )
+
+    def make_store(self, path: Path) -> None:
+        path.mkdir(parents=True)
+        run(["git", "init", "-q"], path)
+        run(["git", "config", "user.name", "m"], path)
+        run(["git", "config", "user.email", "m@e.invalid"], path)
+        self.pin_line_endings(path)
+        identity = run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], self.repo
+        ).stdout.strip()
+        (path / ".context-os-repository").write_text(
+            str(Path(identity).resolve()) + "\n", encoding="utf-8"
+        )
+        (path / "MEMORY.md").write_text("# Memory\n", encoding="utf-8")
+        run(["git", "add", "-A"], path)
+        run(["git", "commit", "-qm", "base"], path)
+
+    def test_memory_inside_the_working_tree_is_rejected(self) -> None:
+        nested = self.repo / "private-memory"
+        self.make_store(nested)
+        self.rebind(nested)
+        self.assertIn("outside this repository", self.assert_rejects("resolve"))
+
+    def test_memory_inside_the_git_directory_is_rejected(self) -> None:
+        nested = self.repo / ".git" / "memory"
+        self.make_store(nested)
+        self.rebind(nested)
+        self.assertIn("outside this repository", self.assert_rejects("resolve"))
+
+    def test_a_sibling_directory_is_still_accepted(self) -> None:
+        """The guard must reject nesting, not every path that shares a prefix.
+        `repo-memory` starts with the repo directory's own name and must bind."""
+        sibling = self.root / "repo-memory"
+        self.make_store(sibling)
+        self.rebind(sibling)
+        resolved = self.helper("resolve")
+        self.assertEqual(resolved.returncode, 0, resolved.stderr)
+
+
+class BindCommandTests(MemoryFixture):
+    """bind writes both recorded files from the same code that reads them, so
+    the two spellings cannot drift apart the way they did on Windows."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        # The fixture arrives already bound to self.memory. bind's job is
+        # first-time setup, and binding somewhere else is supposed to be refused
+        # without --force, so start from an unbound repo or every case here
+        # asserts on that refusal instead of on bind.
+        (self.repo / ".context-os" / "memory-directory").unlink()
+
+    def test_bind_produces_a_binding_resolve_accepts(self) -> None:
+        target = self.root / "fresh-memory"
+        bound = self.helper("bind", "--memory-dir", str(target))
+        self.assertEqual(bound.returncode, 0, bound.stderr)
+        self.assertEqual(json.loads(bound.stdout)["memory_dir"], str(target))
+        run(["git", "add", "-A"], target)
+        run(["git", "commit", "-qm", "bound"], target)
+        resolved = self.helper("resolve")
+        self.assertEqual(resolved.returncode, 0, resolved.stderr)
+        self.assertEqual(json.loads(resolved.stdout)["memory_dir"], str(target))
+
+    def test_bind_creates_the_scaffolding_it_reports(self) -> None:
+        target = self.root / "fresh-memory"
+        self.helper("bind", "--memory-dir", str(target))
+        self.assertTrue((target / "archive").is_dir())
+        self.assertTrue((target / ".git").exists())
+        self.assertTrue((target / "MEMORY.md").is_file())
+        self.assertTrue((target / ".context-os-repository").is_file())
+
+    def test_rebinding_the_same_directory_is_idempotent(self) -> None:
+        target = self.root / "fresh-memory"
+        self.helper("bind", "--memory-dir", str(target))
+        again = self.helper("bind", "--memory-dir", str(target))
+        self.assertEqual(again.returncode, 0, again.stderr)
+        self.assertIn("nothing", json.loads(again.stdout)["created"])
+
+    def test_bind_never_empties_an_existing_store(self) -> None:
+        """The memory store is the one thing in this system with no upstream
+        copy, so a re-bind must not reset content it did not create."""
+        target = self.root / "fresh-memory"
+        self.helper("bind", "--memory-dir", str(target))
+        (target / "MEMORY.md").write_text("# Real memory\nkeep me\n", encoding="utf-8")
+        (target / "project_gamma.md").write_text("gamma\n", encoding="utf-8")
+        self.helper("bind", "--memory-dir", str(target))
+        self.assertIn("keep me", (target / "MEMORY.md").read_text(encoding="utf-8"))
+        self.assertTrue((target / "project_gamma.md").is_file())
+
+    def test_repointing_an_existing_binding_needs_force(self) -> None:
+        first = self.root / "first-memory"
+        second = self.root / "second-memory"
+        self.helper("bind", "--memory-dir", str(first))
+        refused = self.helper("bind", "--memory-dir", str(second))
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("already points at", refused.stderr)
+        forced = self.helper("bind", "--memory-dir", str(second), "--force")
+        self.assertEqual(forced.returncode, 0, forced.stderr)
+
+    def test_claiming_a_store_bound_elsewhere_needs_force(self) -> None:
+        target = self.root / "someone-elses-memory"
+        target.mkdir()
+        (target / ".context-os-repository").write_text(
+            str(self.root / "other-repo" / ".git") + "\n", encoding="utf-8"
+        )
+        refused = self.helper("bind", "--memory-dir", str(target))
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("already bound to a different repository", refused.stderr)
+
+    def test_bind_refuses_a_directory_inside_the_repository(self) -> None:
+        refused = self.helper("bind", "--memory-dir", str(self.repo / "inside"))
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("outside this repository", refused.stderr)
+        self.assertFalse(
+            (self.repo / "inside").exists(), "a refused bind must not create anything"
+        )
+
+    def test_bind_refuses_a_relative_path(self) -> None:
+        refused = self.helper("bind", "--memory-dir", "relative/memory")
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("absolute", refused.stderr)
+
+    def test_bind_reports_failure_when_the_binding_it_wrote_is_invalid(self) -> None:
+        """bind must return the validator's verdict, not its own optimism.
+
+        Writing the two files is the easy half; the claim that matters is that a
+        zero exit means the binding actually validates. Constructed so the writes
+        all succeed and validation still must fail: the target is already a git
+        repo with a remote, which the binding rules forbid. If bind ever stops
+        running the real check and reports what it intended to write, this goes
+        green while `resolve` disagrees -- the precise failure bind exists to
+        prevent.
+        """
+        target = self.root / "memory-with-remote"
+        target.mkdir()
+        run(["git", "init", "-q"], target)
+        run(["git", "remote", "add", "origin", "https://example.invalid/m.git"], target)
+
+        bound = self.helper("bind", "--memory-dir", str(target))
+        self.assertNotEqual(bound.returncode, 0, bound.stdout)
+        self.assertIn("remote", bound.stderr)

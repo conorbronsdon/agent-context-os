@@ -300,6 +300,42 @@ def changed_memory_paths(memory_dir: Path) -> set[str]:
     )
 
 
+def require_outside_repository(memory_dir: Path, repo: Path, identity: str) -> None:
+    """Refuse a memory directory that lives inside the repository.
+
+    docs/auto-memory.md step 1 says "a private absolute directory OUTSIDE this
+    repository", and until now nothing enforced it: a memory dir nested in the
+    working tree passed every check, because it is its own git top-level and so
+    satisfied the one test that came close.
+
+    Nesting it is the failure this whole binding exists to prevent. Private
+    memory inside a shared checkout is one `git add -A` away from being staged
+    as a gitlink, one `rm -rf .git` away from being committed wholesale, and it
+    travels with any archive of the repo. The repo here is shared with other
+    people, so "it is only local" is not a property that holds.
+
+    Checks the working tree and the git common directory separately: a linked
+    worktree's toplevel is not under its common dir, so testing one does not
+    cover the other.
+    """
+    try:
+        worktree = Path(run_git(["rev-parse", "--show-toplevel"], cwd=repo)).resolve(strict=True)
+    except (ValidationError, OSError):
+        worktree = repo
+
+    for root, what in ((worktree, "working tree"), (Path(identity), "git directory")):
+        try:
+            inside = memory_dir == root or memory_dir.is_relative_to(root)
+        except (OSError, ValueError):
+            continue
+        if inside:
+            raise ValidationError(
+                f"memory directory must live outside this repository; it is inside the {what} "
+                f"({memory_dir}). Move it to a private path outside {root} and update "
+                ".context-os/memory-directory."
+            )
+
+
 def validate_memory_binding(repo: Path, *, require_clean: bool = False) -> dict[str, str]:
     repo = repo.resolve(strict=True)
     identity = repository_identity(repo)
@@ -308,6 +344,8 @@ def validate_memory_binding(repo: Path, *, require_clean: bool = False) -> dict[
         read_single_line(binding, ".context-os/memory-directory"),
         ".context-os/memory-directory",
     )
+
+    require_outside_repository(memory_dir, repo, identity)
 
     marker = memory_dir / ".context-os-repository"
     marker_value = read_single_line(marker, "memory repository marker")
@@ -1324,6 +1362,20 @@ def build_parser() -> argparse.ArgumentParser:
     subcommands = parser.add_subparsers(dest="command", required=True)
     subcommands.add_parser("resolve", help="validate and print the memory binding")
 
+    bind = subcommands.add_parser(
+        "bind", help="write the memory binding for this repository, then validate it"
+    )
+    bind.add_argument(
+        "--memory-dir",
+        required=True,
+        help="absolute path to a private memory directory outside this repository",
+    )
+    bind.add_argument(
+        "--force",
+        action="store_true",
+        help="repoint an existing binding, or claim a store bound to another repository",
+    )
+
     artifact = subcommands.add_parser("artifact", help="validate or allocate a dream artifact")
     artifact.add_argument("timestamp", help="YYYY-MM-DDTHH-MM-SSZ or latest")
     artifact.add_argument(
@@ -1377,12 +1429,103 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def cmd_bind(args: argparse.Namespace) -> dict[str, str]:
+    """Write both halves of the binding, then prove the result validates.
+
+    The two recorded files have always been written by hand, in a shell, from a
+    doc — while being read by this script, in Python. Nothing kept the two
+    spellings in agreement, and both Windows bugs fixed alongside this came from
+    exactly that split: a marker git spelled `C:/...` compared against a
+    a backslash-separated resolve, and a memory path bash spelled `/c/...` that Python read
+    as relative. Normalizing on read treats the symptom. Writing both files here,
+    in the same code that reads them, removes the disagreement by construction.
+
+    Deliberately conservative about existing state. It creates the memory
+    directory, `archive/`, a git repo, and MEMORY.md only when they are ABSENT,
+    never resetting or emptying one that is already there, and it refuses to
+    repoint a binding that already names somewhere else unless --force says so.
+    A memory store is the one thing in this system with no upstream copy.
+    """
+    repo = Path.cwd().resolve(strict=True)
+    identity = repository_identity(repo)
+
+    raw = args.memory_dir
+    if CONTROL.search(raw):
+        raise ValidationError("--memory-dir contains a control character")
+    target = Path(native_path(raw))
+    if not target.is_absolute():
+        raise ValidationError(f"--memory-dir must be absolute: {raw}")
+    if target.is_symlink():
+        raise ValidationError(f"--memory-dir must not be a symlink: {target}")
+
+    # Resolve non-strictly: the directory may not exist yet, but '..' and any
+    # symlinked parent must still collapse before anything is written, or we
+    # would record a path that fails the canonical check on the very next read.
+    target = Path(os.path.abspath(target))
+    if target.exists():
+        target = target.resolve(strict=True)
+        if not target.is_dir():
+            raise ValidationError(f"--memory-dir exists and is not a directory: {target}")
+
+    require_outside_repository(target, repo, identity)
+
+    binding = repo / ".context-os" / "memory-directory"
+    if binding.exists() and not args.force:
+        current = read_single_line(binding, ".context-os/memory-directory")
+        if not same_directory(current, str(target)):
+            raise ValidationError(
+                f".context-os/memory-directory already points at {current}. "
+                "Re-run with --force to repoint it, after confirming the existing "
+                "memory store is somewhere you can still reach."
+            )
+
+    marker = target / ".context-os-repository"
+    if marker.exists() and not args.force:
+        existing = read_single_line(marker, "memory repository marker")
+        if not same_directory(existing, identity):
+            raise ValidationError(
+                f"{target} is already bound to a different repository ({existing}). "
+                "Re-run with --force only if you mean to hand this memory store to "
+                "this repository."
+            )
+
+    created = []
+    for directory in (target, target / "archive"):
+        if not directory.exists():
+            directory.mkdir(parents=True)
+            created.append(str(directory))
+
+    if not (target / ".git").exists():
+        run_git(["init", "-q"], cwd=target)
+        created.append(str(target / ".git"))
+
+    index = target / "MEMORY.md"
+    if not index.exists():
+        index.write_text("# Memory\n", encoding="utf-8")
+        created.append(str(index))
+
+    binding.parent.mkdir(parents=True, exist_ok=True)
+    # Newline-terminated single line: read_single_line rejects anything else.
+    binding.write_text(f"{target}\n", encoding="utf-8")
+    marker.write_text(f"{identity}\n", encoding="utf-8")
+
+    # Prove it. A bind that reports success without the validator agreeing is
+    # the failure this command exists to prevent, so run the real check rather
+    # than trusting that we wrote the right bytes. require_clean stays off: the
+    # marker we just wrote is legitimately uncommitted.
+    result = validate_memory_binding(repo, require_clean=False)
+    result["created"] = ", ".join(created) if created else "nothing (all present)"
+    return result
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
         if args.command == "resolve":
             result = cmd_resolve(args)
+        elif args.command == "bind":
+            result = cmd_bind(args)
         elif args.command == "artifact":
             if args.for_create and args.for_commit:
                 raise ValidationError("--for-create and --for-commit are mutually exclusive")
