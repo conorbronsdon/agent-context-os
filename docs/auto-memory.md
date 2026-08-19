@@ -12,13 +12,33 @@ The `/dream` and `/dream-apply` commands need a stable, explicit directory becau
 
 ## Explicit directory contract for `/dream`
 
-1. Choose a private absolute directory outside this repository.
+1. Choose a private absolute directory outside this repository. This is enforced, not just advised: a store inside the working tree or the git directory is rejected, because private memory in a shared checkout is one `git add -A` from being staged.
 2. Set Claude Code's `autoMemoryDirectory` to that exact absolute path in the project-local `.claude/settings.local.json`, which this repository ignores. Claude Code also supports other settings scopes, but a local file avoids changing unrelated repositories. Do not commit personal paths.
 3. Confirm with `/memory` that Claude Code is using the intended store and that its `MEMORY.md` belongs to this workspace.
 4. Record the same absolute path as the only line of the ignored local file `.context-os/memory-directory`.
 5. Put the resolved git common directory as the only line of `<memory-directory>/.context-os-repository`. That identity is stable across linked worktrees, unlike a checkout root.
 
-Example setup, after replacing the placeholder and reviewing every destination:
+Steps 4 and 5 are what `bind` does for you:
+
+```bash
+python scripts/dream/validate-memory.py bind   --memory-dir /absolute/private/path/to/this-workspace-memory
+```
+
+It writes both recorded files, creates the directory, `archive/`, a git repo,
+and `MEMORY.md` if they are absent, and then runs the real validator and prints
+its verdict — so a zero exit means the binding actually resolves, not that the
+command finished. Prefer it to writing the files by hand: both are read by this
+same script, and every path bug this setup has had came from a shell and a
+Python script disagreeing about how to spell one directory.
+
+It will not overwrite content it did not create, and it refuses to repoint an
+existing binding, or to claim a store already bound to another repository,
+unless you pass `--force`. Re-running it against the same directory is a no-op.
+
+<details>
+<summary>Equivalent by hand</summary>
+
+After replacing the placeholder and reviewing every destination:
 
 ```bash
 MEMORY_DIR="/absolute/private/path/to/this-workspace-memory"
@@ -27,6 +47,8 @@ mkdir -p "$MEMORY_DIR/archive" .context-os
 printf '%s\n' "$MEMORY_DIR" > .context-os/memory-directory
 printf '%s\n' "$REPO_ID" > "$MEMORY_DIR/.context-os-repository"
 ```
+
+</details>
 
 These commands run unchanged on macOS, Linux, and Windows under Git Bash. On
 Windows they record MSYS-style paths (`/c/Users/...`, and `/tmp/...` for a shell
