@@ -1,4 +1,6 @@
+import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -145,6 +147,58 @@ class DreamMemoryPathTests(unittest.TestCase):
         """
         run(["git", "config", "core.autocrlf", "false"], repo)
         run(["git", "config", "core.eol", "lf"], repo)
+
+    @staticmethod
+    def msys(path: Path) -> str:
+        """Spell a native Windows path the way Git Bash would (drive letter to /c/... form)."""
+        drive, rest = str(path).split(":", 1)
+        return f"/{drive.lower()}{rest.replace(chr(92), '/')}"
+
+    @unittest.skipUnless(os.name == "nt", "the binding is already native on POSIX")
+    def test_msys_spelled_binding_is_accepted(self) -> None:
+        (self.repo / ".context-os" / "memory-directory").write_text(
+            self.msys(self.memory) + "\n", encoding="utf-8"
+        )
+        resolved = self.helper("resolve")
+        self.assertEqual(resolved.returncode, 0, resolved.stderr)
+        self.assertEqual(json.loads(resolved.stdout)["memory_dir"], str(self.memory))
+
+    @unittest.skipUnless(os.name == "nt", "the marker is already native on POSIX")
+    def test_msys_spelled_marker_is_accepted(self) -> None:
+        identity = run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], self.repo
+        ).stdout.strip()
+        (self.memory / ".context-os-repository").write_text(
+            self.msys(Path(identity).resolve()) + "\n", encoding="utf-8"
+        )
+        # resolve also demands a clean memory repo, so commit the rewritten marker
+        # or this asserts on the wrong failure.
+        run(["git", "add", "-A"], self.memory)
+        run(["git", "commit", "-qm", "msys marker"], self.memory)
+        resolved = self.helper("resolve")
+        self.assertEqual(resolved.returncode, 0, resolved.stderr)
+
+    @unittest.skipUnless(os.name == "nt", "Windows-only spelling")
+    def test_a_wrong_marker_is_still_rejected_when_msys_spelled(self) -> None:
+        """Translating the spelling must not become a way to smuggle a
+        mismatched identity past the check."""
+        (self.memory / ".context-os-repository").write_text(
+            "/c/definitely/not/this/repo/.git\n", encoding="utf-8"
+        )
+        self.assertIn("marker", self.assert_rejects("resolve"))
+
+    @unittest.skipUnless(os.name == "nt", "Windows-only spelling")
+    def test_a_noncanonical_msys_path_is_still_rejected(self) -> None:
+        """Translating the spelling must not translate away the '..' check.
+
+        Uses <memory>/../memory, which RESOLVES to a real directory -- so it gets
+        past the existence gate and has to be caught by the canonical check
+        itself, rather than incidentally failing because the path is missing.
+        """
+        (self.repo / ".context-os" / "memory-directory").write_text(
+            self.msys(self.memory) + "/../" + self.memory.name + "\n", encoding="utf-8"
+        )
+        self.assertIn("canonical", self.assert_rejects("resolve"))
 
     def helper(self, *args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
         normalized = list(args)
@@ -1282,3 +1336,38 @@ class DreamMemoryPathTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+WINDOWS = os.name == "nt"
+
+
+class NativePathTests(unittest.TestCase):
+    """docs/auto-memory.md builds both recorded paths in bash, so on Windows they
+    arrive MSYS-spelled (/c/Users/...). These cover the translation AND, more
+    importantly, that translating a path does not let a bad one through."""
+
+    def setUp(self) -> None:
+        spec = importlib.util.spec_from_file_location("validate_memory", HELPER)
+        self.vm = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.vm)
+
+    @unittest.skipUnless(WINDOWS, "MSYS spellings only need translating on Windows")
+    def test_translates_msys_and_cygwin_drive_forms(self) -> None:
+        self.assertEqual(self.vm.native_path("/c/Users/me/memory"), r"C:\Users\me\memory")
+        self.assertEqual(self.vm.native_path("/cygdrive/c/Users/me/memory"), r"C:\Users\me\memory")
+        self.assertEqual(self.vm.native_path("/D/data"), r"D:\data")
+
+    @unittest.skipUnless(WINDOWS, "Windows-only spelling")
+    def test_leaves_native_windows_paths_untouched(self) -> None:
+        for raw in (r"C:\Users\me\memory", "C:/Users/me/memory"):
+            self.assertEqual(self.vm.native_path(raw), raw)
+
+    @unittest.skipIf(WINDOWS, "on POSIX /c/... is a real path, not a drive")
+    def test_is_a_no_op_on_posix(self) -> None:
+        for raw in ("/c/Users/me/memory", "/cygdrive/c/x", "/home/me/memory"):
+            self.assertEqual(self.vm.native_path(raw), raw)
+
+    def test_does_not_invent_a_path_for_junk(self) -> None:
+        """Untranslatable input must come back unchanged so the caller's own
+        checks reject it, rather than being guessed into something plausible."""
+        self.assertEqual(self.vm.native_path("relative/not/absolute"), "relative/not/absolute")

@@ -28,6 +28,19 @@ printf '%s\n' "$MEMORY_DIR" > .context-os/memory-directory
 printf '%s\n' "$REPO_ID" > "$MEMORY_DIR/.context-os-repository"
 ```
 
+These commands run unchanged on macOS, Linux, and Windows under Git Bash. On
+Windows they record MSYS-style paths (`/c/Users/...`, and `/tmp/...` for a shell
+mount), because that is how bash spells an absolute path there. The validator
+translates those to native paths before checking them — the drive-letter forms
+directly, anything else via `cygpath`, which ships with Git for Windows. So both
+spellings of the same directory are accepted, and the file stays readable in
+whichever shell you wrote it from.
+
+The translation is a spelling change only. Every check still applies to the
+translated path: it must be absolute, non-symlinked, canonical (no `..`), an
+existing directory, and — for the marker — still the same repository. A path
+that cannot be translated is left alone and rejected, rather than guessed at.
+
 Separately add the reviewed absolute path to `.claude/settings.local.json`:
 
 ```json
