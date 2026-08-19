@@ -1449,6 +1449,13 @@ class BindCommandTests(MemoryFixture):
         bound = self.helper("bind", "--memory-dir", str(target))
         self.assertEqual(bound.returncode, 0, bound.stderr)
         self.assertEqual(json.loads(bound.stdout)["memory_dir"], str(target))
+        # bind git-inits the store but does not set an identity, and it should
+        # not -- that is the user's global config. The TEST must not depend on
+        # one existing though: a clean CI runner has none, and this failed with
+        # "empty ident name" the first time it ran anywhere but a dev box.
+        run(["git", "config", "user.name", "Bind Test"], target)
+        run(["git", "config", "user.email", "bind@example.invalid"], target)
+        self.pin_line_endings(target)
         run(["git", "add", "-A"], target)
         run(["git", "commit", "-qm", "bound"], target)
         resolved = self.helper("resolve")
