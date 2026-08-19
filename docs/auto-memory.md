@@ -12,7 +12,7 @@ The `/dream` and `/dream-apply` commands need a stable, explicit directory becau
 
 ## Explicit directory contract for `/dream`
 
-1. Choose a private absolute directory outside this repository. This is enforced, not just advised: a store inside the working tree or the git directory is rejected, because private memory in a shared checkout is one `git add -A` from being staged.
+1. Choose a private absolute **local** directory outside this repository. UNC paths (`\server\share`) and Win32 device paths are rejected: the validator resolves the recorded value, and resolving a network path named in a file would reach out to that host. This is enforced, not just advised: a store inside the working tree or the git directory is rejected, because private memory in a shared checkout is one `git add -A` from being staged.
 2. Set Claude Code's `autoMemoryDirectory` to that exact absolute path in the project-local `.claude/settings.local.json`, which this repository ignores. Claude Code also supports other settings scopes, but a local file avoids changing unrelated repositories. Do not commit personal paths.
 3. Confirm with `/memory` that Claude Code is using the intended store and that its `MEMORY.md` belongs to this workspace.
 4. Record the same absolute path as the only line of the ignored local file `.context-os/memory-directory`.
