@@ -1345,8 +1345,6 @@ class DreamMemoryPathTests(MemoryFixture):
 
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 WINDOWS = os.name == "nt"
@@ -1540,3 +1538,181 @@ class BindCommandTests(MemoryFixture):
         bound = self.helper("bind", "--memory-dir", str(target))
         self.assertNotEqual(bound.returncode, 0, bound.stdout)
         self.assertIn("remote", bound.stderr)
+
+
+class ControlPathSafetyTests(MemoryFixture):
+    """Every one of these reproduces a defect that shipped in #32 and was found
+    by an independent review. They are written to fail without the fix."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        (self.repo / ".context-os" / "memory-directory").unlink()
+
+    @unittest.skipUnless(SYMLINKS_AVAILABLE, "needs symlink privilege")
+    def test_force_does_not_overwrite_a_file_through_a_symlinked_binding(self) -> None:
+        """--force used to skip the symlink check, because that check lived
+        inside the read_single_line call it was skipping -- turning bind --force
+        into an arbitrary-file overwrite."""
+        victim = self.root / "victim.txt"
+        victim.write_text("PRECIOUS ORIGINAL CONTENT\n", encoding="utf-8")
+        (self.repo / ".context-os" / "memory-directory").symlink_to(victim)
+
+        refused = self.helper("bind", "--memory-dir", str(self.root / "mem"), "--force")
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertEqual(victim.read_text(encoding="utf-8"), "PRECIOUS ORIGINAL CONTENT\n")
+
+    @unittest.skipUnless(SYMLINKS_AVAILABLE, "needs symlink privilege")
+    def test_a_broken_symlink_does_not_become_a_created_file(self) -> None:
+        """Path.exists() is False for a broken symlink, so even the non-force
+        path skipped its check and wrote wherever the link pointed."""
+        ghost = self.root / "does-not-exist-yet.txt"
+        (self.repo / ".context-os" / "memory-directory").symlink_to(ghost)
+
+        refused = self.helper("bind", "--memory-dir", str(self.root / "mem"))
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertFalse(ghost.exists(), "created a file at the broken symlink's target")
+
+    @unittest.skipUnless(SYMLINKS_AVAILABLE, "needs symlink privilege")
+    def test_a_symlinked_parent_cannot_smuggle_the_store_into_the_repo(self) -> None:
+        """abspath() is lexical, so a symlinked parent left the containment
+        check inspecting a path that pointed somewhere else -- and a whole
+        memory store got built inside the repository before anything complained."""
+        outside = self.root / "outside"
+        outside.mkdir()
+        (outside / "link-to-repo").symlink_to(self.repo, target_is_directory=True)
+
+        refused = self.helper(
+            "bind", "--memory-dir", str(outside / "link-to-repo" / "inside-memory")
+        )
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("outside this repository", refused.stderr)
+        self.assertFalse((self.repo / "inside-memory").exists())
+
+
+class BindPreflightTests(MemoryFixture):
+    def setUp(self) -> None:
+        super().setUp()
+        (self.repo / ".context-os" / "memory-directory").unlink()
+
+    def test_a_doomed_bind_leaves_the_previous_binding_intact(self) -> None:
+        """bind used to write both files and THEN validate, so a bind that
+        failed had already destroyed a working configuration while exiting 1."""
+        good = self.root / "good-memory"
+        self.helper("bind", "--memory-dir", str(good))
+        before = (self.repo / ".context-os" / "memory-directory").read_text(encoding="utf-8")
+
+        doomed = self.root / "memory-with-remote"
+        doomed.mkdir()
+        run(["git", "init", "-q"], doomed)
+        run(["git", "remote", "add", "origin", "https://example.invalid/m.git"], doomed)
+
+        refused = self.helper("bind", "--memory-dir", str(doomed), "--force")
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("remote", refused.stderr)
+        self.assertEqual(
+            (self.repo / ".context-os" / "memory-directory").read_text(encoding="utf-8"),
+            before,
+            "a failed bind repointed the repository at a store it then rejected",
+        )
+        self.assertFalse(
+            (doomed / ".context-os-repository").exists(),
+            "a failed bind claimed the target store anyway",
+        )
+
+    def test_a_refused_bind_creates_no_scaffolding(self) -> None:
+        doomed = self.root / "memory-with-remote"
+        doomed.mkdir()
+        run(["git", "init", "-q"], doomed)
+        run(["git", "remote", "add", "origin", "https://example.invalid/m.git"], doomed)
+        self.helper("bind", "--memory-dir", str(doomed))
+        self.assertFalse((doomed / "archive").exists())
+        self.assertFalse((doomed / "MEMORY.md").exists())
+
+    def test_bind_pins_line_endings_on_the_store_it_creates(self) -> None:
+        """Git for Windows sets core.autocrlf=true at SYSTEM level. The review
+        flow digests worktree bytes and compares them to the staged blob, so an
+        inherited autocrlf rewrites the bytes between those two reads and every
+        approved change is rejected as tampered. The fixtures pinned this and
+        thereby hid it: the suite passed while real stores were broken."""
+        target = self.root / "fresh-memory"
+        self.helper("bind", "--memory-dir", str(target))
+        got = run(["git", "config", "core.autocrlf"], target).stdout.strip()
+        self.assertEqual(got, "false")
+
+    def test_the_reviewed_digest_survives_a_bind_created_store(self) -> None:
+        """End-to-end version of the above: this is the workflow that was broken."""
+        target = self.root / "fresh-memory"
+        self.helper("bind", "--memory-dir", str(target))
+        run(["git", "config", "user.name", "m"], target)
+        run(["git", "config", "user.email", "m@e.invalid"], target)
+        run(["git", "add", "-A"], target)
+        run(["git", "commit", "-qm", "base"], target)
+
+        (target / "project_alpha.md").write_text("reviewed replacement\n", encoding="utf-8")
+        candidate = self.helper("changes", "--allow", "project_alpha.md")
+        self.assertEqual(candidate.returncode, 0, candidate.stderr)
+        digest = json.loads(candidate.stdout)["change_digest"]
+        run(["git", "add", "--", "project_alpha.md"], target)
+        staged = self.helper(
+            "changes", "--staged", "--expect-digest", digest, "--allow", "project_alpha.md"
+        )
+        self.assertEqual(staged.returncode, 0, staged.stderr)
+
+
+class RecordedPathHardeningTests(unittest.TestCase):
+    def setUp(self) -> None:
+        spec = importlib.util.spec_from_file_location("validate_memory", HELPER)
+        self.vm = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.vm)
+
+    def test_traversal_is_rejected_before_translation_can_erase_it(self) -> None:
+        """cygpath silently collapses '..', so /tmp/../tmp reached the canonical
+        check already normalized and passed -- while the drive-letter spelling of
+        the same forbidden input was correctly rejected."""
+        for raw in ("/tmp/../tmp/memory", "/c/Users/me/../me/mem", "/./mem"):
+            with self.assertRaises(self.vm.ValidationError, msg=raw):
+                self.vm.reject_traversal(raw, "test")
+
+    def test_unc_and_device_roots_are_rejected(self) -> None:
+        for raw in (r"\\attacker\share\mem", "//attacker/share/mem", r"\\?\C:\mem"):
+            with self.assertRaises(self.vm.ValidationError, msg=raw):
+                self.vm.reject_nonlocal_root(Path(raw), "test")
+
+    def test_a_nul_fails_closed_instead_of_raising(self) -> None:
+        """A NUL reached subprocess and raised ValueError, which same_directory
+        did not catch -- a traceback instead of a verdict."""
+        self.assertFalse(self.vm.same_directory("/bad" + chr(0) + "path", str(HELPER.parent)))
+
+    @unittest.skipUnless(SYMLINKS_AVAILABLE, "needs symlink privilege")
+    def test_same_file_sees_through_a_different_spelling_of_one_directory(self) -> None:
+        """The decisive case, and the reason Path.__eq__ is not enough: two
+        different path strings naming ONE directory must compare equal. A
+        mutation back to `a == b` fails here -- the earlier version of this test
+        did not, because every case it used agreed under both implementations."""
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp).resolve()
+            real = base / "real"
+            real.mkdir()
+            alias = base / "alias"
+            alias.symlink_to(real, target_is_directory=True)
+            self.assertNotEqual(real, alias, "precondition: the two spellings differ")
+            self.assertTrue(self.vm.same_file(real, alias))
+
+    def test_same_file_compares_identity_not_spelling(self) -> None:
+        """Path.__eq__ is case-insensitive on Windows, so two genuinely distinct
+        repositories could compare equal. samefile asks the filesystem."""
+        here = HELPER.parent
+        self.assertTrue(self.vm.same_file(here, here))
+        self.assertFalse(self.vm.same_file(here, here.parent))
+        self.assertFalse(self.vm.same_file(here, here / "definitely-absent"))
+
+    def test_cygpath_is_locatable_without_it_being_on_path(self) -> None:
+        """It lives in Git\\usr\\bin while git.exe is elsewhere, so a PATH with
+        git does not imply one with cygpath."""
+        if os.name != "nt":
+            self.skipTest("cygpath only matters on Windows")
+        self.assertIsNotNone(self.vm.find_cygpath())
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -16,6 +16,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -147,11 +148,13 @@ def same_directory(recorded: str, identity: str) -> bool:
     if recorded == identity:
         return True
     try:
-        return (
-            Path(native_path(recorded)).resolve(strict=True)
-            == Path(native_path(identity)).resolve(strict=True)
-        )
-    except OSError:
+        if CONTROL.search(recorded) or CONTROL.search(identity):
+            return False
+        left = Path(native_path(recorded))
+        right = Path(native_path(identity))
+        reject_nonlocal_root(left, "memory repository marker")
+        return same_file(left.resolve(strict=True), right.resolve(strict=True))
+    except (OSError, ValueError, ValidationError):
         # Nonexistent, malformed, or not addressable on this platform -- e.g. the
         # MSYS-style /c/... form under a native Python. Fail closed: an identity
         # we cannot resolve is not an identity we can vouch for.
@@ -206,6 +209,120 @@ def require_regular_file(path: Path, label: str) -> None:
         raise ValidationError(f"{label} must be a regular file: {path}")
 
 
+DOTS = {".", ".."}
+
+
+def reject_traversal(raw: str, label: str) -> None:
+    """Reject '.'/'..' in a slash-form path BEFORE any translation sees it.
+
+    cygpath collapses traversal silently, so `/tmp/../tmp/memory` reached
+    require_canonical_directory already normalized and sailed through the
+    "must be canonical with no '..'" check that the drive-letter branch
+    correctly rejects. Two spellings of the same forbidden input, two different
+    verdicts, on the same platform. Checked on the raw string so the answer no
+    longer depends on which translation branch runs.
+    """
+    for part in raw.replace("\\", "/").split("/"):
+        if part in DOTS:
+            raise ValidationError(f"{label} must be canonical with no '.' or '..': {raw}")
+
+
+def reject_nonlocal_root(path: Path, label: str) -> None:
+    """Reject UNC shares and Win32 device paths.
+
+    Two reasons, one of them new. The binding is documented as a PRIVATE
+    directory, and a share is not private. More sharply: same_directory now
+    RESOLVES the recorded value, and resolving `//attacker/share/...` makes
+    Windows open an SMB connection to a host named in an attacker-controlled
+    file -- a credential-disclosure and hang risk the old literal string compare
+    did not have. The ten-second guard on cygpath does not cover filesystem
+    resolution, which has no timeout at all.
+
+    Device paths (\\\\?\\, \\\\.\\) are rejected in the same breath: they bypass
+    normalization, so a canonical check on one means very little.
+
+    This is a deliberate tightening -- UNC memory directories were accepted
+    before. Reverse it by dropping this call if a network store is ever wanted,
+    but do it knowing the resolution happens on unvalidated input.
+    """
+    text = str(path)
+    if text.startswith("\\\\") or text.startswith("//"):
+        raise ValidationError(
+            f"{label} must be a local path; UNC and device paths are not accepted: {path}"
+        )
+
+
+def find_cygpath() -> str | None:
+    """Locate cygpath, falling back to the Git installation that ships it.
+
+    It lives in `Git\\usr\\bin` while git.exe is in `Git\\mingw64\\bin` or
+    `Git\\cmd` -- different directories -- so a PATH carrying git does not imply
+    one carrying cygpath. Without this the documented `/tmp/...` form silently
+    stops translating and gets rejected as non-absolute, on a machine where Git
+    for Windows is installed and everything looks fine.
+    """
+    found = shutil.which("cygpath")
+    if found:
+        return found
+    git = shutil.which("git")
+    if not git:
+        return None
+    for parent in Path(git).resolve().parents:
+        candidate = parent / "usr" / "bin" / "cygpath.exe"
+        if candidate.is_file():
+            return str(candidate)
+    return None
+
+
+def same_file(a: Path, b: Path) -> bool:
+    """Compare filesystem identity, not path spelling.
+
+    Path.__eq__ is case-INSENSITIVE on Windows, so `C:\\cs\\Repo\\.git` and
+    `C:\\cs\\repo\\.git` compared equal -- two genuinely different repositories
+    on a directory with case sensitivity enabled, and the marker is the whole
+    binding. The pre-existing literal string compare happened to be
+    case-sensitive; switching to Path comparison quietly gave that away.
+
+    os.path.samefile compares device and inode (the file index on Windows), so
+    it answers the question actually being asked. Requires both to exist, which
+    is correct here: an identity that cannot be stat'd is not one to vouch for.
+    """
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return False
+
+
+def replace_control_file(path: Path, text: str, label: str) -> None:
+    """Write a control file without ever following what is already there.
+
+    `path.write_text()` follows a symlink. That turned `bind --force` into an
+    arbitrary-file-overwrite: point `.context-os/memory-directory` at any file,
+    run bind --force, and its contents are replaced -- verified against a file
+    holding unrelated content. A BROKEN symlink was worse, because Path.exists()
+    is false for one, so even the non-force path skipped its check and created a
+    file wherever the link pointed.
+
+    Writing a temp sibling and os.replace()ing it swaps the directory ENTRY, so
+    an existing symlink is replaced rather than traversed. The lexists check
+    still refuses up front, so this is belt and braces on the operation that
+    actually caused the damage.
+    """
+    if os.path.lexists(path) and (path.is_symlink() or not path.is_file()):
+        raise ValidationError(
+            f"{label} must be a regular file, not a symlink or special file: {path}"
+        )
+    tmp = path.with_name(path.name + ".tmp-bind")
+    if os.path.lexists(tmp):
+        raise ValidationError(f"stale temporary file in the way: {tmp}")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, path)
+    finally:
+        if os.path.lexists(tmp):
+            tmp.unlink()
+
+
 MSYS_DRIVE = re.compile(r"^/(?:cygdrive/)?([A-Za-z])/(.*)$")
 
 
@@ -229,6 +346,7 @@ def native_path(raw: str) -> str:
     """
     if os.name != "nt" or not raw.startswith("/"):
         return raw
+    reject_traversal(raw, "recorded path")
     match = MSYS_DRIVE.match(raw)
     if match:
         drive, rest = match.groups()
@@ -237,11 +355,14 @@ def native_path(raw: str) -> str:
     # only the shell knows about. cygpath ships with Git for Windows and is the
     # authority on those; if it is missing or fails, hand back the original so
     # the caller's own checks reject it rather than guessing a translation.
+    cygpath = find_cygpath()
+    if not cygpath:
+        return raw
     try:
         converted = subprocess.run(
-            ["cygpath", "-w", raw], capture_output=True, text=True, timeout=10
+            [cygpath, "-w", raw], capture_output=True, text=True, timeout=10
         )
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError, ValueError):
         return raw
     if converted.returncode != 0:
         return raw
@@ -251,10 +372,12 @@ def native_path(raw: str) -> str:
 def require_canonical_directory(raw: str, label: str) -> Path:
     if CONTROL.search(raw):
         raise ValidationError(f"{label} contains a control character")
+    reject_traversal(raw, label)
     raw = native_path(raw)
     path = Path(raw)
     if not path.is_absolute():
         raise ValidationError(f"{label} must be absolute")
+    reject_nonlocal_root(path, label)
     if path.is_symlink():
         raise ValidationError(f"{label} must not be a symlink")
     try:
@@ -1432,19 +1555,29 @@ def build_parser() -> argparse.ArgumentParser:
 def cmd_bind(args: argparse.Namespace) -> dict[str, str]:
     """Write both halves of the binding, then prove the result validates.
 
-    The two recorded files have always been written by hand, in a shell, from a
-    doc — while being read by this script, in Python. Nothing kept the two
-    spellings in agreement, and both Windows bugs fixed alongside this came from
-    exactly that split: a marker git spelled `C:/...` compared against a
-    a backslash-separated resolve, and a memory path bash spelled `/c/...` that Python read
-    as relative. Normalizing on read treats the symptom. Writing both files here,
-    in the same code that reads them, removes the disagreement by construction.
+    The two recorded files were written by hand, in a shell, from a doc -- while
+    being read by this script, in Python. Nothing kept the two spellings in
+    agreement, and both Windows bugs fixed alongside this came from exactly that
+    split. Writing both files here, in the same code that reads them, removes
+    the disagreement by construction.
 
-    Deliberately conservative about existing state. It creates the memory
-    directory, `archive/`, a git repo, and MEMORY.md only when they are ABSENT,
-    never resetting or emptying one that is already there, and it refuses to
-    repoint a binding that already names somewhere else unless --force says so.
-    A memory store is the one thing in this system with no upstream copy.
+    STRICTLY PREFLIGHTED. Every refusal runs before anything is created or
+    written, because the first version did not and that was the bug: a bind that
+    failed validation had already created a git repo, an archive/ and a
+    MEMORY.md, and had already overwritten the previous binding -- destroying a
+    working configuration while exiting non-zero. Nothing below the PREFLIGHT
+    marker may raise for a reason that could have been known above it.
+
+    Deliberately conservative about existing state: it creates the directory,
+    archive/, a git repo and MEMORY.md only when ABSENT, never resetting one
+    already there, and refuses to repoint a binding or claim a store bound
+    elsewhere unless --force. A memory store is the one thing here with no
+    upstream copy.
+
+    --force relaxes exactly one thing: the semantic "this points somewhere else"
+    refusal. It has never been a reason to skip a SAFETY check, and used to skip
+    the symlink check by accident, because those checks lived inside the same
+    read_single_line call that read the value being compared.
     """
     repo = Path.cwd().resolve(strict=True)
     identity = repository_identity(repo)
@@ -1452,42 +1585,67 @@ def cmd_bind(args: argparse.Namespace) -> dict[str, str]:
     raw = args.memory_dir
     if CONTROL.search(raw):
         raise ValidationError("--memory-dir contains a control character")
+    reject_traversal(raw, "--memory-dir")
     target = Path(native_path(raw))
     if not target.is_absolute():
         raise ValidationError(f"--memory-dir must be absolute: {raw}")
+    reject_nonlocal_root(target, "--memory-dir")
+
+    # resolve(strict=False), not abspath: abspath is purely lexical, so a
+    # symlinked or junctioned PARENT stayed unresolved and the containment check
+    # below ran against a path that pointed somewhere else entirely. Verified:
+    # `--memory-dir /outside/link-to-repo/inside` built a whole memory store
+    # INSIDE the repository, which is the exact thing require_outside_repository
+    # exists to prevent.
+    target = target.resolve(strict=False)
     if target.is_symlink():
         raise ValidationError(f"--memory-dir must not be a symlink: {target}")
-
-    # Resolve non-strictly: the directory may not exist yet, but '..' and any
-    # symlinked parent must still collapse before anything is written, or we
-    # would record a path that fails the canonical check on the very next read.
-    target = Path(os.path.abspath(target))
-    if target.exists():
-        target = target.resolve(strict=True)
-        if not target.is_dir():
-            raise ValidationError(f"--memory-dir exists and is not a directory: {target}")
+    if os.path.lexists(target) and not target.is_dir():
+        raise ValidationError(f"--memory-dir exists and is not a directory: {target}")
 
     require_outside_repository(target, repo, identity)
 
     binding = repo / ".context-os" / "memory-directory"
-    if binding.exists() and not args.force:
-        current = read_single_line(binding, ".context-os/memory-directory")
-        if not same_directory(current, str(target)):
-            raise ValidationError(
-                f".context-os/memory-directory already points at {current}. "
-                "Re-run with --force to repoint it, after confirming the existing "
-                "memory store is somewhere you can still reach."
-            )
-
     marker = target / ".context-os-repository"
-    if marker.exists() and not args.force:
-        existing = read_single_line(marker, "memory repository marker")
-        if not same_directory(existing, identity):
+
+    # Safety checks on both control paths, regardless of --force.
+    for control, label in ((binding, ".context-os/memory-directory"),
+                           (marker, "memory repository marker")):
+        if os.path.lexists(control) and (control.is_symlink() or not control.is_file()):
             raise ValidationError(
-                f"{target} is already bound to a different repository ({existing}). "
-                "Re-run with --force only if you mean to hand this memory store to "
-                "this repository."
+                f"{label} must be a regular file, not a symlink or special file: {control}"
             )
+    if binding.parent.is_symlink():
+        raise ValidationError(f".context-os must not be a symlink: {binding.parent}")
+
+    # Semantic refusals -- the only thing --force is allowed to relax.
+    if not args.force:
+        if binding.is_file():
+            current = read_single_line(binding, ".context-os/memory-directory")
+            if not same_directory(current, str(target)):
+                raise ValidationError(
+                    f".context-os/memory-directory already points at {current}. "
+                    "Re-run with --force to repoint it, after confirming the existing "
+                    "memory store is somewhere you can still reach."
+                )
+        if marker.is_file():
+            existing = read_single_line(marker, "memory repository marker")
+            if not same_directory(existing, identity):
+                raise ValidationError(
+                    f"{target} is already bound to a different repository ({existing}). "
+                    "Re-run with --force only if you mean to hand this memory store to "
+                    "this repository."
+                )
+
+    # A store that already exists must satisfy the rules the validator will apply
+    # anyway. Checking here keeps a doomed bind from writing the repo's binding
+    # file first and reporting the failure second.
+    if (target / ".git").exists() and run_git(["remote"], cwd=target):
+        raise ValidationError(
+            f"{target} is a git repository with remotes; a memory store must have none"
+        )
+
+    # ---- PREFLIGHT COMPLETE. Everything below creates or writes. ----
 
     created = []
     for directory in (target, target / "archive"):
@@ -1497,6 +1655,15 @@ def cmd_bind(args: argparse.Namespace) -> dict[str, str]:
 
     if not (target / ".git").exists():
         run_git(["init", "-q"], cwd=target)
+        # Pin line endings on the store we just made. Git for Windows sets
+        # core.autocrlf=true at SYSTEM level, and the review flow digests
+        # worktree bytes and compares them against the staged blob -- so an
+        # inherited autocrlf rewrites the bytes between those two reads and
+        # every approved change is rejected as tampered. The test fixtures
+        # pinned this and thereby HID it: the suite passed while the real
+        # Windows workflow was broken for anyone whose store bind created.
+        run_git(["config", "core.autocrlf", "false"], cwd=target)
+        run_git(["config", "core.eol", "lf"], cwd=target)
         created.append(str(target / ".git"))
 
     index = target / "MEMORY.md"
@@ -1506,8 +1673,10 @@ def cmd_bind(args: argparse.Namespace) -> dict[str, str]:
 
     binding.parent.mkdir(parents=True, exist_ok=True)
     # Newline-terminated single line: read_single_line rejects anything else.
-    binding.write_text(f"{target}\n", encoding="utf-8")
-    marker.write_text(f"{identity}\n", encoding="utf-8")
+    # Written via replace_control_file so an existing symlink is REPLACED rather
+    # than followed.
+    replace_control_file(binding, f"{target}\n", ".context-os/memory-directory")
+    replace_control_file(marker, f"{identity}\n", "memory repository marker")
 
     # Prove it. A bind that reports success without the validator agreeing is
     # the failure this command exists to prevent, so run the real check rather
