@@ -127,7 +127,7 @@ GitHub's official MCP server exposes repository, issue, pull-request, Actions, s
 - **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `publish`, `overwrite`, `delete`, `oauth`, `destructive`
 - **Confirmation:** Confirm the exact GitHub identity, host, repositories, credential scopes, and enabled toolsets; ask before private-repository reads, and separately show the exact target and payload before comments, branch or file writes, workflow actions, publication, overwrite, deletion, or administration.
 - **Risk tags:** `credentials`, `private-repositories`, `sensitive-read`, `remote-write`, `publish-capable`, `public-publish`, `overwrite-capable`, `delete-capable`, `oauth`, `destructive-capable`, `broad-api-surface`, `ci-cd`, `prompt-injection`
-- **Evidence:** [1](https://github.com/github/github-mcp-server); [2](https://github.com/github/github-mcp-server/blob/main/docs/server-configuration.md); [3](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md)
+- **Evidence:** [1](https://github.com/github/github-mcp-server); [2](https://github.com/github/github-mcp-server/blob/bf47e3eca9aeda1e3826916a57c0f9fb0f9d2bc7/docs/server-configuration.md); [3](https://github.com/github/github-mcp-server/blob/bf47e3eca9aeda1e3826916a57c0f9fb0f9d2bc7/docs/remote-server.md)
 - **Health check:** Start the server in read-only mode with only context, repos, issues, and pull\_requests enabled, verify the authenticated identity and host, then read one explicitly named repository and issue without performing a write.
 - **Uninstall:** Remove the MCP client entry, stop or uninstall the local server if used, and revoke the OAuth grant, personal access token, or GitHub App installation used for the connection; leave repositories and GitHub content unchanged. (removes user data: No)
 
@@ -279,7 +279,7 @@ Readwise's official hosted MCP searches highlights, notes, and Reader documents 
 - **Typed safety signals:** sensitive read, remote write, overwrite, delete, oauth
 - **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `overwrite`, `delete`, `oauth`, `destructive`
 - **Confirmation:** Confirm the exact Readwise account and the full-library indexing boundary; ask before broad searches or exporting content elsewhere, and show the exact document, highlight, tags, metadata, destination, or deletion before every remote change.
-- **Risk tags:** `credentials`, `hosted`, `personal-library`, `semantic-index`, `sensitive-read`, `remote-write`, `overwrite-capable`, `delete-capable`, `oauth`, `destructive-capable`
+- **Risk tags:** `credentials`, `hosted`, `personal-library`, `semantic-index`, `sensitive-read`, `remote-write`, `overwrite-capable`, `delete-capable`, `oauth`, `destructive-capable`, `prompt-injection`
 - **Evidence:** [1](https://docs.readwise.io/tools/mcp); [2](https://docs.readwise.io/tools)
 - **Health check:** After OAuth, run one narrowly scoped search for a known title or highlight and inspect a single result without moving, tagging, creating, updating, or deleting content.
 - **Uninstall:** Disconnect Readwise in the MCP client and revoke the authorization in Readwise if available; leave all Reader documents, highlights, notes, and tags unchanged. (removes user data: No)
