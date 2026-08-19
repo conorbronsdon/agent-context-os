@@ -85,7 +85,15 @@ def run(command: list[str], cwd: Path, *, check: bool = True) -> subprocess.Comp
 class DreamMemoryPathTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
-        self.root = Path(self.tmp.name)
+        # .resolve() matters: on Windows the temp root can come back as an 8.3
+        # SHORT NAME (C:\Users\RUNNER~1\... on GitHub's runners). The fixture
+        # records this path in .context-os/memory-directory, and the helper
+        # rightly rejects a non-canonical binding -- so an unresolved tempdir
+        # fails most of the suite with "must be canonical with no '..' or
+        # symlinks", blaming the binding rather than the fixture. It reproduces
+        # only where the account name exceeds 8 characters, which is why a local
+        # Windows run can pass while CI does not.
+        self.root = Path(self.tmp.name).resolve()
         self.repo = self.root / "repo"
         self.memory = self.root / "memory"
         self.repo.mkdir()
