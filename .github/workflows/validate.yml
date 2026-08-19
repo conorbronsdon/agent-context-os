@@ -16,3 +16,23 @@ jobs:
         run: |
           chmod +x scripts/*.sh tests/*.sh
           bash scripts/validate-all.sh
+
+  # The Python suite shells out to helpers and hashes file bytes, so it is exposed
+  # to three things a Linux-only matrix cannot see. All three were live on main
+  # until 2026-08-19 and every one of them was invisible here:
+  #   - "python3" is a Store stub on Windows that runs nothing and prints an ad
+  #   - core.autocrlf=true (system default) rewrites the bytes under a digest check
+  #   - git identity paths come back C:/... but resolve to C:\...
+  # validate-all.sh stays Linux-only -- it is a bash pipeline with find/chmod in it.
+  # This job runs just the part that has a real chance of breaking per-platform.
+  tests-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Run the Python test suite on Windows
+        run: python -m unittest discover -s tests -p "test_*.py" -v

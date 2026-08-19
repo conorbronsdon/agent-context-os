@@ -1,9 +1,66 @@
 import json
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+# Shell out to the interpreter running these tests, never a bare "python3".
+#
+# On Windows "python3" resolves to the Microsoft Store App Execution Alias — a
+# stub that prints "Python was not found; run without arguments to install from
+# the Microsoft Store" and exits WITHOUT running Python. Every test that shells
+# out then reads empty stdout and dies on json.loads(""), which surfaces as
+# "Expecting value: line 1 column 1 (char 0)" and looks like a helper bug rather
+# than a missing interpreter. That took out 34 of 89 tests.
+#
+# sys.executable is also correct on POSIX and in a venv, where a bare "python3"
+# can be a DIFFERENT interpreter than the one running the suite.
+PYTHON = sys.executable
+
+
+def _symlinks_available() -> bool:
+    """Can this process actually create a symlink?
+
+    Probed, not inferred from the OS name: Windows CAN create symlinks when the
+    account holds SeCreateSymbolicLinkPrivilege (Developer Mode, or elevated).
+    Gating on `os.name == "nt"` would permanently skip these on machines that are
+    perfectly capable of running them, and these are security tests -- the cost of
+    an unnecessary skip is a real hole in coverage.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        (base / "target").write_text("probe", encoding="utf-8")
+        try:
+            (base / "link").symlink_to(base / "target")
+        except (OSError, NotImplementedError):
+            return False
+        return True
+
+
+def _git_tracks_file_mode() -> bool:
+    """Does Git record the executable bit on this filesystem?
+
+    Git for Windows sets core.fileMode=false because NTFS has no exec bit to read,
+    so a chmod is invisible and a test asserting "the mode change is detected" can
+    never pass there. Probed against a scratch repo so the answer reflects the
+    filesystem actually under test, not a guess.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            subprocess.run(["git", "init", "-q"], cwd=tmp, check=True,
+                           capture_output=True)
+            value = subprocess.run(["git", "config", "core.fileMode"], cwd=tmp,
+                                   capture_output=True, text=True).stdout.strip()
+        except (OSError, subprocess.CalledProcessError):
+            return False
+        return value != "false"
+
+
+SYMLINKS_AVAILABLE = _symlinks_available()
+GIT_TRACKS_FILE_MODE = _git_tracks_file_mode()
+
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,9 +93,11 @@ class DreamMemoryPathTests(unittest.TestCase):
         run(["git", "init", "-q"], self.repo)
         run(["git", "config", "user.name", "Dream Test"], self.repo)
         run(["git", "config", "user.email", "dream@example.invalid"], self.repo)
+        self.pin_line_endings(self.repo)
         run(["git", "init", "-q"], self.memory)
         run(["git", "config", "user.name", "Dream Memory"], self.memory)
         run(["git", "config", "user.email", "dream-memory@example.invalid"], self.memory)
+        self.pin_line_endings(self.memory)
         (self.repo / ".context-os").mkdir()
         (self.repo / ".context-os" / "memory-directory").write_text(
             f"{self.memory}\n", encoding="utf-8"
@@ -61,6 +120,24 @@ class DreamMemoryPathTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
+    @staticmethod
+    def pin_line_endings(repo: Path) -> None:
+        """Stop the host's Git config from rewriting bytes these tests hash.
+
+        Git for Windows sets core.autocrlf=true at SYSTEM level, so a fixture repo
+        inherits it even though nothing here asks for it. The suite then compares a
+        digest of worktree bytes against the staged blob: Python's write_text()
+        emits CRLF on Windows, autocrlf normalizes it back to LF on `git add`, the
+        two digests differ, and the failure reads "staged bytes do not match the
+        reviewed change digest" -- i.e. exactly like the tamper-detection working
+        as designed, which is the worst possible disguise for an environment bug.
+
+        Pinned per-repo rather than relying on a global, so the suite is
+        deterministic regardless of how the developer's Git is configured.
+        """
+        run(["git", "config", "core.autocrlf", "false"], repo)
+        run(["git", "config", "core.eol", "lf"], repo)
+
     def helper(self, *args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
         normalized = list(args)
         if (
@@ -70,7 +147,7 @@ class DreamMemoryPathTests(unittest.TestCase):
             and "--for-commit" not in normalized
         ):
             normalized.append("--for-commit")
-        return run(["python3", str(HELPER), *normalized], cwd or self.repo, check=False)
+        return run([PYTHON, str(HELPER), *normalized], cwd or self.repo, check=False)
 
     def write_archive(self, *rows: str) -> None:
         (self.memory / "ARCHIVE.md").write_text(
@@ -148,7 +225,7 @@ class DreamMemoryPathTests(unittest.TestCase):
         run(["git", "commit", "-qm", "dream artifact"], self.memory)
         clean_apply = run(
             [
-                "python3",
+                PYTHON,
                 str(HELPER),
                 "artifact",
                 "2026-08-15T10-19-00Z",
@@ -163,10 +240,12 @@ class DreamMemoryPathTests(unittest.TestCase):
         self.assertIn("timestamp", self.assert_rejects("artifact", "2026-08-15T10-19-00Z\nx"))
         self.assertIn("timestamp", self.assert_rejects("artifact", "2026-99-99T99-99-99Z"))
 
+    @unittest.skipUnless(SYMLINKS_AVAILABLE, "needs symlink privilege (Windows: Developer Mode)")
     def test_artifact_rejects_symlinked_components(self) -> None:
         (self.memory / ".dreams").symlink_to(self.root)
         self.assertIn("symlink", self.assert_rejects("artifact", "2026-08-15T10-19-00Z"))
 
+    @unittest.skipUnless(SYMLINKS_AVAILABLE, "needs symlink privilege (Windows: Developer Mode)")
     def test_proposals_reject_path_escape_absolute_and_symlink_targets(self) -> None:
         proposal = self.valid_modify()
         proposal["target"] = "../outside.md"
@@ -710,6 +789,7 @@ class DreamMemoryPathTests(unittest.TestCase):
         self.assertEqual(staged.returncode, 0, staged.stderr)
         self.assertEqual(json.loads(staged.stdout)["change_digest"], digest)
 
+    @unittest.skipUnless(GIT_TRACKS_FILE_MODE, "git core.fileMode is false; no exec bit on this filesystem")
     def test_staged_digest_rejects_unreviewed_mode_change(self) -> None:
         target = self.memory / "project_alpha.md"
         target.write_text("reviewed replacement\n", encoding="utf-8")

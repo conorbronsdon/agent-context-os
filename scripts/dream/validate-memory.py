@@ -120,6 +120,41 @@ def repository_identity(repo: Path) -> str:
     return str(resolved)
 
 
+def same_directory(recorded: str, identity: str) -> bool:
+    """Do two recorded paths name the same directory?
+
+    Compared as paths rather than as strings, because the marker file and this
+    check are written by different tools that spell the same directory
+    differently:
+
+      git rev-parse   C:/Users/me/repo/.git      (forward slashes, even on Windows)
+      Python resolve  C:\\Users\\me\\repo\\.git     (backslashes)
+      docs/auto-memory.md's `realpath` under Git Bash → /c/Users/me/repo/.git
+
+    All three name one directory. On POSIX they are byte-identical, which is why
+    a literal `!=` held up everywhere CI runs and failed only on Windows -- where
+    it rejected every correctly-configured binding, taking out 31 tests and, more
+    importantly, the feature itself for any Windows user who followed the setup
+    doc exactly.
+
+    This does NOT loosen the check. It still demands the same directory; it just
+    stops treating a separator convention as a different repository. Comparison is
+    on fully resolved paths, so `..`, symlinks, and 8.3 short names all normalize
+    before the equality, and a marker naming any other directory is still
+    rejected. Unresolvable input (a path that does not exist, e.g. the classic
+    stale marker pointing at a deleted checkout) fails closed.
+    """
+    if recorded == identity:
+        return True
+    try:
+        return Path(recorded).resolve(strict=True) == Path(identity).resolve(strict=True)
+    except OSError:
+        # Nonexistent, malformed, or not addressable on this platform -- e.g. the
+        # MSYS-style /c/... form under a native Python. Fail closed: an identity
+        # we cannot resolve is not an identity we can vouch for.
+        return False
+
+
 def head_identity(memory_dir: Path) -> str:
     completed = subprocess.run(
         ["git", "symbolic-ref", "-q", "HEAD"],
@@ -230,7 +265,7 @@ def validate_memory_binding(repo: Path, *, require_clean: bool = False) -> dict[
 
     marker = memory_dir / ".context-os-repository"
     marker_value = read_single_line(marker, "memory repository marker")
-    if marker_value != identity:
+    if not same_directory(marker_value, identity):
         raise ValidationError(
             "memory repository marker does not match this repository identity"
         )

@@ -1,8 +1,22 @@
 import json
 import re
 import subprocess
+import sys
 import unittest
 from pathlib import Path
+
+# Shell out to the interpreter running these tests, never a bare "python3".
+#
+# On Windows "python3" resolves to the Microsoft Store App Execution Alias — a
+# stub that prints "Python was not found; run without arguments to install from
+# the Microsoft Store" and exits WITHOUT running Python. Every test that shells
+# out then reads empty stdout and dies on json.loads(""), which surfaces as
+# "Expecting value: line 1 column 1 (char 0)" and looks like a helper bug rather
+# than a missing interpreter. That took out 34 of 89 tests.
+#
+# sys.executable is also correct on POSIX and in a venv, where a bare "python3"
+# can be a DIFFERENT interpreter than the one running the suite.
+PYTHON = sys.executable
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -306,7 +320,7 @@ class DocumentationPositioningTests(unittest.TestCase):
         ):
             result = subprocess.run(
                 [
-                    "python3",
+                    PYTHON,
                     "tests/validate-openai-metadata.py",
                     "--command",
                     f".claude/commands/{name}.md",
