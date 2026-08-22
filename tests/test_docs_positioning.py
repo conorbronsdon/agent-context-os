@@ -44,8 +44,9 @@ class DocumentationPositioningTests(unittest.TestCase):
     def test_repository_name_is_preserved_without_neutral_parity_overclaim(self) -> None:
         readme = self.text("README.md")
         self.assertIn("# Context OS", readme)
-        self.assertIn("conorbronsdon/claude-context-os.git", readme)
-        self.assertNotIn("agent-context-os", readme)
+        # Renamed claude-context-os -> agent-context-os (Aug 2026); old URLs redirect.
+        self.assertIn("conorbronsdon/agent-context-os.git", readme)
+        self.assertNotIn("claude-context-os", readme)
 
     def test_getting_started_keeps_mutations_opt_in(self) -> None:
         guide = self.text("docs/getting-started.md")

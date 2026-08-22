@@ -171,7 +171,7 @@ if python3 tests/validate-openai-metadata.py --command "$duplicate_gate" dream >
 fi
 
 help_output=$(bash scripts/setup.sh --help)
-grep -Fq -- '--agent auto|claude|codex|none' <<<"$help_output" || fail "setup help does not describe agent selection"
+grep -Fq -- '--agent auto|claude|codex|hermes|cursor|openclaw|none' <<<"$help_output" || fail "setup help does not describe agent selection"
 if bash scripts/setup.sh --agent invalid >/dev/null 2>&1; then
   fail "setup accepted an invalid agent"
 fi
@@ -242,7 +242,7 @@ grep -Fq 'autoMemoryEnabled: false' <<<"$memory_notice_output" || fail "local Cl
 
 template_fixture="$portability_tmp/template-remote"
 make_setup_fixture "$template_fixture"
-git -C "$template_fixture" remote set-url origin https://github.com/conorbronsdon/claude-context-os.git
+git -C "$template_fixture" remote set-url origin https://github.com/conorbronsdon/agent-context-os.git
 template_output=$(printf 'y\n\n\n\nn\nn\nn\n' | (cd "$template_fixture" && bash scripts/setup.sh --agent none))
 grep -Fq 'Your git remote still points to the template repo' <<<"$template_output" || fail "template remote replacement path was not offered"
 warning_line=$(grep -n 'This workspace can contain identity' scripts/setup.sh | cut -d: -f1)

@@ -2,9 +2,7 @@
 
 ## Product name
 
-Use **Context OS** as the product name. Keep `claude-context-os` as the repository slug for link continuity unless a later rename has a clear migration plan.
-
-`agent-context-os` is more provider-neutral than the current slug, but it makes the agent the subject. The product is the context layer: the files, provenance, routing, review gates, and maintenance loop that remain useful when the active agent changes.
+The product name and the repository slug are both **Context OS** (`agent-context-os`). The repository was renamed from `claude-context-os` in August 2026; old GitHub URLs redirect automatically.
 
 ## One-line description
 

@@ -4,7 +4,7 @@ Drafts only. Review links, release status, and platform length before publishing
 
 ## Main announcement
 
-I built `claude-context-os` because I was tired of rebuilding the same context across chats, projects, and coding agents.
+I built `agent-context-os` because I was tired of rebuilding the same context across chats, projects, and coding agents.
 
 The project now has a clearer public name: Context OS.
 
@@ -21,11 +21,11 @@ The new integration catalog is opt-in and explicit about what each add-on can re
 
 If your AI context is scattered across five places and slowly going stale, this is the problem I want Context OS to solve.
 
-https://github.com/conorbronsdon/claude-context-os
+https://github.com/conorbronsdon/agent-context-os
 
 ## Short announcement
 
-`claude-context-os` is now Context OS: a Git-backed context and workflow layer for Claude Code and Codex.
+`agent-context-os` is now Context OS: a Git-backed context and workflow layer for Claude Code and Codex.
 
 New in this release:
 
@@ -36,7 +36,7 @@ New in this release:
 
 Your durable context stays in files you can inspect, version, and move.
 
-https://github.com/conorbronsdon/claude-context-os
+https://github.com/conorbronsdon/agent-context-os
 
 ## Changelog post
 
@@ -48,4 +48,4 @@ The optional integration catalog now covers portable skill collections and creat
 
 I also rewrote the onboarding and migration docs around the actual user journey: bring forward selected context, choose a host, add only the tools you need, and keep the result current.
 
-https://github.com/conorbronsdon/claude-context-os
+https://github.com/conorbronsdon/agent-context-os

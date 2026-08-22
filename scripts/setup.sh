@@ -13,7 +13,7 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --agent)
       if [ "$#" -lt 2 ]; then
-        echo "Usage: bash scripts/setup.sh [--agent auto|claude|codex|none]" >&2
+        echo "Usage: bash scripts/setup.sh [--agent auto|claude|codex|hermes|cursor|openclaw|none]" >&2
         exit 2
       fi
       AGENT_TARGET="$2"
@@ -24,22 +24,22 @@ while [ "$#" -gt 0 ]; do
       shift
       ;;
     -h|--help)
-      echo "Usage: bash scripts/setup.sh [--agent auto|claude|codex|none]"
+      echo "Usage: bash scripts/setup.sh [--agent auto|claude|codex|hermes|cursor|openclaw|none]"
       exit 0
       ;;
     *)
       echo "Unknown argument: $1" >&2
-      echo "Usage: bash scripts/setup.sh [--agent auto|claude|codex|none]" >&2
+      echo "Usage: bash scripts/setup.sh [--agent auto|claude|codex|hermes|cursor|openclaw|none]" >&2
       exit 2
       ;;
   esac
 done
 
 case "$AGENT_TARGET" in
-  auto|claude|codex|none) ;;
+  auto|claude|codex|hermes|cursor|openclaw|none) ;;
   *)
     echo "Invalid --agent value: $AGENT_TARGET" >&2
-    echo "Expected one of: auto, claude, codex, none" >&2
+    echo "Expected one of: auto, claude, codex, hermes, cursor, openclaw, none" >&2
     exit 2
     ;;
 esac
@@ -118,7 +118,7 @@ fi
 echo ""
 CURRENT_REMOTE=$(git remote get-url origin 2>/dev/null || echo "")
 
-if echo "$CURRENT_REMOTE" | grep -q "claude-context-os"; then
+if echo "$CURRENT_REMOTE" | grep -q "agent-context-os"; then
   echo "  Your git remote still points to the template repo."
   echo "  A replacement remote is optional; the privacy boundary above still applies."
   echo ""
@@ -210,6 +210,30 @@ else
   echo "    Optional: codex — see docs/codex-onboarding.md"
 fi
 
+HERMES_FOUND=false
+if command -v hermes &>/dev/null; then
+  echo "    Found: hermes"
+  HERMES_FOUND=true
+else
+  echo "    Optional: hermes — see AGENTS.md (Hermes Agent section)"
+fi
+
+CURSOR_FOUND=false
+if command -v cursor-agent &>/dev/null || command -v cursor &>/dev/null; then
+  echo "    Found: cursor"
+  CURSOR_FOUND=true
+else
+  echo "    Optional: cursor (Cursor CLI)"
+fi
+
+OPENCLAW_FOUND=false
+if command -v openclaw &>/dev/null; then
+  echo "    Found: openclaw"
+  OPENCLAW_FOUND=true
+else
+  echo "    Optional: openclaw"
+fi
+
 if command -v git &>/dev/null; then
   echo "    Found: git"
 else
@@ -276,6 +300,8 @@ if [ "$SELECTED_AGENT" = "auto" ]; then
     SELECTED_AGENT="claude"
   elif [ "$CODEX_FOUND" = true ]; then
     SELECTED_AGENT="codex"
+  elif [ "$HERMES_FOUND" = true ]; then
+    SELECTED_AGENT="hermes"
   else
     SELECTED_AGENT="none"
   fi
@@ -308,9 +334,45 @@ case "$SELECTED_AGENT" in
       exec codex
     fi
     ;;
+  hermes)
+    printf '  1. cd %q && hermes\n' "$REPO_ROOT"
+    echo "  2. Hermes reads AGENTS.md automatically; ask it to run the context-setup"
+    echo "     skill (install the .agents/skills/ lifecycle skills first if you have"
+    echo "     not: hermes skills install .agents/skills/context-setup and siblings)."
+    echo "     See AGENTS.md (Hermes Agent section) and docs/memory-across-agents.md."
+    echo ""
+    if [ "$HERMES_FOUND" = true ] && prompt_yn "  Launch Hermes now?" "y"; then
+      cd "$REPO_ROOT"
+      exec hermes
+    fi
+    ;;
+  cursor)
+    printf '  1. cd %q\n' "$REPO_ROOT"
+    echo "  2. Open the repository in Cursor; Cursor reads AGENTS.md from the"
+    echo "     repository root. The portable lifecycle skills in .agents/skills/"
+    echo "     can be pasted or referenced in Cursor rules as needed."
+    echo ""
+    if [ "$CURSOR_FOUND" = true ] && prompt_yn "  Launch Cursor CLI now?" "y"; then
+      cd "$REPO_ROOT"
+      if command -v cursor-agent &>/dev/null; then exec cursor-agent; else exec cursor; fi
+    fi
+    ;;
+  openclaw)
+    printf '  1. cd %q && openclaw\n' "$REPO_ROOT"
+    echo "  2. OpenClaw reads AGENTS.md and agentskills.io-compatible skills from"
+    echo "     .agents/skills/. See AGENTS.md for the session loop."
+    echo ""
+    if [ "$OPENCLAW_FOUND" = true ] && prompt_yn "  Launch OpenClaw now?" "y"; then
+      cd "$REPO_ROOT"
+      exec openclaw
+    fi
+    ;;
   none)
     printf '  Claude Code: cd %q && claude, then run /setup\n' "$REPO_ROOT"
     printf '  Codex:       cd %q && codex, then run $context-setup\n' "$REPO_ROOT"
+    printf '  Hermes:      cd %q && hermes (reads AGENTS.md; see AGENTS.md Hermes section)\n' "$REPO_ROOT"
+    printf '  Cursor:      cd %q and open in Cursor (reads AGENTS.md)\n' "$REPO_ROOT"
+    printf '  OpenClaw:    cd %q && openclaw (reads AGENTS.md + .agents/skills/)\n' "$REPO_ROOT"
     echo "  claude.ai:   open SETUP-PROMPTS.md and paste the prompts there"
     echo "  Guide:       docs/getting-started.md"
     echo ""

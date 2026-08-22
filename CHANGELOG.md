@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+- **Repository renamed `claude-context-os` → `agent-context-os`.** Self-references updated across the README (badges, clone commands, UTM), docs, setup remote check, test fixtures, and the og-image SVG; old GitHub URLs redirect automatically. Re-render and re-upload `docs/assets/og-image.png` via Settings → Social preview.
+- Added first-class Hermes Agent support: an AGENTS.md Hermes section (Hermes loads `AGENTS.md` as project rules), a memory-mapping guide (`docs/memory-across-agents.md`) covering native Hermes memory and its Curator versus repository state and `/dream`, a hooks-equivalents note, and a new [memory across agents](docs/memory-across-agents.md) README row in host support.
+- `scripts/setup.sh` now detects and offers to launch Claude Code, Codex, Hermes, Cursor CLI, or OpenClaw (`--agent auto|claude|codex|hermes|cursor|openclaw|none`), with per-host next steps.
+
 ### Added
 - Reviewed optional entries for the official GitHub, Linear, and Readwise MCP servers, including read-only starting profiles and explicit sensitive-read, remote-write, publish, overwrite, deletion, OAuth, and destructive confirmation gates.
 - Source-neutral onboarding and migration docs for ChatGPT, Claude, Gemini, and other assistants, with a reviewed migration-packet format and optional import handling in `$context-setup`.

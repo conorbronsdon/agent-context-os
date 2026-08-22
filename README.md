@@ -4,11 +4,11 @@
 
 A Git-backed context and workflow layer for Claude Code and Codex.
 
-[![GitHub stars](https://img.shields.io/github/stars/conorbronsdon/claude-context-os?style=social)](https://github.com/conorbronsdon/claude-context-os/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/conorbronsdon/agent-context-os?style=social)](https://github.com/conorbronsdon/agent-context-os/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-ready-d97757?style=flat-square)](https://docs.anthropic.com/en/docs/claude-code)
 [![Codex](https://img.shields.io/badge/Codex-ready-111827?style=flat-square)](docs/codex-onboarding.md)
-[![Validate](https://github.com/conorbronsdon/claude-context-os/actions/workflows/validate.yml/badge.svg)](https://github.com/conorbronsdon/claude-context-os/actions/workflows/validate.yml)
+[![Validate](https://github.com/conorbronsdon/agent-context-os/actions/workflows/validate.yml/badge.svg)](https://github.com/conorbronsdon/agent-context-os/actions/workflows/validate.yml)
 [![X](https://img.shields.io/badge/X-@ConorBronsdon-black?style=flat-square&logo=x)](https://x.com/ConorBronsdon)
 
 </div>
@@ -31,7 +31,7 @@ Context OS does not scrape every account, sync product UIs automatically, or ins
 Personal and business context often belongs in a private repository. Create an empty private repository first if that applies to you, and never commit credentials or a raw account export.
 
 ```bash
-git clone https://github.com/conorbronsdon/claude-context-os.git my-context
+git clone https://github.com/conorbronsdon/agent-context-os.git my-context
 cd my-context
 
 # Recommended for a private copy:
@@ -95,7 +95,9 @@ The guide covers ChatGPT, Claude, Gemini Apps, Gemini CLI, and a generic path fo
 |---|---|
 | Claude Code | Full experience: shared lifecycle, slash-command adapters, hooks, optional live reads, and Claude-only auto-memory curation |
 | Codex | First-class shared lifecycle and repository skills; no claim of Claude hook or auto-memory parity |
+| Hermes Agent | Reads `AGENTS.md` automatically; installs the portable lifecycle skills as slash commands (`hermes skills install`); native memory mapping in [memory across agents](docs/memory-across-agents.md); no Claude hook or auto-memory parity |
 | Gemini CLI / Antigravity CLI | Migration tooling plus portable-skill discovery for continuing enterprise/API-key Gemini CLI; no complete workspace adapter, and no Antigravity discovery or permission parity is claimed |
+| Cursor / OpenClaw | Read `AGENTS.md` from the repository root; portable skills usable where their Agent Skills support allows |
 | claude.ai | Manual consumer of selected knowledge files; no repository writes, hooks, or slash-command parity |
 | Other agents | Can use the Markdown state and portable skills only when their file and Agent Skills support is compatible |
 
@@ -172,6 +174,7 @@ CI runs the same aggregate validator. It checks structure, adapter mappings, lin
 | Install and choose a host | [Getting started](docs/getting-started.md) |
 | Import useful context from another system | [Migration guide](docs/migration-guide.md) |
 | Use the repository in Codex | [Codex onboarding](docs/codex-onboarding.md) |
+| Use the repository in Hermes Agent | [Memory across agents](docs/memory-across-agents.md) and the Hermes section of [AGENTS.md](AGENTS.md) |
 | Keep claude.ai projects aligned | [Claude projects sync](docs/claude-projects-sync.md) |
 | See every command and portable skill | [Commands and skills](docs/commands-and-skills.md) |
 | Choose an optional add-on | [Integration chooser](docs/integrations-guide.md) and [catalog](references/integrations.md) |
@@ -185,7 +188,7 @@ This is a template. Structural contributions, clearer conventions, and reusable 
 
 ## Used by
 
-- [Conor Bronsdon](https://github.com/conorbronsdon), host of the [Chain of Thought podcast](https://chainofthought.show/?utm_source=github&utm_medium=referral&utm_campaign=repo-readme&utm_content=claude-context-os)
+- [Conor Bronsdon](https://github.com/conorbronsdon), host of the [Chain of Thought podcast](https://chainofthought.show/?utm_source=github&utm_medium=referral&utm_campaign=repo-readme&utm_content=agent-context-os)
 
 Using the template? Open a PR to add yourself.
 

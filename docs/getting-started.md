@@ -13,7 +13,7 @@ Decide where the repository will live. If it will contain personal, client, empl
 Clone the public template:
 
 ```bash
-git clone https://github.com/conorbronsdon/claude-context-os.git my-context
+git clone https://github.com/conorbronsdon/agent-context-os.git my-context
 cd my-context
 ```
 

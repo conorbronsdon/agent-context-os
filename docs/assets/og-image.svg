@@ -34,7 +34,7 @@
   <text x="80" y="514" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="24" fill="#9aa3b8">+ Start &#8594; work &#8594; reviewed handoff</text>
 
   <!-- footer -->
-  <text x="80" y="588" font-family="JetBrains Mono, Fira Code, Menlo, monospace" font-size="22" fill="#6e7898">github.com/conorbronsdon/claude-context-os</text>
+  <text x="80" y="588" font-family="JetBrains Mono, Fira Code, Menlo, monospace" font-size="22" fill="#6e7898">github.com/conorbronsdon/agent-context-os</text>
 
   <!-- terminal cursor -->
   <rect x="1170" y="568" width="14" height="26" fill="#7c5cff">

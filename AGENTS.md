@@ -28,8 +28,17 @@ These skills are deliberately explicit-invocation workflows. Do not start, check
 ## Portability boundary
 
 - `.agents/skills/` contains the portable workflow cores.
-- `.claude/` contains Claude Code commands, hooks, settings, and memory adapters. Do not assume those features run in Codex.
+- `.claude/` contains Claude Code commands, hooks, settings, and memory adapters. Do not assume those features run in Codex or Hermes.
 - Do not commit personal Codex configuration or credentials. Keep machine-level configuration outside this repository.
+
+## Hermes Agent
+
+Hermes Agent reads this repository's instructions automatically:
+
+- Project rules: Hermes loads `AGENTS.md` from the working directory into every session in this repository. This file is the portable entry point; `CLAUDE.md` remains Claude Code-specific.
+- Session loop: the four lifecycle skills (`context-setup`, `context-start`, `context-update`, `context-end`) under `.agents/skills/` are agentskills.io-compatible SKILL.md files. Install them with `hermes skills install <path>` (or import via `hermes import-agent claude-code`, which picks up skill directories), then invoke them as `/context-start`, `/context-update`, and `/context-end`.
+- Memory: Hermes has its own persistent memory (`MEMORY.md`) plus a background Curator. See `docs/memory-across-agents.md` for how this repository's state layer relates to native Hermes memory, and when to run `/dream` equivalents.
+- Hooks: the checked-in `.claude/hooks/` guards do not run under Hermes. Hermes' equivalent is its plugin/hooks system (`hermes config get plugins`, docs: Features → Hooks); the safety contract in `docs/safety-contract.md` still applies as instructions even without enforcement.
 
 ## Validation
 
