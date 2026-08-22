@@ -37,9 +37,16 @@ fi
 
 TEMP_ROOT=$(mktemp -d)
 trap 'rm -rf "$TEMP_ROOT"' EXIT
-TEST_REPO="$TEMP_ROOT/guarded-repo"
+# Native git needs a Windows path, but MSYS PATH entries must stay POSIX or
+# Windows binaries shadow the fixture stubs. Keep both forms.
+if command -v cygpath >/dev/null 2>&1; then
+  TEMP_ROOT_WIN=$(cygpath -m "$TEMP_ROOT")
+else
+  TEMP_ROOT_WIN=$TEMP_ROOT
+fi
+TEST_REPO="$TEMP_ROOT_WIN/guarded-repo"
 mkdir -p "$TEST_REPO/.claude/hooks" "$TEMP_ROOT/bin"
-git -C "$TEMP_ROOT" init -q -b main guarded-repo
+git -C "$TEMP_ROOT_WIN" init -q -b main guarded-repo
 cp "$ROOT/.claude/hooks/worktree-guard.sh" "$TEST_REPO/.claude/hooks/worktree-guard.sh"
 printf 'guarded-repo\r\n' > "$TEST_REPO/.claude/hooks/guarded-repos.txt"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "claude.exe one\\nclaude.exe two\\n"' > "$TEMP_ROOT/bin/tasklist"
