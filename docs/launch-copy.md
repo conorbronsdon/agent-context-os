@@ -42,7 +42,7 @@ https://github.com/conorbronsdon/agent-context-os
 
 Context OS update:
 
-Codex is now a first-class path, not a fork. The same repository state powers `$context-setup`, `$context-start`, `$context-update`, and `$context-end`, while Claude Code keeps its slash-command adapters.
+Codex is now a first-class path, not a fork. The same repository state powers `$setup`, `$start`, `$update`, and `$end`, while Claude Code keeps its slash-command adapters.
 
 The optional integration catalog now covers portable skill collections and creator tools, plus reviewed paths for Tolaria, Obsidian, Beads, Granola, Google Workspace, Notion, and Substack. Each entry declares data access, side effects, confirmation gates, evidence, health checks, and uninstall behavior.
 

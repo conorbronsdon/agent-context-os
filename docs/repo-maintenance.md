@@ -4,7 +4,7 @@ Context is useful only when it is current, scoped, and safe to load. Maintenance
 
 ## Every working session
 
-Use `/start` and `/end` in Claude Code, or `$context-start` and `$context-end` in Codex. The close workflow proposes a handoff before updating shared state.
+Use `/start` and `/end` in Claude Code, or `$start` and `$end` in Codex. The close workflow proposes a handoff before updating shared state.
 
 Before committing:
 

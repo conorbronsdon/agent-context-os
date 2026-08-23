@@ -55,7 +55,7 @@ class DocumentationPositioningTests(unittest.TestCase):
             "Each optional change is prompted",
             "Avoid bulk ingestion",
             "Core setup requires no external integration",
-            "$context-setup",
+            "$setup",
             "/setup",
             "private remote",
             "Antigravity",

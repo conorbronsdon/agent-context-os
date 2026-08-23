@@ -16,6 +16,7 @@ test -f state/current-log.md || fail "missing current.md history seed"
 
 skills=(context-setup context-start context-update context-end)
 commands=(setup start update end)
+aliases=(setup start update end)
 
 for index in "${!skills[@]}"; do
   skill="${skills[$index]}"
@@ -41,6 +42,20 @@ for index in "${!skills[@]}"; do
   fi
 done
 
+for index in "${!aliases[@]}"; do
+  alias_name="${aliases[$index]}"
+  core_name="${skills[$index]}"
+  alias_file=".agents/skills/$alias_name/SKILL.md"
+  metadata_file=".agents/skills/$alias_name/agents/openai.yaml"
+
+  test -f "$alias_file" || fail "missing $alias_file"
+  test -f "$metadata_file" || fail "missing $metadata_file"
+  grep -qx "name: $alias_name" "$alias_file" || fail "$alias_file name does not match its directory"
+  grep -Fq "../$core_name/SKILL.md" "$alias_file" || fail "$alias_file does not route to $core_name"
+  python3 tests/validate-openai-metadata.py "$metadata_file" "$alias_name" || fail "$metadata_file failed schema validation"
+  [ "$(wc -l < "$alias_file")" -le 15 ] || fail "$alias_file is no longer a thin alias"
+done
+
 for command in "${commands[@]}"; do
   lines=$(wc -l < ".claude/commands/$command.md")
   [ "$lines" -le 40 ] || fail ".claude/commands/$command.md is no longer a thin adapter"
@@ -62,6 +77,10 @@ grep -qx 'allowed-tools: "Read, Glob, Grep"' .claude/commands/find-context.md \
 
 for skill in "${skills[@]}"; do
   grep -Fq "\$$skill" AGENTS.md || fail "AGENTS.md does not route to \$$skill"
+done
+
+for alias_name in "${aliases[@]}"; do
+  grep -Fq "\$$alias_name" AGENTS.md || fail "AGENTS.md does not route to \$$alias_name"
 done
 
 while IFS= read -r portable_skill; do

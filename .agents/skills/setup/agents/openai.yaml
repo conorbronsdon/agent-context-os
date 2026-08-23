@@ -1,0 +1,6 @@
+interface:
+  display_name: "Setup"
+  short_description: "Build or import durable workspace context"
+  default_prompt: "Use $setup to initialize this workspace through a guided review."
+policy:
+  allow_implicit_invocation: false

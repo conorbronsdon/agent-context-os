@@ -4,12 +4,14 @@ This repository is the durable source of truth for personal, project, and sessio
 
 ## Session lifecycle
 
-- First-time onboarding: use `$context-setup`.
-- Begin work: use `$context-start`.
-- Save a mid-session checkpoint: use `$context-update`.
-- Close a session: use `$context-end`.
+- First-time onboarding: use `$setup`.
+- Begin work: use `$start`.
+- Save a mid-session checkpoint: use `$update`.
+- Close a session: use `$end`.
 
 These skills are deliberately explicit-invocation workflows. Do not start, checkpoint, or close a session merely because their descriptions seem relevant.
+The namespaced `$context-setup`, `$context-start`, `$context-update`, and
+`$context-end` forms remain supported compatibility names.
 
 ## Context routing
 
@@ -36,7 +38,7 @@ These skills are deliberately explicit-invocation workflows. Do not start, check
 Hermes Agent reads this repository's instructions automatically:
 
 - Project rules: Hermes loads `AGENTS.md` from the working directory into every session in this repository. This file is the portable entry point; `CLAUDE.md` remains Claude Code-specific.
-- Session loop: the four lifecycle skills (`context-setup`, `context-start`, `context-update`, `context-end`) under `.agents/skills/` are agentskills.io-compatible SKILL.md files. Install them with `hermes skills install <path>` (or import via `hermes import-agent claude-code`, which picks up skill directories), then invoke them as `/context-start`, `/context-update`, and `/context-end`.
+- Session loop: the lifecycle skills under `.agents/skills/` are agentskills.io-compatible SKILL.md files. Install the short `setup`, `start`, `update`, and `end` aliases with `hermes skills install <path>` (or import via `hermes import-agent claude-code`, which picks up skill directories), then invoke them as `/start`, `/update`, and `/end`. The `context-*` directories remain the canonical workflow cores and compatibility names.
 - Memory: Hermes has its own persistent memory (`MEMORY.md`) plus a background Curator. See `docs/memory-across-agents.md` for how this repository's state layer relates to native Hermes memory, and when to run `/dream` equivalents.
 - Hooks: the checked-in `.claude/hooks/` guards do not run under Hermes. Hermes' equivalent is its plugin/hooks system (`hermes config get plugins`, docs: Features → Hooks); the safety contract in `docs/safety-contract.md` still applies as instructions even without enforcement.
 

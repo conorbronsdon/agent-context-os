@@ -106,4 +106,4 @@ Present:
 
 Wait for approval, then apply only the approved changes. Run `bash scripts/validate-all.sh` and report the result. Offer a commit only after the user reviews the diff.
 
-Finish by suggesting `$context-start` for the next working session and `$context-end` when that session is complete.
+Finish by suggesting `$start` for the next working session and `$end` when that session is complete.

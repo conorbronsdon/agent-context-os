@@ -1,0 +1,6 @@
+interface:
+  display_name: "Start"
+  short_description: "Load state and brief the next work session"
+  default_prompt: "Use $start to load this workspace and brief me on what matters now."
+policy:
+  allow_implicit_invocation: false

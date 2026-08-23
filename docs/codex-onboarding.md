@@ -13,17 +13,17 @@ bash scripts/setup.sh --agent codex
 Then launch Codex from the repository root and invoke the onboarding skill explicitly:
 
 ```text
-$context-setup
+$setup
 ```
 
 Codex discovers the root [`AGENTS.md`](../AGENTS.md) and repository skills automatically. The lifecycle is:
 
 | Moment | Codex skill | Shared result |
 |---|---|---|
-| First run or major refresh | `$context-setup` | Identity, projects, reusable workflows, and weekly state |
-| Start work | `$context-start` | Briefing from repository state and recent sessions |
-| Mid-session | `$context-update` | Append-only checkpoint and minimal state change |
-| Finish work | `$context-end` | Reviewed session log, state updates, decisions, and git safety report |
+| First run or major refresh | `$setup` | Identity, projects, reusable workflows, and weekly state |
+| Start work | `$start` | Briefing from repository state and recent sessions |
+| Mid-session | `$update` | Append-only checkpoint and minimal state change |
+| Finish work | `$end` | Reviewed session log, state updates, decisions, and git safety report |
 
 The four lifecycle skills disable implicit invocation. This prevents an agent from opening, checkpointing, or closing a session merely because a prompt resembles the workflow.
 
@@ -44,7 +44,7 @@ Commit these files only when they are appropriate for the repository's visibilit
 |---|---:|---:|---|
 | Repository state and session logs | Yes | No | Read and update through the lifecycle skills |
 | Lifecycle workflow core | Yes | No | `.agents/skills/context-*` |
-| Slash commands | No | Yes | Invoke `$context-*` skills instead |
+| Slash commands | No | Yes | Invoke `$setup`, `$start`, `$update`, or `$end` instead |
 | Checked-in hooks and settings | No | Yes | No equivalence is claimed |
 | Claude auto-memory and `/dream` | No | Yes | Use repository `state/` and `sessions/` for shared continuity |
 | Personal agent configuration | No | No | Keep it outside the repository |

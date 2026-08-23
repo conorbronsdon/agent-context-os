@@ -28,7 +28,7 @@ If `workspace.yaml` exists, use its state and sessions directories. Otherwise us
    - let `old_date` be the prior real date and `newest_history_date` be the newest date already in the log; archive only when `old_date != today && old_date != newest_history_date`;
    - when that invariant passes, prepend a separate line containing `old_date` under `# current.md update log` in `<state_dir>/current-log.md`; and
    - never log a placeholder. A second checkpoint or close on the same day therefore leaves both the current date and history unchanged.
-5. If a durable decision was made, mention that `$context-end` can add it to the decision log; do not expand a quick checkpoint into a full close workflow.
+5. If a durable decision was made, mention that `$end` can add it to the decision log; do not expand a quick checkpoint into a full close workflow.
 6. Confirm in one line what was checkpointed and which files changed.
 
 Do not invent progress or touch files solely to refresh their timestamps.

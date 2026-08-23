@@ -4,9 +4,9 @@ Maintenance should keep context accurate and permissions narrow without creating
 
 ## Every working session
 
-1. Run `/start` in Claude Code or `$context-start` in Codex.
-2. Use `/update` or `$context-update` only when a long session needs a durable handoff.
-3. Finish with `/end` or `$context-end` and review the proposed session/state diff.
+1. Run `/start` in Claude Code or `$start` in Codex.
+2. Use `/update` or `$update` only when a long session needs a durable handoff.
+3. Finish with `/end` or `$end` and review the proposed session/state diff.
 4. Inspect `git status` and the exact diff. Commit or push only after a separate approval and remote-audience check.
 
 ## Weekly

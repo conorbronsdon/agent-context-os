@@ -6,12 +6,15 @@ This index separates portable workflow cores from host-specific adapters. A comm
 
 | Job | Claude Code | Codex | Effects and prerequisites |
 |---|---|---|---|
-| Initialize context | `/setup` | `$context-setup` | Proposes identity, project, state, routing, and approved workflow files; review before writes |
-| Start a session | `/start` | `$context-start` | Repository reads only; no live external data or authentication by default |
-| Checkpoint | `/update` | `$context-update` | Writes a reviewed session checkpoint and minimal current state |
-| Close a session | `/end` | `$context-end` | Writes a reviewed handoff, state, and decisions; Claude may separately propose host-local memory |
+| Initialize context | `/setup` | `$setup` (`$context-setup` compatibility) | Proposes identity, project, state, routing, and approved workflow files; review before writes |
+| Start a session | `/start` | `$start` (`$context-start` compatibility) | Repository reads only; no live external data or authentication by default |
+| Checkpoint | `/update` | `$update` (`$context-update` compatibility) | Writes a reviewed session checkpoint and minimal current state |
+| Close a session | `/end` | `$end` (`$context-end` compatibility) | Writes a reviewed handoff, state, and decisions; Claude may separately propose host-local memory |
 
-The portable sources are `.agents/skills/context-setup`, `context-start`, `context-update`, and `context-end`. Claude Code files are thin adapters. All four require explicit user invocation.
+The portable workflow cores are `.agents/skills/context-setup`, `context-start`,
+`context-update`, and `context-end`. The matching short skill directories are
+thin compatibility adapters, and Claude Code files are host-specific adapters.
+Both naming forms require explicit user invocation.
 
 ## Portable migration
 

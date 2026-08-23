@@ -61,7 +61,7 @@ claude
 codex
 ```
 
-Run `/setup` in Claude Code or `$context-setup` in Codex. The guided interview asks one question at a time, proposes a file map, and waits before changing populated files.
+Run `/setup` in Claude Code or `$setup` in Codex. The guided interview asks one question at a time, proposes a file map, and waits before changing populated files.
 
 ### Bring existing context
 
@@ -97,9 +97,9 @@ Commit and push only after the diff matches what you intend to preserve.
 
 | Moment | Claude Code | Codex |
 |---|---|---|
-| Start work | `/start` | `$context-start` |
-| Save progress without closing | `/update` | `$context-update` |
-| End with a reviewed handoff | `/end` | `$context-end` |
+| Start work | `/start` | `$start` |
+| Save progress without closing | `/update` | `$update` |
+| End with a reviewed handoff | `/end` | `$end` |
 
 The lifecycle writes shared continuity to `state/` and `sessions/`. Claude Code has additional host-specific hooks, commands, and auto-memory features. The [Codex onboarding guide](codex-onboarding.md) documents the exact boundary.
 

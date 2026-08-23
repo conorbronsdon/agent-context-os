@@ -48,7 +48,7 @@ Then start your agent from the repository root:
 | Starting point | Next action |
 |---|---|
 | New workspace in Claude Code | Run `/setup` |
-| New workspace in Codex | Run `$context-setup` |
+| New workspace in Codex | Run `$setup` |
 | Existing context in another assistant | Follow the [migration guide](docs/migration-guide.md), then use the selected material during setup |
 | claude.ai only | Use [SETUP-PROMPTS.md](SETUP-PROMPTS.md) and copy the approved output into the repository |
 
@@ -58,9 +58,9 @@ The setup interview fills the identity, first project, workflows, and weekly sta
 
 ![A start session in Claude Code: state files load and a session briefing comes back, using sample data from the included example musician project](docs/assets/start-demo.gif)
 
-`/start` in Claude Code and `$context-start` in Codex read your state, priorities, decisions, blockers, and recent handoff. The result is a working briefing grounded in files, not a request to reconstruct everything from chat.
+`/start` in Claude Code and `$start` in Codex read your state, priorities, decisions, blockers, and recent handoff. The result is a working briefing grounded in files, not a request to reconstruct everything from chat.
 
-At the end, `/end` or `$context-end` proposes a handoff for review before it updates `sessions/` and `state/`.
+At the end, `/end` or `$end` proposes a handoff for review before it updates `sessions/` and `state/`. The namespaced `$context-end` form remains supported.
 
 <sub>The GIF is scripted with sample data. [`docs/start-demo.tape`](docs/start-demo.tape) regenerates it, and [`docs/demo/start-session.sh`](docs/demo/start-session.sh) contains the transcript. Neither reads your state or calls a model.</sub>
 
@@ -70,10 +70,13 @@ Start small. Use the core loop for a week, add one active project, then turn a r
 
 | Moment | Claude Code | Codex | Shared result |
 |---|---|---|---|
-| First run or major refresh | `/setup` | `$context-setup` | Identity, projects, workflows, and weekly state |
-| Start work | `/start` | `$context-start` | Briefing from current state and recent sessions |
-| Save a checkpoint | `/update` | `$context-update` | Short session update with minimal state churn |
-| Finish work | `/end` | `$context-end` | Reviewed handoff, state updates, decisions, and git safety report |
+| First run or major refresh | `/setup` | `$setup` | Identity, projects, workflows, and weekly state |
+| Start work | `/start` | `$start` | Briefing from current state and recent sessions |
+| Save a checkpoint | `/update` | `$update` | Short session update with minimal state churn |
+| Finish work | `/end` | `$end` | Reviewed handoff, state updates, decisions, and git safety report |
+
+The namespaced `$context-setup`, `$context-start`, `$context-update`, and
+`$context-end` invocations remain available for compatibility.
 
 Claude Code also ships host-specific commands for capture, daily checks, recovery, context search, and auto-memory curation. The [host boundary](docs/codex-onboarding.md#host-specific-boundaries) names what is portable and what is not.
 
@@ -106,7 +109,7 @@ The guide covers ChatGPT, Claude, Gemini Apps, Gemini CLI, and a generic path fo
 | Capability | Shared | Claude Code adapter | Codex adapter |
 |---|---:|---:|---:|
 | Identity, project, state, and session files | Yes | Reads the repository | Reads the repository |
-| Lifecycle workflow core | Yes | `/setup`, `/start`, `/update`, `/end` | `$context-setup`, `$context-start`, `$context-update`, `$context-end` |
+| Lifecycle workflow core | Yes | `/setup`, `/start`, `/update`, `/end` | `$setup`, `$start`, `$update`, `$end` |
 | Reusable provider-neutral skills | Yes | Thin slash commands when needed | Repository skills under `.agents/skills/` |
 | Checked-in hooks and settings | No | Included | No equivalent claimed |
 | Claude auto-memory and `/dream` | No | Included | Use repository state and sessions for shared continuity |
