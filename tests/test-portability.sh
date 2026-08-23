@@ -29,7 +29,7 @@ for index in "${!skills[@]}"; do
   test -f "$metadata_file" || fail "missing $metadata_file"
   test -f "$command_file" || fail "missing $command_file"
 
-  grep -qx "name: $skill" "$skill_file" || fail "$skill_file name does not match its directory"
+  tr -d '\r' < "$skill_file" | grep -qx "name: $skill" || fail "$skill_file name does not match its directory"
   python3 tests/validate-openai-metadata.py "$metadata_file" "$skill" || fail "$metadata_file failed schema validation"
   grep -Fq ".agents/skills/$skill/SKILL.md" "$command_file" || fail "$command_file does not route to $skill"
   python3 tests/validate-openai-metadata.py --command "$command_file" "$command" || fail "$command_file failed frontmatter validation"
@@ -50,7 +50,7 @@ for index in "${!aliases[@]}"; do
 
   test -f "$alias_file" || fail "missing $alias_file"
   test -f "$metadata_file" || fail "missing $metadata_file"
-  grep -qx "name: $alias_name" "$alias_file" || fail "$alias_file name does not match its directory"
+  tr -d '\r' < "$alias_file" | grep -qx "name: $alias_name" || fail "$alias_file name does not match its directory"
   grep -Fq "../$core_name/SKILL.md" "$alias_file" || fail "$alias_file does not route to $core_name"
   python3 tests/validate-openai-metadata.py "$metadata_file" "$alias_name" || fail "$metadata_file failed schema validation"
   [ "$(wc -l < "$alias_file")" -le 15 ] || fail "$alias_file is no longer a thin alias"
@@ -70,9 +70,9 @@ for command in "${side_effecting_commands[@]}"; do
     || fail ".claude/commands/$command.md failed strict side-effecting frontmatter validation"
 done
 
-grep -qx 'allowed-tools: "Read"' .claude/commands/clean-ai-writing.md \
+tr -d '\r' < .claude/commands/clean-ai-writing.md | grep -qx 'allowed-tools: "Read"' \
   || fail "clean-ai-writing must remain read-only when it is model-invocable"
-grep -qx 'allowed-tools: "Read, Glob, Grep"' .claude/commands/find-context.md \
+tr -d '\r' < .claude/commands/find-context.md | grep -qx 'allowed-tools: "Read, Glob, Grep"' \
   || fail "find-context must not pre-approve Bash when it is model-invocable"
 
 for skill in "${skills[@]}"; do
@@ -97,20 +97,20 @@ done < <(find .agents/skills projects/example-musician/workflow-examples -name S
 test ! -d projects/example-musician/skills || fail "example project still presents a nested skills directory as discoverable"
 
 [ "$(wc -l < AGENTS.md)" -le 100 ] || fail "AGENTS.md should stay under 100 lines"
-grep -Fq 'hooks and settings' docs/codex-onboarding.md || fail "Codex guide must disclose host-only hooks and settings"
-grep -Fq 'auto-memory' docs/codex-onboarding.md || fail "Codex guide must disclose the auto-memory boundary"
+grep -Fq 'repository hooks' docs/codex-onboarding.md || fail "Codex guide must describe repository hooks"
+grep -Fq 'Native memory' docs/codex-onboarding.md || fail "Codex guide must disclose the native-memory boundary"
 grep -Fq '/import' docs/codex-onboarding.md || fail "Codex guide must explain optional import"
 
-grep -Fq 'trusted repository-scoped' docs/codex-onboarding.md || fail "Codex guide must describe supported project configuration accurately"
+grep -Fq '`.codex` layer is trusted' docs/codex-onboarding.md || fail "Codex guide must describe project trust"
 
 setup_skill=.agents/skills/context-setup/SKILL.md
-storage_line=$(grep -n 'Confirm storage and audience before collecting context' "$setup_skill" | cut -d: -f1)
-source_line=$(grep -n 'Choose the starting point' "$setup_skill" | cut -d: -f1)
+storage_line=$(grep -n 'Confirm storage and audience' "$setup_skill" | cut -d: -f1)
+source_line=$(grep -n 'Choose and inspect the starting point' "$setup_skill" | cut -d: -f1)
 test -n "$storage_line" && test -n "$source_line" && test "$storage_line" -lt "$source_line" \
   || fail "portable setup does not confirm storage before reading or collecting context"
-grep -Fq 'does not erase them from git history' "$setup_skill" \
+grep -Fq 'does not erase git history' "$setup_skill" \
   || fail "portable setup omits git-history retention disclosure"
-grep -Fq 'explicitly confirm' "$setup_skill" \
+grep -Fq 'explicitly confirms the audience' "$setup_skill" \
   || fail "portable setup does not require audience confirmation"
 grep -Fq 'auto-memory is enabled by default' .claude/commands/setup.md \
   || fail "Claude setup adapter omits the host auto-memory default"
@@ -154,42 +154,49 @@ if python3 tests/validate-openai-metadata.py "$control_prompt" context-start >/d
   fail "escaped control character passed metadata validation"
 fi
 
+normalized_start="$portability_tmp/normalized-start.md"
+normalized_setup="$portability_tmp/normalized-setup.md"
+normalized_dream="$portability_tmp/normalized-dream.md"
+tr -d '\r' < .claude/commands/start.md > "$normalized_start"
+tr -d '\r' < .claude/commands/setup.md > "$normalized_setup"
+tr -d '\r' < .claude/commands/dream.md > "$normalized_dream"
+
 body_only_command="$portability_tmp/body-only-start.md"
-sed '/^disable-model-invocation: true$/d' .claude/commands/start.md > "$body_only_command"
+sed '/^disable-model-invocation: true$/d' "$normalized_start" > "$body_only_command"
 printf '\ndisable-model-invocation: true\n' >> "$body_only_command"
 if python3 tests/validate-openai-metadata.py --command "$body_only_command" start >/dev/null 2>&1; then
   fail "body-only invocation gate passed command validation"
 fi
 
 unrestricted_start="$portability_tmp/unrestricted-start.md"
-sed 's/^allowed-tools:.*/allowed-tools: [Read, Bash]/' .claude/commands/start.md > "$unrestricted_start"
+sed 's/^allowed-tools:.*/allowed-tools: [Read, Bash]/' "$normalized_start" > "$unrestricted_start"
 if python3 tests/validate-openai-metadata.py --command "$unrestricted_start" start >/dev/null 2>&1; then
   fail "unrestricted inline Bash grant passed command validation"
 fi
 
 wildcard_start="$portability_tmp/wildcard-start.md"
-sed 's/^allowed-tools:.*/allowed-tools: "Read, Glob, Bash(gws drive files list:*)"/' .claude/commands/start.md > "$wildcard_start"
+sed 's/^allowed-tools:.*/allowed-tools: "Read, Glob, Bash(gws drive files list:*)"/' "$normalized_start" > "$wildcard_start"
 if python3 tests/validate-openai-metadata.py --command "$wildcard_start" start >/dev/null 2>&1; then
   fail "gws trailing-wildcard pre-approval passed command validation"
 fi
 
 for bad_scalar in false null 123; do
   typed_command="$portability_tmp/non-string-description-$bad_scalar.md"
-  sed "s/^description:.*/description: $bad_scalar/" .claude/commands/setup.md > "$typed_command"
+  sed "s/^description:.*/description: $bad_scalar/" "$normalized_setup" > "$typed_command"
   if python3 tests/validate-openai-metadata.py --command "$typed_command" setup >/dev/null 2>&1; then
     fail "$bad_scalar command description passed scalar-type validation"
   fi
 done
 
 boolean_tools="$portability_tmp/boolean-tools-start.md"
-sed 's/^allowed-tools:.*/allowed-tools: false/' .claude/commands/start.md > "$boolean_tools"
+sed 's/^allowed-tools:.*/allowed-tools: false/' "$normalized_start" > "$boolean_tools"
 if python3 tests/validate-openai-metadata.py --command "$boolean_tools" start >/dev/null 2>&1; then
   fail "boolean allowed-tools passed scalar-type validation"
 fi
 
 duplicate_gate="$portability_tmp/duplicate-gate-dream.md"
 sed '/^disable-model-invocation: true$/a disable-model-invocation: false' \
-  .claude/commands/dream.md > "$duplicate_gate"
+  "$normalized_dream" > "$duplicate_gate"
 if python3 tests/validate-openai-metadata.py --command "$duplicate_gate" dream >/dev/null 2>&1; then
   fail "duplicate false invocation gate passed command validation"
 fi
@@ -207,7 +214,7 @@ make_setup_fixture() {
   git -C "$destination" init -q
   git -C "$destination" config user.name "Portability Test"
   git -C "$destination" config user.email "portability@example.invalid"
-  git -C "$destination" add -A
+  git -C "$destination" -c core.autocrlf=false add -A
   git -C "$destination" commit -qm baseline
   git -C "$destination" remote add origin https://example.invalid/context.git
 }
@@ -263,7 +270,7 @@ git -C "$no_remote_fixture" diff --quiet || fail "no-remote default-no path wrot
 
 memory_notice_fixture="$portability_tmp/claude-memory-notice"
 make_setup_fixture "$memory_notice_fixture"
-memory_notice_output=$(printf 'y\n\nn\nn\nn\n' | (cd "$memory_notice_fixture" && PATH="$(dirname "$(command -v python3)"):/usr/bin:/bin" bash scripts/setup.sh --agent claude))
+memory_notice_output=$(printf 'y\n\nn\nn\nn\n' | (cd "$memory_notice_fixture" && PATH="$(dirname "$(command -v python3)"):$(dirname "$(command -v git)"):/usr/bin:/bin" bash scripts/setup.sh --agent claude))
 grep -Fq 'auto-memory is enabled by default' <<<"$memory_notice_output" || fail "local Claude onboarding omitted auto-memory default"
 grep -Fq 'Inspect it with /memory' <<<"$memory_notice_output" || fail "local Claude onboarding omitted /memory inspection"
 grep -Fq 'autoMemoryEnabled: false' <<<"$memory_notice_output" || fail "local Claude onboarding omitted opt-out setting"
@@ -277,10 +284,17 @@ warning_line=$(grep -n 'This workspace can contain identity' scripts/setup.sh | 
 name_line=$(grep -n 'Name to place in CLAUDE.md' scripts/setup.sh | cut -d: -f1)
 test -n "$warning_line" && test -n "$name_line" && test "$warning_line" -lt "$name_line" || fail "privacy warning did not precede personalization"
 
-for skill in context-update context-end; do
-  grep -Fq 'current-log.md' ".agents/skills/$skill/SKILL.md" || fail "$skill lacks current.md history handling"
-  grep -Fq '**Last Updated:**' ".agents/skills/$skill/SKILL.md" || fail "$skill lacks current.md timestamp handling"
-  grep -Fq 'old_date != today && old_date != newest_history_date' ".agents/skills/$skill/SKILL.md" || fail "$skill lacks the same-day history invariant"
+for skill in context-setup context-update context-end; do
+  grep -Fq 'python3 -m contextos propose' ".agents/skills/$skill/SKILL.md" || fail "$skill does not route mutation through the kernel"
+  grep -Fq 'python3 -m contextos apply' ".agents/skills/$skill/SKILL.md" || fail "$skill does not route approval through the kernel"
 done
+
+test -f .codex/hooks.json || fail "missing Codex hook adapter"
+test -f adapters/hermes/hooks.example.yaml || fail "missing Hermes hook adapter"
+test -f contextos/__main__.py || fail "missing deterministic lifecycle kernel"
+python3 -m unittest discover -s tests -p 'test_contextos_kernel.py' >/dev/null \
+  || fail "kernel conformance failed"
+python3 -m unittest discover -s tests -p 'test_runtime_manifests.py' >/dev/null \
+  || fail "kernel or runtime manifest conformance failed"
 
 echo "Portability checks passed"

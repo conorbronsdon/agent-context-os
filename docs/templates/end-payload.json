@@ -1,0 +1,15 @@
+{
+  "what_happened": [
+    "Replace this with one approved factual outcome."
+  ],
+  "decisions": [
+    {
+      "decision": "Replace or remove this example decision.",
+      "rationale": "Why this choice matters later.",
+      "rejected_alternatives": "Leave blank when there was no real branch point."
+    }
+  ],
+  "next_time": [
+    "Replace this with the highest-value next action."
+  ]
+}

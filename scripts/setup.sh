@@ -250,6 +250,16 @@ fi
 
 echo "    Optional add-ons: see references/integrations.md (nothing is installed automatically)"
 
+echo ""
+echo "  Checking the provider-neutral lifecycle kernel..."
+if python3 -m contextos doctor >/dev/null; then
+  echo "    Found: context-os kernel"
+else
+  echo "    Kernel doctor found a required repository problem." >&2
+  python3 -m contextos doctor >&2 || true
+  exit 1
+fi
+
 # ── 7. Initial commit ───────────────────────────────────────────────────────
 
 echo ""
@@ -309,6 +319,7 @@ fi
 
 case "$SELECTED_AGENT" in
   claude)
+    python3 -m contextos install --runtime claude >/dev/null
     echo "  Claude Code auto-memory is enabled by default and may write machine-local memory."
     echo "  Inspect it with /memory; to opt out, set autoMemoryEnabled: false in"
     echo "  .claude/settings.local.json. Setup does not change that host setting."
@@ -324,8 +335,9 @@ case "$SELECTED_AGENT" in
     fi
     ;;
   codex)
+    python3 -m contextos install --runtime codex >/dev/null
     printf '  1. cd %q && codex\n' "$REPO_ROOT"
-    echo '  2. Type: $context-setup'
+    echo '  2. Type: $setup'
     echo "     Codex will interview you and build your context files."
     echo "     See docs/getting-started.md for migration, integrations, and host limits."
     echo ""
@@ -335,11 +347,12 @@ case "$SELECTED_AGENT" in
     fi
     ;;
   hermes)
+    python3 -m contextos install --runtime hermes >/dev/null
     printf '  1. cd %q && hermes\n' "$REPO_ROOT"
-    echo "  2. Hermes reads AGENTS.md automatically; ask it to run the context-setup"
-    echo "     skill (install the .agents/skills/ lifecycle skills first if you have"
-    echo "     not: hermes skills install .agents/skills/context-setup and siblings)."
-    echo "     See AGENTS.md (Hermes Agent section) and docs/memory-across-agents.md."
+    echo "  2. Hermes reads AGENTS.md automatically. Expose .agents/skills/ as an"
+    echo "     external skill directory, then type /setup. If you copy skills instead,"
+    echo "     install the short aliases and context-* cores together."
+    echo "     See adapters/hermes/ and docs/memory-across-agents.md."
     echo ""
     if [ "$HERMES_FOUND" = true ] && prompt_yn "  Launch Hermes now?" "y"; then
       cd "$REPO_ROOT"
@@ -369,7 +382,7 @@ case "$SELECTED_AGENT" in
     ;;
   none)
     printf '  Claude Code: cd %q && claude, then run /setup\n' "$REPO_ROOT"
-    printf '  Codex:       cd %q && codex, then run $context-setup\n' "$REPO_ROOT"
+    printf '  Codex:       cd %q && codex, then run $setup\n' "$REPO_ROOT"
     printf '  Hermes:      cd %q && hermes (reads AGENTS.md; see AGENTS.md Hermes section)\n' "$REPO_ROOT"
     printf '  Cursor:      cd %q and open in Cursor (reads AGENTS.md)\n' "$REPO_ROOT"
     printf '  OpenClaw:    cd %q && openclaw (reads AGENTS.md + .agents/skills/)\n' "$REPO_ROOT"

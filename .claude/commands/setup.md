@@ -1,7 +1,7 @@
 ---
 name: setup
 description: "Guided onboarding or import for durable workspace context"
-allowed-tools: "Read, Write, Edit, Bash, Glob"
+allowed-tools: "Read, Glob"
 disable-model-invocation: true
 ---
 

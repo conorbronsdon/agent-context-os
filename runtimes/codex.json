@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "runtime": "codex",
+  "instruction_file": "AGENTS.md",
+  "invocation": {
+    "setup": "$setup",
+    "start": "$start",
+    "update": "$update",
+    "end": "$end"
+  },
+  "capabilities": {
+    "agent_skills": "native",
+    "explicit_invocation": "native",
+    "project_hooks": "native",
+    "blocking_pre_tool_hook": "native",
+    "mcp": "native",
+    "native_memory": "unsupported",
+    "proposal_apply": "adapter"
+  },
+  "install": {
+    "mode": "repository-native",
+    "next_steps": [
+      "Launch Codex from the repository root.",
+      "Review the trusted .codex layer and project hooks, then run $setup or $start."
+    ]
+  }
+}

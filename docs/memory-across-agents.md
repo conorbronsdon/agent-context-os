@@ -1,33 +1,50 @@
 # Memory across agents
 
-Context OS is deliberately not a memory product. It is a Git-backed context layer, and its relationship to each host's native memory feature is worth stating plainly so users do not double-book the same fact in two systems.
+Context OS is a Git-backed context layer, not a native-memory synchronizer.
 
-## The short version
-
-| Concern | Where it lives |
+| Concern | Canonical home |
 |---|---|
-| Durable facts you want every agent to see | This repository (`identity/`, `state/`, `projects/`) — versioned, reviewable, portable |
-| Host-local working memory (one agent's private scratch) | That host's native memory feature |
-| Curated long-term memory with provenance and review gates | Repository state plus a reviewed curator workflow |
+| Facts every configured agent should see | Reviewed repository files |
+| One host's private scratch or learned preferences | That host's native memory |
+| Promotion from a session into shared state | Kernel proposal/apply transaction |
+| Evidence of a host-confirmed shared mutation | Gitignored proposal and receipt |
 
 ## Claude Code
 
-Claude Code auto-memory writes machine-local files under `~/.claude/projects/<encoded-cwd>/memory/` automatically. Context OS treats it as a separate layer: `/dream` curates it via proposal artifacts, `/dream-apply` applies accepted changes, and neither governs auto-memory's ordinary automatic writes. See [`auto-memory.md`](auto-memory.md) and [`dream-architecture.md`](dream-architecture.md).
+Claude auto-memory is machine-local and may write during ordinary sessions. Use
+Claude's `/memory` command to inspect the active store; do not derive its path.
+`/dream` and `/dream-apply` are separate review workflows for that host-local
+store. They do not replace lifecycle proposal/apply for repository state.
+
+## Codex
+
+No Codex-native memory behavior is part of the shared contract. `AGENTS.md`,
+`state/`, and `sessions/` provide continuity. Personal Codex configuration and
+credentials remain outside the repository.
 
 ## Hermes Agent
 
-Hermes has two native memory mechanisms that overlap conceptually with parts of this repository:
+Hermes `MEMORY.md` and `USER.md` are bounded, per-profile, machine-local memory.
+Its Curator maintains Hermes-owned stores. Context OS never reads, writes, or
+synchronizes those files automatically.
 
-| Hermes native | Closest Context OS concept | How they differ |
-|---|---|---|
-| `MEMORY.md` + `USER.md` persistent memory (typed entries, injected every session) | `state/current.md`, `identity/who-i-am.md` | Hermes memory is per-profile and machine-local; repository state is versioned, diffable, and travels with the clone. Keep facts that must survive a machine or agent switch in the repository. |
-| Background Curator (usage tracking, staleness detection, archival of skills and memories) | `/dream` rot-detection pass | Both detect drift and propose maintenance. The Curator runs autonomously on Hermes' own stores; `/dream` writes reviewable proposal artifacts before anything mutates. |
+Use Hermes memory for host-local preferences and environment facts. Promote a
+fact that must travel across runtimes only by drafting it into an approved
+repository proposal. Do not run multiple writers against one Hermes home, and
+do not duplicate the same fact in native memory and repository state without a
+declared canonical home.
 
-Practical guidance for Hermes users:
+## Proposal/apply boundary
 
-1. Let Hermes remember session-level preferences natively — do not mirror them into `state/`.
-2. Put identity, project briefs, decisions, and priorities in this repository. They are the durable layer.
-3. If you run `/dream` against a Hermes memory directory, treat the output exactly as designed: proposals only, reviewed item by item before any write-back.
-4. Do not configure the same fact as both a Hermes memory entry and a repository file without picking one canonical home. See the SSOT rule in `AGENTS.md`.
+All three runtimes use the same repository transaction:
 
-The design bet is the same one described in [`positioning.md`](positioning.md): durable context belongs in files you control, and an assistant's private memory is never the source of truth.
+1. reviewed structured input;
+2. exact proposed diffs and digest;
+3. host-mediated explicit confirmation (the kernel does not authenticate the human);
+4. optimistic hash and exclusive-lock checks;
+5. bounded writes; and
+6. a receipt naming the runtime and before/after hashes.
+
+This provides portable provenance without copying private native memory between
+providers. Proposal and receipt files are ignored and may still contain
+sensitive context; treat the local checkout as part of the privacy boundary.

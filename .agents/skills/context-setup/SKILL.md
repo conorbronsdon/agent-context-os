@@ -5,105 +5,62 @@ description: Build, import, or refresh this workspace's identity, project, reusa
 
 # Set up workspace context
 
-Build useful context from the user's own words or selected migration material without silently overwriting existing files.
+Build useful context without silently overwriting user data.
 
 ## Guardrails
 
-- Ask questions one at a time.
-- Inspect existing files before proposing changes. Treat non-placeholder content as user data.
+- Ask questions one at a time and inspect existing files before proposing changes.
 - Preserve the user's wording; do not embellish credentials, goals, or biography.
-- Show the proposed file map and summarize replacements before writing.
-- Require approval before overwriting populated files, creating broad batches of files, committing, or pushing.
-- Never request or store passwords, access tokens, recovery codes, or other credentials.
-- Never ingest a raw account export or complete conversation archive into tracked context.
+- Require approval before replacing populated files, broad writes, commits, or pushes.
+- Never request or store credentials or ingest a raw account export into tracked context.
 
 ## Procedure
 
-### 1. Confirm storage and audience before collecting context
+### 1. Confirm storage and audience
 
-Explain that identity, project, state, session, and imported context can be
-sensitive. Tracked files are visible to every repository collaborator and
-configured agent, and deleting them later does not erase them from git history.
-Recommend a local-only workspace or private remote by default; a public remote
-requires deliberately sanitized content. Keep raw exports and migration staging
-outside tracked files.
+Explain that tracked identity, project, state, session, and imported context is
+visible to repository collaborators and configured agents. Deleting it later
+does not erase git history. Recommend local-only or private storage by default;
+a public remote requires deliberately sanitized content. Stop before collecting
+personal information unless the user explicitly confirms the audience.
 
-Ask the user to confirm that the current storage location, repository audience,
-and intended agent access are appropriate. If they do not explicitly confirm,
-stop before reading migration material or asking for personal information.
+### 2. Choose and inspect the starting point
 
-### 2. Choose the starting point
+Ask whether to start from answers, selected existing material, or both. For
+existing material, follow `docs/migration-guide.md` and accept only a reviewed,
+narrow packet. Read the existing identity, project index, current state, weekly
+priorities, and routing files. Classify each as missing, placeholder, or populated.
 
-Ask whether the user wants to start from their answers, selected existing material, or both.
+### 3. Gather reviewed context
 
-For existing material, read `docs/migration-guide.md`. Ask for one reviewed migration packet or a narrow set of source files. Inventory the selected input, mark claims that need verification, identify sensitive items that should stay out of the workspace, and propose destinations. Do not read beyond the scope the user selected.
+One question at a time, gather identity, current focus, relevant background,
+three-month goals, working preferences, optional useful personal context,
+verifiable proof points, and approved public links. Then gather one recurring
+project: purpose, audience, current focus, non-goals, prior decisions, and
+repeated workflows. Finally gather weekly outcomes, non-goals, success criteria,
+and blockers. Draft the smallest coherent file map and routing additions.
 
-### 3. Inspect the workspace
+Portable repeated workflows belong under `.agents/skills/`; facts stay in their
+identity, project, or state source and are referenced rather than copied.
 
-Read:
+### 4. Propose and apply deterministically
 
-- `identity/who-i-am.md`
-- `identity/professional-background.md`
-- `projects/README.md`
-- `state/current.md`
-- `state/weekly-priorities.md`
-- `ROUTING.md`
+Encode the reviewed file map as JSON under `.context-os/inputs/`, with `files`
+mapping repository-relative paths to complete desired content. Add a path to
+`replace_populated` only after explicit approval to replace that populated file.
+Use `{{TODAY}}` where the deterministic local date belongs.
 
-Classify each as missing, placeholder-only, or populated. Tell the user what can be filled safely, what would be merged, and what would be updated.
+Run `python3 -m contextos propose setup --input <payload.json>`. Present every
+returned diff and its proposal digest. The digest binds the exact content but
+does not authenticate a human approver; rely on the host permission boundary.
+After explicit approval of that exact proposal, run:
 
-### 4. Gather identity context
+```text
+python3 -m contextos apply <proposal> --confirm <digest> --runtime <active-runtime>
+```
 
-Ask for, one question at a time:
+The kernel must refuse path escapes, writes outside context paths, unapproved
+populated replacements, changed targets, or concurrent applies.
 
-1. name and a one-sentence description,
-2. current role or main focus,
-3. relevant background,
-4. three-month goals,
-5. working preferences,
-6. optional personal context that genuinely helps,
-7. a short self-description,
-8. verifiable credentials or proof points, and
-9. public links they want recorded.
-
-Use approved migration items as candidate answers, then ask only for missing details or verification. Draft updates to the two identity files, preserve the user's language, and use today's date for `**Last Updated:**`.
-
-### 5. Gather the first project
-
-Ask for one recurring project, then gather:
-
-1. purpose and desired outcome,
-2. audience or collaborators,
-3. current focus and explicit non-goals,
-4. decisions already made,
-5. repeated tasks, and
-6. the one or two repeated tasks most worth standardizing.
-
-Draft `projects/<project-slug>/context.md` and `projects/<project-slug>/strategy.md`. For each approved repeated workflow, draft a portable skill at `.agents/skills/<project-slug>-<workflow-slug>/SKILL.md`; keep project facts in the project files and reference them from the skill rather than copying them. Add a concise route to `ROUTING.md`.
-
-Offer to repeat this phase for another project.
-
-### 6. Gather weekly state
-
-Ask for:
-
-1. the top three outcomes for this week,
-2. explicit non-goals,
-3. what a good week looks like, and
-4. blockers or items waiting on someone else.
-
-Draft `state/current.md` and `state/weekly-priorities.md` with current dates.
-
-### 7. Review and apply
-
-Present:
-
-- every file to create or edit,
-- populated content that would be replaced,
-- imported claims that remain unverified,
-- selected source material that will stay outside tracked files,
-- the proposed routing additions, and
-- any reusable workflow skills.
-
-Wait for approval, then apply only the approved changes. Run `bash scripts/validate-all.sh` and report the result. Offer a commit only after the user reviews the diff.
-
-Finish by suggesting `$start` for the next working session and `$end` when that session is complete.
+Run `bash scripts/validate-all.sh`, report the receipt and result, and offer a
+commit only after final diff review. Suggest `$start` next and `$end` to close.

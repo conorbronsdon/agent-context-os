@@ -1,7 +1,7 @@
 ---
 name: end
 description: "End a session — log what happened, update state and the decision log, propose memory updates, and check for uncommitted or unpushed work"
-allowed-tools: "Read, Write, Edit, Glob, Bash"
+allowed-tools: "Read, Glob"
 disable-model-invocation: true
 ---
 

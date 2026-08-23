@@ -1,0 +1,98 @@
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+from . import __version__
+from .kernel import (
+    ContextOSError,
+    apply_proposal,
+    create_proposal,
+    discover_root,
+    doctor,
+    hook_report,
+    install_runtime,
+    parse_now,
+    read_json,
+    start_report,
+)
+
+
+def parser() -> argparse.ArgumentParser:
+    result = argparse.ArgumentParser(prog="context-os", description="Deterministic Context OS lifecycle kernel")
+    result.add_argument("--root", type=Path, help="Context OS repository root")
+    result.add_argument("--version", action="version", version=__version__)
+    commands = result.add_subparsers(dest="command", required=True)
+
+    start = commands.add_parser("start", help="Read workspace continuity as structured data")
+    start.add_argument("--now", help="ISO-8601 timestamp for deterministic runs")
+
+    propose = commands.add_parser("propose", help="Create a reviewable lifecycle proposal")
+    propose.add_argument("workflow", choices=("setup", "update", "end"))
+    propose.add_argument("--input", type=Path, required=True, help="Reviewed JSON payload")
+    propose.add_argument("--now", help="ISO-8601 timestamp for deterministic runs")
+
+    apply = commands.add_parser("apply", help="Apply one exact host-confirmed proposal")
+    apply.add_argument("proposal", type=Path)
+    apply.add_argument("--confirm", required=True, help="Exact proposal digest printed by propose")
+    apply.add_argument("--runtime", choices=("claude", "codex", "hermes", "generic"), required=True)
+
+    install = commands.add_parser("install", help="Record the selected runtime and print host setup steps")
+    install.add_argument("--runtime", choices=("claude", "codex", "hermes"), required=True)
+
+    diagnose = commands.add_parser("doctor", help="Check kernel, state, manifests, locks, and runtime")
+    diagnose.add_argument("--runtime", choices=("claude", "codex", "hermes"))
+
+    hook = commands.add_parser("hook", help="Run a normalized read-only lifecycle hook check")
+    hook.add_argument("event", choices=("session-start", "pre-write"))
+    hook.add_argument("--runtime", choices=("claude", "codex", "hermes"), required=True)
+    return result
+
+
+def emit(value: object) -> None:
+    print(json.dumps(value, indent=2, ensure_ascii=False))
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parser().parse_args(argv)
+    try:
+        root = discover_root(args.root)
+        if args.command == "start":
+            emit(start_report(root, parse_now(args.now)))
+        elif args.command == "propose":
+            path, document = create_proposal(root, args.workflow, read_json(args.input), parse_now(args.now))
+            emit({
+                "proposal": path.relative_to(root).as_posix(),
+                "proposal_id": document["proposal_id"],
+                "proposal_digest": document["proposal_digest"],
+                "changes": [{"path": item["path"], "diff": item["diff"]} for item in document["changes"]],
+            })
+        elif args.command == "apply":
+            proposal = args.proposal if args.proposal.is_absolute() else root / args.proposal
+            receipt_path, receipt = apply_proposal(root, proposal, args.confirm, args.runtime)
+            emit({"receipt": receipt_path.relative_to(root).as_posix(), **receipt})
+        elif args.command == "install":
+            path, manifest = install_runtime(root, args.runtime)
+            emit({"runtime_file": path.relative_to(root).as_posix(), **manifest})
+        elif args.command == "doctor":
+            report = doctor(root, args.runtime)
+            emit(report)
+            return 1 if report["status"] == "fail" else 0
+        elif args.command == "hook":
+            raw = sys.stdin.read().strip()
+            payload = json.loads(raw) if raw else {}
+            if not isinstance(payload, dict):
+                raise ContextOSError("hook input must be a JSON object")
+            report = hook_report(root, args.event, payload)
+            messages = [item["message"] for item in report["findings"]]
+            if args.runtime in {"claude", "codex"}:
+                if messages:
+                    emit({"systemMessage": "\n".join(messages)})
+            else:
+                emit({"action": "allow", "message": "\n".join(messages)})
+        return 0
+    except (ContextOSError, json.JSONDecodeError, OSError, UnicodeError) as exc:
+        print(f"context-os: {exc}", file=sys.stderr)
+        return 2

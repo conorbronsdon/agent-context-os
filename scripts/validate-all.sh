@@ -23,8 +23,16 @@ from pathlib import Path
 
 paths = [
     Path(".claude/settings.json"),
+    Path(".codex/hooks.json"),
     Path("docs/templates/workflow-parity.json"),
+    Path("docs/templates/setup-payload.json"),
+    Path("docs/templates/update-payload.json"),
+    Path("docs/templates/end-payload.json"),
     Path("integrations/catalog.json"),
+    Path("runtimes/schema.json"),
+    Path("runtimes/claude.json"),
+    Path("runtimes/codex.json"),
+    Path("runtimes/hermes.json"),
 ]
 for path in paths:
     with path.open(encoding="utf-8") as handle:

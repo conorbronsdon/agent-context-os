@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "runtime": "hermes",
+  "instruction_file": "AGENTS.md",
+  "invocation": {
+    "setup": "/setup",
+    "start": "/start",
+    "update": "/update",
+    "end": "/end"
+  },
+  "capabilities": {
+    "agent_skills": "adapter",
+    "explicit_invocation": "advisory",
+    "project_hooks": "adapter",
+    "blocking_pre_tool_hook": "advisory",
+    "mcp": "native",
+    "native_memory": "native",
+    "proposal_apply": "adapter"
+  },
+  "install": {
+    "mode": "skill-copy-or-external-directory",
+    "next_steps": [
+      "Expose this repository's .agents/skills directory to Hermes or install all four short aliases and their context-* cores.",
+      "Start a new Hermes session so the installed skill catalog refreshes.",
+      "Keep Hermes MEMORY.md and USER.md separate from repository state."
+    ]
+  }
+}

@@ -15,12 +15,15 @@ A Git-backed context and workflow layer for agents like Claude Code, Codex, and 
 
 Chat history, project instructions, and copied prompts drift apart. Context OS puts the durable parts in plain Markdown: who you are, what you are working on, decisions already made, and the workflows you want an agent to follow.
 
-Claude Code and Codex read the same repository state. Git shows what changed. A reviewed start, checkpoint, and close loop keeps the context current without treating an assistant's private memory as the source of truth.
+Claude Code, Codex, and Hermes read the same repository state. A deterministic
+lifecycle kernel turns reviewed setup, checkpoint, and close requests into
+hash-checked proposals and receipts, without treating native memory as the
+source of truth.
 
 | What you need | How Context OS handles it |
 |---|---|
 | Bring useful context forward | A source-neutral [migration workflow](docs/migration-guide.md) turns selected chats, project instructions, memory exports, and documents into reviewable files. |
-| Work across coding agents | Provider-neutral state and skills live outside host adapters. Claude Code and Codex share the same lifecycle core. |
+| Work across coding agents | Provider-neutral state, skills, and lifecycle transitions live outside host adapters. Claude Code, Codex, and Hermes share the same kernel. |
 | Add the tools that fit | A generated [integration catalog](references/integrations.md) documents install scope, data access, side effects, and confirmation gates. Nothing is enabled automatically. |
 | Keep context useful | Session handoffs, staleness checks, decision logs, and reviewable memory proposals make maintenance part of the normal workflow. |
 
@@ -41,6 +44,7 @@ git remote add origin <YOUR_PRIVATE_REPO_URL>
 # Pick a host, or omit --agent to auto-detect one:
 bash scripts/setup.sh --agent claude
 # bash scripts/setup.sh --agent codex
+# bash scripts/setup.sh --agent hermes
 ```
 
 Then start your agent from the repository root:
@@ -49,6 +53,7 @@ Then start your agent from the repository root:
 |---|---|
 | New workspace in Claude Code | Run `/setup` |
 | New workspace in Codex | Run `$setup` |
+| New workspace in Hermes | Run `/setup` after exposing the repository skills |
 | Existing context in another assistant | Follow the [migration guide](docs/migration-guide.md), then use the selected material during setup |
 | claude.ai only | Use [SETUP-PROMPTS.md](SETUP-PROMPTS.md) and copy the approved output into the repository |
 
@@ -58,7 +63,9 @@ The setup interview fills the identity, first project, workflows, and weekly sta
 
 ![A start session in Claude Code: state files load and a session briefing comes back, using sample data from the included example musician project](docs/assets/start-demo.gif)
 
-`/start` in Claude Code and `$start` in Codex read your state, priorities, decisions, blockers, and recent handoff. The result is a working briefing grounded in files, not a request to reconstruct everything from chat.
+`/start` in Claude Code or Hermes and `$start` in Codex read your state,
+priorities, decisions, blockers, and recent handoff. The result is grounded in
+files rather than reconstructed from chat.
 
 At the end, `/end` or `$end` proposes a handoff for review before it updates `sessions/` and `state/`. The namespaced `$context-end` form remains supported.
 
@@ -68,12 +75,12 @@ At the end, `/end` or `$end` proposes a handoff for review before it updates `se
 
 Start small. Use the core loop for a week, add one active project, then turn a repeated task into a skill when the repetition is clear.
 
-| Moment | Claude Code | Codex | Shared result |
-|---|---|---|---|
-| First run or major refresh | `/setup` | `$setup` | Identity, projects, workflows, and weekly state |
-| Start work | `/start` | `$start` | Briefing from current state and recent sessions |
-| Save a checkpoint | `/update` | `$update` | Short session update with minimal state churn |
-| Finish work | `/end` | `$end` | Reviewed handoff, state updates, decisions, and git safety report |
+| Moment | Claude Code | Codex | Hermes | Shared result |
+|---|---|---|---|---|
+| First run or major refresh | `/setup` | `$setup` | `/setup` | Reviewed context proposal |
+| Start work | `/start` | `$start` | `/start` | Read-only continuity inventory and briefing |
+| Save a checkpoint | `/update` | `$update` | `/update` | Hash-checked update and receipt |
+| Finish work | `/end` | `$end` | `/end` | Hash-checked handoff, decisions, and receipt |
 
 The namespaced `$context-setup`, `$context-start`, `$context-update`, and
 `$context-end` invocations remain available for compatibility.
@@ -97,8 +104,8 @@ The guide covers ChatGPT, Claude, Gemini Apps, Gemini CLI, and a generic path fo
 | Host | Support level |
 |---|---|
 | Claude Code | Full experience: shared lifecycle, slash-command adapters, hooks, optional live reads, and Claude-only auto-memory curation |
-| Codex | First-class shared lifecycle and repository skills; no claim of Claude hook or auto-memory parity |
-| Hermes Agent | Reads `AGENTS.md` automatically; installs the portable lifecycle skills as slash commands (`hermes skills install`); native memory mapping in [memory across agents](docs/memory-across-agents.md); no Claude hook or auto-memory parity |
+| Codex | First-class lifecycle, repository skills, trusted project hooks, and the shared deterministic kernel; native memory remains outside the contract |
+| Hermes Agent | `AGENTS.md`, portable skills, the shared kernel, and optional hook adapter; copied skills and native memory remain explicit host boundaries |
 | Gemini CLI / Antigravity CLI | Migration tooling plus portable-skill discovery for continuing enterprise/API-key Gemini CLI; no complete workspace adapter, and no Antigravity discovery or permission parity is claimed |
 | Cursor / OpenClaw | Read `AGENTS.md` from the repository root; portable skills usable where their Agent Skills support allows |
 | claude.ai | Manual consumer of selected knowledge files; no repository writes, hooks, or slash-command parity |
@@ -106,14 +113,13 @@ The guide covers ChatGPT, Claude, Gemini Apps, Gemini CLI, and a generic path fo
 
 ## One source, explicit host adapters
 
-| Capability | Shared | Claude Code adapter | Codex adapter |
-|---|---:|---:|---:|
-| Identity, project, state, and session files | Yes | Reads the repository | Reads the repository |
-| Lifecycle workflow core | Yes | `/setup`, `/start`, `/update`, `/end` | `$setup`, `$start`, `$update`, `$end` |
-| Reusable provider-neutral skills | Yes | Thin slash commands when needed | Repository skills under `.agents/skills/` |
-| Checked-in hooks and settings | No | Included | No equivalent claimed |
-| Claude auto-memory and `/dream` | No | Included | Use repository state and sessions for shared continuity |
-| Browser project knowledge | Selected files only | Manual upload to claude.ai | Product-specific import or attachment flows remain separate |
+| Capability | Shared | Claude Code | Codex | Hermes |
+|---|---:|---:|---:|---:|
+| Identity, project, state, and session files | Yes | Reads | Reads | Reads |
+| Deterministic proposal/apply and receipts | Yes | Adapter | Native skill calls | Installed skill calls |
+| Lifecycle vocabulary | Semantics | `/setup` etc. | `$setup` etc. | `/setup` etc. |
+| Project hooks | Event contract only | `.claude/` | `.codex/` | Optional adapter |
+| Native memory | No | Claude auto-memory | Outside contract | `MEMORY.md` / `USER.md` |
 
 The shared layer is intentionally plain files. Provider-specific tool names, hooks, permissions, and memory features stay in their adapter directories.
 
@@ -128,7 +134,7 @@ The current catalog includes portable skill collections and creator tools, plus 
 ## Repository layout
 
 ```text
-AGENTS.md                  Codex repository instructions
+AGENTS.md                  Portable repository instructions
 CLAUDE.md                  Claude Code root context and adapter index
 ROUTING.md                 Task-to-context routing table
 TODO.md                    Full backlog
@@ -137,9 +143,13 @@ projects/                  Project context and project-specific workflows
 state/                     Current focus, priorities, blockers, and decisions
 sessions/                  Reviewed session handoffs
 .agents/skills/            Provider-neutral workflow cores
+contextos/                 Deterministic lifecycle kernel
 .claude/commands/          Claude Code slash-command adapters
 .claude/skills/            Claude Code-only skills
 .claude/hooks/             Claude Code-only safety and session hooks
+.codex/hooks.json          Codex lifecycle advisory adapter
+adapters/hermes/           Hermes installation and optional hook adapter
+runtimes/                  Machine-readable capability manifests
 integrations/              Machine-checked opt-in integration catalog
 references/                Generated catalog and integration setup notes
 scripts/                   Setup, validation, migration, and maintenance tools

@@ -7,73 +7,52 @@ description: Close a workspace session by reviewing a proposed summary, recordin
 
 Leave durable, reviewable state for the next session.
 
-## Configuration
-
-If `workspace.yaml` exists, use its state and sessions directories. Otherwise use `state/` and `sessions/`.
-
 ## Procedure
 
 ### 1. Draft before writing
 
-Determine today's local date and time. Extract:
+Determine today's local date and time. Extract completed work, durable decisions
+and rationale, meaningful rejected alternatives, priority or thread changes,
+blockers, open work, and next actions. Present the draft and obtain confirmation
+before creating a proposal.
 
-- work completed,
-- decisions and their rationale,
-- meaningful rejected alternatives,
-- priority or thread changes,
-- blockers,
-- open work, and
-- next actions.
+### 2. Build the deterministic proposal
 
-Present the draft and wait for confirmation before editing context files.
+Create a reviewed JSON payload under `.context-os/inputs/` with:
 
-### 2. Record the approved session
+- `what_happened`: approved factual strings;
+- `decisions`: durable objects containing `decision`, `rationale`, and optional
+  `rejected_alternatives`;
+- `next_time`: approved open-work strings; and
+- optional complete desired Markdown for `current_markdown`,
+  `blockers_markdown`, or `weekly_priorities_markdown`, only when that state
+  materially changed.
 
-Create `<sessions_dir>/<YYYY-MM-DD>.md` with this shape when it does not exist:
+Run `python3 -m contextos propose end --input <payload.json>`. The kernel owns
+session append behavior, decision rows, dates, exact paths, the single
+`Last Updated` line, and same-day history. Present every returned diff and its
+proposal digest. The digest binds the exact content but does not authenticate a
+human approver; rely on the host permission boundary for explicit confirmation.
 
-```markdown
-# Session — <YYYY-MM-DD>
+### 3. Apply only the approved proposal
 
-## What happened
-- <approved facts>
+After explicit approval of that exact diff, run:
 
-## Decisions
-- <approved decisions>
-
-## Next time
-- <approved open work>
+```text
+python3 -m contextos apply <proposal> --confirm <digest> --runtime <active-runtime>
 ```
 
-If the file exists, append `## Session <HH:MM>` and the three subsections instead of overwriting it.
+The kernel must refuse altered proposals, changed targets, path escapes, or a
+concurrent apply. Never bypass those checks or edit lifecycle state directly.
 
-### 3. Update state
+### 4. Check repository state
 
-- Update `<state_dir>/current.md` with approved active threads, completions, and a brief recent-context note.
-- Keep exactly one `**Last Updated:**` line in `current.md` and set it to today's date. Let `old_date` be the prior real date and `newest_history_date` be the newest date already in the log; archive only when `old_date != today && old_date != newest_history_date`. When that invariant passes, prepend a separate line containing `old_date` under `# current.md update log` in `<state_dir>/current-log.md`. Never log a placeholder; a second checkpoint or close on the same day leaves both the current date and history unchanged.
-- Update `<state_dir>/blockers.md` only for a new, changed, or resolved dependency.
-- Update `<state_dir>/weekly-priorities.md` only when meaningful progress changed the weekly view.
-- Preserve unrelated content in every file.
+If this is a git repository, inspect recent commits for parallel work touching
+the same files, show uncommitted files, and show the count of unpushed commits
+when an upstream exists. Flag conflicts and wait for direction. Never commit,
+push, discard, or reconcile without explicit approval. Outside git, skip this.
 
-### 4. Record durable decisions
+### 5. Confirm the handoff
 
-For each approved decision future sessions need, append one row to `<state_dir>/decisions.md`:
-
-```markdown
-| <date> | <decision> | <context or rationale> | <rejected alternatives> |
-```
-
-Skip trivial choices. Leave rejected alternatives blank when there was no real branch point.
-
-### 5. Check repository state
-
-If this is a git repository:
-
-1. inspect recent commits for parallel work touching the same files,
-2. show uncommitted files, and
-3. show the count of unpushed commits when an upstream exists.
-
-Flag conflicts and wait for direction. Never commit, push, discard, or reconcile work without explicit approval. Outside git, skip this step.
-
-### 6. Confirm the handoff
-
-Report what was logged, which state files changed, and the top next action. Mention any conflict or repository work still awaiting a decision.
+Report the receipt path, what was logged, changed state files, and the top next
+action. Mention any conflict or repository work still awaiting a decision.

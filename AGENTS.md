@@ -1,6 +1,8 @@
 # Context OS
 
-This repository is the durable source of truth for personal, project, and session context. Keep provider-neutral state in the repository and keep host-specific behavior in its adapter directory.
+This repository is the durable source of truth for personal, project, and
+session context. Keep provider-neutral state here and host-specific behavior in
+its adapter directory.
 
 ## Session lifecycle
 
@@ -9,39 +11,59 @@ This repository is the durable source of truth for personal, project, and sessio
 - Save a mid-session checkpoint: use `$update`.
 - Close a session: use `$end`.
 
-These skills are deliberately explicit-invocation workflows. Do not start, checkpoint, or close a session merely because their descriptions seem relevant.
-The namespaced `$context-setup`, `$context-start`, `$context-update`, and
-`$context-end` forms remain supported compatibility names.
+These workflows require explicit invocation. The `$context-setup`,
+`$context-start`, `$context-update`, and `$context-end` compatibility names
+remain supported.
+
+## Lifecycle kernel
+
+- `python3 -m contextos start` is the read-only continuity inventory.
+- Setup, update, and end use `propose` then exact-digest `apply`; never edit
+  lifecycle state directly.
+- Present every proposal diff. Apply only after explicit approval of that exact
+  proposal and report its receipt.
+- Run `python3 -m contextos doctor` when discovery, runtime setup, a lock, or
+  copied skills may be stale.
 
 ## Context routing
 
 - Read `ROUTING.md` before loading task-specific context.
-- Treat `TODO.md` as the task backlog and `state/current.md` as the curated top-of-mind view.
-- Keep each fact in one canonical file; link to it elsewhere instead of duplicating it.
-- Load only the files needed for the current task. Identity and session data may be sensitive.
+- Treat `TODO.md` as the backlog and `state/current.md` as top-of-mind context.
+- Keep each fact in one canonical file and link to it elsewhere.
+- Load only what the current task needs. Identity and session data may be sensitive.
 
 ## Safety
 
-- Follow `docs/safety-contract.md` before any external write, publish, destructive action, credential change, or permission expansion.
-- Show proposed context-file changes before broad or destructive rewrites.
+- Follow `docs/safety-contract.md` before any external write, publish,
+  destructive action, credential change, or permission expansion.
+- Show proposed context changes before broad or destructive rewrites.
 - Never commit or push without explicit approval.
-- Treat optional integrations as disabled until the user chooses and configures one. Check `references/integrations.md` for its data and side-effect boundaries.
+- Optional integrations stay disabled until chosen and configured. Review
+  `references/integrations.md` for data and side-effect boundaries.
 
 ## Portability boundary
 
-- `.agents/skills/` contains the portable workflow cores.
-- `.claude/` contains Claude Code commands, hooks, settings, and memory adapters. Do not assume those features run in Codex or Hermes.
-- Do not commit personal Codex configuration or credentials. Keep machine-level configuration outside this repository.
+- `.agents/skills/` contains portable workflow cores.
+- `.claude/` contains Claude Code commands, hooks, settings, and memory adapters.
+- `.codex/hooks.json` maps Codex events to the same read-only policy checks.
+- `adapters/hermes/` documents optional Hermes hooks and skill installation.
+- Runtime manifests under `runtimes/` declare support instead of implying parity.
+- Kernel proposal/apply is the enforcement boundary on every host; hooks are
+  defense in depth and host-local memory is never shared automatically.
 
 ## Hermes Agent
 
-Hermes Agent reads this repository's instructions automatically:
-
-- Project rules: Hermes loads `AGENTS.md` from the working directory into every session in this repository. This file is the portable entry point; `CLAUDE.md` remains Claude Code-specific.
-- Session loop: the lifecycle skills under `.agents/skills/` are agentskills.io-compatible SKILL.md files. Install the short `setup`, `start`, `update`, and `end` aliases with `hermes skills install <path>` (or import via `hermes import-agent claude-code`, which picks up skill directories), then invoke them as `/start`, `/update`, and `/end`. The `context-*` directories remain the canonical workflow cores and compatibility names.
-- Memory: Hermes has its own persistent memory (`MEMORY.md`) plus a background Curator. See `docs/memory-across-agents.md` for how this repository's state layer relates to native Hermes memory, and when to run `/dream` equivalents.
-- Hooks: the checked-in `.claude/hooks/` guards do not run under Hermes. Hermes' equivalent is its plugin/hooks system (`hermes config get plugins`, docs: Features → Hooks); the safety contract in `docs/safety-contract.md` still applies as instructions even without enforcement.
+- Hermes loads `AGENTS.md` as project context.
+- Expose `.agents/skills/` as an external skill directory, or install the four
+  short aliases and all four `context-*` cores together. Copied skills must be
+  refreshed after source changes.
+- Invoke `/setup`, `/start`, `/update`, and `/end` explicitly.
+- Keep Hermes `MEMORY.md` and `USER.md` separate from repository state. See
+  `docs/memory-across-agents.md`.
+- `.claude/hooks/` does not run under Hermes. The optional Hermes adapter maps
+  supported events to portable checks; kernel enforcement does not depend on it.
 
 ## Validation
 
-Run `bash scripts/validate-all.sh` after changing instructions, skills, commands, hooks, scripts, or generated references.
+Run `bash scripts/validate-all.sh` after changing instructions, skills,
+commands, hooks, scripts, manifests, or generated references.

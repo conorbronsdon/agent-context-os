@@ -1,0 +1,6 @@
+{
+  "files": {
+    "identity/who-i-am.md": "# Your reviewed content\n\n**Last Updated:** {{TODAY}}\n"
+  },
+  "replace_populated": []
+}

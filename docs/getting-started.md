@@ -1,10 +1,14 @@
 # Getting started with Context OS
 
-Context OS can begin with a blank interview or selected context from another assistant. The result is the same: a small, reviewable repository that Claude Code and Codex can use as shared state.
+Context OS can begin with a blank interview or selected context from another
+assistant. The result is a small, reviewable repository that Claude Code,
+Codex, and Hermes can use as shared state.
 
 ## Before you clone
 
-You need Git, Bash, and Python 3. You also need Claude Code or Codex for the guided lifecycle. claude.ai can help produce files, but it cannot maintain a local checkout directly.
+You need Git, Bash, Python 3, and at least one supported local agent: Claude
+Code, Codex, or Hermes. claude.ai can help produce files but cannot maintain a
+local checkout directly.
 
 Decide where the repository will live. If it will contain personal, client, employer, financial, or unpublished project context, use a private remote. Repository visibility is only one control; do not store credentials, raw account exports, or information you would not want every configured agent to read.
 
@@ -35,6 +39,8 @@ Choose the host you expect to use first:
 bash scripts/setup.sh --agent claude
 # or
 bash scripts/setup.sh --agent codex
+# or
+bash scripts/setup.sh --agent hermes
 ```
 
 You can omit `--agent` to auto-detect an installed host, or use `--agent none` to prepare the repository without launching one.
@@ -59,9 +65,13 @@ Launch the selected host from the repository root:
 claude
 # or
 codex
+# or
+hermes
 ```
 
-Run `/setup` in Claude Code or `$setup` in Codex. The guided interview asks one question at a time, proposes a file map, and waits before changing populated files.
+Run `/setup` in Claude Code or Hermes, or `$setup` in Codex. The guided
+interview asks one question at a time, builds a deterministic proposal, and
+waits before applying the exact reviewed diff.
 
 ### Bring existing context
 
@@ -86,6 +96,7 @@ Remove any unsupported inference, stale claim, duplicate fact, or context that i
 Then run:
 
 ```bash
+python3 -m contextos doctor
 bash scripts/validate-all.sh
 git diff --check
 git status --short
@@ -95,13 +106,16 @@ Commit and push only after the diff matches what you intend to preserve.
 
 ## Run the daily loop
 
-| Moment | Claude Code | Codex |
-|---|---|---|
-| Start work | `/start` | `$start` |
-| Save progress without closing | `/update` | `$update` |
-| End with a reviewed handoff | `/end` | `$end` |
+| Moment | Claude Code | Codex | Hermes |
+|---|---|---|---|
+| Start work | `/start` | `$start` | `/start` |
+| Save progress without closing | `/update` | `$update` | `/update` |
+| End with a reviewed handoff | `/end` | `$end` | `/end` |
 
-The lifecycle writes shared continuity to `state/` and `sessions/`. Claude Code has additional host-specific hooks, commands, and auto-memory features. The [Codex onboarding guide](codex-onboarding.md) documents the exact boundary.
+The lifecycle kernel writes shared continuity to `state/` and `sessions/` only
+after exact-proposal approval, then emits a local receipt. Each host retains
+different hooks, commands, permissions, and native memory. See the
+[cross-runtime architecture](cross-runtime-architecture.md).
 
 ## Add capabilities later
 

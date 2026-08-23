@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Context OS runtime capability manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "runtime", "instruction_file", "invocation", "capabilities", "install"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "runtime": {"enum": ["claude", "codex", "hermes"]},
+    "instruction_file": {"type": "string"},
+    "invocation": {
+      "type": "object",
+      "additionalProperties": {"type": "string"},
+      "required": ["setup", "start", "update", "end"]
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": {"enum": ["native", "adapter", "advisory", "unsupported"]}
+    },
+    "install": {
+      "type": "object",
+      "required": ["mode", "next_steps"],
+      "properties": {
+        "mode": {"type": "string"},
+        "next_steps": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

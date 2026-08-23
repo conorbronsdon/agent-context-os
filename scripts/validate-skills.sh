@@ -57,7 +57,7 @@ done < <(find . -path './.git' -prune -o -name 'SKILL.md' -print0)
 if [ -d ".claude/commands" ]; then
   while IFS= read -r -d '' cmd; do
     check_frontmatter "$cmd" 20
-    declared_name=$(grep '^name:' "$cmd" | head -1 | sed 's/^name:[[:space:]]*//' || true)
+    declared_name=$(grep '^name:' "$cmd" | head -1 | sed 's/^name:[[:space:]]*//' | tr -d '\r' || true)
     file_name=$(basename "$cmd" .md)
     if [ -n "$declared_name" ] && [ "$declared_name" != "$file_name" ]; then
       ERRORS+=("COMMAND NAME MISMATCH: $cmd declares '$declared_name'")
