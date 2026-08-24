@@ -202,9 +202,16 @@ def _advance_dated_state(path: Path, desired: str, today: str) -> str:
         raise ContextOSError(
             f"{label} must begin with a level-one heading when adding **Last Updated:**"
         )
-    remainder = "\n".join(lines[1:]).lstrip()
-    suffix = f"\n\n{remainder}" if remainder else "\n"
-    return f"{lines[0]}\n\n**Last Updated:** {today}{suffix}"
+    insert_at = 1
+    if path.name == "weekly-priorities.md":
+        for index, line in enumerate(lines[1:], start=1):
+            if line.startswith("**Week of:**"):
+                insert_at = index + 1
+                break
+    before = "\n".join(lines[:insert_at]).rstrip()
+    after = "\n".join(lines[insert_at:]).strip()
+    suffix = f"\n\n{after}\n" if after else "\n"
+    return f"{before}\n\n**Last Updated:** {today}{suffix}"
 
 
 def _session_append(path: Path, block: str, date: str) -> str:
@@ -612,6 +619,8 @@ def _state_freshness(path: Path, today: date, threshold: int) -> dict[str, Any]:
         status = "missing"
     elif age is None:
         status = "unknown"
+    elif age < 0:
+        status = "future"
     elif age > threshold:
         status = "stale"
     else:
@@ -622,7 +631,7 @@ def _state_freshness(path: Path, today: date, threshold: int) -> dict[str, Any]:
         "age_days": age,
         "stale_after_days": threshold,
         "freshness_status": status,
-        "stale": None if age is None else age > threshold,
+        "stale": None if age is None or age < 0 else age > threshold,
     }
 
 
@@ -693,7 +702,7 @@ def doctor(root: Path, runtime: str | None = None) -> dict[str, Any]:
     initialized, initialization_files = _initialization_state(workspace, utc_now().date())
     unknown = [
         path for path, item in initialization_files.items()
-        if item["freshness_status"] in {"missing", "unknown"}
+        if item["freshness_status"] in {"missing", "unknown", "future"}
     ]
     add(
         "initialization-state",

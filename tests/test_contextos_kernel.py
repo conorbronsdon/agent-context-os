@@ -156,6 +156,13 @@ class KernelTest(unittest.TestCase):
             content = (self.root / "state" / filename).read_text(encoding="utf-8")
             self.assertIn("**Last Updated:** 2026-08-23", content)
             self.assertEqual(1, content.count("**Last Updated:**"))
+        weekly_content = (self.root / "state/weekly-priorities.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertLess(
+            weekly_content.index("**Week of:**"),
+            weekly_content.index("**Last Updated:**"),
+        )
 
     def test_exact_confirmation_and_optimistic_hashes_fail_closed(self) -> None:
         proposal_path, proposal = self._propose("update", {"progress": ["One"]})
@@ -292,6 +299,26 @@ class KernelTest(unittest.TestCase):
         )
         self.assertEqual("warn", initialization["status"])
         self.assertIn("guided setup required", initialization["detail"])
+
+    def test_future_dated_state_is_not_treated_as_initialized(self) -> None:
+        (self.root / "state/current.md").write_text(
+            "# Current State\n\n**Last Updated:** 2099-01-01\n",
+            encoding="utf-8",
+        )
+
+        report = start_report(self.root, NOW)
+        current = report["state"]["state/current.md"]
+        self.assertEqual("future", current["freshness_status"])
+        self.assertLess(current["age_days"], 0)
+        self.assertIsNone(current["stale"])
+        self.assertFalse(report["initialized"])
+
+        diagnosis = doctor(self.root)
+        initialization = next(
+            item for item in diagnosis["checks"] if item["name"] == "initialization-state"
+        )
+        self.assertEqual("warn", initialization["status"])
+        self.assertIn("state/current.md", initialization["detail"])
 
     def test_install_and_doctor_are_machine_local(self) -> None:
         target, installed = install_runtime(self.root, "hermes")
