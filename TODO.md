@@ -6,13 +6,6 @@ Canonical task backlog. `state/current.md` is the curated top-of-mind view for `
 
 ---
 
-## Getting started
-
-- [ ] Run through `SETUP-PROMPTS.md` to fill in identity and project files
-- [ ] Try `/start` to see a session briefing
-- [ ] Try `/end` at the end of a session to log your work
-- [ ] Build your first custom skill (see `docs/agent-template.md`)
-
-## Ideas
+## Tasks and ideas
 
 [Add tasks, goals, and ideas here as they come up. Organize into sections that make sense for your work.]

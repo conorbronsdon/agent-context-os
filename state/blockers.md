@@ -1,5 +1,7 @@
 # Blockers
 
+**Last Updated:** [DATE]
+
 Active blockers preventing progress on priorities. Remove when resolved.
 
 <!-- Template:

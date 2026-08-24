@@ -2,6 +2,8 @@
 
 **Week of:** [DATE]
 
+**Last Updated:** [DATE]
+
 ## Top 3 this week
 
 1. [Must ship / must do]

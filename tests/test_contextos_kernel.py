@@ -123,6 +123,40 @@ class KernelTest(unittest.TestCase):
         decisions = (self.root / "state/decisions.md").read_text(encoding="utf-8")
         self.assertIn("Use proposal \\| apply", decisions)
 
+    def test_end_advances_freshness_for_changed_weekly_priorities_and_blockers(self) -> None:
+        blockers = (self.root / "state/blockers.md").read_text(encoding="utf-8") + "\n- Waiting on review\n"
+        weekly = (self.root / "state/weekly-priorities.md").read_text(encoding="utf-8") + "\n- Ship readiness fix\n"
+        proposal_path, proposal = self._propose(
+            "end",
+            {
+                "what_happened": ["Updated lifecycle state"],
+                "blockers_markdown": blockers,
+                "weekly_priorities_markdown": weekly,
+            },
+        )
+        self._apply(proposal_path, proposal)
+        for filename in ("blockers.md", "weekly-priorities.md"):
+            content = (self.root / "state" / filename).read_text(encoding="utf-8")
+            self.assertIn("**Last Updated:** 2026-08-23", content)
+            self.assertEqual(1, content.count("**Last Updated:**"))
+
+    def test_end_upgrades_legacy_dated_state_without_freshness_metadata(self) -> None:
+        blockers = "# Blockers\n\n- Waiting on review\n"
+        weekly = "# Weekly Priorities\n\n**Week of:** 2026-08-18\n\n1. Ship fix\n"
+        proposal_path, proposal = self._propose(
+            "end",
+            {
+                "what_happened": ["Updated legacy lifecycle state"],
+                "blockers_markdown": blockers,
+                "weekly_priorities_markdown": weekly,
+            },
+        )
+        self._apply(proposal_path, proposal)
+        for filename in ("blockers.md", "weekly-priorities.md"):
+            content = (self.root / "state" / filename).read_text(encoding="utf-8")
+            self.assertIn("**Last Updated:** 2026-08-23", content)
+            self.assertEqual(1, content.count("**Last Updated:**"))
+
     def test_exact_confirmation_and_optimistic_hashes_fail_closed(self) -> None:
         proposal_path, proposal = self._propose("update", {"progress": ["One"]})
         with self.assertRaisesRegex(ContextOSError, "exactly match"):
@@ -237,6 +271,27 @@ class KernelTest(unittest.TestCase):
         self.assertEqual(before, after)
         self.assertFalse(report["state"]["state/current.md"]["stale"])
         self.assertEqual(3, report["state"]["state/current.md"]["age_days"])
+        self.assertEqual("fresh", report["state"]["state/current.md"]["freshness_status"])
+        self.assertTrue(report["initialized"])
+        self.assertIsNone(report["next_action"])
+
+    def test_fresh_clone_reports_setup_required_from_real_templates(self) -> None:
+        for filename in ("current.md", "weekly-priorities.md", "blockers.md"):
+            (self.root / "state" / filename).write_bytes((ROOT / "state" / filename).read_bytes())
+
+        report = start_report(self.root, NOW)
+        self.assertFalse(report["initialized"])
+        self.assertIn("setup workflow", report["next_action"])
+        for item in report["state"].values():
+            self.assertEqual("unknown", item["freshness_status"])
+            self.assertIsNone(item["stale"])
+
+        diagnosis = doctor(self.root)
+        initialization = next(
+            item for item in diagnosis["checks"] if item["name"] == "initialization-state"
+        )
+        self.assertEqual("warn", initialization["status"])
+        self.assertIn("guided setup required", initialization["detail"])
 
     def test_install_and_doctor_are_machine_local(self) -> None:
         target, installed = install_runtime(self.root, "hermes")

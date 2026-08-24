@@ -4,6 +4,7 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
+source "$ROOT/scripts/python-env.sh"
 
 fail() {
   echo "portability: $*" >&2
@@ -30,9 +31,9 @@ for index in "${!skills[@]}"; do
   test -f "$command_file" || fail "missing $command_file"
 
   tr -d '\r' < "$skill_file" | grep -qx "name: $skill" || fail "$skill_file name does not match its directory"
-  python3 tests/validate-openai-metadata.py "$metadata_file" "$skill" || fail "$metadata_file failed schema validation"
+  "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py "$metadata_file" "$skill" || fail "$metadata_file failed schema validation"
   grep -Fq ".agents/skills/$skill/SKILL.md" "$command_file" || fail "$command_file does not route to $skill"
-  python3 tests/validate-openai-metadata.py --command "$command_file" "$command" || fail "$command_file failed frontmatter validation"
+  "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py --command "$command_file" "$command" || fail "$command_file failed frontmatter validation"
 
   lines=$(wc -l < "$skill_file")
   [ "$lines" -le 180 ] || fail "$skill_file is too long to remain a focused workflow core"
@@ -52,7 +53,7 @@ for index in "${!aliases[@]}"; do
   test -f "$metadata_file" || fail "missing $metadata_file"
   tr -d '\r' < "$alias_file" | grep -qx "name: $alias_name" || fail "$alias_file name does not match its directory"
   grep -Fq "../$core_name/SKILL.md" "$alias_file" || fail "$alias_file does not route to $core_name"
-  python3 tests/validate-openai-metadata.py "$metadata_file" "$alias_name" || fail "$metadata_file failed schema validation"
+  "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py "$metadata_file" "$alias_name" || fail "$metadata_file failed schema validation"
   [ "$(wc -l < "$alias_file")" -le 15 ] || fail "$alias_file is no longer a thin alias"
 done
 
@@ -66,7 +67,7 @@ side_effecting_commands=(
   reconcile recover setup today update end
 )
 for command in "${side_effecting_commands[@]}"; do
-  python3 tests/validate-openai-metadata.py --command ".claude/commands/$command.md" "$command" \
+  "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py --command ".claude/commands/$command.md" "$command" \
     || fail ".claude/commands/$command.md failed strict side-effecting frontmatter validation"
 done
 
@@ -126,31 +127,50 @@ if command -v cygpath >/dev/null 2>&1; then
   portability_tmp=$(cygpath -m "$portability_tmp")
 fi
 trap 'rm -rf "$portability_tmp"' EXIT
+
+# Windows commonly exposes Python 3 as `python` without a usable `python3`.
+# Exercise that fallback with an isolated PATH so a host python3 cannot mask it.
+python_fallback_bin="$portability_tmp/python-fallback-bin"
+mkdir -p "$python_fallback_bin"
+python_fallback_path="$python_fallback_bin"
+if command -v cygpath >/dev/null 2>&1; then
+  python_fallback_path=$(cygpath -u "$python_fallback_bin")
+fi
+resolved_bash=$(command -v bash)
+resolved_python=$(command -v "$CONTEXTOS_PYTHON_CMD")
+printf '#!%s\nexec %q "$@"\n' "$resolved_bash" "$resolved_python" > "$python_fallback_bin/python"
+chmod +x "$python_fallback_bin/python"
+fallback_python=$(
+  PATH="$python_fallback_path" CONTEXTOS_PYTHON= "$resolved_bash" -c \
+    'source "$1"; printf "%s" "$CONTEXTOS_PYTHON_CMD"' _ "$ROOT/scripts/python-env.sh"
+)
+[ "$fallback_python" = "python" ] || fail "Python resolver did not fall back from python3 to python"
+
 invalid_metadata="$portability_tmp/invalid-openai.yaml"
 cp .agents/skills/context-start/agents/openai.yaml "$invalid_metadata"
 printf 'malformed: [\n' >> "$invalid_metadata"
-if python3 tests/validate-openai-metadata.py "$invalid_metadata" context-start >/dev/null 2>&1; then
+if "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py "$invalid_metadata" context-start >/dev/null 2>&1; then
   fail "malformed openai.yaml metadata passed validation"
 fi
 
 invalid_policy="$portability_tmp/string-policy-openai.yaml"
 sed 's/allow_implicit_invocation: false/allow_implicit_invocation: "false"/' \
   .agents/skills/context-start/agents/openai.yaml > "$invalid_policy"
-if python3 tests/validate-openai-metadata.py "$invalid_policy" context-start >/dev/null 2>&1; then
+if "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py "$invalid_policy" context-start >/dev/null 2>&1; then
   fail "string-valued invocation policy passed validation"
 fi
 
 invalid_prompt="$portability_tmp/prefixed-skill-openai.yaml"
 sed 's/\$context-start /\$context-started /' \
   .agents/skills/context-start/agents/openai.yaml > "$invalid_prompt"
-if python3 tests/validate-openai-metadata.py "$invalid_prompt" context-start >/dev/null 2>&1; then
+if "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py "$invalid_prompt" context-start >/dev/null 2>&1; then
   fail "prefixed skill token passed metadata validation"
 fi
 
 control_prompt="$portability_tmp/control-prompt-openai.yaml"
 sed 's/brief me/brief\\u000a me/' \
   .agents/skills/context-start/agents/openai.yaml > "$control_prompt"
-if python3 tests/validate-openai-metadata.py "$control_prompt" context-start >/dev/null 2>&1; then
+if "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py "$control_prompt" context-start >/dev/null 2>&1; then
   fail "escaped control character passed metadata validation"
 fi
 
@@ -164,40 +184,40 @@ tr -d '\r' < .claude/commands/dream.md > "$normalized_dream"
 body_only_command="$portability_tmp/body-only-start.md"
 sed '/^disable-model-invocation: true$/d' "$normalized_start" > "$body_only_command"
 printf '\ndisable-model-invocation: true\n' >> "$body_only_command"
-if python3 tests/validate-openai-metadata.py --command "$body_only_command" start >/dev/null 2>&1; then
+if "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py --command "$body_only_command" start >/dev/null 2>&1; then
   fail "body-only invocation gate passed command validation"
 fi
 
 unrestricted_start="$portability_tmp/unrestricted-start.md"
 sed 's/^allowed-tools:.*/allowed-tools: [Read, Bash]/' "$normalized_start" > "$unrestricted_start"
-if python3 tests/validate-openai-metadata.py --command "$unrestricted_start" start >/dev/null 2>&1; then
+if "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py --command "$unrestricted_start" start >/dev/null 2>&1; then
   fail "unrestricted inline Bash grant passed command validation"
 fi
 
 wildcard_start="$portability_tmp/wildcard-start.md"
 sed 's/^allowed-tools:.*/allowed-tools: "Read, Glob, Bash(gws drive files list:*)"/' "$normalized_start" > "$wildcard_start"
-if python3 tests/validate-openai-metadata.py --command "$wildcard_start" start >/dev/null 2>&1; then
+if "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py --command "$wildcard_start" start >/dev/null 2>&1; then
   fail "gws trailing-wildcard pre-approval passed command validation"
 fi
 
 for bad_scalar in false null 123; do
   typed_command="$portability_tmp/non-string-description-$bad_scalar.md"
   sed "s/^description:.*/description: $bad_scalar/" "$normalized_setup" > "$typed_command"
-  if python3 tests/validate-openai-metadata.py --command "$typed_command" setup >/dev/null 2>&1; then
+  if "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py --command "$typed_command" setup >/dev/null 2>&1; then
     fail "$bad_scalar command description passed scalar-type validation"
   fi
 done
 
 boolean_tools="$portability_tmp/boolean-tools-start.md"
 sed 's/^allowed-tools:.*/allowed-tools: false/' "$normalized_start" > "$boolean_tools"
-if python3 tests/validate-openai-metadata.py --command "$boolean_tools" start >/dev/null 2>&1; then
+if "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py --command "$boolean_tools" start >/dev/null 2>&1; then
   fail "boolean allowed-tools passed scalar-type validation"
 fi
 
 duplicate_gate="$portability_tmp/duplicate-gate-dream.md"
 sed '/^disable-model-invocation: true$/a disable-model-invocation: false' \
   "$normalized_dream" > "$duplicate_gate"
-if python3 tests/validate-openai-metadata.py --command "$duplicate_gate" dream >/dev/null 2>&1; then
+if "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py --command "$duplicate_gate" dream >/dev/null 2>&1; then
   fail "duplicate false invocation gate passed command validation"
 fi
 
@@ -270,7 +290,7 @@ git -C "$no_remote_fixture" diff --quiet || fail "no-remote default-no path wrot
 
 memory_notice_fixture="$portability_tmp/claude-memory-notice"
 make_setup_fixture "$memory_notice_fixture"
-memory_notice_output=$(printf 'y\n\nn\nn\nn\n' | (cd "$memory_notice_fixture" && PATH="$(dirname "$(command -v python3)"):$(dirname "$(command -v git)"):/usr/bin:/bin" bash scripts/setup.sh --agent claude))
+memory_notice_output=$(printf 'y\n\nn\nn\nn\n' | (cd "$memory_notice_fixture" && PATH="$(dirname "$(command -v "$CONTEXTOS_PYTHON_CMD")"):$(dirname "$(command -v git)"):/usr/bin:/bin" bash scripts/setup.sh --agent claude))
 grep -Fq 'auto-memory is enabled by default' <<<"$memory_notice_output" || fail "local Claude onboarding omitted auto-memory default"
 grep -Fq 'Inspect it with /memory' <<<"$memory_notice_output" || fail "local Claude onboarding omitted /memory inspection"
 grep -Fq 'autoMemoryEnabled: false' <<<"$memory_notice_output" || fail "local Claude onboarding omitted opt-out setting"
@@ -292,9 +312,9 @@ done
 test -f .codex/hooks.json || fail "missing Codex hook adapter"
 test -f adapters/hermes/hooks.example.yaml || fail "missing Hermes hook adapter"
 test -f contextos/__main__.py || fail "missing deterministic lifecycle kernel"
-python3 -m unittest discover -s tests -p 'test_contextos_kernel.py' >/dev/null \
+"$CONTEXTOS_PYTHON_CMD" -m unittest discover -s tests -p 'test_contextos_kernel.py' >/dev/null \
   || fail "kernel conformance failed"
-python3 -m unittest discover -s tests -p 'test_runtime_manifests.py' >/dev/null \
+"$CONTEXTOS_PYTHON_CMD" -m unittest discover -s tests -p 'test_runtime_manifests.py' >/dev/null \
   || fail "kernel or runtime manifest conformance failed"
 
 echo "Portability checks passed"

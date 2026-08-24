@@ -2,10 +2,11 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+source "$ROOT/scripts/python-env.sh"
 
 SSOT_OUTPUT=$(printf '%s' '{"tool_input":{"file_path":"/tmp/context/state/current.md"}}' | \
   bash "$ROOT/.claude/hooks/ssot-guard.sh")
-if ! printf '%s' "$SSOT_OUTPUT" | python3 -c '
+if ! printf '%s' "$SSOT_OUTPUT" | "$CONTEXTOS_PYTHON_CMD" -c '
 import json, sys
 payload = json.load(sys.stdin)
 assert "current.md is updated" in payload["systemMessage"]
@@ -16,7 +17,7 @@ fi
 
 SSOT_WINDOWS_OUTPUT=$(printf '%s' '{"tool_input":{"file_path":"C:\\repo\\state\\decisions.md"}}' | \
   bash "$ROOT/.claude/hooks/ssot-guard.sh")
-if ! printf '%s' "$SSOT_WINDOWS_OUTPUT" | python3 -c '
+if ! printf '%s' "$SSOT_WINDOWS_OUTPUT" | "$CONTEXTOS_PYTHON_CMD" -c '
 import json, sys
 payload = json.load(sys.stdin)
 assert "decisions.md is append-only" in payload["systemMessage"]
@@ -26,7 +27,7 @@ assert "decisions.md is append-only" in payload["systemMessage"]
 fi
 
 MALFORMED_OUTPUT=$(printf '%s' 'not-json' | bash "$ROOT/.claude/hooks/ssot-guard.sh")
-if ! printf '%s' "$MALFORMED_OUTPUT" | python3 -c '
+if ! printf '%s' "$MALFORMED_OUTPUT" | "$CONTEXTOS_PYTHON_CMD" -c '
 import json, sys
 payload = json.load(sys.stdin)
 assert "malformed input" in payload["systemMessage"]
@@ -76,7 +77,7 @@ fi
 
 
 BACKSLASH_PATH=$(printf '%s' "$TEST_REPO/note.md" | tr '/' '\\')
-BACKSLASH_PAYLOAD=$(python3 -c '
+BACKSLASH_PAYLOAD=$("$CONTEXTOS_PYTHON_CMD" -c '
 import json, sys
 print(json.dumps({"tool_input": {"file_path": sys.argv[1]}}))
 ' "$BACKSLASH_PATH")

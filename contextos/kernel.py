@@ -10,7 +10,7 @@ import subprocess
 import sys
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -150,10 +150,12 @@ def read_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def _replace_last_updated(content: str, today: str) -> tuple[str, str | None]:
+def _replace_last_updated(
+    content: str, today: str, label: str = "lifecycle state"
+) -> tuple[str, str | None]:
     matches = LAST_UPDATED_RE.findall(content)
     if len(matches) != 1:
-        raise ContextOSError("state/current.md must contain exactly one **Last Updated:** line")
+        raise ContextOSError(f"{label} must contain exactly one **Last Updated:** line")
     old = matches[0].strip()
     updated = LAST_UPDATED_RE.sub(f"**Last Updated:** {today}", content, count=1)
     return updated, old if REAL_DATE_RE.fullmatch(old) else None
@@ -169,7 +171,9 @@ def _advance_current(
 ) -> None:
     current = workspace.state_dir / "current.md"
     history = workspace.state_dir / "current-log.md"
-    updated, old_date = _replace_last_updated(desired.rstrip() + "\n", today)
+    updated, old_date = _replace_last_updated(
+        desired.rstrip() + "\n", today, "state/current.md"
+    )
     pending[current] = updated
     history_text = history.read_text(encoding="utf-8") if history.exists() else "# current.md update log\n\n"
     newest = _newest_history_date(history_text)
@@ -179,6 +183,28 @@ def _advance_current(
             raise ContextOSError("state/current-log.md is missing its required heading")
         before, after = history_text.split(marker, 1)
         pending[history] = f"{before}{marker}\n\n{old_date}\n\n{after.lstrip()}"
+
+
+def _advance_dated_state(path: Path, desired: str, today: str) -> str:
+    label = path.as_posix()
+    normalized = desired.rstrip() + "\n"
+    matches = LAST_UPDATED_RE.findall(normalized)
+    if len(matches) > 1:
+        raise ContextOSError(f"{label} must contain at most one **Last Updated:** line")
+    if matches:
+        updated, _ = _replace_last_updated(normalized, today, label)
+        return updated
+
+    # Workspaces created before freshness metadata was added should upgrade on
+    # their next lifecycle write instead of failing setup or session end.
+    lines = normalized.splitlines()
+    if not lines or not lines[0].startswith("# "):
+        raise ContextOSError(
+            f"{label} must begin with a level-one heading when adding **Last Updated:**"
+        )
+    remainder = "\n".join(lines[1:]).lstrip()
+    suffix = f"\n\n{remainder}" if remainder else "\n"
+    return f"{lines[0]}\n\n**Last Updated:** {today}{suffix}"
 
 
 def _session_append(path: Path, block: str, date: str) -> str:
@@ -231,7 +257,10 @@ def render_end(workspace: Workspace, payload: dict[str, Any], now: datetime) -> 
         _advance_current(workspace, ensure_text(payload["current_markdown"], "current_markdown"), today, pending)
     for field, filename in (("blockers_markdown", "blockers.md"), ("weekly_priorities_markdown", "weekly-priorities.md")):
         if field in payload:
-            pending[workspace.state_dir / filename] = ensure_text(payload[field], field).rstrip() + "\n"
+            path = workspace.state_dir / filename
+            pending[path] = _advance_dated_state(
+                path, ensure_text(payload[field], field), today
+            )
     if decisions:
         decision_path = workspace.state_dir / "decisions.md"
         if not decision_path.exists():
@@ -571,28 +600,57 @@ def runtime_manifest(root: Path, runtime: str) -> dict[str, Any]:
     return manifest
 
 
+def _state_freshness(path: Path, today: date, threshold: int) -> dict[str, Any]:
+    updated = None
+    age = None
+    if path.exists():
+        match = LAST_UPDATED_RE.search(path.read_text(encoding="utf-8"))
+        if match and REAL_DATE_RE.fullmatch(match.group(1).strip()):
+            updated = match.group(1).strip()
+            age = (today - datetime.strptime(updated, "%Y-%m-%d").date()).days
+    if not path.exists():
+        status = "missing"
+    elif age is None:
+        status = "unknown"
+    elif age > threshold:
+        status = "stale"
+    else:
+        status = "fresh"
+    return {
+        "exists": path.exists(),
+        "last_updated": updated,
+        "age_days": age,
+        "stale_after_days": threshold,
+        "freshness_status": status,
+        "stale": None if age is None else age > threshold,
+    }
+
+
+def _initialization_state(
+    workspace: Workspace, today: date
+) -> tuple[bool, dict[str, dict[str, Any]]]:
+    thresholds = {"current.md": 3, "weekly-priorities.md": 5, "blockers.md": 7}
+    state = {
+        relative_path(workspace.root, workspace.state_dir / filename): _state_freshness(
+            workspace.state_dir / filename, today, threshold
+        )
+        for filename, threshold in thresholds.items()
+    }
+    initialized = all(
+        item["freshness_status"] in {"fresh", "stale"} for item in state.values()
+    )
+    return initialized, state
+
+
 def start_report(root: Path, now: datetime) -> dict[str, Any]:
     workspace = load_workspace(root)
-    thresholds = {"current.md": 3, "weekly-priorities.md": 5, "blockers.md": 7}
-    files: dict[str, Any] = {}
-    today = now.date()
-    for filename, threshold in thresholds.items():
-        path = workspace.state_dir / filename
-        age = None
-        updated = None
-        if path.exists():
-            match = LAST_UPDATED_RE.search(path.read_text(encoding="utf-8"))
-            if match and REAL_DATE_RE.fullmatch(match.group(1).strip()):
-                updated = match.group(1).strip()
-                age = (today - datetime.strptime(updated, "%Y-%m-%d").date()).days
-        files[relative_path(root, path)] = {
-            "exists": path.exists(), "last_updated": updated, "age_days": age,
-            "stale_after_days": threshold, "stale": age is not None and age > threshold,
-        }
+    initialized, files = _initialization_state(workspace, now.date())
     sessions = sorted(workspace.sessions_dir.glob("????-??-??.md"), reverse=True) if workspace.sessions_dir.exists() else []
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_at": now.isoformat(),
+        "initialized": initialized,
+        "next_action": None if initialized else "Run the explicit setup workflow before starting a session.",
         "state": files,
         "latest_session": relative_path(root, sessions[0]) if sessions else None,
         "task_file": relative_path(root, workspace.task_file),
@@ -632,6 +690,16 @@ def doctor(root: Path, runtime: str | None = None) -> dict[str, Any]:
     for path in required_paths:
         rel = relative_path(root, path)
         add(f"file:{rel}", "pass" if path.exists() else "fail", rel)
+    initialized, initialization_files = _initialization_state(workspace, utc_now().date())
+    unknown = [
+        path for path, item in initialization_files.items()
+        if item["freshness_status"] in {"missing", "unknown"}
+    ]
+    add(
+        "initialization-state",
+        "pass" if initialized else "warn",
+        "ready" if initialized else f"guided setup required; unresolved freshness: {', '.join(unknown)}",
+    )
     selected = runtime
     local_runtime = root / ".context-os" / "runtime.json"
     if selected is None and local_runtime.exists():
