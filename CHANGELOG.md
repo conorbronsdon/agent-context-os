@@ -15,9 +15,15 @@
 - `state/current-log.md`, the seed file required by the shared checkpoint and close workflows.
 - A validated, opt-in integrations catalog with generated documentation, explicit credential/data/side-effect boundaries, and no automatic installation or activation. Initial links cover Agent Skills, Agent Workspace, AI Tools for Creators, and Substack MCP.
 - Reviewed optional entries for Tolaria MCP, the official Obsidian CLI, Beads for Gemini CLI, and Granola's hosted MCP, with conservative sensitive-read, remote-write, overwrite, deletion, arbitrary-execution, publish, destructive, OAuth, retention, residency, and transcript gates.
+- `scripts/contextos.sh` and `scripts/context-os-hook.sh`, thin wrappers that run the lifecycle kernel and hook entry point through `scripts/python-env.sh`. The Codex and Hermes hook adapters and the four lifecycle skills now use them instead of hardcoding `python3`.
+- `CONTEXTOS_PYTHON` for pinning an explicit interpreter, documented in the getting-started prerequisites.
 - First-class Codex onboarding with a root `AGENTS.md`, four explicit-invocation lifecycle skills under `.agents/skills/`, generated skill UI metadata, `--agent codex` setup support, portability tests, and a host-boundary guide.
 
 ### Fixed
+- Workspace readiness now has one definition. `start`, `doctor`, and the session-start hook share a single predicate keyed on `state/current.md`; previously the hook and `start` could report opposite verdicts for the same workspace. `weekly-priorities.md` and `blockers.md` freshness is still reported, under a separate `state-freshness` check, but no longer gates readiness — leaving them empty is a valid steady state, not an unfinished setup.
+- `setup` now stamps `**Last Updated:**` on the state files that `start` and `doctor` read, so a completed setup reports as initialized without depending on the agent to hand-write the line.
+- `start`'s `next_action` names the command to run instead of referring to "the explicit setup workflow" abstractly.
+- `CONTEXTOS_PYTHON` is honored exactly: an override that does not resolve to a working interpreter now fails loudly instead of silently falling back to a different one. The interpreter floor is Python 3.9, matching the kernel's use of `str.removeprefix`, instead of any Python 3.
 - `scripts/setup.sh` no longer relies on GNU-only `sed -i`; literal-name replacement and sample-route cleanup now use the documented Python 3 dependency.
 - Replaced the deprecated Notion npm-server instructions with Notion's hosted OAuth MCP path for Claude Code and Codex.
 - Aligned manual claude.ai setup prompts with portable skill paths and approval-gated local setup instead of claiming slash-command or commit parity.

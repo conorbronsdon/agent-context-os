@@ -1,8 +1,8 @@
 # Merge only after reviewing the exact commands and Hermes hook trust boundary.
 hooks:
   - event: on_session_start
-    command: "python3 \"$(git rev-parse --show-toplevel)/scripts/context-os-hook.py\" hermes session-start"
+    command: "bash \"$(git rev-parse --show-toplevel)/scripts/context-os-hook.sh\" hermes session-start"
   - event: pre_tool_call
-    command: "python3 \"$(git rev-parse --show-toplevel)/scripts/context-os-hook.py\" hermes pre-write"
+    command: "bash \"$(git rev-parse --show-toplevel)/scripts/context-os-hook.sh\" hermes pre-write"
     when:
       tools: [patch, write_file, terminal]

@@ -50,13 +50,13 @@ mapping repository-relative paths to complete desired content. Add a path to
 `replace_populated` only after explicit approval to replace that populated file.
 Use `{{TODAY}}` where the deterministic local date belongs.
 
-Run `python3 -m contextos propose setup --input <payload.json>`. Present every
+Run `bash scripts/contextos.sh propose setup --input <payload.json>`. Present every
 returned diff and its proposal digest. The digest binds the exact content but
 does not authenticate a human approver; rely on the host permission boundary.
 After explicit approval of that exact proposal, run:
 
 ```text
-python3 -m contextos apply <proposal> --confirm <digest> --runtime <active-runtime>
+bash scripts/contextos.sh apply <proposal> --confirm <digest> --runtime <active-runtime>
 ```
 
 The kernel must refuse path escapes, writes outside context paths, unapproved

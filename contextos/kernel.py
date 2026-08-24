@@ -21,6 +21,12 @@ LAST_UPDATED_RE = re.compile(r"^\*\*Last Updated:\*\*\s*(.+?)\s*$", re.MULTILINE
 REAL_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 SETUP_ROOTS = {"identity", "projects", "state"}
 SETUP_FILES = {"ROUTING.md", "TODO.md", "CLAUDE.md", "AGENTS.md"}
+STATE_THRESHOLDS = {"current.md": 3, "weekly-priorities.md": 5, "blockers.md": 7}
+INITIALIZATION_FILE = "current.md"
+SETUP_NEXT_ACTION = (
+    "Run the explicit setup workflow (bash scripts/setup.sh, then the $context-setup "
+    "skill) before starting a session."
+)
 RUNTIME_NAMES = {"claude", "codex", "hermes"}
 CAPABILITY_VALUES = {"native", "adapter", "advisory", "unsupported"}
 CAPABILITY_KEYS = {
@@ -185,7 +191,7 @@ def _advance_current(
         pending[history] = f"{before}{marker}\n\n{old_date}\n\n{after.lstrip()}"
 
 
-def _advance_dated_state(path: Path, desired: str, today: str) -> str:
+def _advance_dated_state(path: Path, desired: str, today: str, required: bool = True) -> str:
     label = path.as_posix()
     normalized = desired.rstrip() + "\n"
     matches = LAST_UPDATED_RE.findall(normalized)
@@ -199,6 +205,10 @@ def _advance_dated_state(path: Path, desired: str, today: str) -> str:
     # their next lifecycle write instead of failing setup or session end.
     lines = normalized.splitlines()
     if not lines or not lines[0].startswith("# "):
+        # Setup stamps reviewed content opportunistically; a lifecycle write to a
+        # file the kernel already owns must not silently skip the timestamp.
+        if not required:
+            return normalized
         raise ContextOSError(
             f"{label} must begin with a level-one heading when adding **Last Updated:**"
         )
@@ -302,6 +312,11 @@ def render_setup(workspace: Workspace, payload: dict[str, Any], now: datetime) -
     replace = set(ensure_string_list(payload.get("replace_populated"), "replace_populated"))
     if not isinstance(files, dict) or not files:
         raise ContextOSError("files must be a non-empty object mapping paths to content")
+    today = now.strftime("%Y-%m-%d")
+    # Setup owns the freshness line on the state files start/doctor read, so a
+    # completed setup reports as initialized without relying on the agent to
+    # hand-write **Last Updated:** into reviewed content.
+    dated_state = {workspace.state_dir / filename for filename in STATE_THRESHOLDS}
     pending: dict[Path, str] = {}
     for raw_path, raw_content in files.items():
         if not isinstance(raw_path, str):
@@ -312,9 +327,11 @@ def render_setup(workspace: Workspace, payload: dict[str, Any], now: datetime) -
         skill_path = len(Path(relative).parts) >= 3 and Path(relative).parts[:2] == (".agents", "skills")
         if top not in SETUP_ROOTS and relative not in SETUP_FILES and not skill_path:
             raise ContextOSError(f"setup cannot write outside approved context paths: {relative}")
-        content = ensure_text(raw_content, f"files[{raw_path}]").replace("{{TODAY}}", now.strftime("%Y-%m-%d"))
+        content = ensure_text(raw_content, f"files[{raw_path}]").replace("{{TODAY}}", today)
         if path.exists() and _is_populated(path.read_text(encoding="utf-8")) and relative not in replace:
             raise ContextOSError(f"populated file requires replace_populated approval: {relative}")
+        if path in dated_state:
+            content = _advance_dated_state(path, content, today, required=False)
         pending[path] = content.rstrip() + "\n"
     return pending
 
@@ -635,20 +652,34 @@ def _state_freshness(path: Path, today: date, threshold: int) -> dict[str, Any]:
     }
 
 
+def _is_initialized(workspace: Workspace) -> bool:
+    """Single readiness predicate shared by start, doctor, and the session hook.
+
+    Only current.md gates readiness. weekly-priorities.md and blockers.md are
+    legitimately left at their shipped template by users who have neither, so
+    requiring a real date on all three would report an initialized workspace as
+    needing setup forever. Their freshness is still reported separately.
+    """
+    current = workspace.state_dir / INITIALIZATION_FILE
+    if not current.exists():
+        return False
+    content = current.read_text(encoding="utf-8")
+    if PLACEHOLDER_DATE in content:
+        return False
+    match = LAST_UPDATED_RE.search(content)
+    return bool(match and REAL_DATE_RE.fullmatch(match.group(1).strip()))
+
+
 def _initialization_state(
     workspace: Workspace, today: date
 ) -> tuple[bool, dict[str, dict[str, Any]]]:
-    thresholds = {"current.md": 3, "weekly-priorities.md": 5, "blockers.md": 7}
     state = {
         relative_path(workspace.root, workspace.state_dir / filename): _state_freshness(
             workspace.state_dir / filename, today, threshold
         )
-        for filename, threshold in thresholds.items()
+        for filename, threshold in STATE_THRESHOLDS.items()
     }
-    initialized = all(
-        item["freshness_status"] in {"fresh", "stale"} for item in state.values()
-    )
-    return initialized, state
+    return _is_initialized(workspace), state
 
 
 def start_report(root: Path, now: datetime) -> dict[str, Any]:
@@ -659,7 +690,7 @@ def start_report(root: Path, now: datetime) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "generated_at": now.isoformat(),
         "initialized": initialized,
-        "next_action": None if initialized else "Run the explicit setup workflow before starting a session.",
+        "next_action": None if initialized else SETUP_NEXT_ACTION,
         "state": files,
         "latest_session": relative_path(root, sessions[0]) if sessions else None,
         "task_file": relative_path(root, workspace.task_file),
@@ -700,14 +731,22 @@ def doctor(root: Path, runtime: str | None = None) -> dict[str, Any]:
         rel = relative_path(root, path)
         add(f"file:{rel}", "pass" if path.exists() else "fail", rel)
     initialized, initialization_files = _initialization_state(workspace, utc_now().date())
-    unknown = [
+    gate = relative_path(root, workspace.state_dir / INITIALIZATION_FILE)
+    add(
+        "initialization-state",
+        "pass" if initialized else "warn",
+        "ready" if initialized else f"guided setup required; {gate} carries no real **Last Updated:** date",
+    )
+    unresolved = [
         path for path, item in initialization_files.items()
         if item["freshness_status"] in {"missing", "unknown", "future"}
     ]
     add(
-        "initialization-state",
-        "pass" if initialized else "warn",
-        "ready" if initialized else f"guided setup required; unresolved freshness: {', '.join(unknown)}",
+        "state-freshness",
+        "pass" if not unresolved else "warn",
+        "all tracked state files carry a real date"
+        if not unresolved
+        else f"no usable **Last Updated:** date in: {', '.join(unresolved)}",
     )
     selected = runtime
     local_runtime = root / ".context-os" / "runtime.json"
@@ -778,9 +817,8 @@ def hook_report(root: Path, event: str, payload: dict[str, Any]) -> dict[str, An
     findings: list[dict[str, str]] = []
     workspace = load_workspace(root)
     if event == "session-start":
-        current = workspace.state_dir / "current.md"
-        if current.exists() and PLACEHOLDER_DATE in current.read_text(encoding="utf-8"):
-            findings.append({"severity": "advisory", "message": "Context OS is not initialized; run the explicit setup workflow."})
+        if not _is_initialized(workspace):
+            findings.append({"severity": "advisory", "message": f"Context OS is not initialized. {SETUP_NEXT_ACTION}"})
         lock = root / ".context-os" / "apply.lock"
         if lock.exists():
             findings.append({"severity": "warning", "message": f"A lifecycle apply lock exists at {lock}. Run context-os doctor before writing."})

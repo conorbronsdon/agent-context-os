@@ -26,6 +26,7 @@ class CrossRuntimeHookTest(unittest.TestCase):
         config = json.loads((ROOT / ".codex/hooks.json").read_text(encoding="utf-8"))
         self.assertEqual({"SessionStart", "PreToolUse"}, set(config["hooks"]))
         serialized = json.dumps(config)
+        self.assertIn("context-os-hook.sh", serialized)
         self.assertIn("context-os-hook.py", serialized)
         self.assertIn("commandWindows", serialized)
         self.assertIn("powershell.exe", serialized)
