@@ -105,6 +105,19 @@ def validate_workspace_path(value: Any, field: str) -> str:
     return raw
 
 
+def normalize_legacy_workspace_path(value: Any, field: str) -> str:
+    """Canonicalize only spellings the historical reader treated identically."""
+    raw = _text(value, field)
+    if "\\" in raw:
+        _fail(field, "backslash semantics differ by host; use POSIX separators")
+    if PurePosixPath(raw).is_absolute() or PureWindowsPath(raw).drive:
+        _fail(field, "must be repository-relative")
+    parts = [part for part in raw.split("/") if part not in {"", "."}]
+    if not parts or ".." in parts:
+        _fail(field, "cannot normalize an empty path or '..' segment losslessly")
+    return validate_workspace_path("/".join(parts), field)
+
+
 def _reject_path_role_collisions(paths: dict[str, str]) -> None:
     identities = {key: portable_identity(value) for key, value in paths.items()}
     if len(set(identities.values())) != len(identities):
@@ -309,7 +322,9 @@ def _legacy_scalar(raw: str, *, line_number: int) -> str:
                 raise WorkspaceConfigError(
                     f"workspace.yaml line {line_number}: invalid quoted value"
                 ) from exc
-    return validate_workspace_path(value, f"workspace.yaml line {line_number}")
+    return normalize_legacy_workspace_path(
+        value, f"workspace.yaml line {line_number}"
+    )
 
 
 def analyze_legacy_workspace(text: str) -> LegacyAnalysis:
@@ -364,7 +379,8 @@ def workspace_schema_document() -> dict[str, Any]:
     }
     path = {
         **text,
-        "pattern": r"^(?![A-Za-z]:)(?![/\\])(?!.*\\)(?!.*(?:^|/)\.\.?[/\\]?)"
+        "pattern": r"^(?![A-Za-z]:)(?![/\\])(?!.*\\)"
+        r"(?!.*(?:^|/)\.\.?(?:/|$))"
         r"(?!.*//)(?!.*(?:^|/)(?:\.git|\.context-os)(?:/|$)).+$",
     }
     return {

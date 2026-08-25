@@ -67,10 +67,13 @@ never falls back to valid YAML.
 
 Without JSON, the historical flat `workspace.yaml` path reader remains
 compatible. It continues to accept `state_dir`, `sessions_dir`, and `task_file`
-with the prior defaults. Migration is deliberately stricter: duplicate keys,
-empty values, nested structures, anchors, block scalars, unknown keys, and
-unsafe paths block a supposedly lossless preview instead of being silently
-dropped.
+with the prior defaults and historical host path spelling. Migration safely
+normalizes leading `./`, trailing `/`, and repeated `/`. Backslashes remain
+runtime-compatible on the current host but cannot be migrated because their
+meaning differs across operating systems; replace them with POSIX `/` first.
+Duplicate keys, empty values, nested structures, anchors, block scalars,
+unknown keys, and unsafe paths block a supposedly lossless preview instead of
+being silently dropped.
 
 Inspect effective state:
 
@@ -113,6 +116,10 @@ then removes the now-redundant scalar file. If cleanup fails, the host map
 remains authoritative and the command reports the retained legacy file. Runtime
 installation uses the same migration order before updating the host map and
 preserves an unchanged runtime's original timestamp.
+
+Host-state writes use `.context-os/hosts.lock`. A crash can leave that lock
+behind; `doctor` warns with recovery guidance. Remove it only after confirming
+that no install or migration process is still running.
 
 ## Setup compatibility contract
 

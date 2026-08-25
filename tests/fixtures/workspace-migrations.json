@@ -18,6 +18,33 @@
     }
   },
   {
+    "id": "leading-dot-slash-normalizes",
+    "legacy": "state_dir: ./custom-state\n",
+    "expected_paths": {
+      "state_dir": "custom-state",
+      "sessions_dir": "sessions",
+      "task_file": "TODO.md"
+    }
+  },
+  {
+    "id": "trailing-slash-normalizes",
+    "legacy": "state_dir: custom-state/\n",
+    "expected_paths": {
+      "state_dir": "custom-state",
+      "sessions_dir": "sessions",
+      "task_file": "TODO.md"
+    }
+  },
+  {
+    "id": "repeated-slash-normalizes",
+    "legacy": "state_dir: custom//state\n",
+    "expected_paths": {
+      "state_dir": "custom/state",
+      "sessions_dir": "sessions",
+      "task_file": "TODO.md"
+    }
+  },
+  {
     "id": "all-supported-keys",
     "legacy": "state_dir: custom-state\nsessions_dir: history\ntask_file: tasks.md\n",
     "expected_paths": {

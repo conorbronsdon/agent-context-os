@@ -37,6 +37,7 @@ from .workspace_schema import (
     analyze_legacy_workspace,
     legacy_workspace_values,
     load_workspace_config,
+    normalize_legacy_workspace_path,
     portable_identity as workspace_portable_identity,
     render_workspace_config,
     strict_json_loads,
@@ -143,12 +144,33 @@ def _reject_config_aliases(root: Path, canonical_name: str) -> None:
         )
 
 
-def _workspace_from_paths(root: Path, paths: dict[str, str]) -> Workspace:
+def _legacy_repo_path(root: Path, raw: str, field: str) -> Path:
+    relative = Path(raw)
+    if relative.is_absolute():
+        raise ContextOSError(f"legacy workspace.yaml {field} must be repository-relative")
+    resolved = (root / relative).resolve()
+    try:
+        resolved.relative_to(root.resolve())
+    except ValueError as exc:
+        raise ContextOSError(
+            f"legacy workspace.yaml {field} escapes the repository root: {raw!r}"
+        ) from exc
+    return resolved
+
+
+def _workspace_from_paths(
+    root: Path, paths: dict[str, str], *, legacy: bool = False
+) -> Workspace:
+    def resolve(key: str) -> Path:
+        if legacy:
+            return _legacy_repo_path(root, paths[key], key)
+        return safe_repo_path(root, paths[key])
+
     return Workspace(
         root=root,
-        state_dir=safe_repo_path(root, paths["state_dir"]),
-        sessions_dir=safe_repo_path(root, paths["sessions_dir"]),
-        task_file=safe_repo_path(root, paths["task_file"]),
+        state_dir=resolve("state_dir"),
+        sessions_dir=resolve("sessions_dir"),
+        task_file=resolve("task_file"),
     )
 
 
@@ -229,7 +251,7 @@ def resolve_workspace(root: Path) -> WorkspaceResolution:
             ),
         })
     return WorkspaceResolution(
-        workspace=_workspace_from_paths(root, values),
+        workspace=_workspace_from_paths(root, values, legacy=source == "legacy-yaml"),
         config=None,
         source=source,
         agents=None,
@@ -310,7 +332,7 @@ def plan_workspace_migration(
         if requested != configured and not configured.issubset(requested):
             raise ContextOSError(
                 "workspace migration will not shrink or replace configured agents; "
-                "use the explicit disable lifecycle"
+                "use the future explicit disable lifecycle"
             )
     elif legacy_path.exists() or legacy_path.is_symlink():
         if legacy_path.is_symlink():
@@ -326,7 +348,18 @@ def plan_workspace_migration(
                 "legacy workspace.yaml cannot be migrated losslessly: "
                 + "; ".join(analysis.issues)
             )
-        if analysis.values != effective:
+        try:
+            normalized_effective = {
+                key: normalize_legacy_workspace_path(
+                    value, f"workspace.yaml {key}"
+                )
+                for key, value in effective.items()
+            }
+        except WorkspaceConfigError as exc:
+            raise ContextOSError(
+                "legacy workspace.yaml cannot be migrated losslessly: " + str(exc)
+            ) from exc
+        if analysis.values != normalized_effective:
             raise ContextOSError(
                 "legacy workspace.yaml cannot be migrated losslessly: strict migration "
                 "interpretation differs from the historical reader"
@@ -1372,6 +1405,17 @@ def doctor(
             add(f"manifest:{host}", "fail", str(exc))
     lock = root / ".context-os" / "apply.lock"
     add("transaction-lock", "warn" if lock.exists() else "pass", str(lock) if lock.exists() else "none")
+    hosts_lock = root / ".context-os" / "hosts.lock"
+    add(
+        "host-state-lock",
+        "warn" if hosts_lock.exists() else "pass",
+        (
+            f"stale or active lock at {hosts_lock}; remove it only after confirming "
+            "no install or migration is running"
+        )
+        if hosts_lock.exists()
+        else "none",
+    )
     cutoff = utc_now().timestamp() - (30 * 24 * 60 * 60)
     old_artifacts = [
         path for folder in ("proposals", "receipts")
@@ -1382,20 +1426,37 @@ def doctor(
         "local-artifact-retention", "warn" if old_artifacts else "pass",
         f"{len(old_artifacts)} artifacts older than 30 days" if old_artifacts else "none older than 30 days",
     )
-    if selected:
-        selected_manifest: dict[str, Any] | None = None
+    drift_targets = (
+        [selected]
+        if selected
+        else list(local_hosts["hosts"])
+        if local_hosts is not None
+        else []
+    )
+    for drift_runtime in drift_targets:
+        drift_name = (
+            "runtime-manifest-drift"
+            if len(drift_targets) == 1
+            else f"runtime-manifest-drift:{drift_runtime}"
+        )
         try:
-            selected_manifest = runtime_manifest(root, selected)
-            expected_source = sha256_text(canonical_json(selected_manifest))
-            if local_hosts is not None and selected in local_hosts["hosts"]:
-                recorded_source = local_hosts["hosts"][selected]["source_manifest_sha256"]
+            drift_manifest = runtime_manifest(root, drift_runtime)
+            expected_source = sha256_text(canonical_json(drift_manifest))
+            if local_hosts is not None and drift_runtime in local_hosts["hosts"]:
+                recorded_source = local_hosts["hosts"][drift_runtime]["source_manifest_sha256"]
                 add(
-                    "runtime-manifest-drift",
+                    drift_name,
                     "pass" if recorded_source == expected_source else "warn",
                     "current" if recorded_source == expected_source else "rerun context-os install",
                 )
         except ContextOSError as exc:
-            add("runtime-manifest-drift", "fail", str(exc))
+            add(drift_name, "fail", str(exc))
+    if selected:
+        selected_manifest: dict[str, Any] | None = None
+        try:
+            selected_manifest = runtime_manifest(root, selected)
+        except ContextOSError:
+            selected_manifest = None
         if selected_manifest:
             for surface_id, surface in selected_manifest["surfaces"].items():
                 for probe in surface["binary_probes"]:

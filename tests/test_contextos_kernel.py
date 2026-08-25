@@ -618,6 +618,32 @@ class KernelTest(unittest.TestCase):
         self.assertIn("manifest:hermes", names)
         self.assertNotIn("manifest:claude", names)
 
+    def test_bare_doctor_checks_drift_for_every_installed_host(self) -> None:
+        install_runtime(self.root, "hermes")
+        install_runtime(self.root, "codex")
+        manifest = json.loads(
+            (self.root / "runtimes/hermes.json").read_text(encoding="utf-8")
+        )
+        manifest["install"]["next_steps"].append("drift")
+        (self.root / "runtimes/hermes.json").write_text(
+            json.dumps(manifest), encoding="utf-8"
+        )
+        report = doctor(self.root)
+        checks = {item["name"]: item for item in report["checks"]}
+        self.assertEqual("warn", checks["runtime-manifest-drift:hermes"]["status"])
+        self.assertEqual("pass", checks["runtime-manifest-drift:codex"]["status"])
+
+    def test_doctor_warns_about_host_state_lock_with_recovery_guidance(self) -> None:
+        local = self.root / ".context-os"
+        local.mkdir()
+        (local / "hosts.lock").write_text("pid=999999\n", encoding="utf-8")
+        report = doctor(self.root)
+        check = next(
+            item for item in report["checks"] if item["name"] == "host-state-lock"
+        )
+        self.assertEqual("warn", check["status"])
+        self.assertIn("confirming no install or migration is running", check["detail"])
+
     def test_bare_doctor_fails_when_registry_is_empty(self) -> None:
         shutil.rmtree(self.root / "runtimes")
         report = doctor(self.root)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import io
+import re
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -175,6 +176,17 @@ class WorkspaceConfigTest(unittest.TestCase):
             ):
                 validate_workspace_config(config(paths=paths), known_runtime_ids=KNOWN)
 
+    def test_generated_path_pattern_rejects_dot_segments_not_dotfiles(self) -> None:
+        pattern = workspace_schema_document()["properties"]["paths"]["properties"][
+            "state_dir"
+        ]["pattern"]
+        for accepted in (".github/state", "a/.private/state", "state"):
+            with self.subTest(accepted=accepted):
+                self.assertIsNotNone(re.match(pattern, accepted))
+        for rejected in (".", "..", "./state", "a/./state", "a/../state"):
+            with self.subTest(rejected=rejected):
+                self.assertIsNone(re.match(pattern, rejected))
+
     def test_strict_json_rejects_duplicates_constants_bom_and_invalid_json(self) -> None:
         for raw, message in (
             ('{"a": 1, "a": 2}', "duplicate"),
@@ -278,6 +290,30 @@ class WorkspaceConfigTest(unittest.TestCase):
         legacy.write_text('state_dir: "foo#bar"\n', encoding="utf-8")
         self.assertEqual(self.root / "foo", resolve_workspace(self.root).workspace.state_dir)
         with self.assertRaisesRegex(ContextOSError, "historical reader"):
+            plan_workspace_migration(self.root, ["claude"])
+
+    def test_legacy_benign_noncanonical_paths_still_run_and_migrate(self) -> None:
+        legacy = self.root / "workspace.yaml"
+        for raw, expected in (
+            ("./custom-state", "custom-state"),
+            ("custom-state/", "custom-state"),
+            ("custom//state", "custom/state"),
+        ):
+            with self.subTest(raw=raw):
+                legacy.write_text(f"state_dir: {raw}\n", encoding="utf-8")
+                resolution = resolve_workspace(self.root)
+                self.assertEqual(
+                    (self.root / expected).resolve(), resolution.workspace.state_dir
+                )
+                preview = plan_workspace_migration(self.root, ["claude"])
+                self.assertEqual(expected, preview["config"]["paths"]["state_dir"])
+
+        legacy.write_text("state_dir: custom\\state\n", encoding="utf-8")
+        self.assertEqual(
+            (self.root / Path("custom\\state")).resolve(),
+            resolve_workspace(self.root).workspace.state_dir,
+        )
+        with self.assertRaisesRegex(ContextOSError, "POSIX separators"):
             plan_workspace_migration(self.root, ["claude"])
 
     def test_normative_legacy_migration_fixtures(self) -> None:
