@@ -157,6 +157,7 @@ contextos/                 Deterministic lifecycle kernel
 .codex/hooks.json          Codex lifecycle advisory adapter
 adapters/hermes/           Hermes installation and optional hook adapter
 runtimes/                  Machine-readable capability manifests
+components/                Component ownership and dependency manifest
 integrations/              Machine-checked opt-in integration catalog
 references/                Generated catalog and integration setup notes
 scripts/                   Setup, validation, migration, and maintenance tools
@@ -197,6 +198,7 @@ CI runs the same aggregate validator. It checks structure, adapter mappings, lin
 | Use the repository in Hermes Agent | [Memory across agents](docs/memory-across-agents.md) and the Hermes section of [AGENTS.md](AGENTS.md) |
 | Keep claude.ai projects aligned | [Claude projects sync](docs/claude-projects-sync.md) |
 | See every command and portable skill | [Commands and skills](docs/commands-and-skills.md) |
+| Understand component ownership and future clean composition | [Component model](docs/component-model.md) |
 | Choose an optional add-on | [Integration chooser](docs/integrations-guide.md) and [catalog](references/integrations.md) |
 | Understand product language and boundaries | [Positioning](docs/positioning.md) |
 | Keep context files small and cheap to load | [Optimizing context files](docs/optimizing-context.md) |

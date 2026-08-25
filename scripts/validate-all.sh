@@ -18,6 +18,7 @@ done < <(find .claude/hooks scripts tests -name '*.sh' -print0)
 
 "$CONTEXTOS_PYTHON_CMD" -m unittest discover -s tests -p 'test_*.py'
 "$CONTEXTOS_PYTHON_CMD" scripts/integrations.py check
+"$CONTEXTOS_PYTHON_CMD" scripts/component-manifests.py check
 "$CONTEXTOS_PYTHON_CMD" scripts/runtime-manifests.py check
 
 "$CONTEXTOS_PYTHON_CMD" - <<'PY'

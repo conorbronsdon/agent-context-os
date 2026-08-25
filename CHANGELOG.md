@@ -11,6 +11,9 @@
 ### Added
 - A reviewed Pandoc catalog entry with a bounded non-PDF profile, explicit network and sensitive-read boundaries, PDF-engine execution guidance, and overwrite confirmation.
 - A reviewed MarkItDown MCP catalog entry covering its local-file and network read boundary, unauthenticated localhost transport, sandboxing guidance, and pinned v0.1.7 evidence.
+- An authoritative component inventory with dependency resolution, exact
+  tracked-file ownership, managed/seed/development policies, runtime-reference
+  validation, and documented prerequisites for future clean composition.
 - `CONTRIBUTING.md` — prerequisites, the validator as the one gate, which files are generated, how to add a catalog entry, skill/adapter structure, and the enforced size limits.
 - `SECURITY.md` — private reporting path, what is in and out of scope, and the design boundaries most likely to be misread (validation is not a publication guarantee; `verified` is a metadata claim; nothing here sandboxes an agent).
 - Issue templates for integration proposals and bug reports, plus contact links routing security reports away from public issues.

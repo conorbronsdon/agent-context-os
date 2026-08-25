@@ -12,10 +12,14 @@ models, tool names, or native memory.
    judgment without owning mutation mechanics.
 3. **Deterministic kernel:** `bash scripts/contextos.sh` owns paths, rendering,
    invariants, proposals, locks, optimistic hashes, applies, and receipts.
-4. **Runtime adapters:** discoverable schema-v2 descriptors in `runtimes/` map
+4. **Component inventory:** `components/manifest.json` assigns every tracked
+   product, seed, and development path to one owner and defines the dependency
+   closure shared by runtime selections. It is validated metadata, not a file
+   materializer. See [the component model](component-model.md).
+5. **Runtime adapters:** discoverable schema-v2 descriptors in `runtimes/` map
    each host surface to instructions, skills, lifecycle invocations, probes,
    capabilities, and evidence. Provider files remain in their adapter directories.
-5. **Conformance:** dependency-light tests assert exact state transitions;
+6. **Conformance:** dependency-light tests assert exact state transitions;
    opt-in launch tests exercise installed host discovery without hiding skips.
 
 ## Commands

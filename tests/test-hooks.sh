@@ -59,6 +59,7 @@ cp "$ROOT/.claude/hooks/session-start.sh" "$SESSION_REPO/.claude/hooks/session-s
 cp "$ROOT/scripts/context-os-hook.py" "$ROOT/scripts/context-os-hook.sh" \
   "$ROOT/scripts/python-env.sh" "$SESSION_REPO/scripts/"
 cp -R "$ROOT/contextos" "$SESSION_REPO/contextos"
+cp -R "$ROOT/components" "$SESSION_REPO/"
 cp -R "$ROOT/runtimes" "$SESSION_REPO/"
 printf '# Test workspace\n' > "$SESSION_REPO/AGENTS.md"
 printf '# Test workspace\n' > "$SESSION_REPO/CLAUDE.md"

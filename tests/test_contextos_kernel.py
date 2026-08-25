@@ -58,7 +58,9 @@ class KernelTest(unittest.TestCase):
         for runtime in ("claude", "codex", "hermes"):
             source = ROOT / "runtimes" / f"{runtime}.json"
             (self.root / "runtimes" / f"{runtime}.json").write_bytes(source.read_bytes())
-        for directory in (".agents", ".claude", "adapters", "docs", "tests"):
+        for directory in (
+            ".agents", ".claude", "adapters", "components", "docs", "tests"
+        ):
             shutil.copytree(ROOT / directory, self.root / directory)
 
     def tearDown(self) -> None:

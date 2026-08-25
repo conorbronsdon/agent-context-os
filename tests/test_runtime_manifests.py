@@ -162,6 +162,49 @@ class RuntimeManifestTest(unittest.TestCase):
             surface["instruction_sources"] = [
                 {"scope": "workspace", "role": "canonical", "path": "AGENTS.md", "precedence": 100}
             ]
+            (root / "components").mkdir()
+            component_manifest = {
+                "schema_version": 1,
+                "extensible_roots": [],
+                "components": [
+                    {
+                        "id": "core", "description": "Core fixture.",
+                        "depends_on": [],
+                        "paths": [
+                            {"path": "docs/onboarding.md", "policy": "managed"},
+                            {"path": "tests/conformance.py", "policy": "development"},
+                        ],
+                    },
+                    {
+                        "id": "portable-skills", "description": "Skill fixture.",
+                        "depends_on": ["core"],
+                        "paths": [{"path": "fixture/skill", "policy": "managed"}],
+                    },
+                    {
+                        "id": "agents-instructions", "description": "Instruction fixture.",
+                        "depends_on": ["core", "portable-skills"],
+                        "paths": [{"path": "fixture/agents", "policy": "managed"}],
+                    },
+                    {
+                        "id": "openai-skill-metadata", "description": "Metadata fixture.",
+                        "depends_on": ["portable-skills"],
+                        "paths": [{"path": "fixture/openai", "policy": "managed"}],
+                    },
+                    {
+                        "id": "codex-adapter", "description": "Adapter fixture.",
+                        "depends_on": [
+                            "core", "portable-skills", "agents-instructions",
+                            "openai-skill-metadata",
+                        ],
+                        "paths": [
+                            {"path": "runtimes/future-agent.json", "policy": "managed"}
+                        ],
+                    },
+                ],
+            }
+            (root / "components/manifest.json").write_text(
+                json.dumps(component_manifest), encoding="utf-8"
+            )
             surface["skill_sources"] = [
                 {"scope": "workspace", "role": "skills", "path": "skills", "precedence": 100}
             ]
@@ -172,6 +215,41 @@ class RuntimeManifestTest(unittest.TestCase):
             self.assertTrue(target.is_file())
             self.assertEqual("future-agent", installed["runtime"])
             self.assertEqual({"systemMessage": "notice"}, runtime_hook_payload(manifest, ["notice"]))
+
+            unknown_component = copy.deepcopy(manifest)
+            unknown_component["components"].append("missing-component")
+            (root / "runtimes/future-agent.json").write_text(
+                json.dumps(unknown_component), encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ContextOSError, "unknown components"):
+                runtime_manifest(root, "future-agent")
+
+            (root / "runtimes/future-agent.json").write_text(
+                json.dumps(manifest), encoding="utf-8"
+            )
+            unowned_reference = copy.deepcopy(component_manifest)
+            unowned_reference["components"][0]["paths"].remove(
+                {"path": "docs/onboarding.md", "policy": "managed"}
+            )
+            (root / "components/manifest.json").write_text(
+                json.dumps(unowned_reference), encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ContextOSError, "references unowned path"):
+                runtime_manifest(root, "future-agent")
+
+            unselected_owner = copy.deepcopy(component_manifest)
+            core_paths = unselected_owner["components"][0]["paths"]
+            core_paths.remove({"path": "docs/onboarding.md", "policy": "managed"})
+            unselected_owner["components"].append({
+                "id": "docs-extra", "description": "Unselected docs fixture.",
+                "depends_on": ["core"],
+                "paths": [{"path": "docs/onboarding.md", "policy": "managed"}],
+            })
+            (root / "components/manifest.json").write_text(
+                json.dumps(unselected_owner), encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ContextOSError, "unselected components"):
+                runtime_manifest(root, "future-agent")
 
     def test_openclaw_spike_supports_precedence_and_multiple_surfaces(self) -> None:
         manifest = load("hermes")

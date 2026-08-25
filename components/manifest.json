@@ -1,0 +1,759 @@
+{
+    "schema_version": 1,
+    "extensible_roots": [
+        "content",
+        "identity",
+        "inbox",
+        "projects",
+        "sessions",
+        "state",
+        "writing"
+    ],
+    "components": [
+        {
+            "id": "core",
+            "description": "Provider-neutral kernel, shared documentation, repository scaffolding, and user-owned seed files.",
+            "depends_on": [],
+            "paths": [
+                {
+                    "path": ".gitattributes",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".github/FUNDING.yml",
+                    "policy": "development"
+                },
+                {
+                    "path": ".github/ISSUE_TEMPLATE/bug-report.md",
+                    "policy": "development"
+                },
+                {
+                    "path": ".github/ISSUE_TEMPLATE/config.yml",
+                    "policy": "development"
+                },
+                {
+                    "path": ".github/ISSUE_TEMPLATE/integration-proposal.md",
+                    "policy": "development"
+                },
+                {
+                    "path": ".github/PULL_REQUEST_TEMPLATE.md",
+                    "policy": "development"
+                },
+                {
+                    "path": ".github/workflows/validate.yml",
+                    "policy": "development"
+                },
+                {
+                    "path": ".gitignore",
+                    "policy": "managed"
+                },
+                {
+                    "path": "CHANGELOG.md",
+                    "policy": "development"
+                },
+                {
+                    "path": "components/manifest.json",
+                    "policy": "managed"
+                },
+                {
+                    "path": "components/schema.json",
+                    "policy": "managed"
+                },
+                {
+                    "path": "content/log.md",
+                    "policy": "seed"
+                },
+                {
+                    "path": "contextos/__init__.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "contextos/__main__.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "contextos/cli.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "contextos/component_schema.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "contextos/kernel.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "contextos/runtime_schema.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "CONTRIBUTING.md",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/agent-template.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/assets/og-image.png",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/assets/og-image.svg",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/commands-and-skills.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/component-model.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/cross-runtime-architecture.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/first-skill.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/gemini-migration.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/getting-started.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/integrations-guide.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/launch-copy.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/maintenance.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/mcp-efficiency.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/memory-across-agents.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/migration-guide.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/optimizing-context.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/positioning.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/repo-maintenance.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/safety-contract.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/social-preview.png",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/templates/end-payload.json",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/templates/setup-payload.json",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/templates/update-payload.json",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/templates/workflow-parity.json",
+                    "policy": "managed"
+                },
+                {
+                    "path": "identity/professional-background.md",
+                    "policy": "seed"
+                },
+                {
+                    "path": "identity/who-i-am.md",
+                    "policy": "seed"
+                },
+                {
+                    "path": "inbox/.gitkeep",
+                    "policy": "seed"
+                },
+                {
+                    "path": "integrations/catalog.json",
+                    "policy": "managed"
+                },
+                {
+                    "path": "LICENSE",
+                    "policy": "managed"
+                },
+                {
+                    "path": "projects/README.md",
+                    "policy": "seed"
+                },
+                {
+                    "path": "README.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "references/ai-data-extraction.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "references/google-workspace-cli-setup.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "references/integrations.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "references/notion-mcp-setup.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "ROUTING.md",
+                    "policy": "seed"
+                },
+                {
+                    "path": "runtimes/schema.json",
+                    "policy": "managed"
+                },
+                {
+                    "path": "scripts/check-doc-reachability.sh",
+                    "policy": "development"
+                },
+                {
+                    "path": "scripts/check-links.sh",
+                    "policy": "development"
+                },
+                {
+                    "path": "scripts/component-manifests.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "scripts/contextos.sh",
+                    "policy": "managed"
+                },
+                {
+                    "path": "scripts/context-os-hook.ps1",
+                    "policy": "managed"
+                },
+                {
+                    "path": "scripts/context-os-hook.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "scripts/context-os-hook.sh",
+                    "policy": "managed"
+                },
+                {
+                    "path": "scripts/generate-repo-map.sh",
+                    "policy": "managed"
+                },
+                {
+                    "path": "scripts/integrations.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "scripts/mine-gemini-workflows.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "scripts/pre-commit-hook.sh",
+                    "policy": "managed"
+                },
+                {
+                    "path": "scripts/python-env.sh",
+                    "policy": "managed"
+                },
+                {
+                    "path": "scripts/runtime-manifests.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "scripts/setup.sh",
+                    "policy": "managed"
+                },
+                {
+                    "path": "scripts/validate-all.sh",
+                    "policy": "development"
+                },
+                {
+                    "path": "scripts/validate-skills.sh",
+                    "policy": "development"
+                },
+                {
+                    "path": "SECURITY.md",
+                    "policy": "development"
+                },
+                {
+                    "path": "sessions/.gitkeep",
+                    "policy": "seed"
+                },
+                {
+                    "path": "sessions/README.md",
+                    "policy": "seed"
+                },
+                {
+                    "path": "state/blockers.md",
+                    "policy": "seed"
+                },
+                {
+                    "path": "state/current.md",
+                    "policy": "seed"
+                },
+                {
+                    "path": "state/current-log.md",
+                    "policy": "seed"
+                },
+                {
+                    "path": "state/decisions.md",
+                    "policy": "seed"
+                },
+                {
+                    "path": "state/gws-references.md",
+                    "policy": "seed"
+                },
+                {
+                    "path": "state/heartbeat-log.md",
+                    "policy": "seed"
+                },
+                {
+                    "path": "state/weekly-priorities.md",
+                    "policy": "seed"
+                },
+                {
+                    "path": "tests/test_component_manifests.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_contextos_kernel.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_cross_runtime_hooks.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_docs_positioning.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_integrations.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_mine_gemini_workflows.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_runtime_conformance.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_runtime_launch.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_runtime_manifests.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test-hooks.sh",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test-portability.sh",
+                    "policy": "development"
+                },
+                {
+                    "path": "TODO.md",
+                    "policy": "seed"
+                },
+                {
+                    "path": "writing/skills/avoid-ai-writing/SKILL.md",
+                    "policy": "seed"
+                }
+            ]
+        },
+        {
+            "id": "portable-skills",
+            "description": "Provider-neutral lifecycle and migration skill bodies.",
+            "depends_on": [
+                "core"
+            ],
+            "paths": [
+                {
+                    "path": ".agents/skills/context-end/SKILL.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".agents/skills/context-setup/SKILL.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".agents/skills/context-start/SKILL.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".agents/skills/context-update/SKILL.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".agents/skills/end/SKILL.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".agents/skills/migrate-gemini/SKILL.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".agents/skills/mine-gemini-workflows/SKILL.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".agents/skills/setup/SKILL.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".agents/skills/start/SKILL.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".agents/skills/update/SKILL.md",
+                    "policy": "managed"
+                }
+            ]
+        },
+        {
+            "id": "openai-skill-metadata",
+            "description": "OpenAI skill discovery metadata kept separate from portable skill bodies.",
+            "depends_on": [
+                "portable-skills"
+            ],
+            "paths": [
+                {
+                    "path": ".agents/skills/context-end/agents/openai.yaml",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".agents/skills/context-setup/agents/openai.yaml",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".agents/skills/context-start/agents/openai.yaml",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".agents/skills/context-update/agents/openai.yaml",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".agents/skills/end/agents/openai.yaml",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".agents/skills/setup/agents/openai.yaml",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".agents/skills/start/agents/openai.yaml",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".agents/skills/update/agents/openai.yaml",
+                    "policy": "managed"
+                },
+                {
+                    "path": "tests/validate-openai-metadata.py",
+                    "policy": "development"
+                }
+            ]
+        },
+        {
+            "id": "agents-instructions",
+            "description": "Shared AGENTS.md instruction bridge for runtimes that consume it.",
+            "depends_on": [
+                "core",
+                "portable-skills"
+            ],
+            "paths": [
+                {
+                    "path": "AGENTS.md",
+                    "policy": "managed"
+                }
+            ]
+        },
+        {
+            "id": "claude-adapter",
+            "description": "Claude Code instructions, commands, hooks, memory tooling, and runtime descriptor.",
+            "depends_on": [
+                "core",
+                "portable-skills"
+            ],
+            "paths": [
+                {
+                    "path": ".claude/commands/capture.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/commands/clean-ai-writing.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/commands/content-shipped.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/commands/dream.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/commands/dream-apply.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/commands/end.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/commands/find-context.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/commands/migrate-gemini.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/commands/mine-gemini-workflows.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/commands/reconcile.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/commands/recover.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/commands/setup.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/commands/start.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/commands/today.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/commands/update.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/hooks/branch-hygiene.sh",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/hooks/guarded-repos.txt",
+                    "policy": "seed"
+                },
+                {
+                    "path": ".claude/hooks/README.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/hooks/session-start.sh",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/hooks/ssot-guard.sh",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/hooks/worktree-guard.sh",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/settings.json",
+                    "policy": "seed"
+                },
+                {
+                    "path": ".claude/skills/skill-creator/references/claude-code-frontmatter.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".claude/skills/skill-creator/SKILL.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "CLAUDE.md",
+                    "policy": "seed"
+                },
+                {
+                    "path": "docs/auto-memory.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/claude-projects-sync.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/assets/start-demo.gif",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/demo/start-session.sh",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/dream-architecture.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/memory-template.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/start-demo.tape",
+                    "policy": "managed"
+                },
+                {
+                    "path": "runtimes/claude.json",
+                    "policy": "managed"
+                },
+                {
+                    "path": "scripts/dream/prompts/lint.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "scripts/dream/prompts/merge.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "scripts/dream/prompts/rot.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "scripts/dream/prompts/split.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "scripts/dream/README.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "scripts/dream/validate-memory.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "SETUP-PROMPTS.md",
+                    "policy": "seed"
+                },
+                {
+                    "path": "tests/test_dream_paths.py",
+                    "policy": "development"
+                }
+            ]
+        },
+        {
+            "id": "codex-adapter",
+            "description": "Codex hooks, onboarding, skill metadata, and runtime descriptor.",
+            "depends_on": [
+                "core",
+                "portable-skills",
+                "agents-instructions",
+                "openai-skill-metadata"
+            ],
+            "paths": [
+                {
+                    "path": ".codex/hooks.json",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/codex-onboarding.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "runtimes/codex.json",
+                    "policy": "managed"
+                }
+            ]
+        },
+        {
+            "id": "hermes-adapter",
+            "description": "Hermes installation guidance, optional hooks, and runtime descriptor.",
+            "depends_on": [
+                "core",
+                "portable-skills",
+                "agents-instructions"
+            ],
+            "paths": [
+                {
+                    "path": "adapters/hermes/hooks.example.yaml",
+                    "policy": "managed"
+                },
+                {
+                    "path": "adapters/hermes/README.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "runtimes/hermes.json",
+                    "policy": "managed"
+                }
+            ]
+        },
+        {
+            "id": "example-project",
+            "description": "Optional removable example project and workflow seeds.",
+            "depends_on": [
+                "core"
+            ],
+            "paths": [
+                {
+                    "path": "projects/example-musician/artist-context.md",
+                    "policy": "seed"
+                },
+                {
+                    "path": "projects/example-musician/promotion-strategy.md",
+                    "policy": "seed"
+                },
+                {
+                    "path": "projects/example-musician/README.md",
+                    "policy": "seed"
+                },
+                {
+                    "path": "projects/example-musician/workflow-examples/press-outreach/SKILL.md",
+                    "policy": "seed"
+                },
+                {
+                    "path": "projects/example-musician/workflow-examples/social-post/SKILL.md",
+                    "policy": "seed"
+                }
+            ]
+        }
+    ]
+}

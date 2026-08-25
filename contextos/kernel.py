@@ -14,6 +14,13 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
+from .component_schema import (
+    ComponentManifestError,
+    component_closure,
+    component_owners,
+    load_component_manifest,
+    portable_path_identity,
+)
 from .runtime_schema import (
     RUNTIME_ID_RE,
     RuntimeManifestError,
@@ -603,6 +610,12 @@ def runtime_ids(root: Path) -> list[str]:
 def runtime_manifest(
     root: Path, runtime: str, *, check_paths: bool = True
 ) -> dict[str, Any]:
+    """Load a runtime and its required core component contract.
+
+    ``check_paths=False`` skips maintainer evidence/path existence checks, but
+    structural component and ownership validation remains an operational
+    invariant for hooks and proposal application.
+    """
     if not isinstance(runtime, str) or runtime == "generic" or not RUNTIME_ID_RE.fullmatch(runtime):
         raise ContextOSError(f"invalid runtime id: {runtime}")
     manifest_path = root / "runtimes" / f"{runtime}.json"
@@ -613,7 +626,44 @@ def runtime_manifest(
         validate_runtime_manifest(
             manifest, runtime_id=runtime, root=root, check_paths=check_paths
         )
-    except RuntimeManifestError as exc:
+        components = load_component_manifest(
+            root / "components" / "manifest.json", root=root, check_paths=False
+        )
+        selected = set(component_closure(components, manifest["components"]))
+        owners = component_owners(components)
+        required_paths = {
+            f"runtimes/{runtime}.json",
+            manifest["onboarding_doc"],
+        }
+        for surface in manifest["surfaces"].values():
+            required_paths.update(surface["conformance_tests"])
+            required_paths.update(
+                source["path"]
+                for source in surface["instruction_sources"] + surface["skill_sources"]
+                if source["scope"] == "repository"
+            )
+        required_paths.update(
+            source["location"]
+            for source in manifest["evidence"]["sources"]
+            if source["type"] == "conformance"
+        )
+        for required_path in sorted(required_paths):
+            required_identity = portable_path_identity(required_path.rstrip("/"))
+            matching_owners = {
+                owner for owned_path, owner in owners.items()
+                if portable_path_identity(owned_path) == required_identity
+                or portable_path_identity(owned_path).startswith(required_identity + "/")
+            }
+            if not matching_owners:
+                raise ComponentManifestError(
+                    f"runtime {runtime!r} references unowned path {required_path!r}"
+                )
+            if not matching_owners.intersection(selected):
+                raise ComponentManifestError(
+                    f"runtime {runtime!r} requires {required_path!r}, owned only by "
+                    f"unselected components {sorted(matching_owners)!r}"
+                )
+    except (RuntimeManifestError, ComponentManifestError, OSError, UnicodeError) as exc:
         raise ContextOSError(f"invalid runtime manifest: {manifest_path} ({exc})") from exc
     return manifest
 

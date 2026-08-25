@@ -37,7 +37,7 @@ Run it locally rather than discovering a failure in CI. It takes about a minute.
 
 ## Generated files — do not hand-edit
 
-Four artifacts are produced by scripts. Editing them directly means your change is
+Five artifacts are produced by scripts. Editing them directly means your change is
 silently reverted on the next regeneration.
 
 | File | Source of truth | Regenerate with |
@@ -46,6 +46,7 @@ silently reverted on the next regeneration.
 | `REPO_MAP.md` | the repository itself | `scripts/generate-repo-map.sh` (gitignored — never commit it) |
 | `runtimes/schema.json` | `contextos/runtime_schema.py` | `scripts/runtime-manifests.py generate` |
 | README registered-host table | validated `runtimes/*.json` descriptors | `scripts/runtime-manifests.py generate` |
+| `components/schema.json` | `contextos/component_schema.py` | `scripts/component-manifests.py generate` |
 
 ## Adding a runtime descriptor
 
@@ -59,6 +60,14 @@ fail validation. `generic` is reserved for apply receipts and cannot be a host.
 Run `scripts/runtime-manifests.py generate`, add or extend a must-work conformance
 control, then run the full validator. Do not add compatibility-only hosts to the
 generated registered-host block; a shipped descriptor is a support claim.
+
+Every runtime component ID must also exist in `components/manifest.json`. When
+adding or moving a checked-in file, give it exactly one component owner and an
+explicit `managed`, `seed`, or `development` policy. New user files below the
+catalog's extensible roots are workspace-owned, but the maintainer check is
+strict over this repository's tracked source set; do not add personal context to
+a product contribution. See [the component model](docs/component-model.md) for
+the dependency and clean-composition boundaries.
 
 ## Adding an integration to the catalog
 
