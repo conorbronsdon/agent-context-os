@@ -231,7 +231,7 @@ Microsoft's local MCP server converts explicitly supplied file, HTTP, HTTPS, and
 - **Required confirmation gates:** `external_install`, `read_sensitive`
 - **Confirmation:** Confirm installation and the exact URI before each conversion; reject broad local paths, private-network targets, or untrusted remote content unless their read boundary is explicitly approved.
 - **Risk tags:** `local-data`, `sensitive-read`, `network-capable`, `open-world`, `no-authentication`, `prompt-injection`
-- **Evidence:** [1](https://github.com/microsoft/markitdown/blob/9dc0d6579b8739c9d0671ff205e071e3053c7df1/packages/markitdown-mcp/README.md); [2](https://github.com/microsoft/markitdown/blob/9dc0d6579b8739c9d0671ff205e071e3053c7df1/packages/markitdown-mcp/src/markitdown_mcp/__main__.py); [3](https://github.com/microsoft/markitdown/releases/tag/v0.1.7)
+- **Evidence:** [1](https://github.com/microsoft/markitdown/blob/fd239d5d2be43d9b68329730206b9312c7d5a388/packages/markitdown-mcp/README.md); [2](https://github.com/microsoft/markitdown/blob/fd239d5d2be43d9b68329730206b9312c7d5a388/packages/markitdown-mcp/src/markitdown_mcp/__main__.py); [3](https://github.com/microsoft/markitdown/releases/tag/v0.1.7)
 - **Health check:** Run the stdio server in a sandbox, list its single convert\_to\_markdown tool, then convert one non-sensitive local fixture from an explicitly allowed directory.
 - **Uninstall:** Remove the MarkItDown MCP entry from the client and uninstall markitdown-mcp or remove its container image; preserve every source file and converted output unless separately requested. (removes user data: No)
 
