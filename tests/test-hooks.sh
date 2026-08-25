@@ -45,6 +45,31 @@ if command -v cygpath >/dev/null 2>&1; then
 else
   TEMP_ROOT_WIN=$TEMP_ROOT
 fi
+
+# Claude's configured SessionStart adapter must use the same current.md
+# readiness predicate as start and doctor, while remaining advisory.
+SESSION_REPO="$TEMP_ROOT_WIN/session-repo"
+mkdir -p "$SESSION_REPO/.claude/hooks" "$SESSION_REPO/scripts" "$SESSION_REPO/state"
+cp "$ROOT/.claude/hooks/session-start.sh" "$SESSION_REPO/.claude/hooks/session-start.sh"
+cp "$ROOT/scripts/context-os-hook.py" "$ROOT/scripts/context-os-hook.sh" \
+  "$ROOT/scripts/python-env.sh" "$SESSION_REPO/scripts/"
+cp -R "$ROOT/contextos" "$SESSION_REPO/contextos"
+printf '# Test workspace\n' > "$SESSION_REPO/AGENTS.md"
+git -C "$SESSION_REPO" init -q -b main
+
+printf '# Current State\n\n**Last Updated:** [DATE]\n' > "$SESSION_REPO/state/current.md"
+SESSION_SETUP_OUTPUT=$(cd "$SESSION_REPO" && bash .claude/hooks/session-start.sh)
+printf '%s' "$SESSION_SETUP_OUTPUT" | grep -q 'not initialized' \
+  || fail "Claude session-start must fire when current.md is uninitialized"
+
+printf '# Current State\n\n**Last Updated:** %s\n' "$(date +%F)" > "$SESSION_REPO/state/current.md"
+SESSION_READY_OUTPUT=$(cd "$SESSION_REPO" && bash .claude/hooks/session-start.sh)
+if printf '%s' "$SESSION_READY_OUTPUT" | grep -q 'not initialized'; then
+  fail "Claude session-start fired the setup advisory for initialized state"
+fi
+printf '%s' "$SESSION_READY_OUTPUT" | grep -q 'Tip: Run /start' \
+  || fail "Claude session-start omitted the initialized-state /start tip"
+
 TEST_REPO="$TEMP_ROOT_WIN/guarded-repo"
 mkdir -p "$TEST_REPO/.claude/hooks" "$TEMP_ROOT/bin"
 git -C "$TEMP_ROOT_WIN" init -q -b main guarded-repo

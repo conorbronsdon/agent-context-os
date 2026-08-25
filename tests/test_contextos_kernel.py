@@ -330,6 +330,23 @@ class KernelTest(unittest.TestCase):
         self.assertEqual("warn", initialization["status"])
         self.assertIn("state/current.md", initialization["detail"])
 
+    def test_invalid_or_unreadable_dates_are_unknown_in_every_readiness_consumer(self) -> None:
+        current = self.root / "state/current.md"
+        for content in (
+            b"# Current State\n\n**Last Updated:** 2026-13-01\n",
+            b"# Current State\n\n**Last Updated:** \xff\n",
+        ):
+            current.write_bytes(content)
+            report = start_report(self.root, NOW)
+            self.assertFalse(report["initialized"])
+            self.assertEqual("unknown", report["state"]["state/current.md"]["freshness_status"])
+            self.assertTrue(hook_report(self.root, "session-start", {})["findings"])
+            initialization = next(
+                item for item in doctor(self.root)["checks"]
+                if item["name"] == "initialization-state"
+            )
+            self.assertEqual("warn", initialization["status"])
+
     def test_readiness_predicate_is_shared_by_start_doctor_and_hook(self) -> None:
         """current.md gates readiness, and all three consumers must agree on it."""
         self._write_undated_state("weekly-priorities.md", "blockers.md")

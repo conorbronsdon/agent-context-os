@@ -628,10 +628,17 @@ def _state_freshness(path: Path, today: date, threshold: int) -> dict[str, Any]:
     updated = None
     age = None
     if path.exists():
-        match = LAST_UPDATED_RE.search(path.read_text(encoding="utf-8"))
-        if match and REAL_DATE_RE.fullmatch(match.group(1).strip()):
-            updated = match.group(1).strip()
-            age = (today - datetime.strptime(updated, "%Y-%m-%d").date()).days
+        try:
+            match = LAST_UPDATED_RE.search(path.read_text(encoding="utf-8"))
+            if match and REAL_DATE_RE.fullmatch(match.group(1).strip()):
+                candidate = match.group(1).strip()
+                parsed = datetime.strptime(candidate, "%Y-%m-%d").date()
+                updated = candidate
+                age = (today - parsed).days
+        except (OSError, UnicodeError, ValueError):
+            # Diagnostics and advisory hooks must report unreadable or invalid
+            # state as unknown rather than crashing on the file they diagnose.
+            pass
     if not path.exists():
         status = "missing"
     elif age is None:
