@@ -474,7 +474,7 @@ def unclassified_tracked_paths(
     seen: dict[str, str] = {}
     missing: list[str] = []
     for index, value in enumerate(tracked_paths):
-        path = _safe_posix_path(value, f"tracked_paths[{index}]")
+        path = _ownership_path(value, f"tracked_paths[{index}]")
         key = _identity(path)
         if key in seen:
             _fail("tracked_paths", f"portable path collision: {seen[key]!r} and {path!r}")

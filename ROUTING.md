@@ -32,7 +32,8 @@ For tasks without a slash command, use this table to determine which files to lo
 - Creating a portable skill → use `.agents/skills/<name>/SKILL.md` and keep host adapters thin
 - Creating a Claude-only skill → read `docs/agent-template.md` for the scaffold and checklist
 - Treating `projects/<project>/skills/` as native discovery → do not; those files are ordinary context unless routed or adapted
-- Validating skill structure → run `scripts/validate-all.sh`
+- Validating skill structure in a personalized workspace → run
+  `scripts/validate-all.sh --workspace`
 
 ## Agent migration
 - Importing selected context from an assistant, project, memory export, or account export → read `docs/migration-guide.md`, then use Claude Code `/setup` or portable `$context-setup`

@@ -31,7 +31,9 @@ For a security problem, do not use this template. See SECURITY.md.
 ## Validator output
 
 <!--
-Paste the relevant output of `bash scripts/validate-all.sh`, if you ran it.
+Paste the relevant output of `bash scripts/validate-all.sh --workspace`, if you
+ran it in a personalized workspace. Product contributors should use the strict
+form without `--workspace`.
 If it passes while the bug reproduces, say that explicitly — a green validator
 on broken behavior is itself worth knowing about.
 -->

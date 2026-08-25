@@ -50,7 +50,8 @@ Claude.ai cannot write this repository. If it drafts an improvement:
 2. Compare it with the maintained source and remove Project-only or sensitive
    context.
 3. Propose the exact destination and diff before changing repository files.
-4. Apply only the reviewed change, then run `bash scripts/validate-all.sh`.
+4. Apply only the reviewed change, then run
+   `bash scripts/validate-all.sh --workspace`.
 5. Review the git diff and approve any commit or push separately.
 
 Claude can follow provider-neutral instructions in an uploaded skill file, but

@@ -58,7 +58,7 @@ SSOTs.
 
 ```bash
 bash scripts/contextos.sh doctor --runtime codex
-bash scripts/validate-all.sh
+bash scripts/validate-all.sh --workspace
 ```
 
 Local validation proves kernel transitions and adapter contracts. Opt-in runtime

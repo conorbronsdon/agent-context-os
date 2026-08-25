@@ -68,7 +68,7 @@ The example is deliberately read-only and user-invoked. Add a write, shell, or e
 - [ ] Host-specific tools, permission grants, hooks, and commands stay out of `.agents/skills/`
 - [ ] Routing rule added to ROUTING.md if appropriate
 - [ ] CHANGELOG.md updated with new files
-- [ ] Run `scripts/validate-all.sh` to verify structure
+- [ ] Run `scripts/validate-all.sh --workspace` to verify structure
 
 If you add the optional Claude adapter:
 

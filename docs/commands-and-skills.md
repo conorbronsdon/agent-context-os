@@ -77,4 +77,5 @@ Uploading these files to claude.ai does not activate commands, hooks, tool
 permissions, or skill metadata. See `docs/claude-projects-sync.md`.
 
 Run `bash scripts/contextos.sh doctor` for runtime and state diagnostics, then
-`bash scripts/validate-all.sh` after repository changes.
+`bash scripts/validate-all.sh --workspace` after personalized repository
+changes. Product contributors use the strict form without `--workspace`.

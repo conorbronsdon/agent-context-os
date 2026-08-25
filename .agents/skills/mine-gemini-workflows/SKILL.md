@@ -59,7 +59,8 @@ For each approved candidate:
 - record provenance using session IDs, immutable recording digests, and evidence counts, not transcript content,
 - separate provider-neutral steps from Gemini-, Claude-, or Codex-specific tool adapters.
 
-Show the draft and parity case before writing. Then run `bash scripts/validate-all.sh`.
+Show the draft and parity case before writing. Then run
+`bash scripts/validate-all.sh --workspace`.
 
 ### 6. Report limitations
 

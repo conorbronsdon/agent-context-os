@@ -334,6 +334,25 @@ class ComponentManifestTest(unittest.TestCase):
                 fixture(), ["unowned.txt", "UNOWNED.txt"], root=self.root
             )
 
+    def test_workspace_extensions_reject_secrets_and_sibling_prefixes(self) -> None:
+        manifest = fixture()
+        with self.assertRaisesRegex(ComponentManifestError, "must not claim"):
+            unclassified_tracked_paths(
+                manifest,
+                ["extensions/.env.local"],
+                root=self.root,
+                allow_extensible=True,
+            )
+        self.assertEqual(
+            ["extensions-extra/user.md"],
+            unclassified_tracked_paths(
+                manifest,
+                ["extensions-extra/user.md"],
+                root=self.root,
+                allow_extensible=True,
+            ),
+        )
+
     def test_every_owned_path_must_come_from_the_tracked_source_set(self) -> None:
         tracked = ["feature.txt", "foundation.txt", "adapters/codex.txt"]
         self.assertEqual(
@@ -350,6 +369,11 @@ class ComponentManifestTest(unittest.TestCase):
             (ROOT / "components/manifest.json").read_text(encoding="utf-8")
         )
         owners = component_owners(manifest)
+        policies = {
+            path_entry["path"]: path_entry["policy"]
+            for component in manifest["components"]
+            for path_entry in component["paths"]
+        }
         self.assertEqual("agents-instructions", owners["AGENTS.md"])
         self.assertEqual("claude-adapter", owners["CLAUDE.md"])
         self.assertEqual(
@@ -358,6 +382,8 @@ class ComponentManifestTest(unittest.TestCase):
         )
         self.assertEqual("codex-adapter", owners[".codex/hooks.json"])
         self.assertEqual("hermes-adapter", owners["adapters/hermes/README.md"])
+        self.assertEqual("seed", policies["identity/who-i-am.md"])
+        self.assertEqual("seed", policies["state/current.md"])
 
         codex = component_closure(manifest, ["codex-adapter"])
         self.assertEqual(

@@ -36,7 +36,8 @@ For the selected entry:
 4. Start with the least privilege and the narrowest read-only health check available.
 5. Require a separate confirmation for sensitive reads, writes, remote writes, publish, overwrite, deletion, arbitrary execution, OAuth, or destructive actions when the catalog marks them.
 6. Record how to disable or uninstall it before relying on it.
-7. Re-run `bash scripts/validate-all.sh` after changing tracked configuration.
+7. Re-run `bash scripts/validate-all.sh --workspace` after changing tracked
+   configuration.
 
 Do not infer safety from the word `verified`. In this repository it means the catalog metadata was checked against linked evidence on the stated date; it is not live authentication, an end-to-end test, or a guarantee about future upstream behavior.
 
