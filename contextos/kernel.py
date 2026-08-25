@@ -14,6 +14,12 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
+from .runtime_schema import (
+    RUNTIME_ID_RE,
+    RuntimeManifestError,
+    validate_runtime_manifest,
+)
+
 
 SCHEMA_VERSION = 1
 PLACEHOLDER_DATE = "[DATE]"
@@ -27,14 +33,6 @@ SETUP_NEXT_ACTION = (
     "Run the explicit setup workflow (bash scripts/setup.sh, then the $context-setup "
     "skill) before starting a session."
 )
-RUNTIME_NAMES = {"claude", "codex", "hermes"}
-CAPABILITY_VALUES = {"native", "adapter", "advisory", "unsupported"}
-CAPABILITY_KEYS = {
-    "agent_skills", "explicit_invocation", "project_hooks",
-    "blocking_pre_tool_hook", "mcp", "native_memory", "proposal_apply",
-}
-
-
 class ContextOSError(RuntimeError):
     pass
 
@@ -511,7 +509,7 @@ def apply_proposal(root: Path, proposal: Path, confirmation: str, runtime: str) 
     expected_digest = validate_proposal(document)
     if confirmation != expected_digest:
         raise ContextOSError("--confirm must exactly match the proposal_digest")
-    runtime_manifest(root, runtime)
+    validate_execution_runtime(root, runtime)
     with transaction_lock(root):
         for change in document.get("changes", []):
             path = safe_repo_path(root, ensure_text(change.get("path"), "change.path"))
@@ -589,39 +587,64 @@ def apply_proposal(root: Path, proposal: Path, confirmation: str, runtime: str) 
         return receipt_path, receipt
 
 
+def runtime_ids(root: Path) -> list[str]:
+    runtimes_dir = root / "runtimes"
+    if not runtimes_dir.is_dir():
+        return []
+    identifiers = sorted(
+        path.stem for path in runtimes_dir.glob("*.json")
+        if path.name != "schema.json" and path.is_file()
+    )
+    if len(identifiers) != len({identifier.casefold() for identifier in identifiers}):
+        raise ContextOSError("runtime manifest filenames collide when case-folded")
+    return identifiers
+
+
 def runtime_manifest(root: Path, runtime: str) -> dict[str, Any]:
-    if runtime not in RUNTIME_NAMES | {"generic"}:
-        raise ContextOSError(f"unsupported runtime: {runtime}")
+    if not isinstance(runtime, str) or runtime == "generic" or not RUNTIME_ID_RE.fullmatch(runtime):
+        raise ContextOSError(f"invalid runtime id: {runtime}")
     manifest_path = root / "runtimes" / f"{runtime}.json"
     if not manifest_path.exists():
-        if runtime == "generic":
-            return {"runtime": "generic", "capabilities": {}}
         raise ContextOSError(f"missing runtime manifest: {manifest_path}")
     manifest = read_json(manifest_path)
-    required = {"schema_version", "runtime", "instruction_file", "invocation", "capabilities", "install"}
-    invocation = manifest.get("invocation")
-    capabilities = manifest.get("capabilities")
-    install = manifest.get("install")
-    valid = (
-        set(manifest) == required
-        and manifest.get("runtime") == runtime
-        and manifest.get("schema_version") == SCHEMA_VERSION
-        and isinstance(manifest.get("instruction_file"), str)
-        and isinstance(invocation, dict)
-        and set(invocation) == {"setup", "start", "update", "end"}
-        and all(isinstance(value, str) and value for value in invocation.values())
-        and isinstance(capabilities, dict)
-        and set(capabilities) == CAPABILITY_KEYS
-        and set(capabilities.values()) <= CAPABILITY_VALUES
-        and isinstance(install, dict)
-        and set(install) == {"mode", "next_steps"}
-        and isinstance(install.get("mode"), str)
-        and isinstance(install.get("next_steps"), list)
-        and all(isinstance(item, str) and item for item in install["next_steps"])
-    )
-    if not valid:
-        raise ContextOSError(f"invalid runtime manifest: {manifest_path}")
+    try:
+        validate_runtime_manifest(manifest, runtime_id=runtime, root=root)
+    except RuntimeManifestError as exc:
+        raise ContextOSError(f"invalid runtime manifest: {manifest_path} ({exc})") from exc
     return manifest
+
+
+def validate_execution_runtime(root: Path, runtime: str) -> None:
+    if runtime != "generic":
+        runtime_manifest(root, runtime)
+
+
+def runtime_registry(root: Path) -> dict[str, dict[str, Any]]:
+    return {runtime: runtime_manifest(root, runtime) for runtime in runtime_ids(root)}
+
+
+def runtime_surface(manifest: dict[str, Any], surface_id: str | None = None) -> dict[str, Any]:
+    surfaces = manifest.get("surfaces", {})
+    selected = surface_id or ("cli" if "cli" in surfaces else None)
+    if selected is None and len(surfaces) == 1:
+        selected = next(iter(surfaces))
+    if selected not in surfaces:
+        raise ContextOSError(
+            f"runtime {manifest.get('runtime', 'unknown')} has no unambiguous surface"
+        )
+    return surfaces[selected]
+
+
+def runtime_hook_payload(
+    manifest: dict[str, Any], messages: list[str], surface_id: str | None = None
+) -> dict[str, str] | None:
+    message = "\n".join(messages)
+    hook_output = runtime_surface(manifest, surface_id).get("hook_output")
+    if hook_output is None:
+        return None
+    if hook_output == "system-message":
+        return {"systemMessage": message} if message else None
+    return {"action": "allow", "message": message}
 
 
 def _state_freshness(path: Path, today: date, threshold: int) -> dict[str, Any]:
@@ -719,7 +742,9 @@ def install_runtime(root: Path, runtime: str) -> tuple[Path, dict[str, Any]]:
     return target, local
 
 
-def doctor(root: Path, runtime: str | None = None) -> dict[str, Any]:
+def doctor(
+    root: Path, runtime: str | None = None, *, all_runtimes: bool = False
+) -> dict[str, Any]:
     checks: list[dict[str, str]] = []
 
     def add(name: str, status: str, detail: str) -> None:
@@ -758,7 +783,7 @@ def doctor(root: Path, runtime: str | None = None) -> dict[str, Any]:
     local_runtime = root / ".context-os" / "runtime.json"
     if selected is None and local_runtime.exists():
         selected = read_json(local_runtime).get("runtime")
-    hosts = [selected] if selected else sorted(RUNTIME_NAMES)
+    hosts = runtime_ids(root) if all_runtimes or not selected else [selected]
     for host in hosts:
         try:
             manifest = runtime_manifest(root, host)
@@ -778,6 +803,7 @@ def doctor(root: Path, runtime: str | None = None) -> dict[str, Any]:
         f"{len(old_artifacts)} artifacts older than 30 days" if old_artifacts else "none older than 30 days",
     )
     if selected:
+        selected_manifest: dict[str, Any] | None = None
         try:
             selected_manifest = runtime_manifest(root, selected)
             expected_source = sha256_text(canonical_json(selected_manifest))
@@ -790,10 +816,35 @@ def doctor(root: Path, runtime: str | None = None) -> dict[str, Any]:
                 )
         except ContextOSError as exc:
             add("runtime-manifest-drift", "fail", str(exc))
-        binary = {"claude": "claude", "codex": "codex", "hermes": "hermes"}.get(selected)
-        if binary:
-            location = shutil.which(binary)
-            add(f"runtime:{selected}", "pass" if location else "warn", location or "not installed")
+        if selected_manifest:
+            for surface_id, surface in selected_manifest["surfaces"].items():
+                for probe in surface["binary_probes"]:
+                    locations = {
+                        candidate: shutil.which(candidate) for candidate in probe["candidates"]
+                    }
+                    executable = next((location for location in locations.values() if location), None)
+                    check_name = f"runtime:{selected}:{surface_id}:{probe['purpose']}"
+                    if probe["purpose"] == "availability" or executable is None:
+                        detail = ", ".join(
+                            f"{candidate}={location or 'not installed'}"
+                            for candidate, location in locations.items()
+                        )
+                        add(check_name, "pass" if executable else "warn", detail)
+                        continue
+                    try:
+                        completed = subprocess.run(
+                            [executable, *probe["args"]], text=True, capture_output=True,
+                            timeout=10, check=False,
+                        )
+                        output = (completed.stdout or completed.stderr).strip().splitlines()
+                        detail = output[0][:240] if output else f"exit {completed.returncode}"
+                        add(
+                            check_name,
+                            "pass" if completed.returncode in probe["success_exit_codes"] else "warn",
+                            detail,
+                        )
+                    except (OSError, subprocess.SubprocessError) as exc:
+                        add(check_name, "warn", str(exc))
     status = "fail" if any(item["status"] == "fail" for item in checks) else "warn" if any(item["status"] == "warn" for item in checks) else "pass"
     return {"schema_version": SCHEMA_VERSION, "status": status, "checks": checks}
 

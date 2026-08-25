@@ -59,7 +59,11 @@ cp "$ROOT/.claude/hooks/session-start.sh" "$SESSION_REPO/.claude/hooks/session-s
 cp "$ROOT/scripts/context-os-hook.py" "$ROOT/scripts/context-os-hook.sh" \
   "$ROOT/scripts/python-env.sh" "$SESSION_REPO/scripts/"
 cp -R "$ROOT/contextos" "$SESSION_REPO/contextos"
+cp -R "$ROOT/runtimes" "$ROOT/docs" "$ROOT/adapters" "$ROOT/tests" \
+  "$ROOT/.agents" "$SESSION_REPO/"
+cp -R "$ROOT/.claude/commands" "$SESSION_REPO/.claude/commands"
 printf '# Test workspace\n' > "$SESSION_REPO/AGENTS.md"
+printf '# Test workspace\n' > "$SESSION_REPO/CLAUDE.md"
 git -C "$SESSION_REPO" init -q -b main
 
 printf '# Current State\n\n**Last Updated:** [DATE]\n' > "$SESSION_REPO/state/current.md"

@@ -21,7 +21,7 @@ class RuntimeLaunchTest(unittest.TestCase):
             self.skipTest(f"{runtime} is not installed")
         prompt = (
             f"Read AGENTS.md and runtimes/{runtime}.json in this public fixture. "
-            f"Do not write files or use external data. If the {runtime} manifest declares "
+            f"Do not write files or use external data. If the {runtime} manifest's cli surface declares "
             "setup, start, update, and end invocations and AGENTS.md requires proposal/apply, "
             f"reply with exactly CONTEXT_OS_RUNTIME={runtime}. Otherwise explain the mismatch."
         )

@@ -1,49 +1,164 @@
 from __future__ import annotations
 
+import copy
 import json
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
-from contextos.kernel import ContextOSError, runtime_manifest
+from contextos.kernel import (
+    ContextOSError, install_runtime, runtime_hook_payload, runtime_ids,
+    runtime_manifest, runtime_registry,
+)
+from contextos.runtime_schema import (
+    CAPABILITY_KEYS,
+    RUNTIME_DESCRIPTOR_SCHEMA_VERSION,
+    RuntimeManifestError,
+    runtime_schema_document,
+    validate_runtime_manifest,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def load(runtime: str) -> dict:
+    return json.loads((ROOT / "runtimes" / f"{runtime}.json").read_text(encoding="utf-8"))
+
+
 class RuntimeManifestTest(unittest.TestCase):
-    def test_manifests_have_complete_lifecycle_and_capabilities(self) -> None:
-        required_capabilities = {
-            "agent_skills", "explicit_invocation", "project_hooks",
-            "blocking_pre_tool_hook", "mcp", "native_memory", "proposal_apply",
-        }
-        for runtime in ("claude", "codex", "hermes"):
+    def test_registry_discovers_and_validates_every_descriptor(self) -> None:
+        self.assertEqual(["claude", "codex", "hermes"], runtime_ids(ROOT))
+        registry = runtime_registry(ROOT)
+        self.assertEqual({"claude", "codex", "hermes"}, set(registry))
+        self.assertNotIn("generic", registry)
+        for runtime, manifest in registry.items():
             with self.subTest(runtime=runtime):
-                manifest = json.loads((ROOT / "runtimes" / f"{runtime}.json").read_text(encoding="utf-8"))
-                self.assertEqual(1, manifest["schema_version"])
+                self.assertEqual(RUNTIME_DESCRIPTOR_SCHEMA_VERSION, manifest["schema_version"])
                 self.assertEqual(runtime, manifest["runtime"])
-                self.assertEqual({"setup", "start", "update", "end"}, set(manifest["invocation"]))
-                self.assertEqual(required_capabilities, set(manifest["capabilities"]))
-                self.assertTrue(manifest["install"]["next_steps"])
+                for surface in manifest["surfaces"].values():
+                    self.assertEqual(CAPABILITY_KEYS, set(surface["capabilities"]))
 
-    def test_short_aliases_match_runtime_invocations(self) -> None:
-        claude = json.loads((ROOT / "runtimes/claude.json").read_text())
-        codex = json.loads((ROOT / "runtimes/codex.json").read_text())
-        hermes = json.loads((ROOT / "runtimes/hermes.json").read_text())
-        for name in ("setup", "start", "update", "end"):
-            self.assertEqual(f"/{name}", claude["invocation"][name])
-            self.assertEqual(f"${name}", codex["invocation"][name])
-            self.assertEqual(f"/{name}", hermes["invocation"][name])
+    def test_short_aliases_match_cli_surface_invocations(self) -> None:
+        for runtime, prefix in (("claude", "/"), ("codex", "$"), ("hermes", "/")):
+            invocation = load(runtime)["surfaces"]["cli"]["invocation"]
+            for name in ("setup", "start", "update", "end"):
+                self.assertEqual(f"{prefix}{name}", invocation[name])
 
-    def test_kernel_rejects_schema_drift(self) -> None:
+    def test_checked_in_schema_matches_authoritative_contract(self) -> None:
+        actual = json.loads((ROOT / "runtimes/schema.json").read_text(encoding="utf-8"))
+        self.assertEqual(runtime_schema_document(), actual)
+
+    def test_mutation_sentinel_rejects_unknown_capability_value(self) -> None:
+        manifest = load("codex")
+        manifest["surfaces"]["cli"]["capabilities"]["mcp"] = "invented"
+        with self.assertRaisesRegex(RuntimeManifestError, "capabilities.mcp"):
+            validate_runtime_manifest(manifest, runtime_id="codex", root=ROOT)
+
+    def test_contract_rejects_unknown_keys_claims_future_and_mismatch(self) -> None:
+        manifest = load("codex")
+        mutations = []
+        unknown = copy.deepcopy(manifest)
+        unknown["surprise"] = True
+        mutations.append((unknown, "codex", "unknown surprise"))
+        future = copy.deepcopy(manifest)
+        future["evidence"]["checked_on"] = "2999-01-01"
+        mutations.append((future, "codex", "future"))
+        uncovered = copy.deepcopy(manifest)
+        for source in uncovered["evidence"]["sources"]:
+            if "support" in source["claims"]:
+                source["claims"].remove("support")
+        mutations.append((uncovered, "codex", "does not cover claims"))
+        unknown_claim = copy.deepcopy(manifest)
+        unknown_claim["evidence"]["sources"][0]["claims"].append("magic")
+        mutations.append((unknown_claim, "codex", "unsupported value"))
+        for candidate, runtime_id, message in mutations:
+            with self.subTest(message=message), self.assertRaisesRegex(RuntimeManifestError, message):
+                validate_runtime_manifest(candidate, runtime_id=runtime_id, root=ROOT, today=date(2026, 8, 24))
+        with self.assertRaisesRegex(RuntimeManifestError, "reserved"):
+            validate_runtime_manifest(manifest, runtime_id="generic", root=ROOT)
+        with self.assertRaisesRegex(RuntimeManifestError, "match filename"):
+            validate_runtime_manifest(manifest, runtime_id="other", root=ROOT)
+
+    def test_generic_is_apply_only_not_a_descriptor(self) -> None:
+        with self.assertRaisesRegex(ContextOSError, "invalid runtime id"):
+            runtime_manifest(ROOT, "generic")
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with self.assertRaisesRegex(ContextOSError, "invalid runtime id"):
+                install_runtime(root, "generic")
+            self.assertFalse((root / ".context-os/runtime.json").exists())
+
+    def test_hook_envelopes_come_from_surface_descriptors(self) -> None:
+        self.assertEqual(
+            {"systemMessage": "notice"}, runtime_hook_payload(load("claude"), ["notice"])
+        )
+        self.assertEqual(
+            {"action": "allow", "message": "notice"},
+            runtime_hook_payload(load("hermes"), ["notice"]),
+        )
+
+    def test_new_descriptor_is_discovered_without_code_change(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             (root / "runtimes").mkdir()
-            manifest = json.loads((ROOT / "runtimes/codex.json").read_text(encoding="utf-8"))
-            manifest["capabilities"]["mcp"] = "invented"
-            (root / "runtimes/codex.json").write_text(json.dumps(manifest), encoding="utf-8")
-            with self.assertRaisesRegex(ContextOSError, "invalid runtime manifest"):
-                runtime_manifest(root, "codex")
+            (root / "docs").mkdir()
+            (root / "tests").mkdir()
+            (root / "docs/onboarding.md").write_text("# Onboarding\n", encoding="utf-8")
+            (root / "tests/conformance.py").write_text("# fixture\n", encoding="utf-8")
+            manifest = load("codex")
+            manifest["runtime"] = "future-agent"
+            manifest["display_name"] = "Future Agent"
+            manifest["onboarding_doc"] = "docs/onboarding.md"
+            surface = manifest["surfaces"]["cli"]
+            surface["conformance_test"] = "tests/conformance.py"
+            for source in manifest["evidence"]["sources"]:
+                if source["type"] == "conformance":
+                    source["location"] = "tests/conformance.py"
+            surface["instruction_sources"] = [
+                {"scope": "workspace", "role": "canonical", "path": "AGENTS.md", "precedence": 100}
+            ]
+            surface["skill_sources"] = [
+                {"scope": "workspace", "role": "skills", "path": "skills", "precedence": 100}
+            ]
+            (root / "runtimes/future-agent.json").write_text(json.dumps(manifest), encoding="utf-8")
+            self.assertEqual(["future-agent"], runtime_ids(root))
+            self.assertEqual("Future Agent", runtime_registry(root)["future-agent"]["display_name"])
+            target, installed = install_runtime(root, "future-agent")
+            self.assertTrue(target.is_file())
+            self.assertEqual("future-agent", installed["runtime"])
+            self.assertEqual({"systemMessage": "notice"}, runtime_hook_payload(manifest, ["notice"]))
+
+    def test_openclaw_spike_supports_precedence_and_multiple_surfaces(self) -> None:
+        manifest = load("hermes")
+        manifest["runtime"] = "openclaw-spike"
+        manifest["display_name"] = "OpenClaw Spike"
+        manifest["support_tier"] = "experimental"
+        cli = manifest["surfaces"].pop("cli")
+        cli["support_tier"] = "experimental"
+        cli["instruction_sources"] = [
+            {"scope": "workspace", "role": "canonical", "path": "AGENTS.md", "precedence": 100},
+            {"scope": "user", "role": "persona", "path": "SOUL.md", "precedence": 80},
+            {"scope": "user", "role": "persona", "path": "USER.md", "precedence": 75},
+            {"scope": "user", "role": "memory", "path": "MEMORY.md", "precedence": 70},
+        ]
+        cli["skill_sources"] = [
+            {"scope": "workspace", "role": "skills", "path": ".agents/skills", "precedence": 100},
+            {"scope": "user", "role": "skills", "path": "skills", "precedence": 50},
+        ]
+        messaging = copy.deepcopy(cli)
+        messaging["kind"] = "messaging"
+        messaging["hook_output"] = None
+        cli["binary_probes"].append(
+            {"purpose": "native-doctor", "candidates": ["openclaw", "openclaw-agent"],
+             "args": ["doctor"], "success_exit_codes": [0]}
+        )
+        manifest["surfaces"] = {"cli": cli, "messaging": messaging}
+        manifest["evidence"]["tested_versions"] = []
+        validate_runtime_manifest(manifest, runtime_id="openclaw-spike", root=ROOT)
+        self.assertIn("skill_allowlists", cli["capabilities"])
+        self.assertIn("execution_authorization", cli["capabilities"])
 
 
 if __name__ == "__main__":

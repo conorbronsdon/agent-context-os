@@ -1,27 +1,72 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "runtime": "claude",
-  "instruction_file": "CLAUDE.md",
-  "invocation": {
-    "setup": "/setup",
-    "start": "/start",
-    "update": "/update",
-    "end": "/end"
-  },
-  "capabilities": {
-    "agent_skills": "native",
-    "explicit_invocation": "native",
-    "project_hooks": "native",
-    "blocking_pre_tool_hook": "native",
-    "mcp": "native",
-    "native_memory": "native",
-    "proposal_apply": "adapter"
-  },
+  "display_name": "Claude Code",
+  "support_tier": "first-class",
+  "support_summary": "Shared lifecycle, slash-command adapters, hooks, optional live reads, and Claude-only auto-memory curation",
+  "components": ["core", "portable-skills", "claude-adapter"],
   "install": {
     "mode": "repository-native",
     "next_steps": [
       "Launch Claude Code from the repository root.",
       "Review project hook trust, then run /setup or /start."
+    ]
+  },
+  "onboarding_doc": "docs/getting-started.md",
+  "surfaces": {
+    "cli": {
+      "kind": "cli",
+      "support_tier": "first-class",
+      "instruction_sources": [
+        {"scope": "repository", "role": "canonical", "path": "CLAUDE.md", "precedence": 100}
+      ],
+      "skill_sources": [
+        {"scope": "repository", "role": "skills", "path": ".agents/skills", "precedence": 100},
+        {"scope": "repository", "role": "additive", "path": ".claude/commands", "precedence": 90}
+      ],
+      "invocation": {"setup": "/setup", "start": "/start", "update": "/update", "end": "/end"},
+      "capabilities": {
+        "agent_skills": "native",
+        "explicit_invocation": "native",
+        "project_hooks": "native",
+        "blocking_pre_tool_hook": "native",
+        "mcp": "native",
+        "native_memory": "native",
+        "proposal_apply": "adapter",
+        "skill_allowlists": "native",
+        "execution_authorization": "native"
+      },
+      "hook_output": "system-message",
+      "binary_probes": [
+        {"purpose": "availability", "candidates": ["claude"], "args": [], "success_exit_codes": [0]},
+        {"purpose": "version", "candidates": ["claude"], "args": ["--version"], "success_exit_codes": [0]}
+      ],
+      "conformance_test": "tests/test_runtime_conformance.py",
+      "evidence": ["claude-settings", "claude-hooks", "claude-conformance"]
+    }
+  },
+  "evidence": {
+    "checked_on": "2026-08-24",
+    "tested_versions": [{"surface": "cli", "version": "2.1.245"}],
+    "sources": [
+      {
+        "id": "claude-settings",
+        "type": "official",
+        "location": "https://code.claude.com/docs/en/settings",
+        "claims": ["agent_skills", "explicit_invocation", "mcp", "native_memory", "skill_allowlists", "execution_authorization", "invocation", "instruction_sources", "skill_sources"]
+      },
+      {
+        "id": "claude-hooks",
+        "type": "official",
+        "location": "https://code.claude.com/docs/en/hooks",
+        "claims": ["project_hooks", "blocking_pre_tool_hook", "hook_output"]
+      },
+      {
+        "id": "claude-conformance",
+        "type": "conformance",
+        "location": "tests/test_runtime_conformance.py",
+        "claims": ["proposal_apply", "support"]
+      }
     ]
   }
 }

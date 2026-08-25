@@ -12,8 +12,9 @@ models, tool names, or native memory.
    judgment without owning mutation mechanics.
 3. **Deterministic kernel:** `bash scripts/contextos.sh` owns paths, rendering,
    invariants, proposals, locks, optimistic hashes, applies, and receipts.
-4. **Runtime adapters:** `.claude/`, `.codex/`, and `adapters/hermes/` map host
-   discovery and hooks to the portable layers.
+4. **Runtime adapters:** discoverable schema-v2 descriptors in `runtimes/` map
+   each host surface to instructions, skills, lifecycle invocations, probes,
+   capabilities, and evidence. Provider files remain in their adapter directories.
 5. **Conformance:** dependency-light tests assert exact state transitions;
    opt-in launch tests exercise installed host discovery without hiding skips.
 
@@ -22,9 +23,9 @@ models, tool names, or native memory.
 ```text
 bash scripts/contextos.sh start [--now ISO_TIMESTAMP]
 bash scripts/contextos.sh propose setup|update|end --input payload.json [--now ISO_TIMESTAMP]
-bash scripts/contextos.sh apply proposal.json --confirm SHA256 --runtime claude|codex|hermes
-bash scripts/contextos.sh install --runtime claude|codex|hermes
-bash scripts/contextos.sh doctor [--runtime claude|codex|hermes]
+bash scripts/contextos.sh apply proposal.json --confirm SHA256 --runtime RUNTIME
+bash scripts/contextos.sh install --runtime RUNTIME
+bash scripts/contextos.sh doctor [--runtime RUNTIME | --all]
 ```
 
 `--now` exists for deterministic fixtures. Production calls use local time.
@@ -60,10 +61,14 @@ memory. Those actions remain separate approval boundaries.
 
 ## Capabilities and degradation
 
-`runtimes/*.json` declares host capabilities as `native`, `adapter`,
-`advisory`, or `unsupported`. Adapters may improve presentation or catch errors
-earlier, but unsupported hooks never weaken kernel enforcement. Hermes copied
-skills can drift, so installation and `doctor` report that boundary explicitly.
+`runtimes/*.json` declares capabilities per host surface as `native`, `adapter`,
+`advisory`, or `unsupported`. `contextos/runtime_schema.py` is the authoritative
+contract and deterministically generates `runtimes/schema.json`; validation
+fails if the generated schema or README support table drifts. `generic` is a
+reserved apply-receipt identity, never a discoverable or installable runtime.
+Adapters may improve presentation or catch errors earlier, but unsupported hooks
+never weaken kernel enforcement. Hermes copied skills can drift, so installation
+and `doctor` report that boundary explicitly.
 
 ## Conformance policy
 

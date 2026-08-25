@@ -101,11 +101,18 @@ The guide covers ChatGPT, Claude, Gemini Apps, Gemini CLI, and a generic path fo
 
 ## Host support
 
-| Host | Support level |
+<!-- runtime-support:start -->
+| Host | Tier | Support |
+|---|---|---|
+| Claude Code | first-class | Shared lifecycle, slash-command adapters, hooks, optional live reads, and Claude-only auto-memory curation |
+| Codex | first-class | Shared lifecycle, native skills, project instructions, hooks, and reviewed proposal/apply writes |
+| Hermes Agent | first-class | Shared lifecycle through portable skills, advisory hooks, MCP, and separate Hermes-native memory |
+<!-- runtime-support:end -->
+
+Compatibility paths that are not registered runtime adapters:
+
+| Host | Compatibility path |
 |---|---|
-| Claude Code | Full experience: shared lifecycle, slash-command adapters, hooks, optional live reads, and Claude-only auto-memory curation |
-| Codex | First-class lifecycle, repository skills, trusted project hooks, and the shared deterministic kernel; native memory remains outside the contract |
-| Hermes Agent | `AGENTS.md`, portable skills, the shared kernel, and optional hook adapter; copied skills and native memory remain explicit host boundaries |
 | Gemini CLI / Antigravity CLI | Migration tooling plus portable-skill discovery for continuing enterprise/API-key Gemini CLI; no complete workspace adapter, and no Antigravity discovery or permission parity is claimed |
 | Cursor / OpenClaw | Read `AGENTS.md` from the repository root; portable skills usable where their Agent Skills support allows |
 | claude.ai | Manual consumer of selected knowledge files; no repository writes, hooks, or slash-command parity |

@@ -18,6 +18,7 @@ done < <(find .claude/hooks scripts tests -name '*.sh' -print0)
 
 "$CONTEXTOS_PYTHON_CMD" -m unittest discover -s tests -p 'test_*.py'
 "$CONTEXTOS_PYTHON_CMD" scripts/integrations.py check
+"$CONTEXTOS_PYTHON_CMD" scripts/runtime-manifests.py check
 
 "$CONTEXTOS_PYTHON_CMD" - <<'PY'
 import json
@@ -31,11 +32,8 @@ paths = [
     Path("docs/templates/update-payload.json"),
     Path("docs/templates/end-payload.json"),
     Path("integrations/catalog.json"),
-    Path("runtimes/schema.json"),
-    Path("runtimes/claude.json"),
-    Path("runtimes/codex.json"),
-    Path("runtimes/hermes.json"),
 ]
+paths.extend(sorted(Path("runtimes").glob("*.json")))
 for path in paths:
     with path.open(encoding="utf-8") as handle:
         json.load(handle)

@@ -37,13 +37,28 @@ Run it locally rather than discovering a failure in CI. It takes about a minute.
 
 ## Generated files — do not hand-edit
 
-Two files are produced by scripts. Editing them directly means your change is
+Four artifacts are produced by scripts. Editing them directly means your change is
 silently reverted on the next regeneration.
 
 | File | Source of truth | Regenerate with |
 |---|---|---|
 | `references/integrations.md` | `integrations/catalog.json` | `scripts/integrations.py render` |
 | `REPO_MAP.md` | the repository itself | `scripts/generate-repo-map.sh` (gitignored — never commit it) |
+| `runtimes/schema.json` | `contextos/runtime_schema.py` | `scripts/runtime-manifests.py generate` |
+| README registered-host table | validated `runtimes/*.json` descriptors | `scripts/runtime-manifests.py generate` |
+
+## Adding a runtime descriptor
+
+Add `runtimes/<runtime-id>.json`; the lowercase filename stem is the stable ID.
+Copy a current descriptor, declare each host surface independently, and cite
+official evidence for native behavior plus the named local conformance test for
+adapter or advisory behavior. Unknown keys, capability values, evidence claims,
+future dates, missing repository references, and generated-artifact drift all
+fail validation. `generic` is reserved for apply receipts and cannot be a host.
+
+Run `scripts/runtime-manifests.py generate`, add or extend a must-work conformance
+control, then run the full validator. Do not add compatibility-only hosts to the
+generated registered-host block; a shipped descriptor is a support claim.
 
 ## Adding an integration to the catalog
 

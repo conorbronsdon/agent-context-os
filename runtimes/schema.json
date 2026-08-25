@@ -1,28 +1,529 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Context OS runtime capability manifest",
+  "$comment": "Generated structural subset. contextos.runtime_schema is authoritative for repository paths, evidence coverage, dates, reserved IDs, and cross-field rules.",
+  "title": "Context OS runtime descriptor",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "runtime", "instruction_file", "invocation", "capabilities", "install"],
+  "required": [
+    "components",
+    "display_name",
+    "evidence",
+    "install",
+    "onboarding_doc",
+    "runtime",
+    "schema_version",
+    "support_summary",
+    "support_tier",
+    "surfaces"
+  ],
   "properties": {
-    "schema_version": {"const": 1},
-    "runtime": {"enum": ["claude", "codex", "hermes"]},
-    "instruction_file": {"type": "string"},
-    "invocation": {
-      "type": "object",
-      "additionalProperties": {"type": "string"},
-      "required": ["setup", "start", "update", "end"]
+    "schema_version": {
+      "const": 2
     },
-    "capabilities": {
-      "type": "object",
-      "additionalProperties": {"enum": ["native", "adapter", "advisory", "unsupported"]}
+    "runtime": {
+      "type": "string",
+      "pattern": "^(?!generic$)[a-z][a-z0-9-]*$"
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)(?:[^\\x00-\\x1f]*\\S)$"
+    },
+    "support_tier": {
+      "enum": [
+        "compatibility",
+        "deprecated",
+        "experimental",
+        "first-class"
+      ]
+    },
+    "support_summary": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)(?:[^\\x00-\\x1f]*\\S)$"
+    },
+    "components": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]*$"
+      }
     },
     "install": {
       "type": "object",
-      "required": ["mode", "next_steps"],
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "next_steps"
+      ],
       "properties": {
-        "mode": {"type": "string"},
-        "next_steps": {"type": "array", "items": {"type": "string"}}
+        "mode": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!\\s)(?:[^\\x00-\\x1f]*\\S)$"
+        },
+        "next_steps": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!\\s)(?:[^\\x00-\\x1f]*\\S)$"
+          }
+        }
+      }
+    },
+    "onboarding_doc": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)(?:[^\\x00-\\x1f]*\\S)$"
+    },
+    "surfaces": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "binary_probes",
+          "capabilities",
+          "conformance_test",
+          "evidence",
+          "hook_output",
+          "instruction_sources",
+          "invocation",
+          "kind",
+          "skill_sources",
+          "support_tier"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "cli",
+              "cloud",
+              "environment",
+              "gateway",
+              "ide",
+              "messaging",
+              "review"
+            ]
+          },
+          "support_tier": {
+            "enum": [
+              "compatibility",
+              "deprecated",
+              "experimental",
+              "first-class"
+            ]
+          },
+          "instruction_sources": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "precedence",
+                "role",
+                "scope"
+              ],
+              "properties": {
+                "scope": {
+                  "enum": [
+                    "repository",
+                    "runtime",
+                    "user",
+                    "workspace"
+                  ]
+                },
+                "role": {
+                  "enum": [
+                    "additive",
+                    "canonical",
+                    "memory",
+                    "persona",
+                    "skills"
+                  ]
+                },
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^(?!\\s)(?:[^\\x00-\\x1f]*\\S)$"
+                },
+                "precedence": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "skill_sources": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "precedence",
+                "role",
+                "scope"
+              ],
+              "properties": {
+                "scope": {
+                  "enum": [
+                    "repository",
+                    "runtime",
+                    "user",
+                    "workspace"
+                  ]
+                },
+                "role": {
+                  "enum": [
+                    "additive",
+                    "canonical",
+                    "memory",
+                    "persona",
+                    "skills"
+                  ]
+                },
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^(?!\\s)(?:[^\\x00-\\x1f]*\\S)$"
+                },
+                "precedence": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "invocation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "end",
+              "setup",
+              "start",
+              "update"
+            ],
+            "properties": {
+              "end": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^(?!\\s)(?:[^\\x00-\\x1f]*\\S)$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "setup": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^(?!\\s)(?:[^\\x00-\\x1f]*\\S)$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "start": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^(?!\\s)(?:[^\\x00-\\x1f]*\\S)$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "update": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^(?!\\s)(?:[^\\x00-\\x1f]*\\S)$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "capabilities": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "agent_skills",
+              "blocking_pre_tool_hook",
+              "execution_authorization",
+              "explicit_invocation",
+              "mcp",
+              "native_memory",
+              "project_hooks",
+              "proposal_apply",
+              "skill_allowlists"
+            ],
+            "properties": {
+              "agent_skills": {
+                "enum": [
+                  "adapter",
+                  "advisory",
+                  "native",
+                  "unsupported"
+                ]
+              },
+              "blocking_pre_tool_hook": {
+                "enum": [
+                  "adapter",
+                  "advisory",
+                  "native",
+                  "unsupported"
+                ]
+              },
+              "execution_authorization": {
+                "enum": [
+                  "adapter",
+                  "advisory",
+                  "native",
+                  "unsupported"
+                ]
+              },
+              "explicit_invocation": {
+                "enum": [
+                  "adapter",
+                  "advisory",
+                  "native",
+                  "unsupported"
+                ]
+              },
+              "mcp": {
+                "enum": [
+                  "adapter",
+                  "advisory",
+                  "native",
+                  "unsupported"
+                ]
+              },
+              "native_memory": {
+                "enum": [
+                  "adapter",
+                  "advisory",
+                  "native",
+                  "unsupported"
+                ]
+              },
+              "project_hooks": {
+                "enum": [
+                  "adapter",
+                  "advisory",
+                  "native",
+                  "unsupported"
+                ]
+              },
+              "proposal_apply": {
+                "enum": [
+                  "adapter",
+                  "advisory",
+                  "native",
+                  "unsupported"
+                ]
+              },
+              "skill_allowlists": {
+                "enum": [
+                  "adapter",
+                  "advisory",
+                  "native",
+                  "unsupported"
+                ]
+              }
+            }
+          },
+          "hook_output": {
+            "oneOf": [
+              {
+                "enum": [
+                  "allow-message",
+                  "system-message"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "binary_probes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "args",
+                "candidates",
+                "purpose",
+                "success_exit_codes"
+              ],
+              "properties": {
+                "purpose": {
+                  "enum": [
+                    "availability",
+                    "native-doctor",
+                    "version"
+                  ]
+                },
+                "candidates": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+                  }
+                },
+                "args": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^(?!\\s)(?:[^\\x00-\\x1f]*\\S)$"
+                  }
+                },
+                "success_exit_codes": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          },
+          "conformance_test": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!\\s)(?:[^\\x00-\\x1f]*\\S)$"
+          },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!\\s)(?:[^\\x00-\\x1f]*\\S)$"
+            }
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checked_on",
+        "sources",
+        "tested_versions"
+      ],
+      "properties": {
+        "checked_on": {
+          "type": "string",
+          "format": "date"
+        },
+        "tested_versions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "surface",
+              "version"
+            ],
+            "properties": {
+              "surface": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?!\\s)(?:[^\\x00-\\x1f]*\\S)$"
+              },
+              "version": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?!\\s)(?:[^\\x00-\\x1f]*\\S)$"
+              }
+            }
+          }
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "claims",
+              "id",
+              "location",
+              "type"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "type": {
+                "enum": [
+                  "conformance",
+                  "official"
+                ]
+              },
+              "location": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?!\\s)(?:[^\\x00-\\x1f]*\\S)$"
+              },
+              "claims": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "agent_skills",
+                    "blocking_pre_tool_hook",
+                    "execution_authorization",
+                    "explicit_invocation",
+                    "hook_output",
+                    "instruction_sources",
+                    "invocation",
+                    "mcp",
+                    "native_memory",
+                    "project_hooks",
+                    "proposal_apply",
+                    "skill_allowlists",
+                    "skill_sources",
+                    "support"
+                  ]
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

@@ -1,27 +1,71 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "runtime": "codex",
-  "instruction_file": "AGENTS.md",
-  "invocation": {
-    "setup": "$setup",
-    "start": "$start",
-    "update": "$update",
-    "end": "$end"
-  },
-  "capabilities": {
-    "agent_skills": "native",
-    "explicit_invocation": "native",
-    "project_hooks": "native",
-    "blocking_pre_tool_hook": "native",
-    "mcp": "native",
-    "native_memory": "unsupported",
-    "proposal_apply": "adapter"
-  },
+  "display_name": "Codex",
+  "support_tier": "first-class",
+  "support_summary": "Shared lifecycle, native skills, project instructions, hooks, and reviewed proposal/apply writes",
+  "components": ["core", "portable-skills", "agents-instructions", "codex-adapter"],
   "install": {
     "mode": "repository-native",
     "next_steps": [
       "Launch Codex from the repository root.",
       "Review the trusted .codex layer and project hooks, then run $setup or $start."
+    ]
+  },
+  "onboarding_doc": "docs/codex-onboarding.md",
+  "surfaces": {
+    "cli": {
+      "kind": "cli",
+      "support_tier": "first-class",
+      "instruction_sources": [
+        {"scope": "repository", "role": "canonical", "path": "AGENTS.md", "precedence": 100}
+      ],
+      "skill_sources": [
+        {"scope": "repository", "role": "skills", "path": ".agents/skills", "precedence": 100}
+      ],
+      "invocation": {"setup": "$setup", "start": "$start", "update": "$update", "end": "$end"},
+      "capabilities": {
+        "agent_skills": "native",
+        "explicit_invocation": "native",
+        "project_hooks": "native",
+        "blocking_pre_tool_hook": "native",
+        "mcp": "native",
+        "native_memory": "unsupported",
+        "proposal_apply": "adapter",
+        "skill_allowlists": "unsupported",
+        "execution_authorization": "unsupported"
+      },
+      "hook_output": "system-message",
+      "binary_probes": [
+        {"purpose": "availability", "candidates": ["codex"], "args": [], "success_exit_codes": [0]},
+        {"purpose": "version", "candidates": ["codex"], "args": ["--version"], "success_exit_codes": [0]}
+      ],
+      "conformance_test": "tests/test_runtime_conformance.py",
+      "evidence": ["codex-agents", "codex-commands", "codex-conformance"]
+    }
+  },
+  "evidence": {
+    "checked_on": "2026-08-24",
+    "tested_versions": [{"surface": "cli", "version": "Codex managed session (2026-08-24)"}],
+    "sources": [
+      {
+        "id": "codex-agents",
+        "type": "official",
+        "location": "https://learn.chatgpt.com/docs/agent-configuration/agents-md",
+        "claims": ["agent_skills", "project_hooks", "blocking_pre_tool_hook", "mcp", "hook_output", "instruction_sources", "skill_sources"]
+      },
+      {
+        "id": "codex-commands",
+        "type": "official",
+        "location": "https://learn.chatgpt.com/docs/developer-commands?surface=cli",
+        "claims": ["explicit_invocation", "invocation"]
+      },
+      {
+        "id": "codex-conformance",
+        "type": "conformance",
+        "location": "tests/test_runtime_conformance.py",
+        "claims": ["proposal_apply", "support"]
+      }
     ]
   }
 }

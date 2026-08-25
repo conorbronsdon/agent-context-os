@@ -1,28 +1,73 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "runtime": "hermes",
-  "instruction_file": "AGENTS.md",
-  "invocation": {
-    "setup": "/setup",
-    "start": "/start",
-    "update": "/update",
-    "end": "/end"
-  },
-  "capabilities": {
-    "agent_skills": "adapter",
-    "explicit_invocation": "advisory",
-    "project_hooks": "adapter",
-    "blocking_pre_tool_hook": "advisory",
-    "mcp": "native",
-    "native_memory": "native",
-    "proposal_apply": "adapter"
-  },
+  "display_name": "Hermes Agent",
+  "support_tier": "first-class",
+  "support_summary": "Shared lifecycle through portable skills, advisory hooks, MCP, and separate Hermes-native memory",
+  "components": ["core", "portable-skills", "agents-instructions", "hermes-adapter"],
   "install": {
     "mode": "skill-copy-or-external-directory",
     "next_steps": [
       "Expose this repository's .agents/skills directory to Hermes or install all four short aliases and their context-* cores.",
       "Start a new Hermes session so the installed skill catalog refreshes.",
       "Keep Hermes MEMORY.md and USER.md separate from repository state."
+    ]
+  },
+  "onboarding_doc": "adapters/hermes/README.md",
+  "surfaces": {
+    "cli": {
+      "kind": "cli",
+      "support_tier": "first-class",
+      "instruction_sources": [
+        {"scope": "repository", "role": "canonical", "path": "AGENTS.md", "precedence": 100}
+      ],
+      "skill_sources": [
+        {"scope": "repository", "role": "skills", "path": ".agents/skills", "precedence": 100},
+        {"scope": "repository", "role": "additive", "path": "adapters/hermes", "precedence": 90}
+      ],
+      "invocation": {"setup": "/setup", "start": "/start", "update": "/update", "end": "/end"},
+      "capabilities": {
+        "agent_skills": "adapter",
+        "explicit_invocation": "advisory",
+        "project_hooks": "adapter",
+        "blocking_pre_tool_hook": "advisory",
+        "mcp": "native",
+        "native_memory": "native",
+        "proposal_apply": "adapter",
+        "skill_allowlists": "unsupported",
+        "execution_authorization": "unsupported"
+      },
+      "hook_output": "allow-message",
+      "binary_probes": [
+        {"purpose": "availability", "candidates": ["hermes"], "args": [], "success_exit_codes": [0]},
+        {"purpose": "version", "candidates": ["hermes"], "args": ["--version"], "success_exit_codes": [0]}
+      ],
+      "conformance_test": "tests/test_runtime_conformance.py",
+      "evidence": ["hermes-overview", "hermes-hooks", "hermes-conformance"]
+    }
+  },
+  "evidence": {
+    "checked_on": "2026-08-24",
+    "tested_versions": [{"surface": "cli", "version": "0.20.5"}],
+    "sources": [
+      {
+        "id": "hermes-overview",
+        "type": "official",
+        "location": "https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/overview.md",
+        "claims": ["mcp", "native_memory", "invocation", "instruction_sources", "skill_sources"]
+      },
+      {
+        "id": "hermes-hooks",
+        "type": "official",
+        "location": "https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/hooks.md",
+        "claims": ["hook_output"]
+      },
+      {
+        "id": "hermes-conformance",
+        "type": "conformance",
+        "location": "tests/test_runtime_conformance.py",
+        "claims": ["agent_skills", "explicit_invocation", "project_hooks", "blocking_pre_tool_hook", "proposal_apply", "support"]
+      }
     ]
   }
 }
