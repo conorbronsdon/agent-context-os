@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import unittest
@@ -14,6 +15,8 @@ from pathlib import Path
 
 from contextos.kernel import (
     ContextOSError,
+    _publish_exclusive,
+    _recover_pending_agent_journals,
     apply_proposal,
     create_proposal,
     discover_root,
@@ -23,6 +26,7 @@ from contextos.kernel import (
     migrate_legacy_runtime_state,
     read_json,
     runtime_manifest,
+    runtime_ids,
     canonical_json,
     sha256_text,
     start_report,
@@ -513,12 +517,447 @@ class KernelTest(unittest.TestCase):
         self.assertFalse((self.root / "sessions/2026-08-23.md").exists())
         self.assertFalse(any((self.root / ".context-os/receipts").glob("*.json")))
 
+    def test_forward_capture_preserves_a_late_content_writer(self) -> None:
+        current = self.root / "state/current.md"
+        concurrent = b"# Concurrent writer\n\nDo not overwrite.\n"
+        proposal_path, proposal = self._propose(
+            "update",
+            {
+                "progress": ["One"],
+                "current_markdown": (
+                    "# Current State\n\n**Last Updated:** 2026-08-20\n\n- Reviewed change\n"
+                ),
+            },
+        )
+        real_replace = os.replace
+
+        def race_before_capture(source, destination, *args, **kwargs):
+            if Path(source) == current and Path(destination).parent.name == "forward":
+                current.write_bytes(concurrent)
+            return real_replace(source, destination, *args, **kwargs)
+
+        with mock.patch(
+            "contextos.kernel.os.replace", side_effect=race_before_capture
+        ):
+            with self.assertRaisesRegex(ContextOSError, "rollback was incomplete"):
+                self._apply(proposal_path, proposal)
+        self.assertEqual(concurrent, current.read_bytes())
+        self.assertFalse((self.root / "sessions/2026-08-23.md").exists())
+        self.assertTrue(
+            (self.root / ".context-os/journals" / proposal["proposal_id"]).is_dir()
+        )
+        self.assertFalse(
+            (self.root / ".context-os/receipts" / f"{proposal['proposal_id']}.json").exists()
+        )
+
+    def test_content_post_write_verification_rejects_a_publication_racer(self) -> None:
+        current = self.root / "state/current.md"
+        concurrent = b"# Concurrent after publication\n"
+        proposal_path, proposal = self._propose(
+            "update",
+            {
+                "progress": ["One"],
+                "current_markdown": (
+                    "# Current State\n\n**Last Updated:** 2026-08-20\n\n- Reviewed\n"
+                ),
+            },
+        )
+        real_publish = _publish_exclusive
+
+        def race_after_publish(source, destination):
+            result = real_publish(source, destination)
+            if Path(destination) == current:
+                current.write_bytes(concurrent)
+            return result
+
+        with mock.patch(
+            "contextos.kernel._publish_exclusive", side_effect=race_after_publish
+        ):
+            with self.assertRaisesRegex(ContextOSError, "rollback was incomplete"):
+                self._apply(proposal_path, proposal)
+        self.assertEqual(concurrent, current.read_bytes())
+        self.assertTrue(
+            (self.root / ".context-os/journals" / proposal["proposal_id"]).is_dir()
+        )
+        self.assertFalse(
+            (self.root / ".context-os/receipts" / f"{proposal['proposal_id']}.json").exists()
+        )
+
+    def test_content_post_write_snapshot_rejects_line_ending_inode_swap(self) -> None:
+        current = self.root / "state/current.md"
+        before = current.read_bytes()
+        proposal_path, proposal = self._propose(
+            "update",
+            {
+                "progress": ["One"],
+                "current_markdown": (
+                    "# Current State\n\n**Last Updated:** 2026-08-20\n\n- Reviewed\n"
+                ),
+            },
+        )
+        real_publish = _publish_exclusive
+        real_stat = os.stat
+        armed = False
+        raced = False
+        target_stat_calls = 0
+
+        def arm_after_publish(source, destination):
+            nonlocal armed
+            result = real_publish(source, destination)
+            if Path(destination) == current:
+                armed = True
+            return result
+
+        def replace_before_path_identity_check(path, *args, **kwargs):
+            nonlocal raced, target_stat_calls
+            if (
+                armed
+                and not raced
+                and Path(path) == current
+                and kwargs.get("follow_symlinks") is False
+            ):
+                target_stat_calls += 1
+                if target_stat_calls == 2:
+                    raced = True
+                    metadata = real_stat(path, *args, **kwargs)
+                    changed = mock.Mock()
+                    changed.st_mode = metadata.st_mode
+                    changed.st_dev = metadata.st_dev
+                    changed.st_ino = metadata.st_ino + 1
+                    return changed
+            return real_stat(path, *args, **kwargs)
+
+        with mock.patch(
+            "contextos.kernel._publish_exclusive", side_effect=arm_after_publish
+        ), mock.patch("contextos.kernel.os.stat", side_effect=replace_before_path_identity_check):
+            with self.assertRaisesRegex(ContextOSError, "rolled back"):
+                self._apply(proposal_path, proposal)
+        self.assertTrue(raced)
+        self.assertEqual(before, current.read_bytes())
+        self.assertFalse(
+            (self.root / ".context-os/journals" / proposal["proposal_id"]).exists()
+        )
+        self.assertFalse(
+            (self.root / ".context-os/receipts" / f"{proposal['proposal_id']}.json").exists()
+        )
+
+    def test_content_post_write_snapshot_rejects_same_inode_mutation(self) -> None:
+        current = self.root / "state/current.md"
+        proposal_path, proposal = self._propose(
+            "update",
+            {
+                "progress": ["One"],
+                "current_markdown": (
+                    "# Current State\n\n**Last Updated:** 2026-08-20\n\n- Reviewed\n"
+                ),
+            },
+        )
+        before = current.read_bytes()
+        real_publish = _publish_exclusive
+        real_stat = os.stat
+        armed = False
+        raced = False
+        target_stat_calls = 0
+
+        def arm_after_publish(source, destination):
+            nonlocal armed
+            result = real_publish(source, destination)
+            if Path(destination) == current:
+                armed = True
+            return result
+
+        def mutate_before_final_metadata_check(path, *args, **kwargs):
+            nonlocal raced, target_stat_calls
+            if (
+                armed
+                and not raced
+                and Path(path) == current
+                and kwargs.get("follow_symlinks") is False
+            ):
+                target_stat_calls += 1
+                if target_stat_calls == 2:
+                    metadata = real_stat(path, *args, **kwargs)
+                    os.utime(
+                        current,
+                        ns=(metadata.st_atime_ns, metadata.st_mtime_ns + 1_000_000_000),
+                    )
+                    raced = True
+            return real_stat(path, *args, **kwargs)
+
+        with mock.patch(
+            "contextos.kernel._publish_exclusive", side_effect=arm_after_publish
+        ), mock.patch("contextos.kernel.os.stat", side_effect=mutate_before_final_metadata_check):
+            with self.assertRaisesRegex(ContextOSError, "rolled back"):
+                self._apply(proposal_path, proposal)
+        self.assertTrue(raced)
+        self.assertEqual(before, current.read_bytes())
+        self.assertFalse(
+            (self.root / ".context-os/journals" / proposal["proposal_id"]).exists()
+        )
+        self.assertFalse(
+            (self.root / ".context-os/receipts" / f"{proposal['proposal_id']}.json").exists()
+        )
+
+    def test_content_journal_recovers_exact_bytes_after_process_death(self) -> None:
+        blockers = self.root / "state/blockers.md"
+        current = self.root / "state/current.md"
+        blockers.write_bytes(b"# Blockers\r\n\r\n**Last Updated:** 2026-08-20\r\n\r\n- Old\r\n")
+        current.write_bytes(b"# Current State\r\n\r\n**Last Updated:** 2026-08-20\r\n\r\n- Old\r\n")
+        os.chmod(blockers, 0o600)
+        os.chmod(current, 0o640)
+        before = {
+            blockers: (blockers.read_bytes(), blockers.stat().st_mode & 0o7777),
+            current: (current.read_bytes(), current.stat().st_mode & 0o7777),
+        }
+        proposal_path, proposal = self._propose(
+            "setup",
+            {
+                "files": {
+                    "state/blockers.md": "# Blockers\n\n- New blocker\n",
+                    "state/current.md": "# Current State\n\n- New priority\n",
+                },
+                "replace_populated": ["state/blockers.md", "state/current.md"],
+            },
+        )
+        first = self.root / proposal["changes"][0]["path"]
+        script = r'''
+import os
+import sys
+from pathlib import Path
+from unittest import mock
+import contextos.kernel as kernel
+
+root = Path(sys.argv[1])
+proposal = Path(sys.argv[2])
+digest = sys.argv[3]
+first = Path(sys.argv[4])
+after = bytes.fromhex(sys.argv[5])
+real_sync = kernel._fsync_directory
+
+def crash_after_first_target(directory):
+    real_sync(directory)
+    if Path(directory) == first.parent and first.is_file() and first.read_bytes() == after:
+        os._exit(86)
+
+with mock.patch("contextos.kernel._fsync_directory", side_effect=crash_after_first_target):
+    kernel.apply_proposal(root, proposal, digest, "codex")
+'''
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                script,
+                str(self.root),
+                str(proposal_path),
+                proposal["proposal_digest"],
+                str(first),
+                proposal["changes"][0]["after_text"].encode("utf-8").hex(),
+            ],
+            cwd=ROOT,
+            check=False,
+        )
+        self.assertEqual(86, result.returncode)
+        journal = self.root / ".context-os/journals" / proposal["proposal_id"]
+        self.assertTrue(journal.is_dir())
+        self.assertFalse(
+            (self.root / ".context-os/receipts" / f"{proposal['proposal_id']}.json").exists()
+        )
+        (self.root / ".context-os/apply.lock").unlink()
+
+        _recover_pending_agent_journals(self.root)
+
+        for target, (raw, mode) in before.items():
+            self.assertEqual(raw, target.read_bytes())
+            self.assertEqual(mode, target.stat().st_mode & 0o7777)
+        self.assertFalse(journal.exists())
+        receipt, _ = self._apply(proposal_path, proposal)
+        self.assertTrue(receipt.is_file())
+
+    def test_content_journal_recovers_a_crash_after_forward_capture(self) -> None:
+        blockers = self.root / "state/blockers.md"
+        before = blockers.read_bytes()
+        before_mode = blockers.stat().st_mode & 0o7777
+        proposal_path, proposal = self._propose(
+            "setup",
+            {
+                "files": {"state/blockers.md": "# Blockers\n\n- Replacement\n"},
+                "replace_populated": ["state/blockers.md"],
+            },
+        )
+        script = r'''
+import os
+import sys
+from pathlib import Path
+from unittest import mock
+import contextos.kernel as kernel
+
+root = Path(sys.argv[1])
+proposal = Path(sys.argv[2])
+digest = sys.argv[3]
+real_capture = kernel._capture_transaction_before
+
+def crash_after_capture(*args, **kwargs):
+    real_capture(*args, **kwargs)
+    os._exit(87)
+
+with mock.patch("contextos.kernel._capture_transaction_before", side_effect=crash_after_capture):
+    kernel.apply_proposal(root, proposal, digest, "codex")
+'''
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                script,
+                str(self.root),
+                str(proposal_path),
+                proposal["proposal_digest"],
+            ],
+            cwd=ROOT,
+            check=False,
+        )
+        self.assertEqual(87, result.returncode)
+        self.assertFalse(blockers.exists())
+        journal = self.root / ".context-os/journals" / proposal["proposal_id"]
+        self.assertEqual(1, len(list((journal / "forward").glob("*.before"))))
+        (self.root / ".context-os/apply.lock").unlink()
+
+        _recover_pending_agent_journals(self.root)
+
+        self.assertEqual(before, blockers.read_bytes())
+        self.assertEqual(before_mode, blockers.stat().st_mode & 0o7777)
+        self.assertFalse(journal.exists())
+
+    def test_content_receipt_commit_hash_retires_a_crash_left_journal(self) -> None:
+        proposal_path, proposal = self._propose("update", {"progress": ["One"]})
+        with mock.patch(
+            "contextos.kernel._discard_agent_journal",
+            side_effect=OSError("simulated crash before journal retirement"),
+        ):
+            receipt, _ = self._apply(proposal_path, proposal)
+        journal = self.root / ".context-os/journals" / proposal["proposal_id"]
+        self.assertTrue(receipt.is_file())
+        self.assertTrue((journal / "commit.json").is_file())
+
+        _recover_pending_agent_journals(self.root)
+
+        self.assertTrue(receipt.is_file())
+        self.assertFalse(journal.exists())
+
+    def test_content_receipt_without_matching_commit_record_fails_closed(self) -> None:
+        proposal_path, proposal = self._propose("update", {"progress": ["One"]})
+        with mock.patch(
+            "contextos.kernel._discard_agent_journal",
+            side_effect=OSError("retain journal"),
+        ):
+            receipt, _ = self._apply(proposal_path, proposal)
+        journal = self.root / ".context-os/journals" / proposal["proposal_id"]
+        commit = read_json(journal / "commit.json")
+        commit["receipt_sha256_raw"] = "0" * 64
+        (journal / "commit.json").write_text(
+            json.dumps(commit, indent=2) + "\n", encoding="utf-8"
+        )
+
+        with self.assertRaisesRegex(ContextOSError, "commit hash mismatch"):
+            _recover_pending_agent_journals(self.root)
+        self.assertTrue(receipt.is_file())
+        self.assertTrue(journal.is_dir())
+
     def test_tampered_proposal_is_rejected(self) -> None:
         proposal_path, proposal = self._propose("update", {"progress": ["One"]})
         tampered = read_json(proposal_path)
         tampered["changes"][0]["after_text"] += "tampered\n"
         proposal_path.write_text(json.dumps(tampered), encoding="utf-8")
         with self.assertRaisesRegex(ContextOSError, "digest"):
+            self._apply(proposal_path, proposal)
+
+    def test_resigned_content_proposal_cannot_hide_delete_action(self) -> None:
+        proposal_path, proposal = self._propose(
+            "update",
+            {
+                "progress": ["One"],
+                "current_markdown": (
+                    "# Current State\n\n**Last Updated:** 2026-08-20\n\n- Changed\n"
+                ),
+            },
+        )
+        change = next(
+            item for item in proposal["changes"] if item["path"] == "state/current.md"
+        )
+        target = self.root / change["path"]
+        before = target.read_bytes()
+        change["action"] = "delete"
+        unsigned = dict(proposal)
+        unsigned.pop("proposal_digest")
+        proposal["proposal_digest"] = sha256_text(canonical_json(unsigned))
+        proposal_path.write_text(json.dumps(proposal), encoding="utf-8")
+
+        with self.assertRaisesRegex(ContextOSError, "content change shape"):
+            self._apply(proposal_path, proposal)
+        self.assertEqual(before, target.read_bytes() if target.exists() else None)
+
+    def test_resigned_content_proposal_cannot_forge_diff_or_invariants(self) -> None:
+        proposal_path, proposal = self._propose("update", {"progress": ["One"]})
+        proposal["changes"][0]["diff"] = "forged reviewed diff\n"
+        unsigned = dict(proposal)
+        unsigned.pop("proposal_digest")
+        proposal["proposal_digest"] = sha256_text(canonical_json(unsigned))
+        proposal_path.write_text(json.dumps(proposal), encoding="utf-8")
+        with self.assertRaisesRegex(ContextOSError, "displayed diff"):
+            self._apply(proposal_path, proposal)
+
+        proposal_path.unlink()
+        proposal_path, proposal = self._propose("update", {"progress": ["Two"]})
+        proposal["invariants"] = ["attacker-supplied-claim"]
+        unsigned = dict(proposal)
+        unsigned.pop("proposal_digest")
+        proposal["proposal_digest"] = sha256_text(canonical_json(unsigned))
+        proposal_path.write_text(json.dumps(proposal), encoding="utf-8")
+        with self.assertRaisesRegex(ContextOSError, "proposal invariants"):
+            self._apply(proposal_path, proposal)
+
+    def test_resigned_content_proposal_cannot_forge_freshness_semantics(self) -> None:
+        desired = (
+            "# Current State\n\n**Last Updated:** 2026-08-20\n\n- Changed\n"
+        )
+        proposal_path, proposal = self._propose(
+            "update", {"progress": ["One"], "current_markdown": desired}
+        )
+        change = next(
+            item for item in proposal["changes"] if item["path"] == "state/current.md"
+        )
+        change["after_text"] = change["after_text"].replace(
+            "2026-08-23", "2099-01-01"
+        )
+        change["after_sha256"] = sha256_text(change["after_text"])
+        change["diff"] = change["diff"].replace("2026-08-23", "2099-01-01")
+        unsigned = dict(proposal)
+        unsigned.pop("proposal_digest")
+        proposal["proposal_digest"] = sha256_text(canonical_json(unsigned))
+        proposal_path.write_text(json.dumps(proposal), encoding="utf-8")
+        with self.assertRaisesRegex(ContextOSError, "single-last-updated"):
+            self._apply(proposal_path, proposal)
+
+        proposal_path.unlink()
+        proposal_path, proposal = self._propose(
+            "update", {"progress": ["Two"], "current_markdown": desired}
+        )
+        proposal["changes"] = [
+            change
+            for change in proposal["changes"]
+            if change["path"] != "state/current-log.md"
+        ]
+        proposal["invariants"] = [
+            "workflow-path-policy",
+            "optimistic-file-hashes",
+            "exact-proposal-integrity",
+            "single-last-updated",
+            "same-day-history",
+        ]
+        unsigned = dict(proposal)
+        unsigned.pop("proposal_digest")
+        proposal["proposal_digest"] = sha256_text(canonical_json(unsigned))
+        proposal_path.write_text(json.dumps(proposal), encoding="utf-8")
+        with self.assertRaisesRegex(ContextOSError, "same-day-history"):
             self._apply(proposal_path, proposal)
 
     def test_setup_requires_explicit_populated_replacement(self) -> None:
@@ -1281,6 +1720,36 @@ class KernelTest(unittest.TestCase):
                 for item in report["checks"]
             )
         )
+
+    def test_runtime_registry_rejects_link_like_registry_inputs(self) -> None:
+        runtimes = self.root / "runtimes"
+        with mock.patch(
+            "contextos.kernel._is_link_like",
+            side_effect=lambda path: path == runtimes,
+        ):
+            with self.assertRaisesRegex(ContextOSError, "runtime registry"):
+                runtime_ids(self.root)
+
+        descriptor = runtimes / "claude.json"
+        with mock.patch(
+            "contextos.kernel._is_link_like",
+            side_effect=lambda path: path == descriptor,
+        ):
+            with self.assertRaisesRegex(ContextOSError, "runtime manifest"):
+                runtime_ids(self.root)
+
+    def test_doctor_rejects_link_like_component_inventory(self) -> None:
+        inventory = self.root / "components/manifest.json"
+        with mock.patch(
+            "contextos.kernel._is_link_like",
+            side_effect=lambda path: path == inventory,
+        ):
+            report = doctor(self.root)
+        check = next(
+            item for item in report["checks"] if item["name"] == "component-inventory"
+        )
+        self.assertEqual("fail", check["status"])
+        self.assertIn("symlink or reparse point", check["detail"])
 
     def test_doctor_reports_external_links_for_every_configurable_seed_path(self) -> None:
         with tempfile.TemporaryDirectory() as external:

@@ -10,7 +10,6 @@ import shutil
 import stat
 import subprocess
 import sys
-import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
@@ -52,12 +51,11 @@ from .workspace_schema import (
 
 
 SCHEMA_VERSION = 1
+TRANSACTION_JOURNAL_VERSION = 2
 HOST_STATE_SCHEMA_VERSION = 1
 EVIDENCE_STALE_AFTER_DAYS = 90
 AGENT_LIFECYCLE_WORKFLOW = "agent-config"
 WORKSPACE_MIGRATION_OPERATION = "workspace-migrate"
-LOCAL_ARTIFACT_MODE = 0o600
-NEW_CONTENT_MODE = 0o666 if os.name == "nt" else 0o644
 PROPOSAL_ID_RE = re.compile(
     r"^\d{8}T\d{6}-(?:setup|update|end|agent-config)-[0-9a-f]{10}$"
 )
@@ -70,6 +68,12 @@ AGENT_MIGRATION_INVARIANTS = [
     "exact-proposal-integrity",
     "atomic-replacement-and-rollback",
 ]
+CONTENT_BASE_INVARIANTS = [
+    "workflow-path-policy",
+    "optimistic-file-hashes",
+    "exact-proposal-integrity",
+]
+CONTENT_FRESHNESS_INVARIANTS = ["single-last-updated", "same-day-history"]
 PLACEHOLDER_DATE = "[DATE]"
 LAST_UPDATED_RE = re.compile(r"^\*\*Last Updated:\*\*\s*(.+?)\s*$", re.MULTILINE)
 REAL_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -124,13 +128,58 @@ def file_digest(path: Path) -> str | None:
 
 
 def raw_file_digest(path: Path) -> str | None:
-    if path.is_symlink():
-        raise ContextOSError(f"transaction target must not be a symlink: {path}")
+    if _is_link_like(path):
+        raise ContextOSError(f"transaction target must not be link-like: {path}")
     if not path.exists():
         return None
-    if not path.is_file():
-        raise ContextOSError(f"transaction target must be a regular file: {path}")
-    return sha256_bytes(path.read_bytes())
+    return sha256_bytes(_read_regular_file_snapshot(path))
+
+
+def _read_regular_file_snapshot(path: Path) -> bytes:
+    """Read one no-follow snapshot and verify the pathname still names it."""
+    if _is_link_like(path):
+        raise ContextOSError(f"transaction target must not be link-like: {path}")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise ContextOSError(f"cannot open transaction target snapshot {path}: {exc}") from exc
+    try:
+        metadata_before = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata_before.st_mode):
+            raise ContextOSError(f"transaction target must be a regular file: {path}")
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        current = os.stat(path, follow_symlinks=False)
+        metadata_after = os.fstat(descriptor)
+        fingerprint_before = (
+            metadata_before.st_mode,
+            metadata_before.st_size,
+            metadata_before.st_mtime_ns,
+            metadata_before.st_ctime_ns,
+        )
+        fingerprint_after = (
+            metadata_after.st_mode,
+            metadata_after.st_size,
+            metadata_after.st_mtime_ns,
+            metadata_after.st_ctime_ns,
+        )
+        if (
+            not stat.S_ISREG(current.st_mode)
+            or not os.path.samestat(metadata_before, current)
+            or not os.path.samestat(metadata_before, metadata_after)
+            or fingerprint_before != fingerprint_after
+        ):
+            raise ContextOSError(f"transaction target changed during snapshot: {path}")
+        return b"".join(chunks)
+    except OSError as exc:
+        raise ContextOSError(f"transaction target changed during snapshot: {path}") from exc
+    finally:
+        os.close(descriptor)
 
 
 def utc_now() -> datetime:
@@ -165,6 +214,15 @@ def _is_link_like(path: Path) -> bool:
     return stat.S_ISLNK(metadata.st_mode) or reparse_tag in link_tags
 
 
+def _same_file(left: Path, right: Path) -> bool:
+    try:
+        return os.path.samefile(left, right)
+    except OSError as exc:
+        raise ContextOSError(
+            f"cannot compare transaction path identity for {left} and {right}: {exc}"
+        ) from exc
+
+
 def _config_filename_identity(value: str) -> str:
     # Windows aliases trailing spaces and periods even when a POSIX checkout can
     # contain them, so discovery must reject those names portably.
@@ -182,6 +240,10 @@ def discover_root(start: Path | None = None) -> Path:
             raise ContextOSError(f"root discovery start path does not exist: {raw_start}")
         candidate = raw_start.parent
     else:
+        if _is_link_like(raw_start):
+            raise ContextOSError(
+                f"root discovery start path must not be a symlink or reparse point: {raw_start}"
+            )
         if not raw_start.exists():
             raise ContextOSError(f"root discovery start path does not exist: {raw_start}")
         if raw_start.is_file():
@@ -193,47 +255,32 @@ def discover_root(start: Path | None = None) -> Path:
                 f"root discovery start path is not a directory or file: {raw_start}"
             )
 
-    # A link may be an ordinary internal repository path. Reject it only when
-    # resolving the start would escape the nearest lexical repository boundary.
-    # Do not treat `.git` reached through the link itself as lexical ownership;
-    # that preserves common `~/current -> repo` entrypoints.
-    lexical_boundary: Path | None = None
+    # Reject linked components below a lexical repository boundary before
+    # resolving the start. Links above that boundary are irrelevant, and
+    # symlinked system ancestors such as macOS /tmp remain compatible. Without
+    # any repository boundary, normal resolution preserves legacy behavior.
+    linked_below_boundary: Path | None = None
     for lexical in (candidate, *candidate.parents):
-        if _is_link_like(lexical):
-            continue
+        if _is_link_like(lexical) and linked_below_boundary is None:
+            linked_below_boundary = lexical
         git_marker = lexical / ".git"
         if git_marker.exists() or _is_link_like(git_marker):
-            lexical_boundary = lexical
+            if linked_below_boundary is not None:
+                raise ContextOSError(
+                    "root discovery start path must not traverse a symlink or "
+                    f"reparse point below repository boundary {lexical}: "
+                    f"{linked_below_boundary}"
+                )
             break
-    resolved_candidate = candidate.resolve()
-    if lexical_boundary is not None:
-        try:
-            resolved_candidate.relative_to(lexical_boundary.resolve())
-        except ValueError as exc:
-            raise ContextOSError(
-                "root discovery start path must not escape repository boundary "
-                f"{lexical_boundary}: {candidate}"
-            ) from exc
-    candidate = resolved_candidate
+    candidate = candidate.resolve()
 
-    for index, path in enumerate((candidate, *candidate.parents)):
+    for path in (candidate, *candidate.parents):
         # The tracked JSON marker is authoritative at the nearest candidate.
+        # Reject portable aliases before looking for the exact spelling so an
+        # invalid inner marker can never silently fall through to an outer root.
+        _reject_config_aliases(path, "contextos.workspace.json")
         marker = path / "contextos.workspace.json"
-        marker_present = marker.exists() or _is_link_like(marker)
-        legacy_present = (path / "AGENTS.md").is_file() and (
-            (path / "state").is_dir() or (path / "workspace.yaml").is_file()
-        )
-        git_marker = path / ".git"
-        boundary_present = git_marker.exists() or _is_link_like(git_marker)
-
-        # Directory enumeration is needed only where a marker/root is actually
-        # plausible, plus the explicit start directory for alias-only controls.
-        # Intermediate traverse-only directories and unrelated outer ancestors
-        # remain compatible with legacy discovery.
-        if index == 0 or marker_present or legacy_present or boundary_present:
-            _reject_config_aliases(path, "contextos.workspace.json")
-
-        if marker_present:
+        if marker.exists() or _is_link_like(marker):
             if _is_link_like(marker):
                 raise ContextOSError(
                     "invalid tracked workspace configuration: "
@@ -257,13 +304,16 @@ def discover_root(start: Path | None = None) -> Path:
             return path
 
         # Preserve the original legacy compound marker for existing clones.
-        if legacy_present:
+        if (path / "AGENTS.md").is_file() and (
+            (path / "state").is_dir() or (path / "workspace.yaml").is_file()
+        ):
             return path
 
         # A nested repository without its own Context OS marker must not be
         # captured by an outer repository. Check the candidate before stopping
         # so a marker at a worktree or submodule root still wins.
-        if boundary_present:
+        git_marker = path / ".git"
+        if git_marker.exists() or _is_link_like(git_marker):
             raise ContextOSError(
                 "could not find a Context OS root before repository boundary: "
                 f"{path}"
@@ -413,10 +463,7 @@ def resolve_workspace(root: Path) -> WorkspaceResolution:
             ),
         })
     return WorkspaceResolution(
-        # Repositories without tracked configuration use the same historical
-        # path semantics as workspace.yaml. Tight path rules begin only after
-        # a canonical JSON configuration is explicitly adopted.
-        workspace=_workspace_from_paths(root, values, legacy=True),
+        workspace=_workspace_from_paths(root, values, legacy=source == "legacy-yaml"),
         config=None,
         source=source,
         agents=None,
@@ -560,12 +607,6 @@ def plan_workspace_migration(
         config = validate_workspace_config(candidate, known_runtime_ids=known)
     except WorkspaceConfigError as exc:
         raise ContextOSError(f"invalid workspace migration target: {exc}") from exc
-    try:
-        _workspace_from_paths(root, config["paths"])
-    except ContextOSError as exc:
-        raise ContextOSError(
-            f"workspace migration target cannot be activated safely: {exc}"
-        ) from exc
     target_text = render_workspace_config(config)
     action = "noop" if current_text == target_text else "update" if existing else "add"
     diff = "" if action == "noop" else "".join(difflib.unified_diff(
@@ -618,8 +659,9 @@ def _agent_lifecycle_authorization(
         )
     _reject_config_aliases(root, relative)
     safe_repo_path(root, relative)
+    component_path = safe_repo_path(root, "components/manifest.json")
     manifest = load_component_manifest(
-        root / "components" / "manifest.json", root=root, check_paths=False
+        component_path, root=root, check_paths=False
     )
     declared_owner = workspace_path_owner(manifest, relative)
     if declared_owner != expected[relative]["owner"]:
@@ -653,8 +695,9 @@ def _agent_source_hashes(root: Path) -> dict[str, str]:
 
 
 def _selection_components(root: Path, agents: Sequence[str]) -> list[str]:
+    component_path = safe_repo_path(root, "components/manifest.json")
     manifest = load_component_manifest(
-        root / "components" / "manifest.json", root=root, check_paths=False
+        component_path, root=root, check_paths=False
     )
     requested: set[str] = {"core"}
     for runtime in agents:
@@ -675,17 +718,14 @@ def _agent_change(
     if path.exists() and not path.is_file():
         raise ContextOSError(f"transaction target must be a regular file: {relative}")
     before_bytes = path.read_bytes() if path.exists() else None
-    before_mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else None
     if action == "write":
         if not isinstance(after_text, str):
             raise ContextOSError(f"write action requires text content: {relative}")
         after_bytes = after_text.encode("utf-8")
-        after_mode = before_mode if before_mode is not None else NEW_CONTENT_MODE
     elif action == "delete":
         if after_text is not None or before_bytes is None:
             raise ContextOSError(f"delete action requires an existing file: {relative}")
         after_bytes = None
-        after_mode = None
     else:
         raise ContextOSError(f"unsupported agent lifecycle action: {action}")
     before_text = (
@@ -707,11 +747,9 @@ def _agent_change(
         "before_raw_sha256": (
             sha256_bytes(before_bytes) if before_bytes is not None else None
         ),
-        "before_mode": before_mode,
         "after_raw_sha256": (
             sha256_bytes(after_bytes) if after_bytes is not None else None
         ),
-        "after_mode": after_mode,
         "after_text": after_text,
         "diff": diff,
     }
@@ -722,17 +760,6 @@ def create_workspace_migration_proposal(
     agents: Sequence[str],
     now: datetime,
 ) -> tuple[Path | None, dict[str, Any] | None]:
-    target = root / "contextos.workspace.json"
-    target_content: str | None = None
-    if target.exists() or target.is_symlink():
-        raw_file_digest(target)
-        try:
-            target_content = target.read_text(encoding="utf-8")
-        except UnicodeError as exc:
-            raise ContextOSError(
-                "transaction target must contain valid UTF-8: "
-                "contextos.workspace.json"
-            ) from exc
     resolution = resolve_workspace(root)
     if resolution.source == "defaults":
         raise ContextOSError(
@@ -746,7 +773,8 @@ def create_workspace_migration_proposal(
         )
     preview = plan_workspace_migration(root, agents)
     changes: list[dict[str, Any]] = []
-    if target_content != preview["content"]:
+    target = root / "contextos.workspace.json"
+    if not target.exists() or target.read_text(encoding="utf-8") != preview["content"]:
         changes.append(
             _agent_change(
                 root,
@@ -837,6 +865,17 @@ def read_json(path: Path) -> dict[str, Any]:
     return value
 
 
+def _json_object_from_bytes(raw: bytes, *, source: str) -> dict[str, Any]:
+    try:
+        text = raw.decode("utf-8")
+        value = strict_json_loads(text, source=source)
+    except (UnicodeDecodeError, WorkspaceConfigError) as exc:
+        raise ContextOSError(f"cannot read JSON from {source}: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ContextOSError(f"expected a JSON object in {source}")
+    return value
+
+
 def _replace_last_updated(
     content: str, today: str, label: str = "lifecycle state"
 ) -> tuple[str, str | None]:
@@ -909,7 +948,7 @@ def _session_append(path: Path, block: str, date: str) -> str:
     if path.exists():
         existing = path.read_text(encoding="utf-8").rstrip()
         return f"{existing}\n\n{block.rstrip()}\n"
-    return f"# Session — {date}\n\n{block.rstrip()}\n"
+    return f"# Session â€” {date}\n\n{block.rstrip()}\n"
 
 
 def _bullets(values: list[str], empty: str = "- None recorded") -> str:
@@ -1046,6 +1085,91 @@ def build_changes(
     return changes
 
 
+def _content_invariants(workflow: str, changes: Sequence[dict[str, Any]]) -> list[str]:
+    invariants = list(CONTENT_BASE_INVARIANTS)
+    if workflow in {"update", "end"} and any(
+        isinstance(change, dict)
+        and isinstance(change.get("path"), str)
+        and change["path"].endswith("current.md")
+        for change in changes
+    ):
+        invariants.extend(CONTENT_FRESHNESS_INVARIANTS)
+    return invariants
+
+
+def _content_change_diff(root: Path, relative: str, after_text: str) -> str:
+    path = safe_repo_path(root, relative)
+    before_text = path.read_text(encoding="utf-8") if path.exists() else ""
+    return "".join(
+        difflib.unified_diff(
+            before_text.splitlines(keepends=True),
+            after_text.splitlines(keepends=True),
+            fromfile=f"a/{relative}",
+            tofile=f"b/{relative}",
+        )
+    )
+
+
+def _validate_content_semantics(
+    root: Path,
+    workflow: str,
+    created_at: datetime,
+    changes: Sequence[dict[str, Any]],
+) -> None:
+    if "single-last-updated" not in _content_invariants(workflow, changes):
+        return
+    workspace = load_workspace(root)
+    current_relative = relative_path(root, workspace.state_dir / "current.md")
+    history_relative = relative_path(root, workspace.state_dir / "current-log.md")
+    changes_by_path = {change["path"]: change for change in changes}
+    current_change = changes_by_path.get(current_relative)
+    if current_change is None:
+        raise ContextOSError("content freshness invariants require current.md")
+
+    today = created_at.strftime("%Y-%m-%d")
+    after_dates = LAST_UPDATED_RE.findall(current_change["after_text"])
+    if len(after_dates) != 1 or after_dates[0].strip() != today:
+        raise ContextOSError(
+            "single-last-updated invariant failed for " + current_relative
+        )
+
+    current_path = safe_repo_path(root, current_relative)
+    before_text = current_path.read_text(encoding="utf-8") if current_path.exists() else ""
+    before_dates = LAST_UPDATED_RE.findall(before_text)
+    if len(before_dates) != 1:
+        raise ContextOSError(
+            "same-day-history invariant requires one prior Last Updated date"
+        )
+    prior_date = before_dates[0].strip()
+    history_path = safe_repo_path(root, history_relative)
+    history_before = (
+        history_path.read_text(encoding="utf-8")
+        if history_path.exists()
+        else "# current.md update log\n\n"
+    )
+    history_change = changes_by_path.get(history_relative)
+    needs_history = (
+        REAL_DATE_RE.fullmatch(prior_date) is not None
+        and prior_date != today
+        and prior_date != _newest_history_date(history_before)
+    )
+    if not needs_history:
+        if history_change is not None:
+            raise ContextOSError(
+                "same-day-history invariant rejects an unexpected history change"
+            )
+        return
+    marker = "# current.md update log"
+    if marker not in history_before:
+        raise ContextOSError("state/current-log.md is missing its required heading")
+    before_marker, after_marker = history_before.split(marker, 1)
+    expected_history = (
+        f"{before_marker}{marker}\n\n{prior_date}\n\n{after_marker.lstrip()}"
+    )
+    if history_change is None or history_change["after_text"] != expected_history:
+        raise ContextOSError("same-day-history invariant failed")
+
+
 def proposal_id(workflow: str, now: datetime, changes: list[dict[str, Any]]) -> str:
     seed = canonical_json({"workflow": workflow, "now": now.isoformat(), "changes": changes})
     return f"{now.strftime('%Y%m%dT%H%M%S')}-{workflow}-{sha256_text(seed)[:10]}"
@@ -1090,7 +1214,48 @@ def _guard_local_artifact_path(root: Path, path: Path) -> None:
 
 
 def _write_exclusive_text(path: Path, content: str, *, root: Path) -> None:
-    _write_exclusive_bytes(path, content.encode("utf-8"), root=root)
+    _guard_local_artifact_path(root, path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        descriptor = os.open(
+            path,
+            os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_BINARY", 0),
+        )
+    except FileExistsError as exc:
+        raise ContextOSError(f"refusing to overwrite local artifact: {path}") from exc
+    try:
+        payload = content.encode("utf-8")
+        view = memoryview(payload)
+        while view:
+            written = os.write(descriptor, view)
+            if written <= 0:
+                raise OSError("short write while creating local artifact")
+            view = view[written:]
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _fsync_directory(path: Path) -> None:
+    """Persist a directory entry where the host exposes POSIX directory fsync."""
+    if os.name == "nt":
+        return
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    try:
+        descriptor = os.open(path, flags)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    except OSError as exc:
+        unsupported = {
+            errno.EBADF,
+            errno.EINVAL,
+            getattr(errno, "ENOTSUP", errno.EINVAL),
+            getattr(errno, "EOPNOTSUPP", errno.EINVAL),
+        }
+        if exc.errno not in unsupported:
+            raise
 
 
 def create_proposal(root: Path, workflow: str, payload: dict[str, Any], now: datetime) -> tuple[Path, dict[str, Any]]:
@@ -1113,10 +1278,8 @@ def create_proposal(root: Path, workflow: str, payload: dict[str, Any], now: dat
         "created_at": now.isoformat(),
         "proposal_id": proposal_id(workflow, now, changes),
         "changes": changes,
-        "invariants": ["workflow-path-policy", "optimistic-file-hashes", "exact-proposal-integrity"],
+        "invariants": _content_invariants(workflow, changes),
     }
-    if workflow in {"update", "end"} and any(change["path"].endswith("current.md") for change in changes):
-        document["invariants"].extend(["single-last-updated", "same-day-history"])
     digest = sha256_text(canonical_json(document))
     document["proposal_digest"] = digest
     target = root / ".context-os" / "proposals" / f"{document['proposal_id']}.json"
@@ -1132,27 +1295,20 @@ def create_proposal(root: Path, workflow: str, payload: dict[str, Any], now: dat
 def transaction_lock(root: Path) -> Iterator[None]:
     lock = root / ".context-os" / "apply.lock"
     _guard_local_artifact_path(root, lock)
-    _ensure_local_directory(root, lock.parent)
+    lock.parent.mkdir(parents=True, exist_ok=True)
     try:
-        descriptor = os.open(
-            lock,
-            os.O_CREAT | os.O_EXCL | os.O_WRONLY,
-            LOCAL_ARTIFACT_MODE,
-        )
+        descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError as exc:
         raise ContextOSError(f"another apply is active or left a stale lock: {lock}") from exc
     try:
         try:
             os.write(descriptor, f"pid={os.getpid()}\n".encode())
-            os.chmod(lock, LOCAL_ARTIFACT_MODE)
             os.fsync(descriptor)
         finally:
             os.close(descriptor)
-        _fsync_directory(lock.parent)
         yield
     finally:
         lock.unlink(missing_ok=True)
-        _fsync_directory(lock.parent)
 
 
 def git_head(root: Path) -> str | None:
@@ -1232,9 +1388,7 @@ def _validate_agent_proposal_shape(
         "action",
         "authorization",
         "before_raw_sha256",
-        "before_mode",
         "after_raw_sha256",
-        "after_mode",
         "after_text",
         "diff",
     }
@@ -1267,27 +1421,15 @@ def _validate_agent_proposal_shape(
                 f"agent-config action mismatch for {relative}: {action!r}"
             )
         before_hash = change.get("before_raw_sha256")
-        before_mode = change.get("before_mode")
         after_hash = change.get("after_raw_sha256")
-        after_mode = change.get("after_mode")
         if before_hash is not None and not re.fullmatch(r"[0-9a-f]{64}", str(before_hash)):
             raise ContextOSError(f"invalid raw before hash: {relative}")
-        if (before_hash is None) != (before_mode is None) or (
-            before_mode is not None
-            and (type(before_mode) is not int or not 0 <= before_mode <= 0o7777)
-        ):
-            raise ContextOSError(f"invalid before mode: {relative}")
         if action == "write":
             after_text = ensure_text(change.get("after_text"), "change.after_text")
             if not isinstance(after_hash, str) or after_hash != sha256_bytes(
                 after_text.encode("utf-8")
             ):
                 raise ContextOSError(f"invalid raw after hash: {relative}")
-            expected_after_mode = (
-                before_mode if before_mode is not None else NEW_CONTENT_MODE
-            )
-            if after_mode != expected_after_mode:
-                raise ContextOSError(f"invalid after mode: {relative}")
             try:
                 after_config = validate_workspace_config(
                     strict_json_loads(after_text, source=relative),
@@ -1297,11 +1439,7 @@ def _validate_agent_proposal_shape(
                 raise ContextOSError(f"invalid proposed workspace config: {exc}") from exc
             if after_text != render_workspace_config(after_config):
                 raise ContextOSError("proposed workspace config must be canonical")
-        elif (
-            change.get("after_text") is not None
-            or after_hash is not None
-            or after_mode is not None
-        ):
+        elif change.get("after_text") is not None or after_hash is not None:
             raise ContextOSError(f"delete action must not carry after content: {relative}")
     if paths not in (["contextos.workspace.json"], ["workspace.yaml"], [
         "contextos.workspace.json", "workspace.yaml"
@@ -1383,13 +1521,42 @@ def _validate_proposal_shape(root: Path, proposal: Path, document: dict[str, Any
     changes = document.get("changes")
     if not isinstance(changes, list) or not changes:
         raise ContextOSError("proposal changes must be a non-empty list")
-    if not isinstance(document.get("invariants"), list):
-        raise ContextOSError("proposal invariants must be a list")
+    if workflow != AGENT_LIFECYCLE_WORKFLOW and document.get(
+        "invariants"
+    ) != _content_invariants(workflow, changes):
+        raise ContextOSError("content proposal invariants are invalid")
     workspace = load_workspace(root)
     seen: set[str] = set()
     for index, change in enumerate(changes):
         if not isinstance(change, dict):
             raise ContextOSError(f"changes[{index}] must be an object")
+        if workflow != AGENT_LIFECYCLE_WORKFLOW:
+            expected_change_keys = {
+                "path",
+                "before_sha256",
+                "after_sha256",
+                "after_text",
+                "diff",
+            }
+            if workflow == "setup":
+                expected_change_keys.add("replacement_approved")
+            if set(change) != expected_change_keys:
+                raise ContextOSError(
+                    f"changes[{index}] has an invalid content change shape"
+                )
+            before_digest = change.get("before_sha256")
+            if before_digest is not None and (
+                not isinstance(before_digest, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", before_digest)
+            ):
+                raise ContextOSError(f"changes[{index}].before_sha256 is invalid")
+            after_digest = change.get("after_sha256")
+            if not isinstance(after_digest, str) or not re.fullmatch(
+                r"[0-9a-f]{64}", after_digest
+            ):
+                raise ContextOSError(f"changes[{index}].after_sha256 is invalid")
+            ensure_text(change.get("after_text"), f"changes[{index}].after_text")
+            ensure_text(change.get("diff"), f"changes[{index}].diff")
         relative = ensure_text(change.get("path"), f"changes[{index}].path")
         if relative in seen:
             raise ContextOSError(f"proposal contains duplicate path: {relative}")
@@ -1417,11 +1584,6 @@ def _validate_agent_preflight(root: Path, document: dict[str, Any]) -> None:
             raise ContextOSError(
                 f"refusing stale agent-config proposal; target changed: {relative}"
             )
-        current_mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else None
-        if current_mode != change["before_mode"]:
-            raise ContextOSError(
-                f"refusing stale agent-config proposal; target mode changed: {relative}"
-            )
         if change["action"] == "write" and sha256_bytes(
             change["after_text"].encode("utf-8")
         ) != change["after_raw_sha256"]:
@@ -1435,11 +1597,6 @@ def _validate_agent_preflight(root: Path, document: dict[str, Any]) -> None:
         )
         if change["diff"] != expected["diff"]:
             raise ContextOSError(f"agent-config displayed diff is invalid: {relative}")
-        if (
-            change["before_mode"] != expected["before_mode"]
-            or change["after_mode"] != expected["after_mode"]
-        ):
-            raise ContextOSError(f"agent-config mode plan is invalid: {relative}")
     if list(document["source_hashes"]) != _agent_source_paths(root):
         raise ContextOSError("refusing stale agent-config proposal; source path set changed")
     for relative, expected in document["source_hashes"].items():
@@ -1449,110 +1606,13 @@ def _validate_agent_preflight(root: Path, document: dict[str, Any]) -> None:
             )
 
 
-def _atomic_restore_bytes(
-    path: Path,
-    content: bytes,
-    mode: int | None,
-    *,
-    scratch_dir: Path | None = None,
-) -> None:
+def _write_exclusive_bytes(path: Path, content: bytes, *, root: Path) -> None:
+    _guard_local_artifact_path(root, path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_parent = scratch_dir or path.parent
-    temporary_parent.mkdir(parents=True, exist_ok=True)
-    temporary: str | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="wb",
-            dir=temporary_parent,
-            prefix=f".{path.name}.",
-            suffix=".rollback",
-            delete=False,
-        ) as handle:
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-            temporary = handle.name
-        if mode is not None:
-            os.chmod(temporary, mode)
-            if os.name != "nt":
-                with open(temporary, "rb") as handle:
-                    os.fsync(handle.fileno())
-        _fsync_directory(Path(temporary).parent)
-        os.replace(temporary, path)
-        temporary = None
-        _fsync_directory(path.parent)
-    finally:
-        if temporary is not None:
-            Path(temporary).unlink(missing_ok=True)
-
-
-def _fsync_directory(path: Path) -> None:
-    """Persist directory entries when the host exposes directory fsync."""
-    if os.name == "nt":
-        return
-    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
-    try:
-        descriptor = os.open(path, flags)
-        try:
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
-    except OSError as exc:
-        unsupported = {
-            errno.EBADF,
-            errno.EINVAL,
-            getattr(errno, "ENOTSUP", errno.EINVAL),
-            getattr(errno, "EOPNOTSUPP", errno.EINVAL),
-        }
-        if exc.errno not in unsupported:
-            raise
-
-
-def _ensure_local_directory(root: Path, path: Path) -> None:
-    """Create a local-state directory and durably anchor each new ancestor."""
-    _guard_local_artifact_path(root, path)
-    missing: list[Path] = []
-    current = path
-    while not current.exists():
-        missing.append(current)
-        if current == root:
-            break
-        current = current.parent
-    path.mkdir(parents=True, exist_ok=True)
-    for created in reversed(missing):
-        _fsync_directory(created)
-        _fsync_directory(created.parent)
-
-
-def _mode_matches(actual: int, expected: int) -> bool:
-    if os.name == "nt":
-        return bool(actual & stat.S_IWRITE) == bool(expected & stat.S_IWRITE)
-    return actual == expected
-
-
-def _same_file(left: Path, right: Path) -> bool:
-    try:
-        return os.path.samefile(left, right)
-    except OSError:
-        return False
-
-
-def _write_exclusive_bytes(
-    path: Path,
-    content: bytes,
-    *,
-    root: Path,
-    mode: int = LOCAL_ARTIFACT_MODE,
-) -> None:
-    _guard_local_artifact_path(root, path)
-    if type(mode) is not int or not 0 <= mode <= 0o7777:
-        raise ContextOSError(f"invalid local artifact mode for {path}: {mode!r}")
-    _ensure_local_directory(root, path.parent)
     try:
         descriptor = os.open(
             path,
             os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_BINARY", 0),
-            mode,
         )
     except FileExistsError as exc:
         raise ContextOSError(f"refusing to overwrite local artifact: {path}") from exc
@@ -1563,11 +1623,14 @@ def _write_exclusive_bytes(
             if written <= 0:
                 raise OSError("short write while creating local artifact")
             view = view[written:]
-        os.chmod(path, mode)
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
-    _fsync_directory(path.parent)
+
+
+def _transaction_slot(ordinal: int, relative: str) -> str:
+    identity = workspace_portable_identity(relative)
+    return f"{ordinal:04d}-{sha256_text(identity)[:16]}"
 
 
 def _create_agent_journal(
@@ -1585,58 +1648,75 @@ def _create_agent_journal(
     _guard_local_artifact_path(root, building)
     if building.exists() or building.is_symlink():
         raise ContextOSError(f"agent transaction journal build already exists: {building}")
-    _ensure_local_directory(root, building / "backups")
-    _ensure_local_directory(root, building / "publications")
-    _ensure_local_directory(root, building / "forward")
+    workflow = document["workflow"]
     entries: list[dict[str, Any]] = []
     for index, change in enumerate(document["changes"]):
         path = safe_repo_path(root, change["path"])
         before = backups[path]
-        expected_before_hash = change["before_raw_sha256"]
-        if (sha256_bytes(before) if before is not None else None) != expected_before_hash:
-            raise ContextOSError(f"agent transaction backup changed: {change['path']}")
-        if backup_modes[path] != change["before_mode"]:
-            raise ContextOSError(f"agent transaction mode changed: {change['path']}")
+        slot = _transaction_slot(index, change["path"])
         backup_relative = None
         if before is not None:
-            backup_relative = f"backups/{index}.bin"
+            backup_relative = f"backups/{slot}.bin"
             _write_exclusive_bytes(building / backup_relative, before, root=root)
-        if change["action"] == "write":
-            publication = building / "publications" / f"{index}.after"
-            after_bytes = change["after_text"].encode("utf-8")
-            if sha256_bytes(after_bytes) != change["after_raw_sha256"]:
-                raise ContextOSError(
-                    f"agent transaction publication changed: {change['path']}"
-                )
-            _write_exclusive_bytes(
-                publication,
-                after_bytes,
-                root=root,
-                mode=change["after_mode"],
-            )
+        if workflow == AGENT_LIFECYCLE_WORKFLOW:
+            action = change["action"]
+            owner = change["authorization"]["owner"]
+            policy = change["authorization"]["policy"]
+            after_raw = change["after_raw_sha256"]
+            receipt_entry = {
+                "action": action,
+                "path": change["path"],
+                "owner": owner,
+                "policy": policy,
+                "sha256_before_raw": change["before_raw_sha256"],
+                "sha256_after_raw": after_raw,
+            }
+        else:
+            action = "write"
+            owner = None
+            policy = None
+            after_raw = sha256_bytes(change["after_text"].encode("utf-8"))
+            receipt_entry = {
+                "path": change["path"],
+                "sha256_before": change["before_sha256"],
+                "sha256_after": change["after_sha256"],
+            }
         entries.append({
+            "ordinal": index,
+            "slot": slot,
             "path": change["path"],
-            "action": change["action"],
-            "owner": change["authorization"]["owner"],
-            "policy": change["authorization"]["policy"],
+            "action": action,
+            "owner": owner,
+            "policy": policy,
             "existed": before is not None,
             "mode": backup_modes[path],
-            "after_mode": change["after_mode"],
-            "sha256_raw": sha256_bytes(before) if before is not None else None,
-            "after_sha256_raw": change["after_raw_sha256"],
+            "before_sha256_raw": sha256_bytes(before) if before is not None else None,
+            "after_sha256_raw": after_raw,
             "backup": backup_relative,
+            "receipt_entry": receipt_entry,
         })
+    backup_directory = building / "backups"
+    if backup_directory.is_dir():
+        _fsync_directory(backup_directory)
     manifest = {
+        "journal_version": TRANSACTION_JOURNAL_VERSION,
         "schema_version": SCHEMA_VERSION,
-        "workflow": AGENT_LIFECYCLE_WORKFLOW,
-        "operation": document["operation"],
+        "workflow": workflow,
+        "operation": document.get("operation", "content-lifecycle"),
+        "created_at": document["created_at"],
         "proposal_id": document["proposal_id"],
         "proposal_digest": document["proposal_digest"],
         "receipt": receipt_path.relative_to(root).as_posix(),
-        "authorization": document["authorization"],
-        "source_hashes": document["source_hashes"],
         "invariants": document["invariants"],
         "entries": entries,
+        "agent_evidence": (
+            {
+                "authorization": document["authorization"],
+                "source_hashes": document["source_hashes"],
+            }
+            if workflow == AGENT_LIFECYCLE_WORKFLOW
+            else None
+        ),
     }
     _write_exclusive_text(
         building / "journal.json",
@@ -1655,256 +1735,220 @@ def _create_agent_journal(
     return journal
 
 
-def _regular_file_state(path: Path, *, label: str) -> tuple[str, int] | None:
-    if not (path.exists() or _is_link_like(path)):
-        return None
-    if _is_link_like(path) or not path.is_file():
-        raise ContextOSError(f"{label} is link-like or not a regular file: {path}")
-    return sha256_bytes(path.read_bytes()), stat.S_IMODE(path.stat().st_mode)
-
-
-def _publication_anchor(
-    root: Path, journal: Path, index: int, entry: dict[str, Any]
-) -> Path | None:
-    if entry["action"] != "write":
-        return None
-    anchor = journal / "publications" / f"{index}.after"
-    _guard_local_artifact_path(root, anchor)
-    state = _regular_file_state(anchor, label="transaction publication anchor")
-    if state is None or state[0] != entry["after_sha256_raw"] or not _mode_matches(
-        state[1], entry["after_mode"]
-    ):
-        raise ContextOSError(f"invalid publication anchor for {entry['path']}")
-    return anchor
-
-
-def _rollback_agent_entry(
-    root: Path, journal: Path, index: int, entry: dict[str, Any]
+def _recover_agent_journal(
+    root: Path, journal: Path, *, allow_foreign_receipt_rollback: bool = False
 ) -> None:
-    """Restore one journaled target without overwriting a concurrent writer."""
-    target = safe_repo_path(root, entry["path"])
-    anchor = _publication_anchor(root, journal, index, entry)
-    capture = journal / "forward" / f"{index}.current"
-    _guard_local_artifact_path(root, capture)
-    capture_state = _regular_file_state(capture, label="transaction forward capture")
-    if capture_state is not None and (
-        capture_state[0] != entry["sha256_raw"]
-        or type(entry["mode"]) is not int
-        or not _mode_matches(capture_state[1], entry["mode"])
-    ):
-        raise ContextOSError(f"forward capture mismatch for {entry['path']}")
-    target_state = _regular_file_state(target, label="transaction rollback target")
-
-    if entry["existed"] is False:
-        if capture_state is not None:
-            raise ContextOSError(f"unexpected forward capture for {entry['path']}")
-        if target_state is None:
-            _fsync_directory(target.parent)
-            return
-        if (
-            anchor is None
-            or not _same_file(target, anchor)
-            or target_state[0] != entry["after_sha256_raw"]
-            or not _mode_matches(target_state[1], entry["after_mode"])
-        ):
-            raise ContextOSError(
-                f"rollback preserved a concurrent target: {entry['path']}"
-            )
-        target.unlink()
-        _fsync_directory(target.parent)
-        return
-
-    if capture_state is None:
-        if (
-            target_state is not None
-            and target_state[0] == entry["sha256_raw"]
-            and type(entry["mode"]) is int
-            and _mode_matches(target_state[1], entry["mode"])
-        ):
-            _fsync_directory(target.parent)
-            return
-        raise ContextOSError(
-            f"rollback has no owned before-state for {entry['path']}"
-        )
-
-    if target_state is not None:
-        if _same_file(target, capture):
-            if (
-                target_state[0] != entry["sha256_raw"]
-                or not _mode_matches(target_state[1], entry["mode"])
-            ):
-                raise ContextOSError(f"restored target mismatch for {entry['path']}")
-            _fsync_directory(target.parent)
-            capture.unlink()
-            _fsync_directory(capture.parent)
-            return
-        if (
-            anchor is None
-            or not _same_file(target, anchor)
-            or target_state[0] != entry["after_sha256_raw"]
-            or not _mode_matches(target_state[1], entry["after_mode"])
-        ):
-            raise ContextOSError(
-                f"rollback preserved a concurrent target: {entry['path']}"
-            )
-        target.unlink()
-        _fsync_directory(target.parent)
-
-    _publish_exclusive(capture, target)
-    _fsync_directory(target.parent)
-    restored = _regular_file_state(target, label="restored transaction target")
+    _guard_local_artifact_path(root, journal)
+    manifest_path = journal / "journal.json"
+    _guard_local_artifact_path(root, manifest_path)
+    manifest = read_json(manifest_path)
+    required = {
+        "journal_version",
+        "schema_version",
+        "workflow",
+        "operation",
+        "created_at",
+        "proposal_id",
+        "proposal_digest",
+        "receipt",
+        "invariants",
+        "entries",
+        "agent_evidence",
+    }
+    workflow = manifest.get("workflow")
     if (
-        restored is None
-        or not _same_file(target, capture)
-        or restored[0] != entry["sha256_raw"]
-        or not _mode_matches(restored[1], entry["mode"])
+        set(manifest) != required
+        or type(manifest.get("journal_version")) is not int
+        or manifest.get("journal_version") != TRANSACTION_JOURNAL_VERSION
+        or type(manifest.get("schema_version")) is not int
+        or manifest.get("schema_version") != SCHEMA_VERSION
+        or workflow not in {"setup", "update", "end", AGENT_LIFECYCLE_WORKFLOW}
+        or manifest.get("proposal_id") != journal.name
+        or not isinstance(manifest.get("proposal_id"), str)
+        or PROPOSAL_ID_RE.fullmatch(manifest["proposal_id"]) is None
+        or not isinstance(manifest.get("proposal_digest"), str)
+        or re.fullmatch(r"[0-9a-f]{64}", manifest["proposal_digest"]) is None
     ):
-        raise ContextOSError(f"restored target mismatch for {entry['path']}")
-    capture.unlink()
-    _fsync_directory(capture.parent)
-
-
-def _probe_rollback_publication(
-    root: Path,
-    target: Path,
-    journal: Path,
-    index: int,
-    expected_hash: str,
-    expected_mode: int,
-) -> None:
-    probe = journal / "forward" / f"{index}.preflight"
-    _guard_local_artifact_path(root, probe)
-    if probe.exists() or probe.is_symlink():
-        raise ContextOSError(f"rollback preflight artifact already exists: {probe}")
-    linked = False
-    try:
-        os.link(target, probe)
-        linked = True
-        state = _regular_file_state(probe, label="rollback preflight artifact")
+        raise ContextOSError(f"invalid transaction journal: {journal}")
+    created_at = parse_now(ensure_text(manifest.get("created_at"), "created_at"))
+    if workflow == AGENT_LIFECYCLE_WORKFLOW:
+        if manifest.get("operation") != WORKSPACE_MIGRATION_OPERATION:
+            raise ContextOSError(f"invalid agent transaction journal: {journal}")
+        evidence = manifest.get("agent_evidence")
         if (
-            state is None
-            or not _same_file(target, probe)
-            or state[0] != expected_hash
-            or not _mode_matches(state[1], expected_mode)
+            not isinstance(evidence, dict)
+            or set(evidence) != {"authorization", "source_hashes"}
+            or not isinstance(evidence.get("authorization"), dict)
+            or not isinstance(evidence.get("source_hashes"), dict)
+            or manifest.get("invariants") != AGENT_MIGRATION_INVARIANTS
         ):
-            raise ContextOSError(f"rollback preflight identity mismatch for {target}")
-    except OSError as exc:
-        raise ContextOSError(
-            f"rollback publication is unsupported before mutating {target}: {exc}"
-        ) from exc
-    finally:
-        if linked and (probe.exists() or probe.is_symlink()):
-            probe.unlink()
-            _fsync_directory(probe.parent)
-
-
-def _verify_committed_agent_targets(
-    root: Path, entries: Any, *, journal: Path
-) -> None:
-    """Retain evidence unless every committed target has its receipt-bound state."""
-    expected_keys = {
+            raise ContextOSError(f"invalid agent transaction evidence: {journal}")
+    else:
+        if (
+            manifest.get("operation") != "content-lifecycle"
+            or manifest.get("agent_evidence") is not None
+        ):
+            raise ContextOSError(f"invalid content transaction journal: {journal}")
+    entries = manifest.get("entries")
+    expected_entry_keys = {
+        "ordinal",
+        "slot",
         "path",
         "action",
         "owner",
         "policy",
         "existed",
         "mode",
-        "after_mode",
-        "sha256_raw",
+        "before_sha256_raw",
         "after_sha256_raw",
         "backup",
-    }
-    recovery_policy = {
-        "contextos.workspace.json": ("write", "workspace-config", "managed"),
-        "workspace.yaml": ("delete", "legacy-workspace-config", "migration-only"),
+        "receipt_entry",
     }
     if not isinstance(entries, list) or not entries:
-        raise ContextOSError(f"agent transaction journal has no entries: {journal}")
+        raise ContextOSError(f"transaction journal has no entries: {journal}")
+    workspace = load_workspace(root) if workflow != AGENT_LIFECYCLE_WORKFLOW else None
+    seen_paths: set[str] = set()
+    seen_slots: set[str] = set()
+    recovered: list[tuple[dict[str, Any], Path, bytes | None, int | None]] = []
     for index, entry in enumerate(entries):
-        if not isinstance(entry, dict) or set(entry) != expected_keys:
+        if not isinstance(entry, dict) or set(entry) != expected_entry_keys:
             raise ContextOSError(f"invalid journal entry {index}: {journal}")
-        relative = ensure_text(entry.get("path"), f"entries[{index}].path")
-        if relative not in recovery_policy:
-            raise ContextOSError(f"journal path is not recoverable: {relative}")
-        action, owner, policy = recovery_policy[relative]
+        if type(entry.get("ordinal")) is not int or entry.get("ordinal") != index:
+            raise ContextOSError(f"invalid journal entry ordinal {index}: {journal}")
+        for key in ("slot", "path", "action"):
+            if not isinstance(entry.get(key), str):
+                raise ContextOSError(f"invalid journal entry {index}: {journal}")
+        relative = entry["path"]
+        slot = entry["slot"]
         if (
-            entry.get("action") != action
-            or entry.get("owner") != owner
-            or entry.get("policy") != policy
+            slot != _transaction_slot(index, relative)
+            or relative in seen_paths
+            or slot in seen_slots
         ):
-            raise ContextOSError(f"journal ownership mismatch: {relative}")
-        existed = entry.get("existed")
-        mode = entry.get("mode")
-        after_hash = entry.get("after_sha256_raw")
-        after_mode = entry.get("after_mode")
-        if type(existed) is not bool or (
-            mode is not None and (type(mode) is not int or not 0 <= mode <= 0o7777)
-        ):
-            raise ContextOSError(f"invalid committed journal state: {relative}")
-        if action == "write" and (
-            not isinstance(after_hash, str)
-            or re.fullmatch(r"[0-9a-f]{64}", after_hash) is None
-            or type(after_mode) is not int
-            or not 0 <= after_mode <= 0o7777
-        ):
-            raise ContextOSError(f"journal after state is invalid: {relative}")
-        if action == "delete" and (after_hash is not None or after_mode is not None):
-            raise ContextOSError(f"journal delete after state is invalid: {relative}")
+            raise ContextOSError(f"journal slot identity mismatch for {relative}")
+        seen_paths.add(relative)
+        seen_slots.add(slot)
         target = safe_repo_path(root, relative)
-        _fsync_directory(target.parent)
-        current_hash = raw_file_digest(target)
-        if action == "delete":
-            committed = current_hash is None
+        if type(entry.get("existed")) is not bool:
+            raise ContextOSError(f"invalid journal entry {index}: {journal}")
+        mode = entry.get("mode")
+        if mode is not None and (type(mode) is not int or not 0 <= mode <= 0o7777):
+            raise ContextOSError(f"invalid journal entry {index}: {journal}")
+        for key in ("before_sha256_raw", "after_sha256_raw"):
+            digest = entry.get(key)
+            if digest is not None and (
+                not isinstance(digest, str)
+                or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+            ):
+                raise ContextOSError(f"invalid journal entry {index}: {journal}")
+        if entry.get("backup") is not None and not isinstance(
+            entry.get("backup"), str
+        ):
+            raise ContextOSError(f"invalid journal entry {index}: {journal}")
+        receipt_entry = entry.get("receipt_entry")
+        if workflow == AGENT_LIFECYCLE_WORKFLOW:
+            recovery_policy = {
+                "contextos.workspace.json": ("write", "workspace-config", "managed"),
+                "workspace.yaml": (
+                    "delete",
+                    "legacy-workspace-config",
+                    "migration-only",
+                ),
+            }
+            if relative not in recovery_policy:
+                raise ContextOSError(f"journal path is not recoverable: {relative}")
+            allowed_action, allowed_owner, allowed_policy = recovery_policy[relative]
+            if (
+                entry.get("action") != allowed_action
+                or entry.get("owner") != allowed_owner
+                or entry.get("policy") != allowed_policy
+            ):
+                raise ContextOSError(f"journal ownership mismatch: {relative}")
+            expected_receipt_entry = {
+                "action": allowed_action,
+                "path": relative,
+                "owner": allowed_owner,
+                "policy": allowed_policy,
+                "sha256_before_raw": entry.get("before_sha256_raw"),
+                "sha256_after_raw": entry.get("after_sha256_raw"),
+            }
         else:
-            # The receipt is the commit point. Once it exists, a user tool may
-            # legitimately rewrite an equivalent file through a new inode. The
-            # publication anchor proves ownership before commit and during
-            # rollback; after commit, receipt-bound bytes and mode are the
-            # durable user-facing contract.
-            _publication_anchor(root, journal, index, entry)
-            current_mode = (
-                stat.S_IMODE(target.stat().st_mode) if target.exists() else None
-            )
-            committed = (
-                current_hash == after_hash
-                and target.exists()
-                and type(current_mode) is int
-                and type(after_mode) is int
-                and _mode_matches(current_mode, after_mode)
-            )
-        if not committed:
-            raise ContextOSError(
-                "committed transaction target does not match its receipt; "
-                f"journal retained for recovery: {relative}"
-            )
+            assert workspace is not None
+            _validate_change_path(workspace, workflow, created_at, relative)
+            if entry.get("action") != "write" or entry.get("owner") is not None or entry.get("policy") is not None:
+                raise ContextOSError(f"invalid content journal entry: {relative}")
+            expected_receipt_entry = receipt_entry
+            if (
+                not isinstance(receipt_entry, dict)
+                or set(receipt_entry) != {"path", "sha256_before", "sha256_after"}
+                or receipt_entry.get("path") != relative
+            ):
+                raise ContextOSError(f"invalid content receipt entry: {relative}")
+            for key in ("sha256_before", "sha256_after"):
+                digest = receipt_entry.get(key)
+                if digest is not None and (
+                    not isinstance(digest, str)
+                    or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+                ):
+                    raise ContextOSError(f"invalid content receipt hash: {relative}")
+        if receipt_entry != expected_receipt_entry:
+            raise ContextOSError(f"journal receipt entry mismatch: {relative}")
+        after_hash = entry.get("after_sha256_raw")
+        if entry["action"] == "write":
+            if not isinstance(after_hash, str):
+                raise ContextOSError(f"journal after hash is invalid: {relative}")
+        elif after_hash is not None:
+            raise ContextOSError(f"journal delete after hash is invalid: {relative}")
+        if entry["existed"]:
+            backup_name = entry.get("backup")
+            if backup_name != f"backups/{slot}.bin":
+                raise ContextOSError(f"journal backup path is invalid: {relative}")
+            backup = journal / backup_name
+            _guard_local_artifact_path(root, backup)
+            if _is_link_like(backup) or (backup.exists() and not backup.is_file()):
+                raise ContextOSError(f"journal backup is not a regular file: {relative}")
+            try:
+                content = backup.read_bytes()
+            except (OSError, UnicodeError) as exc:
+                raise ContextOSError(
+                    f"cannot read journal backup for {relative}: {exc}"
+                ) from exc
+            if sha256_bytes(content) != entry.get("before_sha256_raw"):
+                raise ContextOSError(f"journal backup hash mismatch: {relative}")
+            if type(mode) is not int:
+                raise ContextOSError(f"journal mode is invalid: {relative}")
+            if workflow != AGENT_LIFECYCLE_WORKFLOW:
+                try:
+                    logical_before = content.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+                except UnicodeDecodeError as exc:
+                    raise ContextOSError(
+                        f"content journal backup is not UTF-8: {relative}"
+                    ) from exc
+                if sha256_text(logical_before) != receipt_entry["sha256_before"]:
+                    raise ContextOSError(
+                        f"content journal logical before hash mismatch: {relative}"
+                    )
+        else:
+            if entry.get("backup") is not None or entry.get("before_sha256_raw") is not None or mode is not None:
+                raise ContextOSError(f"journal absence entry is invalid: {relative}")
+            content = None
+            mode = None
+        if workflow != AGENT_LIFECYCLE_WORKFLOW:
+            if content is None and receipt_entry["sha256_before"] is not None:
+                raise ContextOSError(
+                    f"content journal absence hash mismatch: {relative}"
+                )
+            if entry["after_sha256_raw"] != receipt_entry["sha256_after"]:
+                raise ContextOSError(
+                    f"content journal raw after hash mismatch: {relative}"
+                )
+        recovered.append((entry, target, content, mode))
 
-
-def _recover_agent_journal(root: Path, journal: Path) -> None:
-    _guard_local_artifact_path(root, journal)
-    manifest_path = journal / "journal.json"
-    _guard_local_artifact_path(root, manifest_path)
-    manifest = read_json(manifest_path)
-    required = {
-        "schema_version",
-        "workflow",
-        "operation",
-        "proposal_id",
-        "proposal_digest",
-        "receipt",
-        "authorization",
-        "source_hashes",
-        "invariants",
-        "entries",
-    }
-    if (
-        set(manifest) != required
-        or type(manifest.get("schema_version")) is not int
-        or manifest.get("schema_version") != SCHEMA_VERSION
-        or manifest.get("workflow") != AGENT_LIFECYCLE_WORKFLOW
-        or manifest.get("operation") != WORKSPACE_MIGRATION_OPERATION
-        or manifest.get("proposal_id") != journal.name
+    if workflow != AGENT_LIFECYCLE_WORKFLOW and manifest.get("invariants") != _content_invariants(
+        workflow, [entry["receipt_entry"] for entry in entries]
     ):
-        raise ContextOSError(f"invalid agent transaction journal: {journal}")
+        raise ContextOSError(f"invalid content transaction invariants: {journal}")
+
     receipt_relative = ensure_text(manifest.get("receipt"), "receipt")
     receipt_parts = PurePosixPath(receipt_relative).parts
     if (
@@ -1915,25 +1959,54 @@ def _recover_agent_journal(root: Path, journal: Path) -> None:
         raise ContextOSError(f"invalid journal receipt path: {receipt_relative}")
     receipt = root.joinpath(*receipt_parts)
     _guard_local_artifact_path(root, receipt)
-    if receipt.exists() or receipt.is_symlink():
-        receipt_anchor = journal / "receipt.anchor"
-        _guard_local_artifact_path(root, receipt_anchor)
-        anchor_state = _regular_file_state(
-            receipt_anchor, label="transaction receipt anchor"
-        )
-        receipt_state = _regular_file_state(
-            receipt, label="transaction receipt"
-        )
+    commit_path = journal / "commit.json"
+    receipt_anchor = journal / "receipt.anchor"
+    _guard_local_artifact_path(root, commit_path)
+    _guard_local_artifact_path(root, receipt_anchor)
+    receipt_present = receipt.exists() or receipt.is_symlink()
+    foreign_receipt = False
+    if receipt_present and allow_foreign_receipt_rollback:
+        if _is_link_like(receipt) or not receipt.is_file():
+            foreign_receipt = True
+        elif (
+            _is_link_like(commit_path)
+            or not commit_path.is_file()
+            or _is_link_like(receipt_anchor)
+            or not receipt_anchor.is_file()
+            or not _same_file(receipt, receipt_anchor)
+        ):
+            foreign_receipt = True
+        else:
+            candidate_commit = read_json(commit_path)
+            foreign_receipt = (
+                not isinstance(candidate_commit, dict)
+                or candidate_commit.get("receipt_sha256_raw")
+                != sha256_bytes(receipt_anchor.read_bytes())
+            )
+    if receipt_present and not foreign_receipt:
+        if _is_link_like(receipt) or not receipt.is_file():
+            raise ContextOSError(f"transaction receipt is not a regular file: {receipt}")
+        if _is_link_like(commit_path) or not commit_path.is_file():
+            raise ContextOSError(f"transaction receipt has no durable commit record: {receipt}")
         if (
-            anchor_state is None
-            or receipt_state is None
-            or anchor_state != receipt_state
+            _is_link_like(receipt_anchor)
+            or not receipt_anchor.is_file()
             or not _same_file(receipt, receipt_anchor)
         ):
             raise ContextOSError(
-                f"journal receipt does not match its owned anchor: {receipt}"
+                f"transaction receipt does not match its durable anchor: {receipt}"
             )
-        value = read_json(receipt)
+        commit = read_json(commit_path)
+        receipt_bytes = receipt_anchor.read_bytes()
+        expected_commit = {
+            "schema_version": SCHEMA_VERSION,
+            "proposal_id": manifest["proposal_id"],
+            "proposal_digest": manifest["proposal_digest"],
+            "receipt_sha256_raw": sha256_bytes(receipt_bytes),
+        }
+        if commit != expected_commit:
+            raise ContextOSError(f"transaction receipt commit hash mismatch: {receipt}")
+        value = _json_object_from_bytes(receipt_bytes, source=str(receipt))
         expected_receipt_keys = {
             "schema_version",
             "proposal_id",
@@ -1946,45 +2019,22 @@ def _recover_agent_journal(root: Path, journal: Path) -> None:
             "git_head_before",
             "git_head_after",
             "invariants_checked",
-            "workflow",
-            "operation",
-            "confirmation",
-            "authorization",
         }
-        expected_files = [
-            {
-                "action": entry["action"],
-                "path": entry["path"],
-                "owner": entry["owner"],
-                "policy": entry["policy"],
-                "sha256_before_raw": entry["sha256_raw"],
-                "mode_before": entry["mode"],
-                "sha256_after_raw": entry["after_sha256_raw"],
-                "mode_after": entry["after_mode"],
-            }
-            for entry in manifest.get("entries", [])
-            if isinstance(entry, dict)
-        ]
-        expected_authorization = {
-            **manifest.get("authorization", {}),
-            "inputs": [
-                {"path": path, "sha256_raw": digest}
-                for path, digest in manifest.get("source_hashes", {}).items()
-            ],
-        }
+        if workflow == AGENT_LIFECYCLE_WORKFLOW:
+            expected_receipt_keys.update(
+                {"workflow", "operation", "confirmation", "authorization"}
+            )
+        expected_files = [entry["receipt_entry"] for entry in entries]
         if (
             set(value) != expected_receipt_keys
             or type(value.get("schema_version")) is not int
             or value.get("schema_version") != SCHEMA_VERSION
             or value.get("proposal_id") != manifest.get("proposal_id")
             or value.get("proposal_digest") != manifest.get("proposal_digest")
-            or value.get("workflow") != AGENT_LIFECYCLE_WORKFLOW
-            or value.get("operation") != WORKSPACE_MIGRATION_OPERATION
             or value.get("runtime_identity") != "self-reported"
             or not isinstance(value.get("runtime"), str)
-            or value.get("confirmation")
-            != {"method": "exact-digest-echo", "human_authenticated": False}
-            or value.get("authorization") != expected_authorization
+            or value.get("approval_evidence")
+            != "host-mediated confirmation; kernel does not authenticate the human approver"
             or value.get("files_changed") != expected_files
             or value.get("invariants_checked") != manifest.get("invariants")
             or not isinstance(value.get("applied_at"), str)
@@ -1996,86 +2046,94 @@ def _recover_agent_journal(root: Path, journal: Path) -> None:
             raise ContextOSError(
                 f"journal receipt is not a valid commit marker: {receipt}"
             )
-        _verify_committed_agent_targets(
-            root, manifest.get("entries"), journal=journal
-        )
+        if workflow == AGENT_LIFECYCLE_WORKFLOW:
+            evidence = manifest["agent_evidence"]
+            expected_authorization = {
+                **evidence["authorization"],
+                "inputs": [
+                    {"path": path, "sha256_raw": digest}
+                    for path, digest in evidence["source_hashes"].items()
+                ],
+            }
+            if (
+                value.get("workflow") != AGENT_LIFECYCLE_WORKFLOW
+                or value.get("operation") != WORKSPACE_MIGRATION_OPERATION
+                or value.get("confirmation")
+                != {"method": "exact-digest-echo", "human_authenticated": False}
+                or value.get("authorization") != expected_authorization
+            ):
+                raise ContextOSError(
+                    f"journal receipt is not a valid agent commit marker: {receipt}"
+                )
         _fsync_directory(receipt.parent)
-        if not _same_file(receipt, receipt_anchor):
+        if (
+            sha256_bytes(receipt_anchor.read_bytes())
+            != commit["receipt_sha256_raw"]
+            or not _same_file(receipt, receipt_anchor)
+        ):
             raise ContextOSError(
-                f"journal receipt changed during recovery validation: {receipt}"
+                f"transaction receipt changed during recovery validation: {receipt}"
             )
         _discard_agent_journal(root, journal)
         staging = root / ".context-os" / "staging" / manifest["proposal_id"]
         _guard_local_artifact_path(root, staging)
         shutil.rmtree(staging, ignore_errors=True)
         return
-    entries = manifest.get("entries")
-    if not isinstance(entries, list) or not entries:
-        raise ContextOSError(f"agent transaction journal has no entries: {journal}")
-    for index, entry in enumerate(entries):
-        expected_keys = {
-            "path",
-            "action",
-            "owner",
-            "policy",
-            "existed",
-            "mode",
-            "after_mode",
-            "sha256_raw",
-            "after_sha256_raw",
-            "backup",
-        }
-        if not isinstance(entry, dict) or set(entry) != expected_keys:
-            raise ContextOSError(f"invalid journal entry {index}: {journal}")
-        relative = ensure_text(entry.get("path"), f"entries[{index}].path")
-        recovery_policy = {
-            "contextos.workspace.json": ("write", "workspace-config", "managed"),
-            "workspace.yaml": (
-                "delete",
-                "legacy-workspace-config",
-                "migration-only",
-            ),
-        }
-        if relative not in recovery_policy:
-            raise ContextOSError(f"journal path is not recoverable: {relative}")
-        allowed_action, allowed_owner, allowed_policy = recovery_policy[relative]
-        if entry.get("owner") != allowed_owner or entry.get("policy") != allowed_policy:
-            raise ContextOSError(f"journal ownership mismatch: {relative}")
-        target = safe_repo_path(root, relative)
-        expected_action = allowed_action
-        if entry.get("action") != expected_action:
-            raise ContextOSError(f"journal action mismatch: {relative}")
-        after_hash = entry.get("after_sha256_raw")
-        after_mode = entry.get("after_mode")
-        if expected_action == "write":
-            if not isinstance(after_hash, str) or not re.fullmatch(
-                r"[0-9a-f]{64}", after_hash
-            ) or type(after_mode) is not int or not 0 <= after_mode <= 0o7777:
-                raise ContextOSError(f"journal after state is invalid: {relative}")
-        elif after_hash is not None or after_mode is not None:
-            raise ContextOSError(f"journal delete after state is invalid: {relative}")
-        if entry.get("existed") is True:
-            backup_name = ensure_text(entry.get("backup"), f"entries[{index}].backup")
-            if backup_name != f"backups/{index}.bin":
-                raise ContextOSError(f"journal backup path is invalid: {relative}")
-            backup = journal / backup_name
-            _guard_local_artifact_path(root, backup)
-            content = backup.read_bytes()
-            if sha256_bytes(content) != entry.get("sha256_raw"):
-                raise ContextOSError(f"journal backup hash mismatch: {relative}")
-            mode = entry.get("mode")
-            if not isinstance(mode, int):
-                raise ContextOSError(f"journal mode is invalid: {relative}")
-        elif entry.get("existed") is False:
+    if commit_path.exists() or commit_path.is_symlink():
+        if _is_link_like(commit_path) or not commit_path.is_file():
+            raise ContextOSError(f"invalid transaction commit record: {commit_path}")
+        commit = read_json(commit_path)
+        if (
+            not isinstance(commit, dict)
+            or set(commit)
+            != {"schema_version", "proposal_id", "proposal_digest", "receipt_sha256_raw"}
+            or commit.get("schema_version") != SCHEMA_VERSION
+            or commit.get("proposal_id") != manifest["proposal_id"]
+            or commit.get("proposal_digest") != manifest["proposal_digest"]
+            or not isinstance(commit.get("receipt_sha256_raw"), str)
+            or re.fullmatch(r"[0-9a-f]{64}", commit["receipt_sha256_raw"]) is None
+        ):
+            raise ContextOSError(f"invalid transaction commit record: {commit_path}")
+    for entry, target, content, mode in recovered:
+        publication_anchor = _validated_publication_anchor(
+            root,
+            journal,
+            slot=entry["slot"],
+            expected_hash=entry["after_sha256_raw"],
+        )
+        forward_capture = _adopt_forward_capture(
+            root,
+            target,
+            content,
+            mode,
+            entry["after_sha256_raw"],
+            publication_anchor,
+            journal=journal,
+            slot=entry["slot"],
+        )
+        _restore_transaction_target(
+            root,
+            target,
+            content,
+            mode,
+            entry["after_sha256_raw"],
+            publication_anchor,
+            work_dir=journal / "rollback",
+            slot=entry["slot"],
+        )
+        if forward_capture is not None:
+            target_digest = raw_file_digest(target)
             if (
-                entry.get("backup") is not None
-                or entry.get("sha256_raw") is not None
-                or entry.get("mode") is not None
+                content is None
+                or mode is None
+                or target_digest != sha256_bytes(content)
+                or target.stat().st_mode & 0o7777 != mode
             ):
-                raise ContextOSError(f"journal absence entry is invalid: {relative}")
-        else:
-            raise ContextOSError(f"journal existed flag is invalid: {relative}")
-        _rollback_agent_entry(root, journal, index, entry)
+                raise ContextOSError(
+                    f"forward capture cannot be retired before exact restoration: {target}"
+                )
+            forward_capture.unlink()
+            _fsync_directory(forward_capture.parent)
     _discard_agent_journal(root, journal)
     staging = root / ".context-os" / "staging" / manifest["proposal_id"]
     _guard_local_artifact_path(root, staging)
@@ -2120,13 +2178,394 @@ def _discard_agent_journal(root: Path, journal: Path) -> None:
 
 
 def _publish_exclusive(source: Path, destination: Path) -> None:
-    """Create a no-clobber hard link; callers own durability and cleanup."""
+    """Create a no-clobber hard link; the caller owns durability and cleanup."""
     try:
         os.link(source, destination)
     except FileExistsError as exc:
         raise ContextOSError(
             f"refusing to overwrite concurrently created path: {destination}"
         ) from exc
+    except OSError as exc:
+        raise ContextOSError(
+            "filesystem does not support atomic no-clobber publication for "
+            f"{destination}: {exc}"
+        ) from exc
+
+
+def _prepare_publication_anchor(
+    root: Path,
+    journal: Path,
+    source: Path,
+    *,
+    slot: str,
+    expected_hash: str,
+) -> Path:
+    """Durably bind a write to an inode before publishing it to the workspace."""
+    directory = journal / "publications"
+    _guard_local_artifact_path(root, directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    _fsync_directory(directory.parent)
+    anchor = directory / f"{slot}.after"
+    _guard_local_artifact_path(root, anchor)
+    if anchor.exists() or anchor.is_symlink():
+        raise ContextOSError(f"publication anchor already exists: {anchor}")
+    _publish_exclusive(source, anchor)
+    _fsync_directory(directory)
+    if raw_file_digest(anchor) != expected_hash or not _same_file(source, anchor):
+        raise ContextOSError(f"publication anchor identity mismatch: {anchor}")
+    return anchor
+
+
+def _validated_publication_anchor(
+    root: Path,
+    journal: Path,
+    *,
+    slot: str,
+    expected_hash: str | None,
+) -> Path | None:
+    anchor = journal / "publications" / f"{slot}.after"
+    _guard_local_artifact_path(root, anchor)
+    present = anchor.exists() or _is_link_like(anchor)
+    if expected_hash is None:
+        if present:
+            raise ContextOSError(f"unexpected publication anchor: {anchor}")
+        return None
+    if not present:
+        return None
+    if _is_link_like(anchor) or not anchor.is_file():
+        raise ContextOSError(f"publication anchor is link-like or non-file: {anchor}")
+    if raw_file_digest(anchor) != expected_hash:
+        raise ContextOSError(f"publication anchor hash mismatch: {anchor}")
+    return anchor
+
+
+def _chmod_and_fsync(path: Path, mode: int) -> None:
+    descriptor = os.open(path, os.O_RDWR | getattr(os, "O_BINARY", 0))
+    try:
+        os.chmod(path, mode)
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _probe_rollback_publication(
+    root: Path, target: Path, *, work_dir: Path, slot: str
+) -> None:
+    """Prove rollback hard-link support before the first repository mutation."""
+    _guard_local_artifact_path(root, work_dir)
+    work_dir.mkdir(parents=True, exist_ok=True)
+    _fsync_directory(work_dir.parent)
+    probe = work_dir / f"{slot}.preflight"
+    _guard_local_artifact_path(root, probe)
+    if probe.exists() or probe.is_symlink():
+        raise ContextOSError(f"rollback preflight artifact already exists for {target}")
+    linked = False
+    try:
+        os.link(target, probe)
+        linked = True
+        if not _same_file(target, probe):
+            raise ContextOSError(f"rollback preflight identity mismatch for {target}")
+    except OSError as exc:
+        raise ContextOSError(
+            f"rollback publication is unsupported before mutating {target}: {exc}"
+        ) from exc
+    finally:
+        if linked and (probe.exists() or probe.is_symlink()):
+            probe.unlink()
+            _fsync_directory(probe.parent)
+
+
+def _capture_transaction_before(
+    root: Path,
+    target: Path,
+    expected_before: bytes,
+    expected_mode: int,
+    *,
+    journal: Path,
+    slot: str,
+) -> Path:
+    """Move a target into its durable forward slot and verify what was moved."""
+    forward_dir = journal / "forward"
+    _guard_local_artifact_path(root, forward_dir)
+    forward_dir.mkdir(parents=True, exist_ok=True)
+    _fsync_directory(forward_dir.parent)
+    capture = forward_dir / f"{slot}.before"
+    _guard_local_artifact_path(root, capture)
+    if capture.exists() or capture.is_symlink():
+        raise ContextOSError(f"forward transaction capture already exists for {target}")
+    os.replace(target, capture)
+    _fsync_directory(capture.parent)
+    _fsync_directory(target.parent)
+    if _is_link_like(capture) or not capture.is_file():
+        raise ContextOSError(f"forward transaction captured a non-file target: {target}")
+    captured = capture.read_bytes()
+    captured_mode = capture.stat().st_mode & 0o7777
+    if captured != expected_before or captured_mode != expected_mode:
+        try:
+            _publish_exclusive(capture, target)
+            _fsync_directory(target.parent)
+        except (OSError, ContextOSError) as exc:
+            raise ContextOSError(
+                f"unrecognized forward capture retained at {capture}; target also changed"
+            ) from exc
+        raise ContextOSError(
+            f"unrecognized forward capture restored at {target}; journal retained for review"
+        )
+    return capture
+
+
+def _adopt_forward_capture(
+    root: Path,
+    target: Path,
+    before: bytes | None,
+    mode: int | None,
+    expected_after_hash: str | None,
+    publication_anchor: Path | None,
+    *,
+    journal: Path,
+    slot: str,
+) -> Path | None:
+    """Resume or validate the durable before-state captured during publication."""
+    capture = journal / "forward" / f"{slot}.before"
+    _guard_local_artifact_path(root, capture)
+    if not (capture.exists() or capture.is_symlink()):
+        return None
+    if before is None or mode is None:
+        raise ContextOSError(f"unexpected forward capture for absent target: {target}")
+    if _is_link_like(capture) or not capture.is_file():
+        raise ContextOSError(f"forward capture is link-like or non-file for {target}")
+    if capture.read_bytes() != before or capture.stat().st_mode & 0o7777 != mode:
+        raise ContextOSError(f"forward capture does not match journal backup: {target}")
+    target_present = target.exists() or _is_link_like(target)
+    if target_present and (_is_link_like(target) or not target.is_file()):
+        raise ContextOSError(f"forward recovery found a non-file target: {target}")
+    if not target_present:
+        _publish_exclusive(capture, target)
+        _fsync_directory(target.parent)
+        capture.unlink()
+        _fsync_directory(capture.parent)
+        return None
+    target_digest = sha256_bytes(target.read_bytes())
+    target_mode = target.stat().st_mode & 0o7777
+    if target_digest == sha256_bytes(before) and target_mode == mode:
+        capture.unlink()
+        _fsync_directory(capture.parent)
+        return None
+    if (
+        target_digest != expected_after_hash
+        or publication_anchor is None
+        or not _same_file(target, publication_anchor)
+    ):
+        raise ContextOSError(
+            f"forward target/capture ambiguity for {target}; both were retained"
+        )
+    return capture
+
+
+def _restore_transaction_target(
+    root: Path,
+    target: Path,
+    before: bytes | None,
+    mode: int | None,
+    expected_after_hash: str | None,
+    publication_anchor: Path | None,
+    *,
+    work_dir: Path,
+    slot: str,
+) -> None:
+    """Idempotently restore one path without overwriting a concurrent writer."""
+    _guard_local_artifact_path(root, work_dir)
+    work_dir.mkdir(parents=True, exist_ok=True)
+    local_root = root / ".context-os"
+    current_directory = work_dir
+    while current_directory != local_root:
+        _fsync_directory(current_directory.parent)
+        current_directory = current_directory.parent
+    capture = work_dir / f"{slot}.current"
+    restore = work_dir / f"{slot}.before"
+    probe = work_dir / f"{slot}.probe"
+    _guard_local_artifact_path(root, capture)
+    _guard_local_artifact_path(root, restore)
+    _guard_local_artifact_path(root, probe)
+
+    before_hash = sha256_bytes(before) if before is not None else None
+
+    def artifact_digest(path: Path, label: str) -> str | None:
+        present = path.exists() or _is_link_like(path)
+        if not present:
+            return None
+        if _is_link_like(path) or not path.is_file():
+            raise ContextOSError(
+                f"rollback {label} is link-like or non-file for {target}: {path}"
+            )
+        return sha256_bytes(path.read_bytes())
+
+    def exact_before(path: Path, digest: str | None) -> bool:
+        if before is None:
+            return digest is None
+        if digest != before_hash or not path.is_file():
+            return False
+        return mode is not None and path.stat().st_mode & 0o7777 == mode
+
+    def remove_artifact(path: Path) -> None:
+        if path.exists() or path.is_symlink():
+            path.unlink()
+            _fsync_directory(path.parent)
+
+    def publish(source: Path, *, remove_source: bool = True) -> None:
+        _publish_exclusive(source, target)
+        _fsync_directory(target.parent)
+        if remove_source:
+            source.unlink()
+            _fsync_directory(source.parent)
+
+    def publish_before() -> None:
+        if before is None:
+            return
+        restore_digest = artifact_digest(restore, "restore payload")
+        if restore_digest is None:
+            _write_exclusive_bytes(restore, before, root=root)
+            if mode is not None:
+                _chmod_and_fsync(restore, mode)
+            _fsync_directory(restore.parent)
+        elif not exact_before(restore, restore_digest):
+            raise ContextOSError(f"rollback restore payload mismatch for {target}")
+        publish(restore)
+
+    if probe.exists() or probe.is_symlink():
+        if (
+            _is_link_like(probe)
+            or not probe.is_file()
+            or not target.is_file()
+            or not _same_file(probe, target)
+        ):
+            raise ContextOSError(f"rollback capability probe is ambiguous for {target}")
+        remove_artifact(probe)
+
+    capture_digest = artifact_digest(capture, "capture")
+    restore_digest = artifact_digest(restore, "restore payload")
+    if restore_digest is not None and not exact_before(restore, restore_digest):
+        raise ContextOSError(f"rollback restore payload mismatch for {target}")
+
+    target_present = target.exists() or _is_link_like(target)
+    if target_present and (_is_link_like(target) or not target.is_file()):
+        raise ContextOSError(
+            f"refusing rollback of a link-like or non-file target: {target}"
+        )
+    target_digest = sha256_bytes(target.read_bytes()) if target_present else None
+
+    if capture_digest is not None:
+        if not target_present:
+            if capture_digest == expected_after_hash:
+                if publication_anchor is None or not _same_file(
+                    capture, publication_anchor
+                ):
+                    raise ContextOSError(
+                        f"rollback capture has no publication ownership proof for {target}"
+                    )
+                if before is None:
+                    remove_artifact(capture)
+                else:
+                    publish_before()
+                    remove_artifact(capture)
+                return
+            if capture_digest == before_hash and before is not None:
+                if mode is not None and capture.stat().st_mode & 0o7777 != mode:
+                    raise ContextOSError(f"rollback capture mode mismatch for {target}")
+                publish(capture)
+                return
+            try:
+                publish(capture, remove_source=False)
+            except (OSError, ContextOSError) as exc:
+                raise ContextOSError(
+                    f"concurrent edit retained at {capture}; target changed during rollback"
+                ) from exc
+            raise ContextOSError(
+                f"unrecognized concurrent edit restored at {target}; rollback requires review"
+            )
+
+        if exact_before(target, target_digest):
+            if capture_digest not in {before_hash, expected_after_hash}:
+                raise ContextOSError(
+                    f"unrecognized rollback capture retained for {target}: {capture}"
+                )
+            if (
+                capture_digest == expected_after_hash
+                and (
+                    publication_anchor is None
+                    or not _same_file(capture, publication_anchor)
+                )
+            ):
+                raise ContextOSError(
+                    f"rollback capture has no publication ownership proof for {target}"
+                )
+            remove_artifact(capture)
+            remove_artifact(restore)
+            return
+        if _same_file(target, capture):
+            raise ContextOSError(
+                f"rollback target and capture remain unresolved for {target}"
+            )
+        raise ContextOSError(
+            f"rollback target/capture ambiguity for {target}; both were retained"
+        )
+
+    if restore_digest is not None:
+        if not target_present:
+            publish(restore)
+            return
+        if exact_before(target, target_digest):
+            remove_artifact(restore)
+            return
+        raise ContextOSError(
+            f"rollback target/restore ambiguity for {target}; both were retained"
+        )
+
+    if not target_present:
+        if expected_after_hash is None:
+            publish_before()
+            return
+        if before is None:
+            return
+        raise ContextOSError(
+            f"refusing rollback after an unrecognized concurrent delete: {target}"
+        )
+
+    if exact_before(target, target_digest):
+        return
+    if target_digest != expected_after_hash:
+        raise ContextOSError(
+            f"refusing to replace an unrecognized post-crash edit or concurrent edit at {target}"
+        )
+    if publication_anchor is None or not _same_file(target, publication_anchor):
+        raise ContextOSError(
+            f"refusing rollback without publication ownership proof at {target}"
+        )
+
+    try:
+        os.link(target, probe)
+        if not _same_file(target, probe):
+            raise ContextOSError(f"rollback capability probe identity mismatch for {target}")
+    except FileExistsError as exc:
+        raise ContextOSError(f"rollback capability probe already exists for {target}") from exc
+    except OSError as exc:
+        raise ContextOSError(
+            f"rollback publication is unsupported before moving {target}: {exc}"
+        ) from exc
+    remove_artifact(probe)
+    os.replace(target, capture)
+    _fsync_directory(capture.parent)
+    _fsync_directory(target.parent)
+    _restore_transaction_target(
+        root,
+        target,
+        before,
+        mode,
+        expected_after_hash,
+        publication_anchor,
+        work_dir=work_dir,
+        slot=slot,
+    )
 
 
 def apply_proposal(root: Path, proposal: Path, confirmation: str, runtime: str) -> tuple[Path, dict[str, Any]]:
@@ -2155,7 +2594,7 @@ def apply_proposal(root: Path, proposal: Path, confirmation: str, runtime: str) 
             workflow, _ = _validate_proposal_shape(root, proposal, document)
             _validate_agent_preflight(root, document)
         else:
-            workflow, _ = _validate_proposal_shape(root, proposal, document)
+            workflow, created_at = _validate_proposal_shape(root, proposal, document)
             for change in document.get("changes", []):
                 path = safe_repo_path(root, ensure_text(change.get("path"), "change.path"))
                 if workflow == "setup" and path.exists() and _is_populated(path.read_text(encoding="utf-8")):
@@ -2165,175 +2604,169 @@ def apply_proposal(root: Path, proposal: Path, confirmation: str, runtime: str) 
                     raise ContextOSError(f"refusing stale proposal; file changed: {change['path']}")
                 if sha256_text(ensure_text(change.get("after_text"), "change.after_text")) != change.get("after_sha256"):
                     raise ContextOSError(f"proposal after hash is invalid: {change['path']}")
+                expected_diff = _content_change_diff(
+                    root,
+                    change["path"],
+                    change["after_text"],
+                )
+                if change["diff"] != expected_diff:
+                    raise ContextOSError(
+                        f"content proposal displayed diff is invalid: {change['path']}"
+                    )
+            _validate_content_semantics(
+                root,
+                workflow,
+                created_at,
+                document["changes"],
+            )
         head_before = git_head(root)
         applied = []
         backups: dict[Path, bytes | None] = {}
         backup_modes: dict[Path, int | None] = {}
+        rollback_slots: dict[Path, str] = {}
         staged: dict[Path, Path] = {}
+        publication_anchors: dict[Path, Path] = {}
         journal_path: Path | None = None
-        journal_entries: list[dict[str, Any]] = []
         receipt_published = False
         staging_root = root / ".context-os" / "staging" / document["proposal_id"]
         receipt_path = root / ".context-os" / "receipts" / f"{document['proposal_id']}.json"
         _guard_local_artifact_path(root, staging_root)
         _guard_local_artifact_path(root, receipt_path)
-        if workflow == AGENT_LIFECYCLE_WORKFLOW and (
-            receipt_path.exists() or receipt_path.is_symlink()
-        ):
+        if receipt_path.exists() or receipt_path.is_symlink():
             raise ContextOSError(f"refusing to overwrite existing receipt: {receipt_path}")
         receipt: dict[str, Any]
         try:
-            if workflow == AGENT_LIFECYCLE_WORKFLOW:
-                if staging_root.exists():
-                    if staging_root.is_symlink() or not staging_root.is_dir():
-                        raise ContextOSError(
-                            f"invalid agent transaction staging path: {staging_root}"
-                        )
-                    shutil.rmtree(staging_root)
-                staging_root.mkdir(parents=True)
+            if staging_root.exists():
+                if staging_root.is_symlink() or not staging_root.is_dir():
+                    raise ContextOSError(
+                        f"invalid transaction staging path: {staging_root}"
+                    )
+                shutil.rmtree(staging_root)
+            staging_root.mkdir(parents=True)
             for change_index, change in enumerate(document["changes"]):
                 path = safe_repo_path(root, change["path"])
                 backups[path] = path.read_bytes() if path.exists() else None
                 backup_modes[path] = (
                     path.stat().st_mode & 0o7777 if path.exists() else None
                 )
+                rollback_slots[path] = _transaction_slot(change_index, change["path"])
                 if change.get("action", "write") == "write":
                     stage = staging_root / change["path"]
                     _guard_local_artifact_path(root, stage)
-                    if workflow == AGENT_LIFECYCLE_WORKFLOW:
-                        _write_exclusive_bytes(
-                            stage,
-                            change["after_text"].encode("utf-8"),
-                            root=root,
-                            mode=change["after_mode"],
-                        )
-                    else:
-                        stage.parent.mkdir(parents=True, exist_ok=True)
-                        with stage.open("wb") as handle:
-                            handle.write(change["after_text"].encode("utf-8"))
-                            handle.flush()
-                            os.fsync(handle.fileno())
+                    _write_exclusive_bytes(
+                        stage, change["after_text"].encode("utf-8"), root=root
+                    )
                     staged[path] = stage
+            journal_path = (
+                root / ".context-os" / "journals" / document["proposal_id"]
+            )
+            _create_agent_journal(
+                root, document, backups, backup_modes, receipt_path
+            )
+            for change in document["changes"]:
+                if change.get("action", "write") != "write":
+                    continue
+                path = safe_repo_path(root, change["path"])
+                expected_after_raw = (
+                    change["after_raw_sha256"]
+                    if workflow == AGENT_LIFECYCLE_WORKFLOW
+                    else sha256_bytes(change["after_text"].encode("utf-8"))
+                )
+                publication_anchors[path] = _prepare_publication_anchor(
+                    root,
+                    journal_path,
+                    staged[path],
+                    slot=rollback_slots[path],
+                    expected_hash=expected_after_raw,
+                )
+            for path, before in backups.items():
+                if before is not None:
+                    _probe_rollback_publication(
+                        root,
+                        path,
+                        work_dir=journal_path / "preflight",
+                        slot=rollback_slots[path],
+                    )
             if workflow == AGENT_LIFECYCLE_WORKFLOW:
-                journal_path = (
-                    root / ".context-os" / "journals" / document["proposal_id"]
-                )
-                _create_agent_journal(
-                    root, document, backups, backup_modes, receipt_path
-                )
-                journal_document = read_json(journal_path / "journal.json")
-                journal_entries = journal_document["entries"]
                 # Staging and journal construction are fallible and may take
                 # long enough for an uncoordinated source edit. Rebind every
                 # source and target immediately before the first mutation.
                 _validate_agent_preflight(root, document)
-                for change_index, change in enumerate(document["changes"]):
-                    if change["before_raw_sha256"] is not None:
-                        _probe_rollback_publication(
-                            root,
-                            safe_repo_path(root, change["path"]),
-                            journal_path,
-                            change_index,
-                            change["before_raw_sha256"],
-                            change["before_mode"],
-                        )
-            for change_index, change in enumerate(document["changes"]):
+            for change in document["changes"]:
                 path = safe_repo_path(root, change["path"])
                 if workflow == AGENT_LIFECYCLE_WORKFLOW:
                     if raw_file_digest(path) != change["before_raw_sha256"]:
                         raise ContextOSError(
                             f"refusing target changed during apply: {change['path']}"
                         )
-                    current_mode = (
-                        stat.S_IMODE(path.stat().st_mode) if path.exists() else None
-                    )
-                    if current_mode != change["before_mode"]:
+                elif file_digest(path) != change.get("before_sha256"):
+                    raise ContextOSError(f"refusing target changed during apply: {change['path']}")
+                before = backups[path]
+                if before is not None:
+                    before_mode = backup_modes[path]
+                    if before_mode is None:
                         raise ContextOSError(
-                            f"refusing target mode changed during apply: {change['path']}"
+                            f"transaction backup mode is missing: {change['path']}"
                         )
-                    assert journal_path is not None
-                    journal_entry = journal_entries[change_index]
-                    applied_entry = {
+                    _capture_transaction_before(
+                        root,
+                        path,
+                        before,
+                        before_mode,
+                        journal=journal_path,
+                        slot=rollback_slots[path],
+                    )
+                if change.get("action", "write") == "delete":
+                    if workflow != AGENT_LIFECYCLE_WORKFLOW:
+                        raise ContextOSError(
+                            f"content lifecycle cannot delete paths: {change['path']}"
+                        )
+                else:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    _publish_exclusive(publication_anchors[path], path)
+                if workflow == AGENT_LIFECYCLE_WORKFLOW:
+                    # Record the successful mutation before any fallible
+                    # verification so in-process rollback covers it, while a
+                    # failed no-clobber create does not claim another writer's
+                    # destination as ours.
+                    applied.append({
                         "action": change["action"],
                         "path": change["path"],
                         "owner": change["authorization"]["owner"],
                         "policy": change["authorization"]["policy"],
                         "sha256_before_raw": change["before_raw_sha256"],
-                        "mode_before": change["before_mode"],
                         "sha256_after_raw": change["after_raw_sha256"],
-                        "mode_after": change["after_mode"],
-                    }
-                    if change["before_raw_sha256"] is not None:
-                        captured = (
-                            journal_path / "forward" / f"{change_index}.current"
-                        )
-                        _guard_local_artifact_path(root, captured)
-                        if captured.exists() or captured.is_symlink():
-                            raise ContextOSError(
-                                f"forward transaction capture already exists: {captured}"
-                            )
-                        os.replace(path, captured)
-                        applied.append(applied_entry)
-                        _fsync_directory(path.parent)
-                        _fsync_directory(captured.parent)
-                        captured_state = _regular_file_state(
-                            captured, label="transaction forward capture"
-                        )
-                        if (
-                            captured_state is None
-                            or captured_state[0] != change["before_raw_sha256"]
-                            or not _mode_matches(
-                                captured_state[1], change["before_mode"]
-                            )
-                        ):
-                            try:
-                                _publish_exclusive(captured, path)
-                                _fsync_directory(path.parent)
-                            except (OSError, ContextOSError) as restore_exc:
-                                raise ContextOSError(
-                                    "unrecognized forward capture retained; target "
-                                    f"also changed: {change['path']}"
-                                ) from restore_exc
-                            raise ContextOSError(
-                                f"refusing target changed during capture: {change['path']}"
-                            )
-                    if change["action"] == "write":
-                        anchor = _publication_anchor(
-                            root, journal_path, change_index, journal_entry
-                        )
-                        assert anchor is not None
-                        _publish_exclusive(anchor, path)
-                        if change["before_raw_sha256"] is None:
-                            applied.append(applied_entry)
-                        _fsync_directory(path.parent)
+                    })
                     if raw_file_digest(path) != change["after_raw_sha256"]:
                         raise ContextOSError(
                             f"agent-config post-write hash is invalid: {change['path']}"
                         )
+                else:
+                    expected_after_raw = sha256_bytes(
+                        change["after_text"].encode("utf-8")
+                    )
+                    content_snapshot = _read_regular_file_snapshot(path)
+                    try:
+                        logical_snapshot = content_snapshot.decode("utf-8").replace(
+                            "\r\n", "\n"
+                        ).replace("\r", "\n")
+                    except UnicodeDecodeError as exc:
+                        raise ContextOSError(
+                            f"content post-write bytes are not UTF-8: {change['path']}"
+                        ) from exc
                     if (
-                        change["action"] == "write"
-                        and not _mode_matches(
-                            stat.S_IMODE(path.stat().st_mode), change["after_mode"]
-                        )
+                        sha256_bytes(content_snapshot) != expected_after_raw
+                        or sha256_text(logical_snapshot) != change["after_sha256"]
                     ):
                         raise ContextOSError(
-                            f"agent-config post-write mode is invalid: {change['path']}"
+                            f"content post-write hash is invalid: {change['path']}"
                         )
-                else:
-                    if file_digest(path) != change.get("before_sha256"):
-                        raise ContextOSError(
-                            f"refusing target changed during apply: {change['path']}"
-                        )
-                    if change.get("action", "write") == "delete":
-                        path.unlink()
-                    else:
-                        path.parent.mkdir(parents=True, exist_ok=True)
-                        os.replace(staged[path], path)
                     applied.append({
                         "path": change["path"],
                         "sha256_before": change["before_sha256"],
-                        "sha256_after": file_digest(path),
+                        "sha256_after": change["after_sha256"],
                     })
+                _fsync_directory(path.parent)
             receipt = {
                 "schema_version": SCHEMA_VERSION,
                 "proposal_id": document["proposal_id"],
@@ -2345,7 +2778,11 @@ def apply_proposal(root: Path, proposal: Path, confirmation: str, runtime: str) 
                 "files_changed": applied,
                 "git_head_before": head_before,
                 "git_head_after": git_head(root),
-                "invariants_checked": document.get("invariants", []),
+                "invariants_checked": (
+                    list(AGENT_MIGRATION_INVARIANTS)
+                    if workflow == AGENT_LIFECYCLE_WORKFLOW
+                    else _content_invariants(workflow, document["changes"])
+                ),
             }
             if workflow == AGENT_LIFECYCLE_WORKFLOW:
                 receipt.update({
@@ -2363,94 +2800,84 @@ def apply_proposal(root: Path, proposal: Path, confirmation: str, runtime: str) 
                         ],
                     },
                 })
-            if workflow == AGENT_LIFECYCLE_WORKFLOW:
-                _ensure_local_directory(root, receipt_path.parent)
-            else:
-                receipt_path.parent.mkdir(parents=True, exist_ok=True)
+            receipt_path.parent.mkdir(parents=True, exist_ok=True)
+            _fsync_directory(receipt_path.parent.parent)
             receipt_stage = staging_root / "receipt.json"
-            if workflow == AGENT_LIFECYCLE_WORKFLOW:
-                _write_exclusive_text(
-                    receipt_stage,
-                    json.dumps(receipt, indent=2) + "\n",
-                    root=root,
+            _write_exclusive_text(
+                receipt_stage,
+                json.dumps(receipt, indent=2) + "\n",
+                root=root,
+            )
+            receipt_bytes = receipt_stage.read_bytes()
+            commit_path = journal_path / "commit.json"
+            _write_exclusive_text(
+                commit_path,
+                json.dumps(
+                    {
+                        "schema_version": SCHEMA_VERSION,
+                        "proposal_id": document["proposal_id"],
+                        "proposal_digest": expected_digest,
+                        "receipt_sha256_raw": sha256_bytes(receipt_bytes),
+                    },
+                    indent=2,
                 )
-            else:
-                receipt_stage.parent.mkdir(parents=True, exist_ok=True)
-                receipt_stage.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8", newline="\n")
-            if workflow == AGENT_LIFECYCLE_WORKFLOW and (
-                receipt_path.exists() or receipt_path.is_symlink()
-            ):
+                + "\n",
+                root=root,
+            )
+            receipt_anchor = journal_path / "receipt.anchor"
+            _publish_exclusive(receipt_stage, receipt_anchor)
+            _fsync_directory(journal_path)
+            if receipt_path.exists() or receipt_path.is_symlink():
                 raise ContextOSError(f"refusing to overwrite existing receipt: {receipt_path}")
-            if workflow == AGENT_LIFECYCLE_WORKFLOW:
-                assert journal_path is not None
-                receipt_anchor = journal_path / "receipt.anchor"
-                _guard_local_artifact_path(root, receipt_anchor)
-                _publish_exclusive(receipt_stage, receipt_anchor)
-                _fsync_directory(journal_path)
-                _publish_exclusive(receipt_anchor, receipt_path)
-                receipt_published = True
-                _fsync_directory(receipt_path.parent)
-                if not _same_file(receipt_anchor, receipt_path):
-                    raise ContextOSError(
-                        "published receipt does not match its transaction anchor"
-                    )
-                _verify_committed_agent_targets(
-                    root, journal_entries, journal=journal_path
+            _publish_exclusive(receipt_anchor, receipt_path)
+            receipt_published = True
+            _fsync_directory(receipt_path.parent)
+            if (
+                _is_link_like(receipt_path)
+                or not receipt_path.is_file()
+                or sha256_bytes(receipt_anchor.read_bytes())
+                != sha256_bytes(receipt_bytes)
+                or not _same_file(receipt_path, receipt_anchor)
+            ):
+                raise ContextOSError(
+                    f"receipt changed before transaction commit: {receipt_path}"
                 )
-                if not _same_file(receipt_anchor, receipt_path):
-                    raise ContextOSError(
-                        "published receipt changed during target verification"
-                    )
-            else:
-                os.replace(receipt_stage, receipt_path)
-            if journal_path is not None:
-                try:
-                    _discard_agent_journal(root, journal_path)
-                except (OSError, ContextOSError):
-                    # Receipt publication is the commit point. A retained valid
-                    # journal is safe: the next apply validates the receipt as
-                    # its commit marker and retires the journal.
-                    pass
+            try:
+                _discard_agent_journal(root, journal_path)
+            except (OSError, ContextOSError):
+                # Receipt publication is the commit point. A retained valid
+                # journal is safe: the next apply validates the exact receipt
+                # commit hash and retires the journal.
+                pass
         except Exception as exc:
             if receipt_published:
                 raise ContextOSError(
-                    "receipt publication reached the commit point but durability "
-                    f"confirmation failed; journal retained for recovery: {exc}"
+                    "apply reached the receipt commit point; state and recovery "
+                    f"artifacts were retained after a durability error: {exc}"
                 ) from exc
             rollback_errors = []
-            journal_by_path = {
-                entry["path"]: (index, entry)
-                for index, entry in enumerate(journal_entries)
-            }
-            for applied_change in reversed(applied):
-                applied_path = safe_repo_path(root, applied_change["path"])
+            if journal_path is not None and journal_path.is_dir():
                 try:
-                    if journal_path is not None:
-                        index, journal_entry = journal_by_path[applied_change["path"]]
-                        _rollback_agent_entry(
-                            root, journal_path, index, journal_entry
-                        )
-                    else:
-                        before = backups[applied_path]
-                        if before is None:
-                            applied_path.unlink(missing_ok=True)
-                        else:
-                            _atomic_restore_bytes(
-                                applied_path,
-                                before,
-                                backup_modes[applied_path],
-                            )
-                except (OSError, ContextOSError, KeyError) as rollback_exc:
-                    rollback_errors.append(f"{applied_change['path']}: {rollback_exc}")
+                    _recover_agent_journal(
+                        root,
+                        journal_path,
+                        allow_foreign_receipt_rollback=True,
+                    )
+                except (OSError, ContextOSError) as rollback_exc:
+                    rollback_errors.append(str(rollback_exc))
             if rollback_errors:
                 raise ContextOSError(
                     f"apply failed and rollback was incomplete ({'; '.join(rollback_errors)}): {exc}"
                 ) from exc
-            if journal_path is not None:
+            if journal_path is not None and journal_path.exists():
                 _discard_agent_journal(root, journal_path)
                 building = journal_path.with_name(f".{journal_path.name}.building")
                 shutil.rmtree(building, ignore_errors=True)
             if isinstance(exc, ContextOSError):
+                if applied:
+                    raise ContextOSError(
+                        f"apply failed; staged writes were rolled back: {exc}"
+                    ) from exc
                 raise
             raise ContextOSError(f"apply failed; staged writes were rolled back: {exc}") from exc
         finally:
@@ -2460,12 +2887,26 @@ def apply_proposal(root: Path, proposal: Path, confirmation: str, runtime: str) 
 
 def runtime_ids(root: Path) -> list[str]:
     runtimes_dir = root / "runtimes"
-    if not runtimes_dir.is_dir():
+    if _is_link_like(runtimes_dir):
+        raise ContextOSError(
+            f"runtime registry must not be a symlink or reparse point: {runtimes_dir}"
+        )
+    if not runtimes_dir.exists():
         return []
-    identifiers = sorted(
-        path.stem for path in runtimes_dir.glob("*.json")
-        if path.name != "schema.json" and path.is_file()
-    )
+    if not runtimes_dir.is_dir():
+        raise ContextOSError(f"runtime registry must be a directory: {runtimes_dir}")
+    identifiers = []
+    for path in runtimes_dir.glob("*.json"):
+        if path.name == "schema.json":
+            continue
+        if _is_link_like(path):
+            raise ContextOSError(
+                f"runtime manifest must not be a symlink or reparse point: {path}"
+            )
+        if not path.is_file():
+            raise ContextOSError(f"runtime manifest must be a regular file: {path}")
+        identifiers.append(path.stem)
+    identifiers.sort()
     if len(identifiers) != len({identifier.casefold() for identifier in identifiers}):
         raise ContextOSError("runtime manifest filenames collide when case-folded")
     return identifiers
@@ -2482,7 +2923,7 @@ def runtime_manifest(
     """
     if not isinstance(runtime, str) or runtime == "generic" or not RUNTIME_ID_RE.fullmatch(runtime):
         raise ContextOSError(f"invalid runtime id: {runtime}")
-    manifest_path = root / "runtimes" / f"{runtime}.json"
+    manifest_path = safe_repo_path(root, f"runtimes/{runtime}.json")
     if not manifest_path.exists():
         raise ContextOSError(f"missing runtime manifest: {manifest_path}")
     manifest = read_json(manifest_path)
@@ -2490,8 +2931,9 @@ def runtime_manifest(
         validate_runtime_manifest(
             manifest, runtime_id=runtime, root=root, check_paths=check_paths
         )
+        component_path = safe_repo_path(root, "components/manifest.json")
         components = load_component_manifest(
-            root / "components" / "manifest.json", root=root, check_paths=False
+            component_path, root=root, check_paths=False
         )
         selected = set(component_closure(components, manifest["components"]))
         owners = component_owners(components)
@@ -3072,11 +3514,12 @@ def doctor(
 
     component_inventory: dict[str, Any] | None = None
     try:
+        component_path = safe_repo_path(root, "components/manifest.json")
         component_inventory = load_component_manifest(
-            root / "components" / "manifest.json", root=root, check_paths=False
+            component_path, root=root, check_paths=False
         )
         add("component-inventory", "pass", "structurally valid")
-    except (ComponentManifestError, OSError, UnicodeError) as exc:
+    except (ContextOSError, ComponentManifestError, OSError, UnicodeError) as exc:
         add("component-inventory", "fail", str(exc))
 
     if scope == "profile" and not validation_ids and component_inventory is not None:
@@ -3498,7 +3941,7 @@ def doctor(
             (
                 f"{len(pending_journals)} pending journal artifact(s); confirm no "
                 "apply process is active, remove a stale apply.lock if present, "
-                "then rerun the approved agent-config apply to inspect and recover. "
+                "then rerun the approved proposal apply to inspect and recover. "
                 "If recovery reports a committed target mismatch, restore the "
                 "reported path to its receipt-bound bytes and mode before rerunning; "
                 "do not delete the journal as a shortcut"

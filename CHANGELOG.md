@@ -54,6 +54,19 @@
 - First-class Codex onboarding with a root `AGENTS.md`, four explicit-invocation lifecycle skills under `.agents/skills/`, generated skill UI metadata, `--agent codex` setup support, portability tests, and a host-boundary guide.
 
 ### Fixed
+- Content lifecycle proposals now bind exact change shapes, displayed diffs,
+  and kernel-derived invariant claims, preventing a resigned write proposal
+  from smuggling an undisclosed delete action into apply.
+- Transaction rollback now restores only targets that still match the
+  transaction's exact post-write bytes. Unrecognized concurrent edits are
+  preserved and leave the recovery journal intact instead of being clobbered.
+- Agent and content lifecycle applies now share path-bound durable journals,
+  forward captures, resumable rollback artifacts, and an exact receipt commit
+  hash. Process death can be recovered before publication, during rollback, or
+  after receipt publication without confusing reverse-order transaction slots.
+- Recovery rejects malformed journal entries with a clean diagnostic, runtime
+  and component registries reject link-like inputs consistently, while
+  transaction publication fails closed when atomic hard links are unavailable.
 - The generated workspace JSON Schema now rejects leading and trailing
   whitespace in configured paths, matching the authoritative Python validator.
 - `scripts/setup.sh` now preserves LF line endings when its inline Python helpers update `CLAUDE.md` or `ROUTING.md`, keeping Windows setup diffs narrow under `core.autocrlf=false`.
