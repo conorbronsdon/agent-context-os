@@ -129,7 +129,7 @@ The [optional integrations catalog](references/integrations.md) is generated fro
 
 Start with the task-based [integration chooser](docs/integrations-guide.md), add at most one new trust boundary at a time, then read the selected generated entry in full.
 
-The current catalog includes portable skill collections and creator tools, plus reviewed paths for Tolaria MCP, Obsidian CLI, Beads for Gemini CLI, Granola MCP, Google Workspace CLI, Notion MCP, and Substack MCP. `listed` and `experimental` entries are leads, not endorsements. Setup never installs, authenticates, or activates them.
+The current catalog includes portable skill collections and creator tools, plus reviewed paths for MarkItDown MCP, Tolaria MCP, Obsidian CLI, Beads for Gemini CLI, Granola MCP, Google Workspace CLI, Notion MCP, and Substack MCP. `listed` and `experimental` entries are leads, not endorsements. Setup never installs, authenticates, or activates them.
 
 ## Repository layout
 
