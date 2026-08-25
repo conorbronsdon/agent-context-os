@@ -27,12 +27,13 @@ class IntegrationCatalogTests(unittest.TestCase):
     def test_catalog_has_expected_entries_and_visible_safety_columns(self) -> None:
         rendered = MODULE.render_reference(self.catalog)
         self.assertEqual(self.catalog["schema_version"], 2)
-        self.assertEqual(len(self.catalog["integrations"]), 13)
+        self.assertEqual(len(self.catalog["integrations"]), 14)
         self.assertTrue(
             {
                 "github-mcp",
                 "google-workspace-cli",
                 "linear-mcp",
+                "markitdown-mcp",
                 "notion-mcp",
                 "readwise-mcp",
             }.issubset(
@@ -46,6 +47,14 @@ class IntegrationCatalogTests(unittest.TestCase):
         self.assertIn("immediate public publish action", rendered)
         self.assertTrue(rendered.endswith("\n"))
         self.assertFalse(rendered.endswith("\n\n"))
+
+    def test_markitdown_mcp_is_read_only_but_open_world(self) -> None:
+        item = self.entry("markitdown-mcp")
+        self.assertTrue(item["capabilities"]["read"])
+        self.assertTrue(item["capabilities"]["sensitive_read"])
+        self.assertFalse(item["capabilities"]["write"])
+        self.assertIn("network-capable", item["risk_tags"])
+        self.assertIn("read_sensitive", item["confirmation"]["required_for"])
 
     def test_issue_22_connectors_have_typed_sensitive_and_mutating_gates(self) -> None:
         for integration_id in ("google-workspace-cli", "notion-mcp"):

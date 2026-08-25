@@ -13,6 +13,7 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [Google Workspace CLI](https://github.com/googleworkspace/cli) | `connector` | verified | Yes | Yes | No | Yes | Yes | 2026-08-15 |
 | [Granola MCP](https://docs.granola.ai/help-center/sharing/integrations/mcp) | `mcp_server` | verified | No | No | No | Yes | No | 2026-08-15 |
 | [Linear MCP](https://linear.app/docs/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-18 |
+| [MarkItDown MCP](https://github.com/microsoft/markitdown/tree/main/packages/markitdown-mcp) | `mcp_server` | verified | No | No | No | Yes | No | 2026-08-25 |
 | [Notion MCP](https://developers.notion.com/guides/mcp/get-started-with-mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-15 |
 | [Obsidian CLI](https://obsidian.md/help/cli) | `editor_guide` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-15 |
 | [Readwise MCP](https://docs.readwise.io/tools/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-18 |
@@ -215,6 +216,30 @@ Capabilities and limits:
 - Use https://mcp.linear.app/mcp/readonly or request only the read OAuth scope for session briefings and investigation
 - The default https://mcp.linear.app/mcp endpoint is read-write and can create or update issues, projects, and comments
 - Before turning notes or repository state into Linear work, show the proposed project, milestones, issues, relationships, and exact comments and do not invent dependencies
+
+## MarkItDown MCP
+
+Microsoft's local MCP server converts explicitly supplied file, HTTP, HTTPS, and data URIs to Markdown through one read-only tool.
+
+- **Supported agents:** `claude_code`, `codex`, `gemini_cli`, `cursor`, `opencode`, `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** Python with pip or Docker; An MCP-compatible client; Explicitly bounded file and network access for the server process
+- **Credentials:** None
+- **Reads:** Any local file readable by the server account when given a file URI; Any HTTP or HTTPS resource reachable from the server process, plus caller-supplied data URIs
+- **Writes / external effects:** None
+- **Typed safety signals:** sensitive read
+- **Required confirmation gates:** `external_install`, `read_sensitive`
+- **Confirmation:** Confirm installation and the exact URI before each conversion; reject broad local paths, private-network targets, or untrusted remote content unless their read boundary is explicitly approved.
+- **Risk tags:** `local-data`, `sensitive-read`, `network-capable`, `open-world`, `no-authentication`, `prompt-injection`
+- **Evidence:** [1](https://github.com/microsoft/markitdown/blob/9dc0d6579b8739c9d0671ff205e071e3053c7df1/packages/markitdown-mcp/README.md); [2](https://github.com/microsoft/markitdown/releases/tag/v0.1.7)
+- **Health check:** Run the stdio server in a sandbox, list its single convert\_to\_markdown tool, then convert one non-sensitive local fixture from an explicitly allowed directory.
+- **Uninstall:** Remove the MarkItDown MCP entry from the client and uninstall markitdown-mcp or remove its container image; preserve every source file and converted output unless separately requested. (removes user data: No)
+
+Capabilities and limits:
+
+- The convert\_to\_markdown tool accepts file, HTTP, HTTPS, and data URIs, so every call must be treated as an explicit sensitive-read boundary
+- The server has no authentication and runs with the privileges and network reachability of its process
+- Keep HTTP or SSE bound to localhost and prefer a sandbox or container with narrow mounts when converting untrusted content
 
 ## Notion MCP
 
