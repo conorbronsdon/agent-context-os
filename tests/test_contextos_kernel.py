@@ -1087,6 +1087,58 @@ class KernelTest(unittest.TestCase):
         self.assertEqual("warn", check["status"])
         self.assertIn("link-like artifact ignored", check["detail"])
 
+    def test_doctor_reports_linked_state_file_without_crashing(self) -> None:
+        outside = self.root / "outside-current.md"
+        outside.write_text("# external\n", encoding="utf-8")
+        current = self.root / "state/current.md"
+        current.unlink()
+        try:
+            current.symlink_to(outside)
+        except OSError:
+            self.skipTest("symlink creation is unavailable")
+
+        report = doctor(self.root)
+        check = next(
+            item for item in report["checks"] if item["name"] == "file:state/current.md"
+        )
+        self.assertEqual("fail", check["status"])
+        self.assertIn("symlink or reparse point", check["detail"])
+
+    def test_doctor_reports_linked_state_directory_without_crashing(self) -> None:
+        outside = self.root / "outside-state"
+        (self.root / "state").rename(outside)
+        state = self.root / "state"
+        try:
+            state.symlink_to(outside, target_is_directory=True)
+        except OSError:
+            outside.rename(state)
+            self.skipTest("directory symlink creation is unavailable")
+
+        report = doctor(self.root)
+        self.assertEqual("fail", report["status"])
+        self.assertEqual("invalid", report["scope"])
+        self.assertTrue(
+            any(
+                "symlink or reparse point" in item["detail"]
+                for item in report["checks"]
+            )
+        )
+
+    def test_doctor_fails_closed_on_linked_local_state_root(self) -> None:
+        outside = self.root / "outside-context-os"
+        outside.mkdir()
+        local = self.root / ".context-os"
+        try:
+            local.symlink_to(outside, target_is_directory=True)
+        except OSError:
+            self.skipTest("directory symlink creation is unavailable")
+
+        report = doctor(self.root)
+        checks = {item["name"]: item for item in report["checks"]}
+        self.assertEqual("fail", checks["local-host-state"]["status"])
+        self.assertEqual("fail", checks["transaction-journals"]["status"])
+        self.assertEqual("fail", checks["host-state-lock"]["status"])
+
     def test_bare_doctor_fails_when_registry_is_empty(self) -> None:
         shutil.rmtree(self.root / "runtimes")
         report = doctor(self.root)

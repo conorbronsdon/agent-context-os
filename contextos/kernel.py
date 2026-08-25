@@ -1078,9 +1078,10 @@ def _guard_local_artifact_path(root: Path, path: Path) -> None:
                     + ", ".join(sorted(aliases))
                 )
         current /= part
-        if current.is_symlink():
+        if _is_link_like(current):
             raise ContextOSError(
-                f"local artifact path must not traverse a symlink: {relative.as_posix()}"
+                "local artifact path must not traverse a symlink or reparse point: "
+                f"{relative.as_posix()}"
             )
         if index < len(relative.parts) - 1 and current.exists() and not current.is_dir():
             raise ContextOSError(
@@ -2662,9 +2663,10 @@ def _guard_local_state_path(root: Path, path: Path) -> None:
         raise ContextOSError(f"local state path escapes workspace: {path}") from exc
     for part in relative.parts:
         current /= part
-        if current.is_symlink():
+        if _is_link_like(current):
             raise ContextOSError(
-                f"local state path must not traverse a symlink: {relative.as_posix()}"
+                "local state path must not traverse a symlink or reparse point: "
+                f"{relative.as_posix()}"
             )
 
 
@@ -2698,7 +2700,8 @@ def _host_entry(value: Any, field: str) -> dict[str, str]:
 
 def _read_hosts_state(root: Path) -> dict[str, Any]:
     path = root / ".context-os" / "hosts.json"
-    if not path.exists() and not path.is_symlink():
+    _guard_local_state_path(root, path)
+    if not path.exists() and not _is_link_like(path):
         return {"schema_version": HOST_STATE_SCHEMA_VERSION, "hosts": {}}
     value = _local_json(path, root=root)
     if set(value) != {"schema_version", "hosts"}:
@@ -2730,7 +2733,8 @@ def _read_hosts_state(root: Path) -> dict[str, Any]:
 
 def _read_legacy_runtime_state(root: Path) -> tuple[str, dict[str, str]] | None:
     path = root / ".context-os" / "runtime.json"
-    if not path.exists() and not path.is_symlink():
+    _guard_local_state_path(root, path)
+    if not path.exists() and not _is_link_like(path):
         return None
     value = _local_json(path, root=root)
     allowed = {
@@ -2939,7 +2943,14 @@ def doctor(
         add("workspace-config", workspace_status, detail)
     except ContextOSError as exc:
         add("workspace-config", "fail", str(exc))
-        workspace = _workspace_from_paths(root, dict(DEFAULT_PATHS))
+        # Keep diagnostics total even when the default path itself is the
+        # malformed link that made workspace resolution fail.
+        workspace = Workspace(
+            root=root,
+            state_dir=root / DEFAULT_PATHS["state_dir"],
+            sessions_dir=root / DEFAULT_PATHS["sessions_dir"],
+            task_file=root / DEFAULT_PATHS["task_file"],
+        )
 
     # Provider-specific instruction files belong to their runtime components,
     # not the neutral core readiness gate.
@@ -2948,32 +2959,64 @@ def doctor(
         workspace.state_dir / "current-log.md",
         workspace.state_dir / "decisions.md",
     ]
-    for path in required_paths:
-        rel = relative_path(root, path)
-        add(f"file:{rel}", "pass" if path.exists() else "fail", rel)
-    initialized, initialization_files = _initialization_state(
-        workspace, effective_today
-    )
-    gate = relative_path(root, workspace.state_dir / INITIALIZATION_FILE)
-    add(
-        "initialization-state",
-        "pass" if initialized else "warn",
-        "ready"
-        if initialized
-        else f"guided setup required; {gate} carries no real **Last Updated:** date",
-    )
-    unresolved = [
-        path
-        for path, item in initialization_files.items()
-        if item["freshness_status"] in {"missing", "unknown", "future"}
+    freshness_paths = [
+        workspace.state_dir / filename for filename in STATE_THRESHOLDS
     ]
-    add(
-        "state-freshness",
-        "pass" if not unresolved else "warn",
-        "all tracked state files carry a real date"
-        if not unresolved
-        else f"no usable **Last Updated:** date in: {', '.join(unresolved)}",
-    )
+    state_path_errors: dict[Path, str] = {}
+    for path in dict.fromkeys([*required_paths, *freshness_paths]):
+        try:
+            _guard_local_state_path(root, path)
+        except ContextOSError as exc:
+            state_path_errors[path] = str(exc)
+    for path in required_paths:
+        rel = path.relative_to(root).as_posix()
+        error = state_path_errors.get(path)
+        add(
+            f"file:{rel}",
+            "fail" if error else "pass" if path.exists() else "fail",
+            error or rel,
+        )
+    unsafe_freshness = [
+        path.relative_to(root).as_posix()
+        for path in freshness_paths
+        if path in state_path_errors
+    ]
+    gate = (workspace.state_dir / INITIALIZATION_FILE).relative_to(root).as_posix()
+    if unsafe_freshness:
+        add(
+            "initialization-state",
+            "warn",
+            "guided setup required; unsafe state path(s): "
+            + ", ".join(unsafe_freshness),
+        )
+        add(
+            "state-freshness",
+            "warn",
+            "cannot inspect unsafe state path(s): " + ", ".join(unsafe_freshness),
+        )
+    else:
+        initialized, initialization_files = _initialization_state(
+            workspace, effective_today
+        )
+        add(
+            "initialization-state",
+            "pass" if initialized else "warn",
+            "ready"
+            if initialized
+            else f"guided setup required; {gate} carries no real **Last Updated:** date",
+        )
+        unresolved = [
+            path
+            for path, item in initialization_files.items()
+            if item["freshness_status"] in {"missing", "unknown", "future"}
+        ]
+        add(
+            "state-freshness",
+            "pass" if not unresolved else "warn",
+            "all tracked state files carry a real date"
+            if not unresolved
+            else f"no usable **Last Updated:** date in: {', '.join(unresolved)}",
+        )
 
     local_hosts = {"schema_version": HOST_STATE_SCHEMA_VERSION, "hosts": {}}
     local_hosts_valid = False
@@ -3369,6 +3412,7 @@ def doctor(
     )
     journals = root / ".context-os" / "journals"
     try:
+        _guard_local_state_path(root, journals)
         if _is_link_like(journals) or (journals.exists() and not journals.is_dir()):
             raise ContextOSError(f"invalid journal path: {journals}")
         pending_journals = list(journals.iterdir()) if journals.is_dir() else []
@@ -3389,22 +3433,27 @@ def doctor(
     except (ContextOSError, OSError) as exc:
         add("transaction-journals", "fail", str(exc))
     hosts_lock = root / ".context-os" / "hosts.lock"
-    add(
-        "host-state-lock",
-        "warn" if hosts_lock.exists() else "pass",
-        (
-            f"stale or active lock at {hosts_lock}; remove it only after confirming "
-            "no install or migration is running"
+    try:
+        _guard_local_state_path(root, hosts_lock)
+        add(
+            "host-state-lock",
+            "warn" if hosts_lock.exists() else "pass",
+            (
+                f"stale or active lock at {hosts_lock}; remove it only after confirming "
+                "no install or migration is running"
+            )
+            if hosts_lock.exists()
+            else "none",
         )
-        if hosts_lock.exists()
-        else "none",
-    )
+    except ContextOSError as exc:
+        add("host-state-lock", "fail", str(exc))
     cutoff = utc_now().timestamp() - (30 * 24 * 60 * 60)
     old_artifacts: list[Path] = []
     artifact_warnings: list[str] = []
     for folder in ("proposals", "receipts"):
         artifact_dir = root / ".context-os" / folder
         try:
+            _guard_local_state_path(root, artifact_dir)
             if _is_link_like(artifact_dir) or (
                 artifact_dir.exists() and not artifact_dir.is_dir()
             ):
