@@ -33,11 +33,11 @@ ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime.fromisoformat("2026-08-23T14:30:00-07:00")
 
 
-def root_config(*, canonical: bool = True) -> str:
+def root_config(*, canonical: bool = True, agents: list[str] | None = None) -> str:
     value = {
         "schema_version": 1,
         "mode": "full-template",
-        "agents": [],
+        "agents": agents or [],
         "paths": {
             "state_dir": "state",
             "sessions_dir": "sessions",
@@ -70,6 +70,15 @@ class RootDiscoveryTest(unittest.TestCase):
 
     def test_valid_noncanonical_json_is_still_a_root(self) -> None:
         self.write_json(self.root, root_config(canonical=False))
+        self.assertEqual(self.root, discover_root(self.root))
+
+    def test_configured_agent_requires_only_its_registry_descriptor(self) -> None:
+        self.write_json(self.root, root_config(agents=["claude"]))
+        with self.assertRaisesRegex(ContextOSError, "unknown runtime"):
+            discover_root(self.root)
+        runtimes = self.root / "runtimes"
+        runtimes.mkdir()
+        shutil.copyfile(ROOT / "runtimes" / "claude.json", runtimes / "claude.json")
         self.assertEqual(self.root, discover_root(self.root))
 
     def test_legacy_compound_markers_remain_supported(self) -> None:
@@ -169,6 +178,41 @@ class RootDiscoveryTest(unittest.TestCase):
             self.skipTest("symlink creation is unavailable")
         with self.assertRaisesRegex(ContextOSError, "must not be a symlink"):
             discover_root(nested)
+        with self.assertRaisesRegex(ContextOSError, "must not be a symlink"):
+            discover_root(marker)
+
+    def test_symlinked_directory_start_cannot_bypass_repository_boundary(self) -> None:
+        self.write_json(self.root)
+        nested = self.root / "nested"
+        nested.mkdir()
+        (nested / ".git").mkdir()
+        linked = nested / "linked"
+        try:
+            linked.symlink_to(self.root, target_is_directory=True)
+        except OSError:
+            self.skipTest("directory symlink creation is unavailable")
+        with self.assertRaisesRegex(ContextOSError, "symlink or reparse point"):
+            discover_root(linked)
+
+    def test_symlinked_ancestor_without_git_boundary_remains_compatible(self) -> None:
+        real_parent = self.root / "real-parent"
+        real_parent.mkdir()
+        workspace = real_parent / "workspace"
+        workspace.mkdir()
+        self.write_json(workspace)
+        linked_parent = self.root / "linked-parent"
+        try:
+            linked_parent.symlink_to(real_parent, target_is_directory=True)
+        except OSError:
+            self.skipTest("directory symlink creation is unavailable")
+        self.assertEqual(workspace, discover_root(linked_parent / "workspace"))
+
+    @unittest.skipIf(os.name == "nt", "Windows aliases trailing dots at creation time")
+    def test_windows_trailing_dot_filename_alias_fails_portably(self) -> None:
+        alias = self.root / "contextos.workspace.json."
+        alias.write_text(root_config(), encoding="utf-8")
+        with self.assertRaisesRegex(ContextOSError, "filename collision"):
+            discover_root(self.root)
 
     def test_existing_file_start_uses_parent_and_missing_start_is_rejected(self) -> None:
         self.write_json(self.root)
@@ -179,6 +223,8 @@ class RootDiscoveryTest(unittest.TestCase):
         self.assertEqual(self.root, discover_root(source))
         with self.assertRaisesRegex(ContextOSError, "does not exist"):
             discover_root(child / "missing")
+        with self.assertRaisesRegex(ContextOSError, "does not exist"):
+            discover_root(child / "contextos.workspace.json")
 
 
 class KernelTest(unittest.TestCase):

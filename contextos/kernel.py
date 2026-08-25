@@ -147,15 +147,72 @@ def parse_now(raw: str | None) -> datetime:
     return parsed
 
 
+def _is_link_like(path: Path) -> bool:
+    """Recognize symlinks and Windows reparse points without following them."""
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        raise ContextOSError(f"cannot inspect path without following links {path}: {exc}") from exc
+    reparse_tag = getattr(metadata, "st_reparse_tag", 0)
+    link_tags = {
+        getattr(stat, "IO_REPARSE_TAG_SYMLINK", -1),
+        getattr(stat, "IO_REPARSE_TAG_MOUNT_POINT", -2),
+    }
+    return stat.S_ISLNK(metadata.st_mode) or reparse_tag in link_tags
+
+
+def _config_filename_identity(value: str) -> str:
+    # Windows aliases trailing spaces and periods even when a POSIX checkout can
+    # contain them, so discovery must reject those names portably.
+    return workspace_portable_identity(value).rstrip(" .")
+
+
 def discover_root(start: Path | None = None) -> Path:
-    raw_start = start or Path.cwd()
-    if not raw_start.exists():
-        raise ContextOSError(f"root discovery start path does not exist: {raw_start}")
-    candidate = raw_start.resolve()
-    if candidate.is_file():
-        candidate = candidate.parent
-    elif not candidate.is_dir():
-        raise ContextOSError(f"root discovery start path is not a directory or file: {raw_start}")
+    raw_start = (start or Path.cwd()).absolute()
+    if _config_filename_identity(raw_start.name) == _config_filename_identity(
+        "contextos.workspace.json"
+    ):
+        # Treat a marker passed directly as a marker in its lexical parent. Do
+        # not resolve it first: it may be a dangling link or Windows junction.
+        if not raw_start.exists() and not _is_link_like(raw_start):
+            raise ContextOSError(f"root discovery start path does not exist: {raw_start}")
+        candidate = raw_start.parent
+    else:
+        if _is_link_like(raw_start):
+            raise ContextOSError(
+                f"root discovery start path must not be a symlink or reparse point: {raw_start}"
+            )
+        if not raw_start.exists():
+            raise ContextOSError(f"root discovery start path does not exist: {raw_start}")
+        if raw_start.is_file():
+            candidate = raw_start.parent
+        elif raw_start.is_dir():
+            candidate = raw_start
+        else:
+            raise ContextOSError(
+                f"root discovery start path is not a directory or file: {raw_start}"
+            )
+
+    # Reject linked components below a lexical repository boundary before
+    # resolving the start. Links above that boundary are irrelevant, and
+    # symlinked system ancestors such as macOS /tmp remain compatible. Without
+    # any repository boundary, normal resolution preserves legacy behavior.
+    linked_below_boundary: Path | None = None
+    for lexical in (candidate, *candidate.parents):
+        if _is_link_like(lexical) and linked_below_boundary is None:
+            linked_below_boundary = lexical
+        git_marker = lexical / ".git"
+        if git_marker.exists() or _is_link_like(git_marker):
+            if linked_below_boundary is not None:
+                raise ContextOSError(
+                    "root discovery start path must not traverse a symlink or "
+                    f"reparse point below repository boundary {lexical}: "
+                    f"{linked_below_boundary}"
+                )
+            break
+    candidate = candidate.resolve()
 
     for path in (candidate, *candidate.parents):
         # The tracked JSON marker is authoritative at the nearest candidate.
@@ -163,11 +220,11 @@ def discover_root(start: Path | None = None) -> Path:
         # invalid inner marker can never silently fall through to an outer root.
         _reject_config_aliases(path, "contextos.workspace.json")
         marker = path / "contextos.workspace.json"
-        if marker.exists() or marker.is_symlink():
-            if marker.is_symlink():
+        if marker.exists() or _is_link_like(marker):
+            if _is_link_like(marker):
                 raise ContextOSError(
                     "invalid tracked workspace configuration: "
-                    "contextos.workspace.json must not be a symlink"
+                    "contextos.workspace.json must not be a symlink or reparse point"
                 )
             if not marker.is_file():
                 raise ContextOSError(
@@ -196,7 +253,7 @@ def discover_root(start: Path | None = None) -> Path:
         # captured by an outer repository. Check the candidate before stopping
         # so a marker at a worktree or submodule root still wins.
         git_marker = path / ".git"
-        if git_marker.exists() or git_marker.is_symlink():
+        if git_marker.exists() or _is_link_like(git_marker):
             raise ContextOSError(
                 "could not find a Context OS root before repository boundary: "
                 f"{path}"
@@ -209,12 +266,12 @@ def discover_root(start: Path | None = None) -> Path:
 
 
 def _reject_config_aliases(root: Path, canonical_name: str) -> None:
-    identity = workspace_portable_identity(canonical_name)
+    identity = _config_filename_identity(canonical_name)
     try:
         matches = [
             path.name
             for path in root.iterdir()
-            if workspace_portable_identity(path.name) == identity
+            if _config_filename_identity(path.name) == identity
         ]
     except OSError as exc:
         raise ContextOSError(f"cannot inspect workspace root {root}: {exc}") from exc
@@ -293,7 +350,9 @@ def resolve_workspace(root: Path) -> WorkspaceResolution:
                     "contextos.workspace.json is valid but not canonically rendered; "
                     "preview the same-agent repair with bash scripts/contextos.sh "
                     f"workspace migrate --agents {','.join(config['agents']) or 'none'}, "
-                    "then create its reviewed proposal with workspace propose-migration"
+                    "then create its reviewed proposal with bash scripts/contextos.sh "
+                    f"workspace propose-migration --agents "
+                    f"{','.join(config['agents']) or 'none'}"
                 ),
             })
         if legacy_path.exists() or legacy_path.is_symlink():
@@ -347,7 +406,8 @@ def resolve_workspace(root: Path) -> WorkspaceResolution:
                 "workspace.yaml remains readable but is deprecated; choose the intended "
                 "agent set and preview migration with bash scripts/contextos.sh workspace "
                 "migrate --agents <comma-separated-runtime-ids|none>, then create its "
-                "reviewed proposal with workspace propose-migration using the same --agents"
+                "reviewed proposal with bash scripts/contextos.sh workspace "
+                "propose-migration --agents <the-same-selection>"
             ),
         })
     else:

@@ -321,7 +321,10 @@ class WorkspaceConfigTest(unittest.TestCase):
             "workspace migrate --agents none",
             resolution.notices[0]["message"],
         )
-        self.assertIn("workspace propose-migration", resolution.notices[0]["message"])
+        self.assertIn(
+            "bash scripts/contextos.sh workspace propose-migration --agents none",
+            resolution.notices[0]["message"],
+        )
 
         (self.root / "workspace.yaml").write_text(
             "state_dir: state\n", encoding="utf-8"
@@ -342,7 +345,11 @@ class WorkspaceConfigTest(unittest.TestCase):
             "workspace migrate --agents <comma-separated-runtime-ids|none>",
             resolution.notices[0]["message"],
         )
-        self.assertIn("workspace propose-migration", resolution.notices[0]["message"])
+        self.assertIn(
+            "bash scripts/contextos.sh workspace propose-migration "
+            "--agents <the-same-selection>",
+            resolution.notices[0]["message"],
+        )
 
     def test_legacy_reader_remains_compatible_but_preview_is_loss_aware(self) -> None:
         legacy = self.root / "workspace.yaml"
