@@ -4,7 +4,9 @@ import json
 import os
 import shutil
 import tempfile
+import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from unittest import mock
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +18,7 @@ from contextos.kernel import (
     doctor,
     hook_report,
     install_runtime,
+    migrate_legacy_runtime_state,
     read_json,
     runtime_manifest,
     canonical_json,
@@ -247,7 +250,7 @@ class KernelTest(unittest.TestCase):
         self.assertEqual("# Changed 2026-08-23\n", target.read_text(encoding="utf-8"))
 
     def test_setup_rejects_path_escape_and_unapproved_root(self) -> None:
-        with self.assertRaisesRegex(ContextOSError, "escapes"):
+        with self.assertRaisesRegex(ContextOSError, "canonical lexical path"):
             self._propose("setup", {"files": {"../outside.md": "no"}})
         with self.assertRaisesRegex(ContextOSError, "approved context paths"):
             self._propose("setup", {"files": {"scripts/unsafe.py": "no"}})
@@ -259,7 +262,7 @@ class KernelTest(unittest.TestCase):
         unsigned.pop("proposal_digest")
         proposal["proposal_digest"] = sha256_text(canonical_json(unsigned))
         proposal_path.write_text(json.dumps(proposal), encoding="utf-8")
-        with self.assertRaisesRegex(ContextOSError, "reserved"):
+        with self.assertRaisesRegex(ContextOSError, "metadata or local host state"):
             self._apply(proposal_path, proposal)
 
     def test_apply_rejects_setup_replacement_bypass(self) -> None:
@@ -418,8 +421,9 @@ class KernelTest(unittest.TestCase):
         self.assertTrue(start_report(self.root, NOW)["initialized"])
     def test_install_and_doctor_are_machine_local(self) -> None:
         target, installed = install_runtime(self.root, "hermes")
-        self.assertEqual(self.root / ".context-os/runtime.json", target)
+        self.assertEqual(self.root / ".context-os/hosts.json", target)
         self.assertEqual("hermes", installed["runtime"])
+        self.assertFalse((self.root / "contextos.workspace.json").exists())
         report = doctor(self.root, "hermes")
         self.assertIn(report["status"], {"pass", "warn"})
         self.assertFalse(any(item["status"] == "fail" for item in report["checks"]))
@@ -429,6 +433,159 @@ class KernelTest(unittest.TestCase):
         drift = doctor(self.root, "hermes")
         drift_check = next(item for item in drift["checks"] if item["name"] == "runtime-manifest-drift")
         self.assertEqual("warn", drift_check["status"])
+
+    def test_legacy_runtime_migrates_only_to_atomic_local_host_state(self) -> None:
+        local = self.root / ".context-os"
+        local.mkdir()
+        digest = "a" * 64
+        legacy = {
+            "schema_version": 1,
+            "runtime": "hermes",
+            "installed_at": "2026-08-20T12:00:00+00:00",
+            "source_manifest_sha256": digest,
+            "next_steps": ["Launch Hermes"],
+        }
+        legacy_path = local / "runtime.json"
+        legacy_path.write_text(json.dumps(legacy), encoding="utf-8")
+
+        target, state, changed, migrated = migrate_legacy_runtime_state(self.root)
+        self.assertTrue(changed)
+        self.assertEqual("hermes", migrated)
+        self.assertEqual(
+            {
+                "installed_at": legacy["installed_at"],
+                "source_manifest_sha256": digest,
+            },
+            state["hosts"]["hermes"],
+        )
+        self.assertTrue(target.exists())
+        self.assertFalse(legacy_path.exists())
+        self.assertFalse((self.root / "contextos.workspace.json").exists())
+
+        before = target.read_bytes()
+        _, repeated, repeated_changed, repeated_runtime = migrate_legacy_runtime_state(
+            self.root
+        )
+        self.assertFalse(repeated_changed)
+        self.assertIsNone(repeated_runtime)
+        self.assertEqual(state, repeated)
+        self.assertEqual(before, target.read_bytes())
+
+    def test_local_host_migration_rejects_conflict_and_preserves_bytes(self) -> None:
+        local = self.root / ".context-os"
+        local.mkdir()
+        legacy = {
+            "schema_version": 1,
+            "runtime": "hermes",
+            "installed_at": "2026-08-20T12:00:00+00:00",
+            "source_manifest_sha256": "a" * 64,
+        }
+        (local / "runtime.json").write_text(json.dumps(legacy), encoding="utf-8")
+        hosts = {
+            "schema_version": 1,
+            "hosts": {
+                "hermes": {
+                    "installed_at": "2026-08-21T12:00:00+00:00",
+                    "source_manifest_sha256": "b" * 64,
+                }
+            },
+        }
+        hosts_path = local / "hosts.json"
+        hosts_path.write_text(json.dumps(hosts), encoding="utf-8")
+        before = hosts_path.read_bytes()
+        with self.assertRaisesRegex(ContextOSError, "conflicts"):
+            migrate_legacy_runtime_state(self.root)
+        self.assertEqual(before, hosts_path.read_bytes())
+
+    def test_malformed_legacy_runtime_never_creates_host_state(self) -> None:
+        local = self.root / ".context-os"
+        local.mkdir()
+        (local / "runtime.json").write_text(
+            '{"schema_version": 1, "runtime": "hermes"}', encoding="utf-8"
+        )
+        with self.assertRaisesRegex(ContextOSError, "missing legacy fields"):
+            migrate_legacy_runtime_state(self.root)
+        self.assertFalse((local / "hosts.json").exists())
+
+    def test_local_host_state_preserves_multiple_installs_and_noop_timestamp(self) -> None:
+        _, first = install_runtime(self.root, "hermes")
+        _, second = install_runtime(self.root, "codex")
+        _, repeated = install_runtime(self.root, "hermes")
+        state = json.loads(
+            (self.root / ".context-os/hosts.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(["codex", "hermes"], list(state["hosts"]))
+        self.assertEqual(first["installed_at"], repeated["installed_at"])
+        self.assertFalse(repeated["host_state_changed"])
+        self.assertEqual("codex", second["runtime"])
+
+    def test_concurrent_host_install_fails_busy_without_losing_updates(self) -> None:
+        entered = threading.Event()
+        release = threading.Event()
+        original_write = __import__(
+            "contextos.kernel", fromlist=["write_generated_file"]
+        ).write_generated_file
+
+        def delayed_write(*args, **kwargs):
+            entered.set()
+            self.assertTrue(release.wait(timeout=5))
+            return original_write(*args, **kwargs)
+
+        with mock.patch("contextos.kernel.write_generated_file", side_effect=delayed_write):
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                first = pool.submit(install_runtime, self.root, "claude")
+                self.assertTrue(entered.wait(timeout=5))
+                second = pool.submit(install_runtime, self.root, "codex")
+                with self.assertRaisesRegex(ContextOSError, "host-state update"):
+                    second.result(timeout=5)
+                release.set()
+                first.result(timeout=5)
+
+        install_runtime(self.root, "codex")
+        state = json.loads(
+            (self.root / ".context-os/hosts.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(["claude", "codex"], list(state["hosts"]))
+
+    def test_malformed_local_host_state_is_a_structured_doctor_failure(self) -> None:
+        local = self.root / ".context-os"
+        local.mkdir()
+        (local / "hosts.json").write_text("{", encoding="utf-8")
+        report = doctor(self.root)
+        check = next(item for item in report["checks"] if item["name"] == "local-host-state")
+        self.assertEqual("fail", check["status"])
+
+    def test_local_host_write_failure_preserves_previous_bytes(self) -> None:
+        local = self.root / ".context-os"
+        local.mkdir()
+        hosts_path = local / "hosts.json"
+        original = '{"schema_version": 1, "hosts": {}}\n'
+        hosts_path.write_text(original, encoding="utf-8")
+        legacy = {
+            "schema_version": 1,
+            "runtime": "historical-host",
+            "installed_at": "2026-08-20T12:00:00+00:00",
+            "source_manifest_sha256": "a" * 64,
+        }
+        (local / "runtime.json").write_text(json.dumps(legacy), encoding="utf-8")
+        with mock.patch(
+            "contextos.kernel.write_generated_file",
+            side_effect=OSError("injected replace failure"),
+        ), self.assertRaisesRegex(ContextOSError, "injected replace failure"):
+            migrate_legacy_runtime_state(self.root)
+        self.assertEqual(original, hosts_path.read_text(encoding="utf-8"))
+
+    def test_local_host_state_rejects_symlinked_parent(self) -> None:
+        outside = self.root / "outside"
+        outside.mkdir()
+        local = self.root / ".context-os"
+        try:
+            local.symlink_to(outside, target_is_directory=True)
+        except OSError:
+            self.skipTest("symlink creation is unavailable")
+        with self.assertRaisesRegex(ContextOSError, "symlink"):
+            install_runtime(self.root, "hermes")
+        self.assertFalse((outside / "hosts.json").exists())
 
     def test_doctor_uses_configured_state_and_selected_manifest_only(self) -> None:
         custom = self.root / "custom-state"
@@ -446,6 +603,20 @@ class KernelTest(unittest.TestCase):
         report = doctor(self.root)
         check = next(item for item in report["checks"] if item["name"] == "manifest:claude")
         self.assertEqual("fail", check["status"])
+
+    def test_bare_doctor_preserves_single_installed_runtime_scope(self) -> None:
+        install_runtime(self.root, "hermes")
+        manifest = json.loads(
+            (self.root / "runtimes/claude.json").read_text(encoding="utf-8")
+        )
+        manifest["unknown"] = True
+        (self.root / "runtimes/claude.json").write_text(
+            json.dumps(manifest), encoding="utf-8"
+        )
+        report = doctor(self.root)
+        names = {item["name"] for item in report["checks"]}
+        self.assertIn("manifest:hermes", names)
+        self.assertNotIn("manifest:claude", names)
 
     def test_bare_doctor_fails_when_registry_is_empty(self) -> None:
         shutil.rmtree(self.root / "runtimes")

@@ -74,6 +74,11 @@ Adapters may improve presentation or catch errors earlier, but unsupported hooks
 never weaken kernel enforcement. Hermes copied skills can drift, so installation
 and `doctor` report that boundary explicitly.
 
+Tracked runtime intent lives in `contextos.workspace.json`; local availability
+and configured manifest digests live in `.context-os/hosts.json`. Neither local
+binary detection nor an operation receipt can add or remove the tracked set.
+See [workspace configuration and migration](workspace-configuration.md).
+
 Binary probes are declarative, resolution-only checks. `doctor` may resolve the
 listed executable candidates with `PATH`, but runtime descriptors cannot supply
 arguments or cause a process to execute. Native diagnostic execution requires a

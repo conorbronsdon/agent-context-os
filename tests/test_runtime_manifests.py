@@ -132,6 +132,7 @@ class RuntimeManifestTest(unittest.TestCase):
             with self.assertRaisesRegex(ContextOSError, "invalid runtime id"):
                 install_runtime(root, "generic")
             self.assertFalse((root / ".context-os/runtime.json").exists())
+            self.assertFalse((root / ".context-os/hosts.json").exists())
 
     def test_hook_envelopes_come_from_surface_descriptors(self) -> None:
         self.assertEqual(

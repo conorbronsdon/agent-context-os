@@ -1,0 +1,92 @@
+[
+  {
+    "id": "defaults",
+    "legacy": null,
+    "expected_paths": {
+      "state_dir": "state",
+      "sessions_dir": "sessions",
+      "task_file": "TODO.md"
+    }
+  },
+  {
+    "id": "one-supported-key",
+    "legacy": "state_dir: custom-state\n",
+    "expected_paths": {
+      "state_dir": "custom-state",
+      "sessions_dir": "sessions",
+      "task_file": "TODO.md"
+    }
+  },
+  {
+    "id": "all-supported-keys",
+    "legacy": "state_dir: custom-state\nsessions_dir: history\ntask_file: tasks.md\n",
+    "expected_paths": {
+      "state_dir": "custom-state",
+      "sessions_dir": "history",
+      "task_file": "tasks.md"
+    }
+  },
+  {
+    "id": "quoted-values-and-comment",
+    "legacy": "state_dir: 'private-state' # comment\nsessions_dir: \"history\"\ntask_file: 'tasks.md'\n",
+    "expected_paths": {
+      "state_dir": "private-state",
+      "sessions_dir": "history",
+      "task_file": "tasks.md"
+    }
+  },
+  {
+    "id": "quoted-hash-historical-mismatch",
+    "legacy": "state_dir: 'state#private'\n",
+    "error": "historical reader"
+  },
+  {
+    "id": "windows-illegal-colon",
+    "legacy": "sessions_dir: \"history:2026\"\n",
+    "error": "Windows-aliased or illegal"
+  },
+  {
+    "id": "crlf-and-bom-compatible",
+    "legacy": "﻿state_dir: custom-state\r\nsessions_dir: history\r\ntask_file: tasks.md\r\n",
+    "expected_paths": {
+      "state_dir": "custom-state",
+      "sessions_dir": "history",
+      "task_file": "tasks.md"
+    }
+  },
+  {
+    "id": "duplicate-key",
+    "legacy": "state_dir: state\nstate_dir: other\n",
+    "error": "duplicate key"
+  },
+  {
+    "id": "empty-value",
+    "legacy": "state_dir:\n",
+    "error": "empty value"
+  },
+  {
+    "id": "nested-mapping",
+    "legacy": "paths:\n  state_dir: state\n",
+    "error": "unsupported key"
+  },
+  {
+    "id": "list",
+    "legacy": "- state_dir: state\n",
+    "error": "unsupported YAML structure"
+  },
+  {
+    "id": "unknown-key",
+    "legacy": "staleness.current_days: 3\n",
+    "error": "unsupported key"
+  },
+  {
+    "id": "anchor",
+    "legacy": "state_dir: &state state\n",
+    "error": "unsupported YAML scalar"
+  },
+  {
+    "id": "block-scalar",
+    "legacy": "state_dir: |\n  state\n",
+    "error": "unsupported YAML scalar"
+  }
+]

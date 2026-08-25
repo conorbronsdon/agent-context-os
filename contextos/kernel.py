@@ -11,8 +11,8 @@ import sys
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from pathlib import Path
-from typing import Any, Iterator
+from pathlib import Path, PurePosixPath
+from typing import Any, Iterator, Sequence
 
 from .component_schema import (
     ComponentManifestError,
@@ -20,15 +20,33 @@ from .component_schema import (
     component_owners,
     load_component_manifest,
     portable_path_identity,
+    write_generated_file,
 )
 from .runtime_schema import (
     RUNTIME_ID_RE,
     RuntimeManifestError,
     validate_runtime_manifest,
 )
+from .workspace_schema import (
+    DEFAULT_PATHS,
+    DEFAULT_TEMPLATE_SOURCE,
+    DEFAULT_TEMPLATE_VERSION,
+    WORKSPACE_MODE,
+    WORKSPACE_SCHEMA_VERSION,
+    WorkspaceConfigError,
+    analyze_legacy_workspace,
+    legacy_workspace_values,
+    load_workspace_config,
+    portable_identity as workspace_portable_identity,
+    render_workspace_config,
+    strict_json_loads,
+    validate_workspace_config,
+    validate_workspace_path,
+)
 
 
 SCHEMA_VERSION = 1
+HOST_STATE_SCHEMA_VERSION = 1
 PLACEHOLDER_DATE = "[DATE]"
 LAST_UPDATED_RE = re.compile(r"^\*\*Last Updated:\*\*\s*(.+?)\s*$", re.MULTILINE)
 REAL_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -50,6 +68,16 @@ class Workspace:
     state_dir: Path
     sessions_dir: Path
     task_file: Path
+
+
+@dataclass(frozen=True)
+class WorkspaceResolution:
+    workspace: Workspace
+    config: dict[str, Any] | None
+    source: str
+    agents: tuple[str, ...] | None
+    notices: tuple[dict[str, str], ...]
+    canonical: bool | None
 
 
 def canonical_json(value: Any) -> str:
@@ -98,39 +126,267 @@ def discover_root(start: Path | None = None) -> Path:
     raise ContextOSError("could not find a Context OS root (AGENTS.md plus state/ or workspace.yaml)")
 
 
-def _simple_workspace_yaml(path: Path) -> dict[str, str]:
-    if not path.exists():
-        return {}
-    values: dict[str, str] = {}
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.split("#", 1)[0].strip()
-        if not line or line.startswith("-") or ":" not in line:
-            continue
-        key, value = line.split(":", 1)
-        key, value = key.strip(), value.strip().strip("'\"")
-        if key in {"state_dir", "sessions_dir", "task_file"} and value:
-            values[key] = value
-    return values
+def _reject_config_aliases(root: Path, canonical_name: str) -> None:
+    identity = workspace_portable_identity(canonical_name)
+    try:
+        matches = [
+            path.name
+            for path in root.iterdir()
+            if workspace_portable_identity(path.name) == identity
+        ]
+    except OSError as exc:
+        raise ContextOSError(f"cannot inspect workspace root {root}: {exc}") from exc
+    if matches and matches != [canonical_name]:
+        raise ContextOSError(
+            f"portable configuration filename collision for {canonical_name!r}: "
+            + ", ".join(sorted(matches))
+        )
+
+
+def _workspace_from_paths(root: Path, paths: dict[str, str]) -> Workspace:
+    return Workspace(
+        root=root,
+        state_dir=safe_repo_path(root, paths["state_dir"]),
+        sessions_dir=safe_repo_path(root, paths["sessions_dir"]),
+        task_file=safe_repo_path(root, paths["task_file"]),
+    )
+
+
+def resolve_workspace(root: Path) -> WorkspaceResolution:
+    _reject_config_aliases(root, "contextos.workspace.json")
+    _reject_config_aliases(root, "workspace.yaml")
+    json_path = root / "contextos.workspace.json"
+    legacy_path = root / "workspace.yaml"
+    notices: list[dict[str, str]] = []
+    if json_path.exists() or json_path.is_symlink():
+        try:
+            config, canonical = load_workspace_config(
+                json_path,
+                root=root,
+                known_runtime_ids=runtime_ids(root),
+            )
+        except WorkspaceConfigError as exc:
+            raise ContextOSError(f"invalid tracked workspace configuration: {exc}") from exc
+        if not canonical:
+            notices.append({
+                "code": "workspace-json-noncanonical",
+                "message": "contextos.workspace.json is valid but not canonically rendered",
+            })
+        if legacy_path.exists() or legacy_path.is_symlink():
+            conflicts: list[str] = []
+            legacy_detail = "legacy workspace.yaml is shadowed by contextos.workspace.json"
+            if legacy_path.is_symlink():
+                legacy_detail += "; legacy file must not be a symlink"
+            else:
+                try:
+                    legacy_text = legacy_path.read_text(encoding="utf-8-sig")
+                    legacy = analyze_legacy_workspace(legacy_text)
+                    for key, value in legacy.values.items():
+                        if config["paths"][key] != value:
+                            conflicts.append(
+                                f"{key}: JSON={config['paths'][key]!r}, YAML={value!r}"
+                            )
+                    if legacy.issues:
+                        legacy_detail += "; legacy issues: " + "; ".join(legacy.issues)
+                    if conflicts:
+                        legacy_detail += "; conflicts: " + "; ".join(conflicts)
+                except (OSError, UnicodeError) as exc:
+                    legacy_detail += f"; legacy file cannot be read: {exc}"
+            notices.append({"code": "legacy-workspace-shadowed", "message": legacy_detail})
+        return WorkspaceResolution(
+            workspace=_workspace_from_paths(root, config["paths"]),
+            config=config,
+            source="json",
+            agents=tuple(config["agents"]),
+            notices=tuple(notices),
+            canonical=canonical,
+        )
+
+    values = dict(DEFAULT_PATHS)
+    source = "defaults"
+    if legacy_path.exists() or legacy_path.is_symlink():
+        if legacy_path.is_symlink():
+            raise ContextOSError("legacy workspace.yaml must not be a symlink")
+        try:
+            legacy_text = legacy_path.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeError) as exc:
+            raise ContextOSError(f"cannot read legacy workspace.yaml: {exc}") from exc
+        values.update(legacy_workspace_values(legacy_text))
+        source = "legacy-yaml"
+        notices.append({
+            "code": "legacy-workspace",
+            "message": (
+                "workspace.yaml remains readable but is deprecated; preview migration "
+                "with context-os workspace migrate"
+            ),
+        })
+    else:
+        notices.append({
+            "code": "workspace-defaults",
+            "message": (
+                "no tracked workspace configuration; legacy default paths are active "
+                "and agent intent is unknown"
+            ),
+        })
+    return WorkspaceResolution(
+        workspace=_workspace_from_paths(root, values),
+        config=None,
+        source=source,
+        agents=None,
+        notices=tuple(notices),
+        canonical=None,
+    )
 
 
 def load_workspace(root: Path) -> Workspace:
-    config = _simple_workspace_yaml(root / "workspace.yaml")
-    state_dir = safe_repo_path(root, config.get("state_dir", "state"))
-    sessions_dir = safe_repo_path(root, config.get("sessions_dir", "sessions"))
-    task_file = safe_repo_path(root, config.get("task_file", "TODO.md"))
-    return Workspace(root=root, state_dir=state_dir, sessions_dir=sessions_dir, task_file=task_file)
+    return resolve_workspace(root).workspace
 
 
 def safe_repo_path(root: Path, raw: str) -> Path:
-    relative = Path(raw)
-    if relative.is_absolute():
-        raise ContextOSError(f"absolute repository path is not allowed: {raw}")
-    resolved = (root / relative).resolve()
+    try:
+        relative = validate_workspace_path(raw, "workspace path")
+    except WorkspaceConfigError as exc:
+        raise ContextOSError(str(exc)) from exc
+    candidate = root.joinpath(*PurePosixPath(relative).parts)
+    current = root
+    for part in PurePosixPath(relative).parts:
+        current /= part
+        if current.is_symlink():
+            raise ContextOSError(f"workspace path must not traverse a symlink: {raw}")
+    resolved = candidate.resolve()
     try:
         resolved.relative_to(root.resolve())
     except ValueError as exc:
         raise ContextOSError(f"path escapes repository root: {raw}") from exc
     return resolved
+
+
+def workspace_resolution_report(root: Path) -> dict[str, Any]:
+    resolution = resolve_workspace(root)
+    workspace = resolution.workspace
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "source": resolution.source,
+        "agents": list(resolution.agents) if resolution.agents is not None else None,
+        "mode": resolution.config["mode"] if resolution.config else None,
+        "paths": {
+            "state_dir": relative_path(root, workspace.state_dir),
+            "sessions_dir": relative_path(root, workspace.sessions_dir),
+            "task_file": relative_path(root, workspace.task_file),
+        },
+        "template": resolution.config["template"] if resolution.config else None,
+        "canonical": resolution.canonical,
+        "notices": list(resolution.notices),
+    }
+
+
+def plan_workspace_migration(
+    root: Path,
+    agents: Sequence[str],
+    *,
+    template_version: str | None = None,
+    template_source: str | None = None,
+) -> dict[str, Any]:
+    _reject_config_aliases(root, "contextos.workspace.json")
+    _reject_config_aliases(root, "workspace.yaml")
+    known = runtime_ids(root)
+    json_path = root / "contextos.workspace.json"
+    legacy_path = root / "workspace.yaml"
+    current_text = ""
+    source = "defaults"
+    paths = dict(DEFAULT_PATHS)
+    existing: dict[str, Any] | None = None
+
+    if json_path.exists() or json_path.is_symlink():
+        resolution = resolve_workspace(root)
+        if resolution.config is None:
+            raise ContextOSError("tracked JSON resolution did not return configuration")
+        existing = resolution.config
+        current_text = json_path.read_text(encoding="utf-8")
+        source = "json"
+        paths = dict(existing["paths"])
+        requested = set(agents)
+        configured = set(existing["agents"])
+        if requested != configured and not configured.issubset(requested):
+            raise ContextOSError(
+                "workspace migration will not shrink or replace configured agents; "
+                "use the explicit disable lifecycle"
+            )
+    elif legacy_path.exists() or legacy_path.is_symlink():
+        if legacy_path.is_symlink():
+            raise ContextOSError("legacy workspace.yaml must not be a symlink")
+        try:
+            legacy_text = legacy_path.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeError) as exc:
+            raise ContextOSError(f"cannot read legacy workspace.yaml: {exc}") from exc
+        analysis = analyze_legacy_workspace(legacy_text)
+        effective = legacy_workspace_values(legacy_text)
+        if analysis.issues:
+            raise ContextOSError(
+                "legacy workspace.yaml cannot be migrated losslessly: "
+                + "; ".join(analysis.issues)
+            )
+        if analysis.values != effective:
+            raise ContextOSError(
+                "legacy workspace.yaml cannot be migrated losslessly: strict migration "
+                "interpretation differs from the historical reader"
+            )
+        paths.update(analysis.values)
+        source = "legacy-yaml"
+
+    candidate = {
+        "schema_version": WORKSPACE_SCHEMA_VERSION,
+        "mode": WORKSPACE_MODE,
+        "agents": list(agents),
+        "paths": paths,
+        "template": {
+            "version": (
+                template_version
+                if template_version is not None
+                else existing["template"]["version"]
+                if existing is not None
+                else DEFAULT_TEMPLATE_VERSION
+            ),
+            "source": (
+                template_source
+                if template_source is not None
+                else existing["template"]["source"]
+                if existing is not None
+                else DEFAULT_TEMPLATE_SOURCE
+            ),
+        },
+    }
+    try:
+        config = validate_workspace_config(candidate, known_runtime_ids=known)
+    except WorkspaceConfigError as exc:
+        raise ContextOSError(f"invalid workspace migration target: {exc}") from exc
+    target_text = render_workspace_config(config)
+    action = "noop" if current_text == target_text else "update" if existing else "add"
+    diff = "" if action == "noop" else "".join(difflib.unified_diff(
+        current_text.splitlines(keepends=True),
+        target_text.splitlines(keepends=True),
+        fromfile="a/contextos.workspace.json",
+        tofile="b/contextos.workspace.json",
+    ))
+    notices = [
+        "preview only; no tracked file was written",
+        "auto and local runtime detection never populate tracked agents",
+    ]
+    if source == "legacy-yaml":
+        notices.append(
+            "workspace.yaml remains unchanged until a later transaction applies migration"
+        )
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "writes": False,
+        "source": source,
+        "target": "contextos.workspace.json",
+        "action": action,
+        "config": config,
+        "content": target_text,
+        "diff": diff,
+        "notices": notices,
+    }
 
 
 def relative_path(root: Path, path: Path) -> str:
@@ -791,18 +1047,246 @@ def start_report(root: Path, now: datetime) -> dict[str, Any]:
     }
 
 
+def _guard_local_state_path(root: Path, path: Path) -> None:
+    current = root
+    try:
+        relative = path.relative_to(root)
+    except ValueError as exc:
+        raise ContextOSError(f"local state path escapes workspace: {path}") from exc
+    for part in relative.parts:
+        current /= part
+        if current.is_symlink():
+            raise ContextOSError(
+                f"local state path must not traverse a symlink: {relative.as_posix()}"
+            )
+
+
+def _local_json(path: Path, *, root: Path) -> dict[str, Any]:
+    _guard_local_state_path(root, path)
+    try:
+        raw = path.read_text(encoding="utf-8")
+        value = strict_json_loads(raw, source=path.name)
+    except (OSError, UnicodeError, WorkspaceConfigError) as exc:
+        raise ContextOSError(f"cannot read local state {path}: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ContextOSError(f"local state {path} must contain a JSON object")
+    return value
+
+
+def _host_entry(value: Any, field: str) -> dict[str, str]:
+    if not isinstance(value, dict) or set(value) != {
+        "installed_at", "source_manifest_sha256"
+    }:
+        raise ContextOSError(
+            f"{field} must contain exactly installed_at and source_manifest_sha256"
+        )
+    installed_at = value.get("installed_at")
+    source = value.get("source_manifest_sha256")
+    if not isinstance(installed_at, str) or not installed_at.strip():
+        raise ContextOSError(f"{field}.installed_at must be a non-empty string")
+    if not isinstance(source, str) or not re.fullmatch(r"[0-9a-f]{64}", source):
+        raise ContextOSError(f"{field}.source_manifest_sha256 must be a SHA-256 digest")
+    return {"installed_at": installed_at, "source_manifest_sha256": source}
+
+
+def _read_hosts_state(root: Path) -> dict[str, Any]:
+    path = root / ".context-os" / "hosts.json"
+    if not path.exists() and not path.is_symlink():
+        return {"schema_version": HOST_STATE_SCHEMA_VERSION, "hosts": {}}
+    value = _local_json(path, root=root)
+    if set(value) != {"schema_version", "hosts"}:
+        raise ContextOSError("hosts.json must contain exactly schema_version and hosts")
+    if (
+        type(value.get("schema_version")) is not int
+        or value["schema_version"] != HOST_STATE_SCHEMA_VERSION
+    ):
+        raise ContextOSError(
+            f"hosts.json schema_version must equal {HOST_STATE_SCHEMA_VERSION}"
+        )
+    raw_hosts = value.get("hosts")
+    if not isinstance(raw_hosts, dict):
+        raise ContextOSError("hosts.json hosts must be an object")
+    hosts: dict[str, dict[str, str]] = {}
+    for runtime, raw_entry in raw_hosts.items():
+        if (
+            not isinstance(runtime, str)
+            or not RUNTIME_ID_RE.fullmatch(runtime)
+            or runtime in {"auto", "generic", "none"}
+        ):
+            raise ContextOSError(f"hosts.json contains invalid runtime id {runtime!r}")
+        hosts[runtime] = _host_entry(raw_entry, f"hosts.{runtime}")
+    return {
+        "schema_version": HOST_STATE_SCHEMA_VERSION,
+        "hosts": {runtime: hosts[runtime] for runtime in sorted(hosts)},
+    }
+
+
+def _read_legacy_runtime_state(root: Path) -> tuple[str, dict[str, str]] | None:
+    path = root / ".context-os" / "runtime.json"
+    if not path.exists() and not path.is_symlink():
+        return None
+    value = _local_json(path, root=root)
+    allowed = {
+        "schema_version", "runtime", "installed_at",
+        "source_manifest_sha256", "next_steps",
+    }
+    required = allowed - {"next_steps"}
+    if not required.issubset(value) or set(value) - allowed:
+        raise ContextOSError(
+            "runtime.json has unsupported or missing legacy fields"
+        )
+    if type(value.get("schema_version")) is not int or value["schema_version"] != 1:
+        raise ContextOSError("runtime.json schema_version must equal 1")
+    runtime = value.get("runtime")
+    if (
+        not isinstance(runtime, str)
+        or not RUNTIME_ID_RE.fullmatch(runtime)
+        or runtime in {"auto", "generic", "none"}
+    ):
+        raise ContextOSError("runtime.json runtime must be a lowercase runtime id")
+    if "next_steps" in value and (
+        not isinstance(value["next_steps"], list)
+        or any(not isinstance(item, str) for item in value["next_steps"])
+    ):
+        raise ContextOSError("runtime.json next_steps must be an array of strings")
+    return runtime, _host_entry(
+        {
+            "installed_at": value.get("installed_at"),
+            "source_manifest_sha256": value.get("source_manifest_sha256"),
+        },
+        "runtime.json",
+    )
+
+
+def _hosts_with_legacy(root: Path) -> tuple[dict[str, Any], str | None]:
+    state = _read_hosts_state(root)
+    legacy = _read_legacy_runtime_state(root)
+    if legacy is None:
+        return state, None
+    runtime, entry = legacy
+    existing = state["hosts"].get(runtime)
+    if existing is not None and existing != entry:
+        raise ContextOSError(
+            f"runtime.json conflicts with hosts.json entry for {runtime!r}"
+        )
+    state["hosts"][runtime] = entry
+    state["hosts"] = {
+        runtime_id: state["hosts"][runtime_id]
+        for runtime_id in sorted(state["hosts"])
+    }
+    return state, runtime
+
+
+def _render_hosts_state(state: dict[str, Any]) -> str:
+    return json.dumps(state, indent=2, ensure_ascii=False) + "\n"
+
+
+@contextmanager
+def host_state_lock(root: Path) -> Iterator[None]:
+    lock = root / ".context-os" / "hosts.lock"
+    _guard_local_state_path(root, lock)
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError as exc:
+        raise ContextOSError(
+            f"another local host-state update is active or left a stale lock: {lock}"
+        ) from exc
+    try:
+        try:
+            os.write(descriptor, f"pid={os.getpid()}\n".encode())
+        finally:
+            os.close(descriptor)
+        yield
+    finally:
+        lock.unlink(missing_ok=True)
+
+
+def _migrate_legacy_runtime_state_unlocked(
+    root: Path,
+) -> tuple[Path, dict[str, Any], bool, str | None]:
+    target = root / ".context-os" / "hosts.json"
+    state, migrated_runtime = _hosts_with_legacy(root)
+    wanted = _render_hosts_state(state)
+    current = None
+    if target.exists() or target.is_symlink():
+        _guard_local_state_path(root, target)
+        try:
+            current = target.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise ContextOSError(f"cannot read local state {target}: {exc}") from exc
+    host_state_changed = current != wanted and (
+        current is not None or migrated_runtime is not None
+    )
+    if host_state_changed:
+        try:
+            write_generated_file(target, wanted, root=root)
+        except (ComponentManifestError, OSError) as exc:
+            raise ContextOSError(f"cannot write local host state: {exc}") from exc
+    if migrated_runtime is not None:
+        legacy_path = root / ".context-os" / "runtime.json"
+        try:
+            legacy_path.unlink()
+        except OSError as exc:
+            raise ContextOSError(
+                "local host state is authoritative, but legacy runtime.json "
+                f"cleanup failed: {exc}"
+            ) from exc
+    changed = host_state_changed or migrated_runtime is not None
+    return target, state, changed, migrated_runtime
+
+
+def migrate_legacy_runtime_state(
+    root: Path,
+) -> tuple[Path, dict[str, Any], bool, str | None]:
+    with host_state_lock(root):
+        return _migrate_legacy_runtime_state_unlocked(root)
+
+
 def install_runtime(root: Path, runtime: str) -> tuple[Path, dict[str, Any]]:
     manifest = runtime_manifest(root, runtime)
+    with host_state_lock(root):
+        _, _, _, migrated_runtime = _migrate_legacy_runtime_state_unlocked(root)
+        state = _read_hosts_state(root)
+        source = sha256_text(canonical_json(manifest))
+        existing = state["hosts"].get(runtime)
+        if existing is not None and existing["source_manifest_sha256"] == source:
+            installed_at = existing["installed_at"]
+        else:
+            installed_at = utc_now().isoformat()
+        state["hosts"][runtime] = {
+            "installed_at": installed_at,
+            "source_manifest_sha256": source,
+        }
+        state["hosts"] = {
+            runtime_id: state["hosts"][runtime_id]
+            for runtime_id in sorted(state["hosts"])
+        }
+        target = root / ".context-os" / "hosts.json"
+        wanted = _render_hosts_state(state)
+        current = None
+        if target.exists() or target.is_symlink():
+            _guard_local_state_path(root, target)
+            try:
+                current = target.read_text(encoding="utf-8")
+            except (OSError, UnicodeError) as exc:
+                raise ContextOSError(f"cannot read local host state: {exc}") from exc
+        host_state_changed = current != wanted
+        if host_state_changed:
+            try:
+                write_generated_file(target, wanted, root=root)
+            except (ComponentManifestError, OSError) as exc:
+                raise ContextOSError(f"cannot write local host state: {exc}") from exc
     local = {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": HOST_STATE_SCHEMA_VERSION,
         "runtime": runtime,
-        "installed_at": utc_now().isoformat(),
-        "source_manifest_sha256": sha256_text(canonical_json(manifest)),
+        "installed_at": installed_at,
+        "source_manifest_sha256": source,
         "next_steps": manifest.get("install", {}).get("next_steps", []),
+        "legacy_runtime_migrated": migrated_runtime,
+        "legacy_runtime_retained": False,
+        "host_state_changed": host_state_changed,
     }
-    target = root / ".context-os" / "runtime.json"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(local, indent=2) + "\n", encoding="utf-8", newline="\n")
     return target, local
 
 
@@ -817,7 +1301,23 @@ def doctor(
     git_location = shutil.which("git")
     add("command:git", "pass" if git_location else "fail", git_location or "not found")
     add("command:python", "pass", sys.executable)
-    workspace = load_workspace(root)
+    try:
+        workspace_resolution = resolve_workspace(root)
+        workspace = workspace_resolution.workspace
+        workspace_status = (
+            "pass"
+            if workspace_resolution.source == "json" and not workspace_resolution.notices
+            else "warn"
+        )
+        detail = workspace_resolution.source
+        if workspace_resolution.notices:
+            detail += "; " + "; ".join(
+                notice["message"] for notice in workspace_resolution.notices
+            )
+        add("workspace-config", workspace_status, detail)
+    except ContextOSError as exc:
+        add("workspace-config", "fail", str(exc))
+        workspace = _workspace_from_paths(root, dict(DEFAULT_PATHS))
     required_paths = [
         root / "AGENTS.md", workspace.state_dir / "current.md",
         workspace.state_dir / "current-log.md", workspace.state_dir / "decisions.md",
@@ -844,9 +1344,23 @@ def doctor(
         else f"no usable **Last Updated:** date in: {', '.join(unresolved)}",
     )
     selected = runtime
-    local_runtime = root / ".context-os" / "runtime.json"
-    if selected is None and local_runtime.exists():
-        selected = read_json(local_runtime).get("runtime")
+    local_hosts: dict[str, Any] | None = None
+    legacy_runtime: str | None = None
+    try:
+        local_hosts, legacy_runtime = _hosts_with_legacy(root)
+        local_detail = f"{len(local_hosts['hosts'])} configured host(s)"
+        if legacy_runtime is not None:
+            local_detail += (
+                f"; legacy runtime.json for {legacy_runtime!r} is readable but retained; "
+                "run workspace migrate-local-runtime"
+            )
+        add("local-host-state", "warn" if legacy_runtime else "pass", local_detail)
+    except ContextOSError as exc:
+        add("local-host-state", "fail", str(exc))
+    if selected is None and local_hosts is not None:
+        configured_hosts = list(local_hosts["hosts"])
+        if len(configured_hosts) == 1:
+            selected = configured_hosts[0]
     hosts = runtime_ids(root) if all_runtimes or not selected else [selected]
     if not hosts:
         add("manifest-registry", "fail", "no runtime descriptors found")
@@ -873,8 +1387,8 @@ def doctor(
         try:
             selected_manifest = runtime_manifest(root, selected)
             expected_source = sha256_text(canonical_json(selected_manifest))
-            if local_runtime.exists():
-                recorded_source = read_json(local_runtime).get("source_manifest_sha256")
+            if local_hosts is not None and selected in local_hosts["hosts"]:
+                recorded_source = local_hosts["hosts"][selected]["source_manifest_sha256"]
                 add(
                     "runtime-manifest-drift",
                     "pass" if recorded_source == expected_source else "warn",

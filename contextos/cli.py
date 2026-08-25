@@ -14,13 +14,18 @@ from .kernel import (
     doctor,
     hook_report,
     install_runtime,
+    migrate_legacy_runtime_state,
     parse_now,
+    plan_workspace_migration,
     read_json,
     render_hook_payload,
+    runtime_ids,
     runtime_manifest,
     runtime_surface,
     start_report,
+    workspace_resolution_report,
 )
+from .workspace_schema import WorkspaceConfigError, parse_agent_selection
 
 
 def parser() -> argparse.ArgumentParser:
@@ -49,6 +54,32 @@ def parser() -> argparse.ArgumentParser:
     diagnose_selection = diagnose.add_mutually_exclusive_group()
     diagnose_selection.add_argument("--runtime", metavar="RUNTIME")
     diagnose_selection.add_argument("--all", action="store_true", help="Validate every shipped runtime descriptor")
+
+    workspace = commands.add_parser(
+        "workspace", help="Inspect tracked workspace intent or preview migration"
+    )
+    workspace_commands = workspace.add_subparsers(
+        dest="workspace_command", required=True
+    )
+    workspace_commands.add_parser(
+        "show", help="Show effective tracked workspace configuration and precedence"
+    )
+    migrate = workspace_commands.add_parser(
+        "migrate", help="Preview canonical tracked JSON without writing it"
+    )
+    selection = migrate.add_mutually_exclusive_group(required=True)
+    selection.add_argument(
+        "--agents", action="append", help="Comma-separated runtime ids, or none for core-only"
+    )
+    selection.add_argument(
+        "--agent",
+        action="append",
+        help="Deprecated singleton compatibility alias; use --agents",
+    )
+    workspace_commands.add_parser(
+        "migrate-local-runtime",
+        help="Atomically copy legacy local runtime state into hosts.json",
+    )
 
     hook = commands.add_parser("hook", help="Run a normalized read-only lifecycle hook check")
     hook.add_argument("event", choices=("session-start", "pre-write"))
@@ -82,11 +113,44 @@ def main(argv: list[str] | None = None) -> int:
             emit({"receipt": receipt_path.relative_to(root).as_posix(), **receipt})
         elif args.command == "install":
             path, manifest = install_runtime(root, args.runtime)
-            emit({"runtime_file": path.relative_to(root).as_posix(), **manifest})
+            relative = path.relative_to(root).as_posix()
+            emit({"host_state": relative, "runtime_file": relative, **manifest})
         elif args.command == "doctor":
             report = doctor(root, args.runtime, all_runtimes=args.all)
             emit(report)
             return 1 if report["status"] == "fail" else 0
+        elif args.command == "workspace":
+            if args.workspace_command == "show":
+                emit(workspace_resolution_report(root))
+            elif args.workspace_command == "migrate":
+                selections = args.agents if args.agents is not None else args.agent
+                if len(selections) != 1:
+                    raise ContextOSError("workspace migration selection may be specified only once")
+                raw_selection = selections[0]
+                if args.agent is not None and "," in raw_selection:
+                    raise ContextOSError(
+                        "--agent is a deprecated singleton alias and accepts exactly one runtime id"
+                    )
+                selected_agents = parse_agent_selection(
+                    raw_selection, known_runtime_ids=runtime_ids(root)
+                )
+                if selected_agents is None:
+                    raise ContextOSError("workspace migration requires explicit agents")
+                report = plan_workspace_migration(root, selected_agents)
+                if args.agent is not None:
+                    report["notices"].append(
+                        "--agent is a deprecated singleton compatibility alias; use --agents"
+                    )
+                emit(report)
+            elif args.workspace_command == "migrate-local-runtime":
+                path, state, changed, migrated_runtime = migrate_legacy_runtime_state(root)
+                emit({
+                    "host_state": path.relative_to(root).as_posix(),
+                    "changed": changed,
+                    "migrated_runtime": migrated_runtime,
+                    "legacy_runtime_retained": False,
+                    **state,
+                })
         elif args.command == "hook":
             hook_manifest = runtime_manifest(root, args.runtime, check_paths=False)
             surface_outputs = {
@@ -106,7 +170,13 @@ def main(argv: list[str] | None = None) -> int:
             if rendered is not None:
                 emit(rendered)
         return 0
-    except (ContextOSError, json.JSONDecodeError, OSError, UnicodeError) as exc:
+    except (
+        ContextOSError,
+        WorkspaceConfigError,
+        json.JSONDecodeError,
+        OSError,
+        UnicodeError,
+    ) as exc:
         if getattr(args, "command", None) == "hook":
             message = f"Context OS advisory hook could not run: {exc}"
             # If no validated descriptor established a host protocol, silence

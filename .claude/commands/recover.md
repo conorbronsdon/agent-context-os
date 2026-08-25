@@ -15,7 +15,10 @@ Scan for orphaned worktrees, stale branches, and partial work left behind by cra
 
 ## Configuration
 
-This core operates on git worktrees and branches only; it reads no state files, so a `workspace.yaml`'s state paths do not apply. The one setting it depends on is the **default branch**, which it detects (step 0) rather than hardcoding.
+This core operates on git worktrees and branches only; it reads no state files,
+so tracked workspace path configuration does not apply. The one setting it
+depends on is the **default branch**, which it detects (step 0) rather than
+hardcoding.
 
 ## When to Use
 

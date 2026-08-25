@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated structural subset. contextos.workspace_schema is authoritative for runtime-registry membership, portable path safety, semantic set uniqueness, role collisions, and canonical rendering.",
+  "title": "Context OS tracked workspace configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "mode",
+    "agents",
+    "paths",
+    "template"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "mode": {
+      "const": "full-template"
+    },
+    "agents": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]*$"
+      }
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state_dir",
+        "sessions_dir",
+        "task_file"
+      ],
+      "properties": {
+        "state_dir": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![A-Za-z]:)(?![/\\\\])(?!.*\\\\)(?!.*(?:^|/)\\.\\.?[/\\\\]?)(?!.*//)(?!.*(?:^|/)(?:\\.git|\\.context-os)(?:/|$)).+$"
+        },
+        "sessions_dir": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![A-Za-z]:)(?![/\\\\])(?!.*\\\\)(?!.*(?:^|/)\\.\\.?[/\\\\]?)(?!.*//)(?!.*(?:^|/)(?:\\.git|\\.context-os)(?:/|$)).+$"
+        },
+        "task_file": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![A-Za-z]:)(?![/\\\\])(?!.*\\\\)(?!.*(?:^|/)\\.\\.?[/\\\\]?)(?!.*//)(?!.*(?:^|/)(?:\\.git|\\.context-os)(?:/|$)).+$"
+        }
+      }
+    },
+    "template": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "source"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!\\s)(?:[^\\u0000-\\u001f\\u007f]*\\S)$"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!\\s)(?:[^\\u0000-\\u001f\\u007f]*\\S)$"
+        }
+      }
+    }
+  }
+}

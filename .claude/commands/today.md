@@ -15,7 +15,11 @@ Lightweight daily check-in that catches staleness, surfaces deadlines, and propo
 
 ## Configuration
 
-If the project root carries a `workspace.yaml`, read it. Below, `<state_dir>`, `<sessions_dir>`, and `<task_file>` are its resolved values; the defaults are `state/`, `sessions/`, and `TODO.md`. Staleness thresholds come from `staleness.current_days` (3), `weekly_days` (5), and `blockers_days` (7).
+Run `bash scripts/contextos.sh workspace show` and use its resolved `<state_dir>`,
+`<sessions_dir>`, and `<task_file>`. Canonical JSON is authoritative; legacy
+YAML is used only when JSON is absent. Stop and report a configuration error
+instead of guessing paths. Schema v1 does not store staleness policy, so use the
+documented defaults: current 3 days, weekly 5 days, blockers 7 days.
 
 ## Instructions
 

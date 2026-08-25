@@ -1,0 +1,69 @@
+[
+  {
+    "id": "json-and-yaml-same-paths",
+    "kind": "precedence",
+    "json_state_dir": "state",
+    "yaml_state_dir": "state",
+    "expected_source": "json",
+    "expected_notice": "shadowed"
+  },
+  {
+    "id": "json-and-yaml-conflicting-paths",
+    "kind": "precedence",
+    "json_state_dir": "state",
+    "yaml_state_dir": "legacy-state",
+    "expected_source": "json",
+    "expected_notice": "conflicts"
+  },
+  {
+    "id": "invalid-json-never-falls-back",
+    "kind": "invalid-json",
+    "yaml_state_dir": "legacy-state",
+    "error": "invalid tracked"
+  },
+  {
+    "id": "existing-set-rerun",
+    "kind": "agent-rerun",
+    "configured": ["claude"],
+    "requested": ["claude"],
+    "expected_action": "noop"
+  },
+  {
+    "id": "existing-set-expansion",
+    "kind": "agent-rerun",
+    "configured": ["claude"],
+    "requested": ["claude", "codex"],
+    "expected_action": "update"
+  },
+  {
+    "id": "existing-set-shrink",
+    "kind": "agent-rerun",
+    "configured": ["claude", "codex"],
+    "requested": ["claude"],
+    "error": "will not shrink or replace"
+  },
+  {
+    "id": "scalar-host-identical",
+    "kind": "local-host",
+    "scalar_runtime": "claude",
+    "host_runtime": "claude",
+    "same_entry": true,
+    "expected_hosts": ["claude"]
+  },
+  {
+    "id": "scalar-host-disjoint",
+    "kind": "local-host",
+    "scalar_runtime": "claude",
+    "host_runtime": "codex",
+    "same_entry": false,
+    "expected_hosts": ["claude", "codex"]
+  },
+  {
+    "id": "scalar-host-conflict",
+    "kind": "local-host",
+    "scalar_runtime": "claude",
+    "host_runtime": "claude",
+    "same_entry": false,
+    "error": "conflicts"
+  }
+]

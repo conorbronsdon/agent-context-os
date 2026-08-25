@@ -47,6 +47,11 @@ bash scripts/setup.sh --agent claude
 # bash scripts/setup.sh --agent hermes
 ```
 
+The current singular `--agent` option chooses what bootstrap launches locally;
+it does not infer or rewrite the tracked runtime set. See [workspace
+configuration](docs/workspace-configuration.md) for the canonical agent-set and
+migration contract.
+
 Then start your agent from the repository root:
 
 | Starting point | Next action |
@@ -158,11 +163,17 @@ contextos/                 Deterministic lifecycle kernel
 adapters/hermes/           Hermes installation and optional hook adapter
 runtimes/                  Machine-readable capability manifests
 components/                Component ownership and dependency manifest
+workspace/                 Schema and inactive canonical config example
 integrations/              Machine-checked opt-in integration catalog
 references/                Generated catalog and integration setup notes
 scripts/                   Setup, validation, migration, and maintenance tools
 docs/                      Onboarding, architecture, safety, and migration guides
 ```
+
+The transaction-backed setup and apply work in #64 and #65 will create
+`contextos.workspace.json`; this release only previews its exact bytes. The
+template does not ship a live root file because that would override an existing
+clone's legacy `workspace.yaml` before its migration is reviewed.
 
 Each fact should have one canonical home. `ROUTING.md` points an agent to the right file instead of copying the same context across prompts.
 
@@ -199,6 +210,7 @@ behavior of an installed agent version or an external service.
 | Goal | Guide |
 |---|---|
 | Install and choose a host | [Getting started](docs/getting-started.md) |
+| Understand agent selection and legacy migration | [Workspace configuration](docs/workspace-configuration.md) |
 | Import useful context from another system | [Migration guide](docs/migration-guide.md) |
 | Use the repository in Codex | [Codex onboarding](docs/codex-onboarding.md) |
 | Use the repository in Hermes Agent | [Memory across agents](docs/memory-across-agents.md) and the Hermes section of [AGENTS.md](AGENTS.md) |

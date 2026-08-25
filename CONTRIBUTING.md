@@ -47,6 +47,7 @@ silently reverted on the next regeneration.
 | `runtimes/schema.json` | `contextos/runtime_schema.py` | `scripts/runtime-manifests.py generate` |
 | README registered-host table | validated `runtimes/*.json` descriptors | `scripts/runtime-manifests.py generate` |
 | `components/schema.json` | `contextos/component_schema.py` | `scripts/component-manifests.py generate` |
+| `workspace/schema.json` | `contextos/workspace_schema.py` | `scripts/workspace-config.py generate` |
 
 ## Adding a runtime descriptor
 

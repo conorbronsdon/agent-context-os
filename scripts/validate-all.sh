@@ -33,6 +33,7 @@ CONTEXTOS_VALIDATION_PROFILE="$VALIDATION_PROFILE" \
 "$CONTEXTOS_PYTHON_CMD" scripts/integrations.py check
 "$CONTEXTOS_PYTHON_CMD" scripts/component-manifests.py "${COMPONENT_CHECK_ARGS[@]}"
 "$CONTEXTOS_PYTHON_CMD" scripts/runtime-manifests.py check
+"$CONTEXTOS_PYTHON_CMD" scripts/workspace-config.py check
 
 "$CONTEXTOS_PYTHON_CMD" - <<'PY'
 import json
@@ -41,11 +42,14 @@ from pathlib import Path
 paths = [
     Path(".claude/settings.json"),
     Path(".codex/hooks.json"),
+    Path("workspace/example.json"),
     Path("docs/templates/workflow-parity.json"),
     Path("docs/templates/setup-payload.json"),
     Path("docs/templates/update-payload.json"),
     Path("docs/templates/end-payload.json"),
     Path("integrations/catalog.json"),
+    Path("tests/fixtures/workspace-migrations.json"),
+    Path("workspace/schema.json"),
 ]
 paths.extend(sorted(Path("runtimes").glob("*.json")))
 for path in paths:

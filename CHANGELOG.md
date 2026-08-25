@@ -11,6 +11,12 @@
 ### Added
 - A reviewed Pandoc catalog entry with a bounded non-PDF profile, explicit network and sensitive-read boundaries, PDF-engine execution guidance, and overwrite confirmation.
 - A reviewed MarkItDown MCP catalog entry covering its local-file and network read boundary, unauthenticated localhost transport, sandboxing guidance, and pinned v0.1.7 evidence.
+- Canonical tracked `contextos.workspace.json` with strict set and path
+  semantics, whole-document precedence over legacy `workspace.yaml`,
+  loss-aware preview-only migration, generated schema validation, and atomic
+  machine-local migration from scalar runtime state to `.context-os/hosts.json`.
+- An inactive `workspace/example.json` instead of a live root seed, so upgrades
+  cannot shadow an existing clone's legacy paths before explicit migration.
 - An authoritative component inventory with dependency resolution, exact
   tracked-file ownership, managed/seed/development policies, runtime-reference
   validation, and documented prerequisites for future clean composition.

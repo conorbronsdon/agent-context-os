@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "mode": "full-template",
+  "agents": [],
+  "paths": {
+    "state_dir": "state",
+    "sessions_dir": "sessions",
+    "task_file": "TODO.md"
+  },
+  "template": {
+    "version": "0.12.0",
+    "source": "agent-context-os-template"
+  }
+}

@@ -17,7 +17,9 @@ When multiple agent sessions run in parallel (especially with worktrees), files 
 
 ## Configuration
 
-If the project root carries a `workspace.yaml`, read it for where state lives. Below, `<state_dir>` and `<task_file>` are its resolved values; the defaults are `state/` and `TODO.md`.
+Run `bash scripts/contextos.sh workspace show` and use its resolved `state_dir`
+and `task_file`. Canonical JSON is authoritative; legacy YAML is used only when
+JSON is absent. Stop and report a configuration error instead of guessing paths.
 
 ## When to Use
 
