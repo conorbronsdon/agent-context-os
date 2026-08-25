@@ -269,8 +269,10 @@ grep -Fq -- '--agent auto|claude|codex|hermes|cursor|openclaw|none' <<<"$help_ou
 if bash scripts/setup.sh --agent invalid >/dev/null 2>&1; then
   fail "setup accepted an invalid agent"
 fi
-test "$(grep -Fc '    newline="\n",' scripts/setup.sh)" -eq 2 \
-  || fail "both setup Python rewrites must explicitly preserve LF line endings"
+setup_write_count=$(grep -Fc 'path.write_text(' scripts/setup.sh)
+setup_lf_count=$(grep -Fc 'newline="\n",' scripts/setup.sh)
+test "$setup_write_count" -eq "$setup_lf_count" \
+  || fail "every setup Python rewrite must explicitly preserve LF line endings"
 
 make_setup_fixture() {
   local destination="$1"
@@ -279,7 +281,8 @@ make_setup_fixture() {
   git -C "$destination" init -q
   git -C "$destination" config user.name "Portability Test"
   git -C "$destination" config user.email "portability@example.invalid"
-  git -C "$destination" -c core.autocrlf=false add -A
+  git -C "$destination" config core.autocrlf false
+  git -C "$destination" add -A
   git -C "$destination" commit -qm baseline
   git -C "$destination" remote add origin https://example.invalid/context.git
 }
