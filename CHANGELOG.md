@@ -20,6 +20,7 @@
 - First-class Codex onboarding with a root `AGENTS.md`, four explicit-invocation lifecycle skills under `.agents/skills/`, generated skill UI metadata, `--agent codex` setup support, portability tests, and a host-boundary guide.
 
 ### Fixed
+- `scripts/setup.sh` now preserves LF line endings when its inline Python helpers update `CLAUDE.md` or `ROUTING.md`, keeping Windows setup diffs narrow under `core.autocrlf=false`.
 - `docs/optimizing-context.md` and `docs/mcp-efficiency.md` were unreachable — nothing outside the changelog linked them. Both are now in the README documentation table. `docs/launch-copy.md` is linked from `docs/positioning.md`.
 - `docs/maintenance.md` and `docs/repo-maintenance.md` gave two overlapping descriptions of the same session and weekly cadence. Each now states its scope and links the other; the workspace cadence lives in `maintenance.md`, repository conventions in `repo-maintenance.md`.
 - `tests/test_dream_paths.py` and `tests/test_mine_gemini_workflows.py` now carry `from __future__ import annotations`, matching the seven other Python files that already do.

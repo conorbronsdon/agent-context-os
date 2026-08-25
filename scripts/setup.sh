@@ -101,7 +101,11 @@ from pathlib import Path
 import sys
 
 path = Path("CLAUDE.md")
-path.write_text(path.read_text(encoding="utf-8").replace("[Your Name]", sys.argv[1]), encoding="utf-8")
+path.write_text(
+    path.read_text(encoding="utf-8").replace("[Your Name]", sys.argv[1]),
+    encoding="utf-8",
+    newline="\n",
+)
 PY
     track_setup_path "CLAUDE.md"
     echo "  → Updated CLAUDE.md with your name"
@@ -145,7 +149,11 @@ from pathlib import Path
 
 path = Path("ROUTING.md")
 lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
-path.write_text("".join(line for line in lines if "example-musician" not in line), encoding="utf-8")
+path.write_text(
+    "".join(line for line in lines if "example-musician" not in line),
+    encoding="utf-8",
+    newline="\n",
+)
 PY
     track_setup_path "projects/example-musician"
     track_setup_path "ROUTING.md"
