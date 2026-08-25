@@ -6,14 +6,14 @@ Codex, and Hermes can use as shared state.
 
 ## Before you clone
 
-You need Git, Bash, Python 3.9 or newer, and at least one supported local
+You need Git, Bash, Python 3.10 or newer, and at least one supported local
 agent: Claude Code, Codex, or Hermes. claude.ai can help produce files but
 cannot maintain a local checkout directly.
 
 Python may be installed as either `python3` or `python`; the repository resolves
 whichever works. To pin a specific interpreter — a virtualenv, or one of several
 installed versions — set `CONTEXTOS_PYTHON` to its path or command. That setting
-is honored exactly: if it does not resolve to a working Python 3.9+, setup and
+is honored exactly: if it does not resolve to a working Python 3.10+, setup and
 validation stop instead of falling back to a different interpreter.
 
 Decide where the repository will live. If it will contain personal, client, employer, financial, or unpublished project context, use a private remote. Repository visibility is only one control; do not store credentials, raw account exports, or information you would not want every configured agent to read.

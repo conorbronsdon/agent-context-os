@@ -24,7 +24,7 @@
 - Future-dated `state/current.md` timestamps no longer satisfy the shared readiness predicate, and the native Windows Codex hooks now honor the same `CONTEXTOS_PYTHON` override and Python 3.9 floor as POSIX hooks.
 - `setup` now stamps `**Last Updated:**` on the state files that `start` and `doctor` read, so a completed setup reports as initialized without depending on the agent to hand-write the line.
 - `start`'s `next_action` names the command to run instead of referring to "the explicit setup workflow" abstractly.
-- `CONTEXTOS_PYTHON` is honored exactly: an override that does not resolve to a working interpreter now fails loudly instead of silently falling back to a different one. The interpreter floor is Python 3.9, matching the kernel's use of `str.removeprefix`, instead of any Python 3.
+- `CONTEXTOS_PYTHON` is honored exactly: an override that does not resolve to a working interpreter now fails loudly instead of silently falling back to a different one. The interpreter floor is Python 3.10, matching `contextos/kernel.py`'s use of `Path.write_text(newline=...)`, instead of any Python 3.
 - `scripts/setup.sh` no longer relies on GNU-only `sed -i`; literal-name replacement and sample-route cleanup now use the documented Python 3 dependency.
 - Replaced the deprecated Notion npm-server instructions with Notion's hosted OAuth MCP path for Claude Code and Codex.
 - Aligned manual claude.ai setup prompts with portable skill paths and approval-gated local setup instead of claiming slash-command or commit parity.
