@@ -35,6 +35,13 @@ for a customized workspace. That operational check also permits intentionally
 removed `seed` files, while missing `managed` or `development` files still fail.
 CI and product contributors use the strict default.
 
+Two exact root paths have virtual transaction owners rather than release
+components: `contextos.workspace.json` is owned by `workspace-config`, and
+legacy `workspace.yaml` by `legacy-workspace-config`. This lets strict tracked
+coverage validate a configured clone without pretending those workspace-local
+files are shipped component assets. The exception is exact; it does not make
+other repository-root paths extensible or writable.
+
 ## Components
 
 | Component | Depends on | Responsibility |

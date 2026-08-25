@@ -21,6 +21,7 @@ from contextos.component_schema import (
     unclassified_tracked_paths,
     validate_component_manifest,
     write_generated_file,
+    workspace_path_owner,
 )
 
 
@@ -525,8 +526,44 @@ class ComponentManifestTest(unittest.TestCase):
         self.assertEqual("hermes-adapter", owners["adapters/hermes/README.md"])
         self.assertEqual("core", owners["workspace/example.json"])
         self.assertEqual("managed", policies["workspace/example.json"])
+        self.assertEqual(
+            "workspace-config",
+            workspace_path_owner(manifest, "contextos.workspace.json"),
+        )
+        self.assertEqual(
+            "legacy-workspace-config",
+            workspace_path_owner(manifest, "workspace.yaml"),
+        )
         self.assertEqual("seed", policies["identity/who-i-am.md"])
         self.assertEqual("seed", policies["state/current.md"])
+
+    def test_virtual_workspace_configs_are_exact_coverage_exceptions(self) -> None:
+        manifest = load_component_manifest(
+            ROOT / "components/manifest.json", root=ROOT, check_paths=False
+        )
+        owners = component_owners(manifest)
+        tracked = list(component_owners(manifest)) + [
+            "contextos.workspace.json",
+            "workspace.yaml",
+        ]
+        self.assertEqual(
+            [], unclassified_tracked_paths(manifest, tracked, root=ROOT)
+        )
+        self.assertEqual(
+            ["other.json"],
+            unclassified_tracked_paths(
+                manifest, [*tracked, "other.json"], root=ROOT
+            ),
+        )
+
+        conflicting = copy.deepcopy(fixture())
+        conflicting["components"][0]["paths"].append(
+            {"path": "contextos.workspace.json", "policy": "managed"}
+        )
+        with self.assertRaisesRegex(
+            ComponentManifestError, "reserved workspace configuration paths"
+        ):
+            validate_component_manifest(conflicting, root=ROOT, check_paths=False)
 
         codex = component_closure(manifest, ["codex-adapter"])
         self.assertEqual(

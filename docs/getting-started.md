@@ -51,10 +51,10 @@ bash scripts/setup.sh --agent hermes
 
 You can omit `--agent` to auto-detect an installed host, or use `--agent none` to prepare the repository without launching one.
 
-That bootstrap option is currently a local launch choice. The transaction-backed
-setup and apply work in #64 and #65 will create tracked
-`contextos.workspace.json`; local detection and `.context-os/hosts.json` never
-infer or rewrite it. See [workspace
+That bootstrap option is currently a local launch choice. A reviewed
+`workspace propose-migration` transaction can create tracked
+`contextos.workspace.json`; setup-time selection remains separate work. Local
+detection and `.context-os/hosts.json` never infer or rewrite it. See [workspace
 configuration](workspace-configuration.md) for `none`, `auto`, legacy YAML,
 previewed migration, and rerun behavior.
 

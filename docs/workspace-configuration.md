@@ -44,9 +44,9 @@ transaction-backed work.
 The public template ships `workspace/example.json` with `agents: []`, but no
 live root configuration. This avoids overriding an existing clone's legacy YAML
 before migration is reviewed. All adapter files remain present in `full-template`
-mode; #64 and #65 add the transaction-backed setup/apply path that will create
-the root JSON and record choices explicitly rather than inferring from installed
-binaries.
+mode. The transaction-backed migration path can create the root JSON and record
+choices explicitly rather than inferring from installed binaries; setup-time
+selection and adapter composition remain separate work.
 
 Paths use canonical POSIX repository-relative syntax on every platform. Drives,
 UNC and absolute paths, backslashes, dot segments, Windows device aliases,
@@ -95,10 +95,41 @@ or clearing an existing non-empty set is rejected and must use the later
 disable lifecycle. Omitted or `auto` selection never infers intent from binaries
 or local state.
 
-Tracked migration is preview-only in this release. The command returns exact
-target bytes and a unified diff with `writes: false`; it neither creates JSON
-nor deletes `workspace.yaml`. Applying that add/delete pair belongs behind the
-transaction boundary.
+Create a local, digest-bound migration proposal after reviewing the preview:
+
+```bash
+bash scripts/contextos.sh workspace propose-migration --agents claude,codex
+bash scripts/contextos.sh apply .context-os/proposals/<proposal-id>.json \
+  --confirm <proposal-digest> --runtime generic
+```
+
+Proposal creation writes only the ignored proposal artifact and reports
+`writes: false`; it does not change tracked files. The proposal digest covers
+the exact canonical JSON write, any legacy YAML deletion, the selected-agent
+component closures, the component/runtime/schema source hashes, and the source
+Git commit. Apply revalidates those inputs and raw target bytes under the shared
+lock before changing tracked files. The digest binds the reviewed proposal but
+does not authenticate who approved it; receipts state that boundary directly.
+After generation, present the returned changes, authorization evidence, source
+Git commit, and digest, then wait for explicit approval of that exact proposal
+before invoking `apply`. Approval of the earlier preview is not approval of a
+newly generated proposal.
+
+Legacy-only migration writes JSON and deletes YAML as one recoverable transaction
+under the agent configuration policy. A shadowed YAML file can be deleted when
+canonical JSON already exists and the requested agent set is unchanged. A
+workspace without legacy YAML is setup work, and changing an existing JSON agent
+set belongs to the later agent lifecycle. A repeated completed migration returns
+a structured no-op and produces no proposal.
+The transaction authorizer owns only those two exact root paths; ordinary
+setup/update/end proposals cannot use it to widen their path policy.
+
+Agent-configuration transactions keep raw-byte backups in a durable local
+journal until the receipt is committed. An ordinary failure restores exact
+bytes and modes immediately. A process kill can leave both the journal and the
+shared apply lock; after confirming no apply process is active and removing the
+stale lock, the next agent-configuration apply recovers the journal before
+revalidating and applying its proposal.
 
 ## Local scalar runtime migration
 

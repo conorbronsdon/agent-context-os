@@ -45,16 +45,25 @@ populated replacement path in `replace_populated`.
 The kernel rejects absolute paths, traversal, setup writes outside approved
 context roots, multiple or missing `Last Updated` lines, and no-op proposals.
 
-## Best-effort transaction protocol
+## Transaction protocols
 
 Proposal files contain exact after-content, unified diffs, and before/after
 SHA-256 values. Their proposal digest covers the entire unsigned proposal. It
 binds integrity; the host permission prompt supplies the human approval boundary.
 Apply requires that exact digest, re-hashes every target, takes an exclusive
 `O_EXCL` lock, writes using UTF-8/LF, and emits a receipt inside the rollback
-boundary. Individual replacements are atomic; a multi-file batch is not
-crash-atomic. A process kill can leave partial state and a stale lock; `doctor`
-surfaces the lock and never deletes it silently.
+boundary. The content lifecycle (`setup`, `update`, and `end`) provides
+best-effort multi-file rollback: individual replacements are atomic, but a
+process kill can leave partial state and a stale lock. `doctor` surfaces the
+lock and never deletes it silently.
+
+The `agent-config` workspace-migration workflow adds raw-byte target and source
+hashes, workflow-specific ownership, write/delete rollback, and a durable local
+journal. After an interrupted apply, an operator first confirms no apply process
+is active and removes the stale lock; the next agent-configuration apply restores
+the journaled bytes before revalidation. This stronger boundary currently owns
+only `contextos.workspace.json` and migration-only deletion of `workspace.yaml`;
+it is not a generic component file writer.
 
 Proposals and receipts can contain full state text. They remain local and ignored
 by Git; `doctor` warns when artifacts are older than 30 days so the owner can

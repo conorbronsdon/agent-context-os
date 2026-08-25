@@ -170,10 +170,11 @@ scripts/                   Setup, validation, migration, and maintenance tools
 docs/                      Onboarding, architecture, safety, and migration guides
 ```
 
-The transaction-backed setup and apply work in #64 and #65 will create
-`contextos.workspace.json`; this release only previews its exact bytes. The
-template does not ship a live root file because that would override an existing
-clone's legacy `workspace.yaml` before its migration is reviewed.
+The workspace migration command can now create a digest-bound proposal for
+`contextos.workspace.json` and, when applicable, retire legacy `workspace.yaml`
+in the same recoverable transaction. Setup-time agent selection remains tracked
+in #65. The template does not ship a live root file because that would override
+an existing clone's legacy YAML before its migration is reviewed.
 
 Each fact should have one canonical home. `ROUTING.md` points an agent to the right file instead of copying the same context across prompts.
 

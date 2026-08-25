@@ -33,6 +33,10 @@ WINDOWS_DEVICE_NAMES = {
     *(f"lpt{index}" for index in range(1, 10)),
 }
 WINDOWS_ILLEGAL_CHARACTERS = set('<>:"|?*')
+VIRTUAL_WORKSPACE_OWNERS = {
+    "contextos.workspace.json": "workspace-config",
+    "workspace.yaml": "legacy-workspace-config",
+}
 
 
 class ComponentManifestError(ValueError):
@@ -291,6 +295,13 @@ def validate_component_manifest(
             path_field = f"{field}.paths[{path_index}]"
             path_entry = _exact_keys(raw_path, PATH_KEYS, path_field)
             path = _ownership_path(path_entry.get("path"), f"{path_field}.path")
+            if _identity(path) in {
+                _identity(relative) for relative in VIRTUAL_WORKSPACE_OWNERS
+            }:
+                _fail(
+                    f"{path_field}.path",
+                    "reserved workspace configuration paths cannot be release components",
+                )
             policy = _text(path_entry.get("policy"), f"{path_field}.policy")
             if policy not in PATH_POLICIES:
                 _fail(f"{path_field}.policy", f"unsupported value {policy!r}")
@@ -419,6 +430,21 @@ def component_owners(manifest: Any) -> dict[str, str]:
     }
 
 
+def workspace_path_owner(manifest: Any, path: str) -> str | None:
+    """Return a release component or reserved virtual workspace owner."""
+    virtual = {
+        _identity(relative): owner
+        for relative, owner in VIRTUAL_WORKSPACE_OWNERS.items()
+    }
+    key = _identity(_ownership_path(path, "path"))
+    if key in virtual:
+        return virtual[key]
+    return {
+        _identity(relative): owner
+        for relative, owner in component_owners(manifest).items()
+    }.get(key)
+
+
 def resolved_component_paths(
     manifest: Any, component_ids: Sequence[str], *, include_development: bool = False,
 ) -> list[dict[str, str]]:
@@ -517,6 +543,7 @@ def unclassified_tracked_paths(
         for component in document["components"]
         for path_entry in component["paths"]
     }
+    classified.update(_identity(path) for path in VIRTUAL_WORKSPACE_OWNERS)
     extensible = [tuple(_identity(path).split("/"))
                   for path in document["extensible_roots"]]
     extensible_paths = {_identity(path) for path in document["extensible_paths"]}

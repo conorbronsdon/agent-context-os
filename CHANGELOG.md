@@ -11,6 +11,11 @@
 ### Added
 - A reviewed Pandoc catalog entry with a bounded non-PDF profile, explicit network and sensitive-read boundaries, PDF-engine execution guidance, and overwrite confirmation.
 - A reviewed MarkItDown MCP catalog entry covering its local-file and network read boundary, unauthenticated localhost transport, sandboxing guidance, and pinned v0.1.7 evidence.
+- A workflow-specific `agent-config` transaction for workspace migration. It
+  creates digest-bound write/delete proposals, revalidates raw target and
+  authorization-source hashes under the shared lock, records exact virtual
+  ownership in receipts, restores exact bytes and modes after ordinary
+  failures, and keeps a durable recovery journal across process interruption.
 - Canonical tracked `contextos.workspace.json` with strict set and path
   semantics, whole-document precedence over legacy `workspace.yaml`,
   loss-aware preview-only migration, generated schema validation, and atomic

@@ -10,6 +10,7 @@ from .kernel import (
     ContextOSError,
     apply_proposal,
     create_proposal,
+    create_workspace_migration_proposal,
     discover_root,
     doctor,
     hook_report,
@@ -76,6 +77,22 @@ def parser() -> argparse.ArgumentParser:
         action="append",
         help="Deprecated singleton compatibility alias; use --agents",
     )
+    propose_migration = workspace_commands.add_parser(
+        "propose-migration",
+        help="Create a digest-bound proposal to write JSON and retire legacy YAML",
+    )
+    proposal_selection = propose_migration.add_mutually_exclusive_group(required=True)
+    proposal_selection.add_argument(
+        "--agents", action="append", help="Comma-separated runtime ids, or none for core-only"
+    )
+    proposal_selection.add_argument(
+        "--agent",
+        action="append",
+        help="Deprecated singleton compatibility alias; use --agents",
+    )
+    propose_migration.add_argument(
+        "--now", help="ISO-8601 timestamp for deterministic proposal IDs"
+    )
     workspace_commands.add_parser(
         "migrate-local-runtime",
         help="Atomically copy legacy local runtime state into hosts.json",
@@ -90,6 +107,23 @@ def parser() -> argparse.ArgumentParser:
 
 def emit(value: object) -> None:
     print(json.dumps(value, indent=2, ensure_ascii=False))
+
+
+def selected_workspace_agents(args: argparse.Namespace, root: Path) -> list[str]:
+    selections = args.agents if args.agents is not None else args.agent
+    if len(selections) != 1:
+        raise ContextOSError("workspace migration selection may be specified only once")
+    raw_selection = selections[0]
+    if args.agent is not None and "," in raw_selection:
+        raise ContextOSError(
+            "--agent is a deprecated singleton alias and accepts exactly one runtime id"
+        )
+    selected_agents = parse_agent_selection(
+        raw_selection, known_runtime_ids=runtime_ids(root)
+    )
+    if selected_agents is None:
+        raise ContextOSError("workspace migration requires explicit agents")
+    return selected_agents
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -123,25 +157,64 @@ def main(argv: list[str] | None = None) -> int:
             if args.workspace_command == "show":
                 emit(workspace_resolution_report(root))
             elif args.workspace_command == "migrate":
-                selections = args.agents if args.agents is not None else args.agent
-                if len(selections) != 1:
-                    raise ContextOSError("workspace migration selection may be specified only once")
-                raw_selection = selections[0]
-                if args.agent is not None and "," in raw_selection:
-                    raise ContextOSError(
-                        "--agent is a deprecated singleton alias and accepts exactly one runtime id"
-                    )
-                selected_agents = parse_agent_selection(
-                    raw_selection, known_runtime_ids=runtime_ids(root)
-                )
-                if selected_agents is None:
-                    raise ContextOSError("workspace migration requires explicit agents")
+                selected_agents = selected_workspace_agents(args, root)
                 report = plan_workspace_migration(root, selected_agents)
                 if args.agent is not None:
                     report["notices"].append(
                         "--agent is a deprecated singleton compatibility alias; use --agents"
                     )
                 emit(report)
+            elif args.workspace_command == "propose-migration":
+                selected_agents = selected_workspace_agents(args, root)
+                path, document = create_workspace_migration_proposal(
+                    root, selected_agents, parse_now(args.now)
+                )
+                notices = []
+                if args.agent is not None:
+                    notices.append(
+                        "--agent is a deprecated singleton compatibility alias; use --agents"
+                    )
+                if path is None or document is None:
+                    emit({
+                        "schema_version": 1,
+                        "writes": False,
+                        "action": "noop",
+                        "proposal": None,
+                        "proposal_id": None,
+                        "proposal_digest": None,
+                        "changes": [],
+                        "notices": notices,
+                    })
+                    return 0
+                emit({
+                    "schema_version": document["schema_version"],
+                    "writes": False,
+                    "action": "proposed",
+                    "workflow": document["workflow"],
+                    "operation": document["operation"],
+                    "proposal": path.relative_to(root).as_posix(),
+                    "proposal_id": document["proposal_id"],
+                    "proposal_digest": document["proposal_digest"],
+                    "changes": [
+                        {
+                            "action": item["action"],
+                            "path": item["path"],
+                            "owner": item["authorization"]["owner"],
+                            "policy": item["authorization"]["policy"],
+                            "before_sha256_raw": item["before_raw_sha256"],
+                            "after_sha256_raw": item["after_raw_sha256"],
+                            "diff": item["diff"],
+                        }
+                        for item in document["changes"]
+                    ],
+                    "authorization_inputs": [
+                        {"path": source, "sha256_raw": digest}
+                        for source, digest in document["source_hashes"].items()
+                    ],
+                    "source_git_head": document["source_git_head"],
+                    "authorization": document["authorization"],
+                    "notices": notices,
+                })
             elif args.workspace_command == "migrate-local-runtime":
                 path, state, changed, migrated_runtime = migrate_legacy_runtime_state(root)
                 emit({

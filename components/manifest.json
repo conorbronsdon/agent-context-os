@@ -363,6 +363,10 @@
                     "policy": "seed"
                 },
                 {
+                    "path": "tests/test_agent_lifecycle_transactions.py",
+                    "policy": "development"
+                },
+                {
                     "path": "tests/test_component_manifests.py",
                     "policy": "development"
                 },
