@@ -1728,7 +1728,7 @@ def apply_proposal(root: Path, proposal: Path, confirmation: str, runtime: str) 
                 # long enough for an uncoordinated source edit. Rebind every
                 # source and target immediately before the first mutation.
                 _validate_agent_preflight(root, document)
-            for change in document["changes"]:
+            for change_index, change in enumerate(document["changes"]):
                 path = safe_repo_path(root, change["path"])
                 if workflow == AGENT_LIFECYCLE_WORKFLOW:
                     if raw_file_digest(path) != change["before_raw_sha256"]:
