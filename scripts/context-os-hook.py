@@ -32,7 +32,7 @@ def main() -> int:
         else:
             print(json.dumps({"action": "allow", "message": "\n".join(messages)}))
         return 0
-    except (ContextOSError, json.JSONDecodeError) as exc:
+    except (ContextOSError, json.JSONDecodeError, OSError, UnicodeError) as exc:
         # These hooks are advisory. Surface malformed input instead of silently
         # passing, but do not create a second mutation-enforcement path.
         message = f"Context OS advisory hook could not run: {exc}"

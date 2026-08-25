@@ -12,7 +12,7 @@ if [ ! -f "$HOOK_WRAPPER" ]; then
 fi
 
 set +e
-HOOK_OUTPUT=$(bash "$HOOK_WRAPPER" claude session-start 2>&1)
+HOOK_OUTPUT=$(bash "$HOOK_WRAPPER" claude session-start </dev/null 2>&1)
 HOOK_STATUS=$?
 set -e
 

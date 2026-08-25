@@ -4,6 +4,11 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 source "$ROOT/scripts/python-env.sh"
 
+fail() {
+  echo "hooks: $*" >&2
+  exit 1
+}
+
 SSOT_OUTPUT=$(printf '%s' '{"tool_input":{"file_path":"/tmp/context/state/current.md"}}' | \
   bash "$ROOT/.claude/hooks/ssot-guard.sh")
 if ! printf '%s' "$SSOT_OUTPUT" | "$CONTEXTOS_PYTHON_CMD" -c '
@@ -69,6 +74,11 @@ if printf '%s' "$SESSION_READY_OUTPUT" | grep -q 'not initialized'; then
 fi
 printf '%s' "$SESSION_READY_OUTPUT" | grep -q 'Tip: Run /start' \
   || fail "Claude session-start omitted the initialized-state /start tip"
+
+printf '\377' > "$SESSION_REPO/workspace.yaml"
+SESSION_ENCODING_OUTPUT=$(cd "$SESSION_REPO" && bash .claude/hooks/session-start.sh)
+printf '%s' "$SESSION_ENCODING_OUTPUT" | grep -q 'advisory hook could not run' \
+  || fail "Claude session-start did not surface an unreadable workspace config"
 
 TEST_REPO="$TEMP_ROOT_WIN/guarded-repo"
 mkdir -p "$TEST_REPO/.claude/hooks" "$TEMP_ROOT/bin"
