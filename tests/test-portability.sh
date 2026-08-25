@@ -179,6 +179,12 @@ fi
 "$resolved_bash" "$ROOT/scripts/contextos.sh" doctor >/dev/null \
   || fail "scripts/contextos.sh could not run the lifecycle kernel"
 
+# User-facing documentation must use the same interpreter-neutral entry point
+# that setup and lifecycle skills use. CHANGELOG preserves historical commands.
+if git grep -n -F 'python3 -m contextos' -- '*.md' ':(exclude)CHANGELOG.md'; then
+  fail "user-facing documentation bypasses scripts/contextos.sh"
+fi
+
 invalid_metadata="$portability_tmp/invalid-openai.yaml"
 cp .agents/skills/context-start/agents/openai.yaml "$invalid_metadata"
 printf 'malformed: [\n' >> "$invalid_metadata"

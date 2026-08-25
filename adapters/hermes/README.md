@@ -1,9 +1,9 @@
 # Hermes adapter
 
-Run `python3 -m contextos install --runtime hermes` from the repository root.
+Run `bash scripts/contextos.sh install --runtime hermes` from the repository root.
 Expose `.agents/skills/` as an external Hermes skill directory, or install the
 four short aliases together with their four `context-*` cores. Hermes copies
-installed skills, so `python3 -m contextos doctor --runtime hermes` should be
+installed skills, so `bash scripts/contextos.sh doctor --runtime hermes` should be
 part of updates and copied skills should be refreshed after a source change.
 
 The optional [`hooks.example.yaml`](hooks.example.yaml) maps Hermes lifecycle
