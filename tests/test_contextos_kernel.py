@@ -1069,6 +1069,24 @@ class KernelTest(unittest.TestCase):
         self.assertEqual("warn", check["status"])
         self.assertIn("confirming no install or migration is running", check["detail"])
 
+    def test_doctor_reports_dangling_local_artifact_link_without_crashing(self) -> None:
+        proposals = self.root / ".context-os/proposals"
+        proposals.mkdir(parents=True)
+        artifact = proposals / "dangling.json"
+        try:
+            artifact.symlink_to(self.root / "missing-artifact.json")
+        except OSError:
+            self.skipTest("symlink creation is unavailable")
+
+        report = doctor(self.root)
+        check = next(
+            item
+            for item in report["checks"]
+            if item["name"] == "local-artifact-retention"
+        )
+        self.assertEqual("warn", check["status"])
+        self.assertIn("link-like artifact ignored", check["detail"])
+
     def test_bare_doctor_fails_when_registry_is_empty(self) -> None:
         shutil.rmtree(self.root / "runtimes")
         report = doctor(self.root)

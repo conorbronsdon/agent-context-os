@@ -3135,12 +3135,22 @@ def doctor(
                                 break
                         if materialized_path == DEFAULT_PATHS["task_file"]:
                             materialized_path = relative_path(root, workspace.task_file)
+                    lexical_target = root
+                    traverses_link = False
+                    for part in PurePosixPath(materialized_path).parts:
+                        lexical_target /= part
+                        if _is_link_like(lexical_target):
+                            traverses_link = True
+                            break
+                    if traverses_link:
+                        missing_paths.append(materialized_path)
+                        continue
                     try:
                         target = safe_repo_path(root, materialized_path)
                     except ContextOSError:
                         missing_paths.append(materialized_path)
                         continue
-                    if target.is_file() and not target.is_symlink():
+                    if target.is_file() and not _is_link_like(target):
                         present_count += 1
                     else:
                         missing_paths.append(materialized_path)
@@ -3358,9 +3368,9 @@ def doctor(
         str(lock) if lock.exists() else "none",
     )
     journals = root / ".context-os" / "journals"
-    if journals.is_symlink() or (journals.exists() and not journals.is_dir()):
-        add("transaction-journals", "fail", f"invalid journal path: {journals}")
-    else:
+    try:
+        if _is_link_like(journals) or (journals.exists() and not journals.is_dir()):
+            raise ContextOSError(f"invalid journal path: {journals}")
         pending_journals = list(journals.iterdir()) if journals.is_dir() else []
         add(
             "transaction-journals",
@@ -3376,6 +3386,8 @@ def doctor(
             if pending_journals
             else "none",
         )
+    except (ContextOSError, OSError) as exc:
+        add("transaction-journals", "fail", str(exc))
     hosts_lock = root / ".context-os" / "hosts.lock"
     add(
         "host-state-lock",
@@ -3388,18 +3400,44 @@ def doctor(
         else "none",
     )
     cutoff = utc_now().timestamp() - (30 * 24 * 60 * 60)
-    old_artifacts = [
-        path
-        for folder in ("proposals", "receipts")
-        for path in (root / ".context-os" / folder).glob("*.json")
-        if path.stat().st_mtime < cutoff
-    ]
+    old_artifacts: list[Path] = []
+    artifact_warnings: list[str] = []
+    for folder in ("proposals", "receipts"):
+        artifact_dir = root / ".context-os" / folder
+        try:
+            if _is_link_like(artifact_dir) or (
+                artifact_dir.exists() and not artifact_dir.is_dir()
+            ):
+                artifact_warnings.append(f"invalid artifact directory: {folder}")
+                continue
+            candidates = list(artifact_dir.glob("*.json"))
+        except (ContextOSError, OSError) as exc:
+            artifact_warnings.append(f"cannot inspect {folder}: {exc}")
+            continue
+        for path in candidates:
+            try:
+                if _is_link_like(path):
+                    artifact_warnings.append(
+                        f"link-like artifact ignored: {folder}/{path.name}"
+                    )
+                elif path.is_file() and path.stat().st_mtime < cutoff:
+                    old_artifacts.append(path)
+            except (ContextOSError, OSError) as exc:
+                artifact_warnings.append(
+                    f"cannot inspect {folder}/{path.name}: {exc}"
+                )
+    retention_details = []
+    if old_artifacts:
+        retention_details.append(f"{len(old_artifacts)} artifacts older than 30 days")
+    if artifact_warnings:
+        retention_details.append(
+            f"{len(artifact_warnings)} invalid or unreadable artifact(s); "
+            + "; ".join(artifact_warnings[:3])
+        )
     add(
         "local-artifact-retention",
-        "warn" if old_artifacts else "pass",
-        f"{len(old_artifacts)} artifacts older than 30 days"
-        if old_artifacts
-        else "none older than 30 days",
+        "warn" if retention_details else "pass",
+        "; ".join(retention_details) if retention_details else "none older than 30 days",
     )
 
     status = (
