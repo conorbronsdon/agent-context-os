@@ -16,6 +16,7 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [MarkItDown MCP](https://github.com/microsoft/markitdown/tree/main/packages/markitdown-mcp) | `mcp_server` | verified | No | No | No | Yes | No | 2026-08-24 |
 | [Notion MCP](https://developers.notion.com/guides/mcp/get-started-with-mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-15 |
 | [Obsidian CLI](https://obsidian.md/help/cli) | `editor_guide` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-15 |
+| [Pandoc](https://github.com/jgm/pandoc) | `connector` | verified | Yes | No | No | No | Yes | 2026-08-25 |
 | [Readwise MCP](https://docs.readwise.io/tools/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-18 |
 | [Substack MCP](https://github.com/conorbronsdon/substack-mcp) | `mcp_server` | verified | Yes | Yes | Yes | Yes | No | 2026-08-15 |
 | [Tolaria MCP](https://github.com/refactoringhq/tolaria) | `local_workspace` | verified | Yes | No | No | Yes | Yes | 2026-08-15 |
@@ -291,6 +292,31 @@ Capabilities and limits:
 - No enforcement wrapper ships here; the calling harness must constrain commands, arguments, and flags, and default-deny eval, command, plugin, theme, web, publish, permanent delete, and mutating sync operations
 - For bounded file operations require explicit vault= plus path= and reject dangerous flags such as overwrite unless separately approved
 - Treat plugin commands and JavaScript eval as open-world execution with possible filesystem and network effects
+
+## Pandoc
+
+A local document-conversion CLI for turning reviewed Markdown into DOCX, PDF, EPUB, or HTML while keeping Markdown canonical in Git.
+
+- **Supported agents:** `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** Pandoc CLI
+- **Credentials:** None
+- **Reads:** Explicitly selected local input Markdown files and explicitly referenced local assets
+- **Writes / external effects:** Explicitly selected local output files, including overwrite of an existing output path when approved
+- **Typed safety signals:** overwrite, arbitrary execution
+- **Required confirmation gates:** `external_install`, `write`, `overwrite`, `arbitrary_execution`, `destructive`
+- **Confirmation:** Confirm exact input and output paths before each run; separately confirm overwrite and any filter, custom writer, include, or remote-fetch option.
+- **Risk tags:** `external-install`, `local-files`, `overwrite-capable`, `arbitrary-execution`, `destructive-capable`
+- **Evidence:** [1](https://github.com/jgm/pandoc); [2](https://github.com/jgm/pandoc/releases/tag/3.10.2); [3](https://pandoc.org/MANUAL.html)
+- **Health check:** Run pandoc --version, then convert one known local Markdown file to a local output path without filters/includes and verify output is created at the expected path.
+- **Uninstall:** Uninstall Pandoc using the platform package manager and keep generated documents unless the user explicitly asks to remove them. (removes user data: No)
+
+Capabilities and limits:
+
+- Default bounded usage converts one exact input path to one exact output path
+- Require explicit confirmation before overwrite of an existing output file
+- Disallow filters, custom writers, include flags, and remote resource fetching in the default recipe
+- Pandoc's full flag surface can enable arbitrary execution via user-supplied filters or custom writers
 
 ## Readwise MCP
 

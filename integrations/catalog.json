@@ -616,6 +616,75 @@
         "instructions": "Remove the MarkItDown MCP entry from the client and uninstall markitdown-mcp or remove its container image; preserve every source file and converted output unless separately requested.",
         "removes_user_data": false
       }
-    }
+    },
+    {
+  "id": "pandoc",
+  "name": "Pandoc",
+  "summary": "A local document-conversion CLI for turning reviewed Markdown into DOCX, PDF, EPUB, or HTML while keeping Markdown canonical in Git.",
+  "source_url": "https://github.com/jgm/pandoc",
+  "kind": "connector",
+  "supported_agents": ["generic"],
+  "installation": {
+    "automatic": false,
+    "scope": "project_or_user",
+    "prerequisites": ["Pandoc CLI"]
+  },
+  "data_boundary": {
+    "credentials": [],
+    "reads": [
+      "Explicitly selected local input Markdown files and explicitly referenced local assets"
+    ],
+    "writes": [
+      "Explicitly selected local output files, including overwrite of an existing output path when approved"
+    ]
+  },
+  "capabilities": {
+    "read": true,
+    "sensitive_read": false,
+    "write": true,
+    "remote_write": false,
+    "publish": false,
+    "overwrite": true,
+    "delete": false,
+    "arbitrary_execution": true,
+    "oauth": false,
+    "destructive": true,
+    "details": [
+      "Default bounded usage converts one exact input path to one exact output path",
+      "Require explicit confirmation before overwrite of an existing output file",
+      "Disallow filters, custom writers, include flags, and remote resource fetching in the default recipe",
+      "Pandoc's full flag surface can enable arbitrary execution via user-supplied filters or custom writers"
+    ]
+  },
+  "confirmation": {
+    "required_for": [
+      "external_install",
+      "write",
+      "overwrite",
+      "arbitrary_execution",
+      "destructive"
+    ],
+    "notes": "Confirm exact input and output paths before each run; separately confirm overwrite and any filter, custom writer, include, or remote-fetch option."
+  },
+  "risk_tags": [
+    "external-install",
+    "local-files",
+    "overwrite-capable",
+    "arbitrary-execution",
+    "destructive-capable"
+  ],
+  "maturity": "verified",
+  "last_verified": "2026-08-25",
+  "evidence": [
+    "https://github.com/jgm/pandoc",
+    "https://github.com/jgm/pandoc/releases/tag/3.10.2",
+    "https://pandoc.org/MANUAL.html"
+  ],
+  "health_check": "Run pandoc --version, then convert one known local Markdown file to a local output path without filters/includes and verify output is created at the expected path.",
+  "uninstall": {
+    "instructions": "Uninstall Pandoc using the platform package manager and keep generated documents unless the user explicitly asks to remove them.",
+    "removes_user_data": false
+  }
+}
   ]
 }
