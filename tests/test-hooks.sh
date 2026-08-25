@@ -2,10 +2,16 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+source "$ROOT/scripts/python-env.sh"
+
+fail() {
+  echo "hooks: $*" >&2
+  exit 1
+}
 
 SSOT_OUTPUT=$(printf '%s' '{"tool_input":{"file_path":"/tmp/context/state/current.md"}}' | \
   bash "$ROOT/.claude/hooks/ssot-guard.sh")
-if ! printf '%s' "$SSOT_OUTPUT" | python3 -c '
+if ! printf '%s' "$SSOT_OUTPUT" | "$CONTEXTOS_PYTHON_CMD" -c '
 import json, sys
 payload = json.load(sys.stdin)
 assert "current.md is updated" in payload["systemMessage"]
@@ -16,7 +22,7 @@ fi
 
 SSOT_WINDOWS_OUTPUT=$(printf '%s' '{"tool_input":{"file_path":"C:\\repo\\state\\decisions.md"}}' | \
   bash "$ROOT/.claude/hooks/ssot-guard.sh")
-if ! printf '%s' "$SSOT_WINDOWS_OUTPUT" | python3 -c '
+if ! printf '%s' "$SSOT_WINDOWS_OUTPUT" | "$CONTEXTOS_PYTHON_CMD" -c '
 import json, sys
 payload = json.load(sys.stdin)
 assert "decisions.md is append-only" in payload["systemMessage"]
@@ -26,7 +32,7 @@ assert "decisions.md is append-only" in payload["systemMessage"]
 fi
 
 MALFORMED_OUTPUT=$(printf '%s' 'not-json' | bash "$ROOT/.claude/hooks/ssot-guard.sh")
-if ! printf '%s' "$MALFORMED_OUTPUT" | python3 -c '
+if ! printf '%s' "$MALFORMED_OUTPUT" | "$CONTEXTOS_PYTHON_CMD" -c '
 import json, sys
 payload = json.load(sys.stdin)
 assert "malformed input" in payload["systemMessage"]
@@ -44,6 +50,36 @@ if command -v cygpath >/dev/null 2>&1; then
 else
   TEMP_ROOT_WIN=$TEMP_ROOT
 fi
+
+# Claude's configured SessionStart adapter must use the same current.md
+# readiness predicate as start and doctor, while remaining advisory.
+SESSION_REPO="$TEMP_ROOT_WIN/session-repo"
+mkdir -p "$SESSION_REPO/.claude/hooks" "$SESSION_REPO/scripts" "$SESSION_REPO/state"
+cp "$ROOT/.claude/hooks/session-start.sh" "$SESSION_REPO/.claude/hooks/session-start.sh"
+cp "$ROOT/scripts/context-os-hook.py" "$ROOT/scripts/context-os-hook.sh" \
+  "$ROOT/scripts/python-env.sh" "$SESSION_REPO/scripts/"
+cp -R "$ROOT/contextos" "$SESSION_REPO/contextos"
+printf '# Test workspace\n' > "$SESSION_REPO/AGENTS.md"
+git -C "$SESSION_REPO" init -q -b main
+
+printf '# Current State\n\n**Last Updated:** [DATE]\n' > "$SESSION_REPO/state/current.md"
+SESSION_SETUP_OUTPUT=$(cd "$SESSION_REPO" && bash .claude/hooks/session-start.sh)
+printf '%s' "$SESSION_SETUP_OUTPUT" | grep -q 'not initialized' \
+  || fail "Claude session-start must fire when current.md is uninitialized"
+
+printf '# Current State\n\n**Last Updated:** %s\n' "$(date +%F)" > "$SESSION_REPO/state/current.md"
+SESSION_READY_OUTPUT=$(cd "$SESSION_REPO" && bash .claude/hooks/session-start.sh)
+if printf '%s' "$SESSION_READY_OUTPUT" | grep -q 'not initialized'; then
+  fail "Claude session-start fired the setup advisory for initialized state"
+fi
+printf '%s' "$SESSION_READY_OUTPUT" | grep -q 'Tip: Run /start' \
+  || fail "Claude session-start omitted the initialized-state /start tip"
+
+printf '\377' > "$SESSION_REPO/workspace.yaml"
+SESSION_ENCODING_OUTPUT=$(cd "$SESSION_REPO" && bash .claude/hooks/session-start.sh)
+printf '%s' "$SESSION_ENCODING_OUTPUT" | grep -q 'advisory hook could not run' \
+  || fail "Claude session-start did not surface an unreadable workspace config"
+
 TEST_REPO="$TEMP_ROOT_WIN/guarded-repo"
 mkdir -p "$TEST_REPO/.claude/hooks" "$TEMP_ROOT/bin"
 git -C "$TEMP_ROOT_WIN" init -q -b main guarded-repo
@@ -76,7 +112,7 @@ fi
 
 
 BACKSLASH_PATH=$(printf '%s' "$TEST_REPO/note.md" | tr '/' '\\')
-BACKSLASH_PAYLOAD=$(python3 -c '
+BACKSLASH_PAYLOAD=$("$CONTEXTOS_PYTHON_CMD" -c '
 import json, sys
 print(json.dumps({"tool_input": {"file_path": sys.argv[1]}}))
 ' "$BACKSLASH_PATH")

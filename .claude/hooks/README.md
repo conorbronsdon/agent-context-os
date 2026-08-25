@@ -2,13 +2,13 @@
 
 These scripts run automatically during Claude Code sessions. Most are **advisory** — they print warnings but never block. `worktree-guard.sh` is the exception: it blocks edits to a guarded repo's primary checkout when more than one Claude session is running.
 
-The PreToolUse hooks require Python 3 to parse Claude's JSON input. Setup checks for it. The advisory hook emits a visible dependency warning if it is missing; a configured blocking guard fails closed rather than silently allowing an unsafe edit.
+The lifecycle SessionStart adapter and PreToolUse hooks require Python 3. Setup checks for it. Advisory hooks emit a visible dependency warning if it is missing; a configured blocking guard fails closed rather than silently allowing an unsafe edit.
 
 ## Files
 
 | Hook | Event | Purpose | Blocks? |
 |------|-------|---------|---------|
-| `session-start.sh` | `SessionStart` | Surfaces stale state files, inbox items, overdue TODOs | no |
+| `session-start.sh` | `SessionStart` | Reports shared kernel readiness, then nudges toward `/start` | no |
 | `branch-hygiene.sh` | `SessionStart` | Surfaces non-default HEAD on guarded repos (catches silent branch-switches by parallel sessions) | no |
 | `ssot-guard.sh` | `PreToolUse` (Edit/Write) | Warns when editing SSOT files to prevent fact duplication | no |
 | `worktree-guard.sh` | `PreToolUse` (Edit/Write) | Blocks edits to a guarded repo's primary checkout when >1 Claude session is running | **yes** |
@@ -70,7 +70,7 @@ Hooks are enabled for the project by the checked-in `.claude/settings.json`. Per
 
 ## Customizing
 
-- Edit the stale-days threshold in `session-start.sh` (default: 3 days)
+- Adjust lifecycle freshness thresholds in `contextos/kernel.py`
 - Add your own SSOT patterns in `ssot-guard.sh`
 - Add/remove repos in `guarded-repos.txt` (no script edits needed)
 - Create new hooks for other events (`PreToolUse`, `PostToolUse`, etc.)

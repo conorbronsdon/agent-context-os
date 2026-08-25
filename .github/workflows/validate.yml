@@ -53,5 +53,7 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Run the Python test suite on the minimum supported Python
-        run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: Run repository validation on the minimum supported Python
+        run: |
+          chmod +x scripts/*.sh tests/*.sh
+          bash scripts/validate-all.sh

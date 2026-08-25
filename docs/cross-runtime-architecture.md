@@ -10,7 +10,7 @@ models, tool names, or native memory.
    the durable, reviewable source of truth.
 2. **Portable intent:** `.agents/skills/context-*` gathers facts and asks for
    judgment without owning mutation mechanics.
-3. **Deterministic kernel:** `python3 -m contextos` owns paths, rendering,
+3. **Deterministic kernel:** `bash scripts/contextos.sh` owns paths, rendering,
    invariants, proposals, locks, optimistic hashes, applies, and receipts.
 4. **Runtime adapters:** `.claude/`, `.codex/`, and `adapters/hermes/` map host
    discovery and hooks to the portable layers.
@@ -20,11 +20,11 @@ models, tool names, or native memory.
 ## Commands
 
 ```text
-python3 -m contextos start [--now ISO_TIMESTAMP]
-python3 -m contextos propose setup|update|end --input payload.json [--now ISO_TIMESTAMP]
-python3 -m contextos apply proposal.json --confirm SHA256 --runtime claude|codex|hermes
-python3 -m contextos install --runtime claude|codex|hermes
-python3 -m contextos doctor [--runtime claude|codex|hermes]
+bash scripts/contextos.sh start [--now ISO_TIMESTAMP]
+bash scripts/contextos.sh propose setup|update|end --input payload.json [--now ISO_TIMESTAMP]
+bash scripts/contextos.sh apply proposal.json --confirm SHA256 --runtime claude|codex|hermes
+bash scripts/contextos.sh install --runtime claude|codex|hermes
+bash scripts/contextos.sh doctor [--runtime claude|codex|hermes]
 ```
 
 `--now` exists for deterministic fixtures. Production calls use local time.

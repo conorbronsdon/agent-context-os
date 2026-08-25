@@ -44,10 +44,7 @@ case "$AGENT_TARGET" in
     ;;
 esac
 
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "Python 3 is required for setup and validation." >&2
-  exit 1
-fi
+source "$SCRIPT_DIR/python-env.sh"
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -99,7 +96,7 @@ read -rp "  Name to place in CLAUDE.md (or press Enter to skip): " USER_NAME
 
 if [ -n "$USER_NAME" ]; then
   if grep -Fq '[Your Name]' CLAUDE.md; then
-    python3 - "$USER_NAME" <<'PY'
+    "$CONTEXTOS_PYTHON_CMD" - "$USER_NAME" <<'PY'
 from pathlib import Path
 import sys
 
@@ -143,7 +140,7 @@ if [ -d "projects/example-musician" ]; then
   if prompt_yn "  Remove the example musician project? (You can always reference it on GitHub)" "n"; then
     rm -rf projects/example-musician
     # Clean any explicit sample-project route without platform-specific sed flags.
-    python3 - <<'PY'
+    "$CONTEXTOS_PYTHON_CMD" - <<'PY'
 from pathlib import Path
 
 path = Path("ROUTING.md")
@@ -240,7 +237,7 @@ else
   echo "    Missing: git"
 fi
 
-echo "    Found: python3"
+echo "    Found: $CONTEXTOS_PYTHON_CMD (Python 3)"
 
 if command -v gws &>/dev/null; then
   echo "    Found: gws (Google Workspace CLI)"
@@ -252,11 +249,11 @@ echo "    Optional add-ons: see references/integrations.md (nothing is installed
 
 echo ""
 echo "  Checking the provider-neutral lifecycle kernel..."
-if python3 -m contextos doctor >/dev/null; then
+if "$CONTEXTOS_PYTHON_CMD" -m contextos doctor >/dev/null; then
   echo "    Found: context-os kernel"
 else
   echo "    Kernel doctor found a required repository problem." >&2
-  python3 -m contextos doctor >&2 || true
+  "$CONTEXTOS_PYTHON_CMD" -m contextos doctor >&2 || true
   exit 1
 fi
 
@@ -319,7 +316,7 @@ fi
 
 case "$SELECTED_AGENT" in
   claude)
-    python3 -m contextos install --runtime claude >/dev/null
+    "$CONTEXTOS_PYTHON_CMD" -m contextos install --runtime claude >/dev/null
     echo "  Claude Code auto-memory is enabled by default and may write machine-local memory."
     echo "  Inspect it with /memory; to opt out, set autoMemoryEnabled: false in"
     echo "  .claude/settings.local.json. Setup does not change that host setting."
@@ -335,7 +332,7 @@ case "$SELECTED_AGENT" in
     fi
     ;;
   codex)
-    python3 -m contextos install --runtime codex >/dev/null
+    "$CONTEXTOS_PYTHON_CMD" -m contextos install --runtime codex >/dev/null
     printf '  1. cd %q && codex\n' "$REPO_ROOT"
     echo '  2. Type: $setup'
     echo "     Codex will interview you and build your context files."
@@ -347,7 +344,7 @@ case "$SELECTED_AGENT" in
     fi
     ;;
   hermes)
-    python3 -m contextos install --runtime hermes >/dev/null
+    "$CONTEXTOS_PYTHON_CMD" -m contextos install --runtime hermes >/dev/null
     printf '  1. cd %q && hermes\n' "$REPO_ROOT"
     echo "  2. Hermes reads AGENTS.md automatically. Expose .agents/skills/ as an"
     echo "     external skill directory, then type /setup. If you copy skills instead,"

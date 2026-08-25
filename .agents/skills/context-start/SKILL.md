@@ -9,10 +9,10 @@ Resume from durable repository state instead of reconstructing context from chat
 
 ## Procedure
 
-1. Run `python3 -m contextos start` from the repository root. Treat its JSON as
+1. Run `bash scripts/contextos.sh start` from the repository root. Treat its JSON as
    the deterministic inventory of configured paths, freshness, latest session,
    and repository revision. If the kernel is unavailable, stop and recommend
-   `python3 -m contextos doctor`; do not silently substitute another lifecycle
+   `bash scripts/contextos.sh doctor`; do not silently substitute another lifecycle
    implementation.
 2. Determine today's local date and day of week. Read `ROUTING.md`, then load:
    - the configured `current.md`;

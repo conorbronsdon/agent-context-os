@@ -20,9 +20,9 @@ Claude files are host adapters. All lifecycle names require explicit invocation.
 The mutation protocol is always:
 
 1. the agent drafts reviewed JSON input under ignored `.context-os/inputs/`;
-2. `python3 -m contextos propose` emits exact diffs and a proposal digest;
+2. `bash scripts/contextos.sh propose` emits exact diffs and a proposal digest;
 3. the agent presents those diffs and waits;
-4. `python3 -m contextos apply` receives that exact digest; and
+4. `bash scripts/contextos.sh apply` receives that exact digest; and
 5. the kernel verifies target hashes, takes an exclusive lock, writes only the
    proposal paths, and records a receipt.
 
@@ -76,5 +76,5 @@ import safe. Their Claude adapters appear in the command index below.
 Uploading these files to claude.ai does not activate commands, hooks, tool
 permissions, or skill metadata. See `docs/claude-projects-sync.md`.
 
-Run `python3 -m contextos doctor` for runtime and state diagnostics, then
+Run `bash scripts/contextos.sh doctor` for runtime and state diagnostics, then
 `bash scripts/validate-all.sh` after repository changes.

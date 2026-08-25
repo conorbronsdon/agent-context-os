@@ -17,13 +17,13 @@ Use `$start`, `$update`, and `$end` for the daily loop. The namespaced
 Setup records a gitignored local runtime selection. Inspect it with:
 
 ```bash
-python3 -m contextos doctor --runtime codex
+bash scripts/contextos.sh doctor --runtime codex
 ```
 
 ## Deterministic writes
 
 The skills do not directly mutate lifecycle state. They create reviewed input,
-run `python3 -m contextos propose`, present exact diffs, and run `apply` only
+run `bash scripts/contextos.sh propose`, present exact diffs, and run `apply` only
 after the user approves the displayed digest. The receipt is the portable proof
 of which paths and hashes changed. The kernel never commits or pushes.
 
@@ -57,7 +57,7 @@ SSOTs.
 ## Verify
 
 ```bash
-python3 -m contextos doctor --runtime codex
+bash scripts/contextos.sh doctor --runtime codex
 bash scripts/validate-all.sh
 ```
 

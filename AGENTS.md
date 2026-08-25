@@ -17,12 +17,12 @@ remain supported.
 
 ## Lifecycle kernel
 
-- `python3 -m contextos start` is the read-only continuity inventory.
+- `bash scripts/contextos.sh start` is the read-only continuity inventory.
 - Setup, update, and end use `propose` then exact-digest `apply`; never edit
   lifecycle state directly.
 - Present every proposal diff. Apply only after explicit approval of that exact
   proposal and report its receipt.
-- Run `python3 -m contextos doctor` when discovery, runtime setup, a lock, or
+- Run `bash scripts/contextos.sh doctor` when discovery, runtime setup, a lock, or
   copied skills may be stale.
 
 ## Context routing
