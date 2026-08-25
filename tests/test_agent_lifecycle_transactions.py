@@ -16,6 +16,7 @@ from unittest import mock
 from contextos.cli import main as cli_main
 from contextos.kernel import (
     ContextOSError,
+    _agent_change,
     _create_agent_journal,
     apply_proposal,
     canonical_json,
@@ -185,6 +186,33 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
                 self.root, path, tampered["proposal_digest"], "generic"
             )
         self.assertEqual("# Fixture\n", (self.root / "AGENTS.md").read_text())
+
+    def test_crafted_dotdot_proposal_id_cannot_collapse_local_state(self) -> None:
+        path, proposal = self.propose()
+        sentinel = self.root / ".context-os/receipts/keep.json"
+        sentinel.parent.mkdir(parents=True)
+        sentinel.write_text("{}\n", encoding="utf-8")
+        crafted = path.with_name("...json")
+        path.rename(crafted)
+        proposal["proposal_id"] = ".."
+        self.resign(crafted, proposal)
+
+        with self.assertRaisesRegex(ContextOSError, "proposal_id has an invalid format"):
+            self.apply(crafted, proposal)
+        self.assertEqual("{}\n", sentinel.read_text(encoding="utf-8"))
+        self.assertTrue(crafted.exists())
+
+    def test_agent_change_reports_directory_target_as_context_error(self) -> None:
+        target = self.root / "contextos.workspace.json"
+        target.mkdir()
+        with self.assertRaisesRegex(ContextOSError, "regular file"):
+            _agent_change(
+                self.root,
+                "workspace-migrate",
+                "contextos.workspace.json",
+                action="write",
+                after_text="{}\n",
+            )
 
     def test_raw_target_and_source_staleness_fail_closed(self) -> None:
         path, proposal = self.propose(("claude",))

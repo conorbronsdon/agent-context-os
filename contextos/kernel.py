@@ -53,6 +53,9 @@ SCHEMA_VERSION = 1
 HOST_STATE_SCHEMA_VERSION = 1
 AGENT_LIFECYCLE_WORKFLOW = "agent-config"
 WORKSPACE_MIGRATION_OPERATION = "workspace-migrate"
+PROPOSAL_ID_RE = re.compile(
+    r"^\d{8}T\d{6}-(?:setup|update|end|agent-config)-[0-9a-f]{10}$"
+)
 AGENT_MIGRATION_INVARIANTS = [
     "agent-workflow-path-policy",
     "component-ownership-closed",
@@ -550,9 +553,9 @@ def _agent_change(
 ) -> dict[str, Any]:
     authorization = _agent_lifecycle_authorization(root, operation, relative)
     path = safe_repo_path(root, relative)
-    before_bytes = path.read_bytes() if path.exists() else None
     if path.exists() and not path.is_file():
         raise ContextOSError(f"transaction target must be a regular file: {relative}")
+    before_bytes = path.read_bytes() if path.exists() else None
     if action == "write":
         if not isinstance(after_text, str):
             raise ContextOSError(f"write action requires text content: {relative}")
@@ -921,6 +924,8 @@ def _guard_local_artifact_path(root: Path, path: Path) -> None:
         raise ContextOSError(f"local artifact path escapes workspace: {path}") from exc
     if not relative.parts or relative.parts[0] != ".context-os":
         raise ContextOSError(f"local artifact must remain below .context-os: {path}")
+    if any(part in {".", ".."} for part in relative.parts):
+        raise ContextOSError(f"local artifact path has a dot segment: {path}")
     current = root
     for index, part in enumerate(relative.parts):
         if current.exists():
@@ -1223,6 +1228,8 @@ def _validate_proposal_shape(root: Path, proposal: Path, document: dict[str, Any
     if workflow not in {"setup", "update", "end", AGENT_LIFECYCLE_WORKFLOW}:
         raise ContextOSError(f"unsupported proposal workflow: {workflow}")
     proposal_id_value = ensure_text(document.get("proposal_id"), "proposal_id")
+    if not PROPOSAL_ID_RE.fullmatch(proposal_id_value):
+        raise ContextOSError("proposal_id has an invalid format")
     expected_dir = (root / ".context-os" / "proposals").resolve()
     try:
         proposal.resolve().relative_to(expected_dir)
