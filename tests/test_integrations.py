@@ -53,8 +53,16 @@ class IntegrationCatalogTests(unittest.TestCase):
         self.assertTrue(item["capabilities"]["read"])
         self.assertTrue(item["capabilities"]["sensitive_read"])
         self.assertFalse(item["capabilities"]["write"])
+        self.assertFalse(item["capabilities"]["arbitrary_execution"])
         self.assertIn("network-capable", item["risk_tags"])
         self.assertIn("read_sensitive", item["confirmation"]["required_for"])
+        prerequisites = " ".join(item["installation"]["prerequisites"])
+        details = " ".join(item["capabilities"]["details"])
+        self.assertIn("MARKITDOWN_ENABLE_PLUGINS", prerequisites)
+        self.assertIn("excludes third-party plugins", details)
+        self.assertTrue(
+            any(url.endswith("/packages/markitdown-mcp/src/markitdown_mcp/__main__.py") for url in item["evidence"])
+        )
 
     def test_issue_22_connectors_have_typed_sensitive_and_mutating_gates(self) -> None:
         for integration_id in ("google-workspace-cli", "notion-mcp"):

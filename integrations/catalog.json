@@ -583,7 +583,7 @@
       "installation": {
         "automatic": false,
         "scope": "project_or_user",
-        "prerequisites": ["Python with pip or Docker", "An MCP-compatible client", "Explicitly bounded file and network access for the server process"]
+        "prerequisites": ["Python with pip or Docker", "An MCP-compatible client", "Explicitly bounded file and network access for the server process", "Third-party plugins disabled by leaving MARKITDOWN_ENABLE_PLUGINS unset or false"]
       },
       "data_boundary": {
         "credentials": [],
@@ -601,7 +601,7 @@
         "arbitrary_execution": false,
         "oauth": false,
         "destructive": false,
-        "details": ["The convert_to_markdown tool accepts file, HTTP, HTTPS, and data URIs, so every call must be treated as an explicit sensitive-read boundary", "The server has no authentication and runs with the privileges and network reachability of its process", "Keep HTTP or SSE bound to localhost and prefer a sandbox or container with narrow mounts when converting untrusted content"]
+        "details": ["The convert_to_markdown tool accepts file, HTTP, HTTPS, and data URIs, so every call must be treated as an explicit sensitive-read boundary", "The server has no authentication and runs with the privileges and network reachability of its process", "Keep HTTP or SSE bound to localhost and prefer a sandbox or container with narrow mounts when converting untrusted content", "This reviewed profile excludes third-party plugins; keep MARKITDOWN_ENABLE_PLUGINS unset or false because enabled plugins widen the process execution boundary"]
       },
       "confirmation": {
         "required_for": ["external_install", "read_sensitive"],
@@ -609,8 +609,8 @@
       },
       "risk_tags": ["local-data", "sensitive-read", "network-capable", "open-world", "no-authentication", "prompt-injection"],
       "maturity": "verified",
-      "last_verified": "2026-08-25",
-      "evidence": ["https://github.com/microsoft/markitdown/blob/9dc0d6579b8739c9d0671ff205e071e3053c7df1/packages/markitdown-mcp/README.md", "https://github.com/microsoft/markitdown/releases/tag/v0.1.7"],
+      "last_verified": "2026-08-24",
+      "evidence": ["https://github.com/microsoft/markitdown/blob/9dc0d6579b8739c9d0671ff205e071e3053c7df1/packages/markitdown-mcp/README.md", "https://github.com/microsoft/markitdown/blob/9dc0d6579b8739c9d0671ff205e071e3053c7df1/packages/markitdown-mcp/src/markitdown_mcp/__main__.py", "https://github.com/microsoft/markitdown/releases/tag/v0.1.7"],
       "health_check": "Run the stdio server in a sandbox, list its single convert_to_markdown tool, then convert one non-sensitive local fixture from an explicitly allowed directory.",
       "uninstall": {
         "instructions": "Remove the MarkItDown MCP entry from the client and uninstall markitdown-mcp or remove its container image; preserve every source file and converted output unless separately requested.",
