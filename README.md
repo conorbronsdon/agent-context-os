@@ -176,6 +176,12 @@ in the same recoverable transaction. Setup-time agent selection remains tracked
 in #65. The template does not ship a live root file because that would override
 an existing clone's legacy YAML before its migration is reviewed.
 
+Once present, `contextos.workspace.json` is the provider-neutral root marker,
+including for a core-only workspace. Existing `AGENTS.md` plus `state/` or
+`workspace.yaml` roots remain discoverable. The nearest recognized root wins,
+and discovery never climbs past a nested `.git` repository boundary; use
+`--root` when deliberately targeting an outer workspace.
+
 Each fact should have one canonical home. `ROUTING.md` points an agent to the right file instead of copying the same context across prompts.
 
 ## Skills and memory

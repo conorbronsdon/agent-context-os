@@ -148,13 +148,64 @@ def parse_now(raw: str | None) -> datetime:
 
 
 def discover_root(start: Path | None = None) -> Path:
-    candidate = (start or Path.cwd()).resolve()
+    raw_start = start or Path.cwd()
+    if not raw_start.exists():
+        raise ContextOSError(f"root discovery start path does not exist: {raw_start}")
+    candidate = raw_start.resolve()
+    if candidate.is_file():
+        candidate = candidate.parent
+    elif not candidate.is_dir():
+        raise ContextOSError(f"root discovery start path is not a directory or file: {raw_start}")
+
     for path in (candidate, *candidate.parents):
+        # The tracked JSON marker is authoritative at the nearest candidate.
+        # Reject portable aliases before looking for the exact spelling so an
+        # invalid inner marker can never silently fall through to an outer root.
+        _reject_config_aliases(path, "contextos.workspace.json")
+        marker = path / "contextos.workspace.json"
+        if marker.exists() or marker.is_symlink():
+            if marker.is_symlink():
+                raise ContextOSError(
+                    "invalid tracked workspace configuration: "
+                    "contextos.workspace.json must not be a symlink"
+                )
+            if not marker.is_file():
+                raise ContextOSError(
+                    "invalid tracked workspace configuration: "
+                    "contextos.workspace.json must be a regular file"
+                )
+            try:
+                load_workspace_config(
+                    marker,
+                    root=path,
+                    known_runtime_ids=runtime_ids(path),
+                )
+            except WorkspaceConfigError as exc:
+                raise ContextOSError(
+                    f"invalid tracked workspace configuration: {exc}"
+                ) from exc
+            return path
+
+        # Preserve the original legacy compound marker for existing clones.
         if (path / "AGENTS.md").is_file() and (
             (path / "state").is_dir() or (path / "workspace.yaml").is_file()
         ):
             return path
-    raise ContextOSError("could not find a Context OS root (AGENTS.md plus state/ or workspace.yaml)")
+
+        # A nested repository without its own Context OS marker must not be
+        # captured by an outer repository. Check the candidate before stopping
+        # so a marker at a worktree or submodule root still wins.
+        git_marker = path / ".git"
+        if git_marker.exists() or git_marker.is_symlink():
+            raise ContextOSError(
+                "could not find a Context OS root before repository boundary: "
+                f"{path}"
+            )
+
+    raise ContextOSError(
+        "could not find a Context OS root "
+        "(contextos.workspace.json, or legacy AGENTS.md plus state/ or workspace.yaml)"
+    )
 
 
 def _reject_config_aliases(root: Path, canonical_name: str) -> None:
@@ -238,11 +289,20 @@ def resolve_workspace(root: Path) -> WorkspaceResolution:
         if not canonical:
             notices.append({
                 "code": "workspace-json-noncanonical",
-                "message": "contextos.workspace.json is valid but not canonically rendered",
+                "message": (
+                    "contextos.workspace.json is valid but not canonically rendered; "
+                    "preview the same-agent repair with bash scripts/contextos.sh "
+                    f"workspace migrate --agents {','.join(config['agents']) or 'none'}, "
+                    "then create its reviewed proposal with workspace propose-migration"
+                ),
             })
         if legacy_path.exists() or legacy_path.is_symlink():
             conflicts: list[str] = []
-            legacy_detail = "legacy workspace.yaml is shadowed by contextos.workspace.json"
+            legacy_detail = (
+                "legacy workspace.yaml is shadowed by contextos.workspace.json; "
+                "retire it through bash scripts/contextos.sh workspace "
+                f"propose-migration --agents {','.join(config['agents']) or 'none'}"
+            )
             if legacy_path.is_symlink():
                 legacy_detail += "; legacy file must not be a symlink"
             else:
@@ -284,8 +344,10 @@ def resolve_workspace(root: Path) -> WorkspaceResolution:
         notices.append({
             "code": "legacy-workspace",
             "message": (
-                "workspace.yaml remains readable but is deprecated; preview migration "
-                "with context-os workspace migrate"
+                "workspace.yaml remains readable but is deprecated; choose the intended "
+                "agent set and preview migration with bash scripts/contextos.sh workspace "
+                "migrate --agents <comma-separated-runtime-ids|none>, then create its "
+                "reviewed proposal with workspace propose-migration using the same --agents"
             ),
         })
     else:

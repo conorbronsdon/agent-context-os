@@ -94,9 +94,8 @@ Before a later command may materialize a selected component set, it must also:
    evidence behave in a slim workspace; and
 8. validate the resulting selected runtime closure without assuming every
    adapter or the development test tree is present;
-9. replace the current `AGENTS.md`-based root discovery and doctor requirement
-   with a provider-neutral marker before a Claude-only closure can omit the
-   `agents-instructions` component; and
+9. remove the remaining unconditional `AGENTS.md` doctor requirement before a
+   Claude-only closure can omit the `agents-instructions` component; and
 10. make shared instruction and documentation links closure-aware so a slim
     workspace neither points at omitted adapter docs nor describes hooks that
     were not selected.

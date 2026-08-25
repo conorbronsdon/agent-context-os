@@ -314,6 +314,36 @@ class WorkspaceConfigTest(unittest.TestCase):
         )
         self.assertEqual("warn", check["status"])
 
+    def test_migration_notices_name_complete_preview_and_proposal_commands(self) -> None:
+        self.write_json(json.dumps(config(agents=[]), separators=(",", ":")))
+        resolution = resolve_workspace(self.root)
+        self.assertIn(
+            "workspace migrate --agents none",
+            resolution.notices[0]["message"],
+        )
+        self.assertIn("workspace propose-migration", resolution.notices[0]["message"])
+
+        (self.root / "workspace.yaml").write_text(
+            "state_dir: state\n", encoding="utf-8"
+        )
+        resolution = resolve_workspace(self.root)
+        shadowed = next(
+            notice for notice in resolution.notices
+            if notice["code"] == "legacy-workspace-shadowed"
+        )
+        self.assertIn(
+            "workspace propose-migration --agents none",
+            shadowed["message"],
+        )
+
+        (self.root / "contextos.workspace.json").unlink()
+        resolution = resolve_workspace(self.root)
+        self.assertIn(
+            "workspace migrate --agents <comma-separated-runtime-ids|none>",
+            resolution.notices[0]["message"],
+        )
+        self.assertIn("workspace propose-migration", resolution.notices[0]["message"])
+
     def test_legacy_reader_remains_compatible_but_preview_is_loss_aware(self) -> None:
         legacy = self.root / "workspace.yaml"
         legacy.write_text(

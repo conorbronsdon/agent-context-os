@@ -15,6 +15,7 @@ from contextos.kernel import (
     ContextOSError,
     apply_proposal,
     create_proposal,
+    discover_root,
     doctor,
     hook_report,
     install_runtime,
@@ -25,10 +26,159 @@ from contextos.kernel import (
     sha256_text,
     start_report,
 )
+from contextos.workspace_schema import render_workspace_config
 
 
 ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime.fromisoformat("2026-08-23T14:30:00-07:00")
+
+
+def root_config(*, canonical: bool = True) -> str:
+    value = {
+        "schema_version": 1,
+        "mode": "full-template",
+        "agents": [],
+        "paths": {
+            "state_dir": "state",
+            "sessions_dir": "sessions",
+            "task_file": "TODO.md",
+        },
+        "template": {"version": "0.12.0", "source": "test"},
+    }
+    if canonical:
+        return render_workspace_config(value)
+    return json.dumps(value, separators=(",", ":"))
+
+
+class RootDiscoveryTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+
+    def write_json(self, root: Path, content: str | None = None) -> Path:
+        marker = root / "contextos.workspace.json"
+        marker.write_text(content or root_config(), encoding="utf-8")
+        return marker
+
+    def test_json_marker_supports_minimal_core_only_workspace(self) -> None:
+        self.write_json(self.root)
+        child = self.root / "uncreated-state-parent"
+        child.mkdir()
+        self.assertEqual(self.root, discover_root(child))
+        self.assertEqual(self.root, discover_root(self.root / "contextos.workspace.json"))
+
+    def test_valid_noncanonical_json_is_still_a_root(self) -> None:
+        self.write_json(self.root, root_config(canonical=False))
+        self.assertEqual(self.root, discover_root(self.root))
+
+    def test_legacy_compound_markers_remain_supported(self) -> None:
+        for companion, is_directory in (("state", True), ("workspace.yaml", False)):
+            with self.subTest(companion=companion):
+                root = self.root / companion.replace(".", "-")
+                root.mkdir()
+                (root / "AGENTS.md").write_text("# fixture\n", encoding="utf-8")
+                if is_directory:
+                    (root / companion).mkdir()
+                else:
+                    (root / companion).write_text("state_dir: state\n", encoding="utf-8")
+                self.assertEqual(root, discover_root(root))
+
+    def test_partial_and_near_name_markers_are_false_positives(self) -> None:
+        fixtures = (
+            ("agents-only", "AGENTS.md", False),
+            ("state-only", "state", True),
+            ("yaml-only", "workspace.yaml", False),
+            ("near-json", "contextos.workspace.json.bak", False),
+        )
+        for name, marker, is_directory in fixtures:
+            with self.subTest(name=name):
+                root = self.root / name
+                root.mkdir()
+                (root / ".git").mkdir()
+                if is_directory:
+                    (root / marker).mkdir()
+                else:
+                    (root / marker).write_text("fixture\n", encoding="utf-8")
+                with self.assertRaisesRegex(ContextOSError, "repository boundary"):
+                    discover_root(root)
+
+    def test_nearest_root_wins_across_json_and_legacy_markers(self) -> None:
+        self.write_json(self.root)
+        inner = self.root / "inner"
+        inner.mkdir()
+        (inner / "AGENTS.md").write_text("# fixture\n", encoding="utf-8")
+        (inner / "state").mkdir()
+        leaf = inner / "leaf"
+        leaf.mkdir()
+        self.assertEqual(inner, discover_root(leaf))
+
+        nested = inner / "nested"
+        nested.mkdir()
+        self.write_json(nested)
+        self.assertEqual(nested, discover_root(nested))
+
+    def test_invalid_inner_json_never_falls_back_to_legacy_or_outer_root(self) -> None:
+        self.write_json(self.root)
+        inner = self.root / "inner"
+        inner.mkdir()
+        (inner / "AGENTS.md").write_text("# fixture\n", encoding="utf-8")
+        (inner / "state").mkdir()
+        self.write_json(inner, "{")
+        with self.assertRaisesRegex(ContextOSError, "invalid tracked"):
+            discover_root(inner)
+
+    def test_nested_git_directory_and_file_stop_ascent(self) -> None:
+        self.write_json(self.root)
+        for name, git_content in (("repo", None), ("worktree", "gitdir: elsewhere\n")):
+            with self.subTest(name=name):
+                nested = self.root / name
+                nested.mkdir()
+                if git_content is None:
+                    (nested / ".git").mkdir()
+                else:
+                    (nested / ".git").write_text(git_content, encoding="utf-8")
+                leaf = nested / "leaf"
+                leaf.mkdir()
+                with self.assertRaisesRegex(ContextOSError, "repository boundary"):
+                    discover_root(leaf)
+                self.write_json(nested)
+                self.assertEqual(nested, discover_root(leaf))
+
+    def test_invalid_marker_types_and_portable_aliases_fail_closed(self) -> None:
+        marker = self.root / "contextos.workspace.json"
+        marker.mkdir()
+        with self.assertRaisesRegex(ContextOSError, "regular file"):
+            discover_root(self.root)
+        marker.rmdir()
+
+        alias = self.root / "ContextOS.Workspace.json"
+        alias.write_text(root_config(), encoding="utf-8")
+        with self.assertRaisesRegex(ContextOSError, "filename collision"):
+            discover_root(self.root)
+
+    def test_symlink_marker_fails_without_using_its_target(self) -> None:
+        outside = self.root / "outside.json"
+        outside.write_text(root_config(), encoding="utf-8")
+        nested = self.root / "nested"
+        nested.mkdir()
+        marker = nested / "contextos.workspace.json"
+        try:
+            marker.symlink_to(outside)
+        except OSError:
+            self.skipTest("symlink creation is unavailable")
+        with self.assertRaisesRegex(ContextOSError, "must not be a symlink"):
+            discover_root(nested)
+
+    def test_existing_file_start_uses_parent_and_missing_start_is_rejected(self) -> None:
+        self.write_json(self.root)
+        child = self.root / "child"
+        child.mkdir()
+        source = child / "input.txt"
+        source.write_text("fixture\n", encoding="utf-8")
+        self.assertEqual(self.root, discover_root(source))
+        with self.assertRaisesRegex(ContextOSError, "does not exist"):
+            discover_root(child / "missing")
 
 
 class KernelTest(unittest.TestCase):
