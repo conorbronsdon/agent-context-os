@@ -44,6 +44,8 @@ class CrossRuntimeHookTest(unittest.TestCase):
     def test_windows_wrapper_honors_override_and_hook_controls(self) -> None:
         environment = os.environ.copy()
         environment.pop("CONTEXTOS_PYTHON", None)
+        config = json.loads((ROOT / ".codex/hooks.json").read_text(encoding="utf-8"))
+        production_pre_write = config["hooks"]["PreToolUse"][0]["hooks"][0]["commandWindows"]
         command = [
             "powershell.exe",
             "-NoProfile",
@@ -56,8 +58,13 @@ class CrossRuntimeHookTest(unittest.TestCase):
             "pre-write",
         ]
 
+        # Native Windows CI exercises the exact production command. When the
+        # Python suite itself is launched below MSYS, use -File because the
+        # parent shell changes stdin-handle behavior before PowerShell starts.
+        must_fire_command = command if os.environ.get("MSYSTEM") else production_pre_write
+
         must_fire = subprocess.run(
-            command,
+            must_fire_command,
             cwd=ROOT,
             env=environment,
             input=json.dumps({"tool_input": {"file_path": str(ROOT / "state/current.md")}}),
@@ -109,6 +116,28 @@ class CrossRuntimeHookTest(unittest.TestCase):
             self.assertNotEqual(0, rejected_chatty_override.returncode)
             self.assertEqual("", rejected_chatty_override.stdout)
             self.assertIn("never silently replaced", rejected_chatty_override.stderr)
+
+            stderr_python = Path(temporary_directory) / "stderr-python.cmd"
+            stderr_python.write_text(
+                '@echo off\nif "%~1"=="-c" (echo harmless-probe-warning 1>&2 & exit /b 0)\n'
+                'echo {"systemMessage":"%~3 forwarded"}\n',
+                encoding="utf-8",
+            )
+            environment["CONTEXTOS_PYTHON"] = str(stderr_python)
+            accepted_stderr_override = subprocess.run(
+                [*command[:-1], "session-start"],
+                cwd=ROOT,
+                env=environment,
+                input="{}",
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(0, accepted_stderr_override.returncode, accepted_stderr_override.stderr)
+            self.assertEqual(
+                "session-start forwarded",
+                json.loads(accepted_stderr_override.stdout)["systemMessage"],
+            )
 
         environment["CONTEXTOS_PYTHON"] = sys.executable
         must_not_fire = subprocess.run(

@@ -11,12 +11,18 @@ function Test-ContextOsPython {
     if (-not (Get-Command -Name $Candidate -ErrorAction SilentlyContinue)) {
         return $false
     }
+    $previousErrorActionPreference = $ErrorActionPreference
+    $probeSucceeded = $false
     try {
-        & $Candidate -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)" >$null 2>&1
-        return $LASTEXITCODE -eq 0
+        $ErrorActionPreference = "Continue"
+        & $Candidate -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)" >$null 2>$null
+        $probeSucceeded = $LASTEXITCODE -eq 0
     } catch {
-        return $false
+        $probeSucceeded = $false
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
     }
+    return $probeSucceeded
 }
 
 $pythonCommand = $null
