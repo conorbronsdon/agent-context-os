@@ -1088,16 +1088,16 @@ class KernelTest(unittest.TestCase):
         self.assertIn("link-like artifact ignored", check["detail"])
 
     def test_doctor_reports_linked_state_file_without_crashing(self) -> None:
-        outside = self.root / "outside-current.md"
-        outside.write_text("# external\n", encoding="utf-8")
-        current = self.root / "state/current.md"
-        current.unlink()
-        try:
-            current.symlink_to(outside)
-        except OSError:
-            self.skipTest("symlink creation is unavailable")
-
-        report = doctor(self.root)
+        with tempfile.TemporaryDirectory() as external:
+            outside = Path(external) / "outside-current.md"
+            outside.write_text("# external\n", encoding="utf-8")
+            current = self.root / "state/current.md"
+            current.unlink()
+            try:
+                current.symlink_to(outside)
+            except OSError:
+                self.skipTest("symlink creation is unavailable")
+            report = doctor(self.root)
         check = next(
             item for item in report["checks"] if item["name"] == "file:state/current.md"
         )
@@ -1105,16 +1105,16 @@ class KernelTest(unittest.TestCase):
         self.assertIn("symlink or reparse point", check["detail"])
 
     def test_doctor_reports_linked_state_directory_without_crashing(self) -> None:
-        outside = self.root / "outside-state"
-        (self.root / "state").rename(outside)
-        state = self.root / "state"
-        try:
-            state.symlink_to(outside, target_is_directory=True)
-        except OSError:
-            outside.rename(state)
-            self.skipTest("directory symlink creation is unavailable")
-
-        report = doctor(self.root)
+        with tempfile.TemporaryDirectory() as external:
+            outside = Path(external) / "outside-state"
+            (self.root / "state").rename(outside)
+            state = self.root / "state"
+            try:
+                state.symlink_to(outside, target_is_directory=True)
+            except OSError:
+                outside.rename(state)
+                self.skipTest("directory symlink creation is unavailable")
+            report = doctor(self.root)
         self.assertEqual("fail", report["status"])
         self.assertEqual("invalid", report["scope"])
         self.assertTrue(
@@ -1123,6 +1123,35 @@ class KernelTest(unittest.TestCase):
                 for item in report["checks"]
             )
         )
+
+    def test_doctor_reports_external_links_for_every_configurable_seed_path(self) -> None:
+        with tempfile.TemporaryDirectory() as external:
+            external_root = Path(external)
+            cases = (
+                (self.root / "sessions", external_root / "sessions", True),
+                (self.root / "TODO.md", external_root / "TODO.md", False),
+            )
+            for target, outside, is_directory in cases:
+                with self.subTest(path=target.name):
+                    target.rename(outside)
+                    try:
+                        target.symlink_to(outside, target_is_directory=is_directory)
+                    except OSError:
+                        outside.rename(target)
+                        self.skipTest("symlink creation is unavailable")
+                    report = doctor(self.root)
+                    self.assertEqual("fail", report["status"])
+                    self.assertEqual("invalid", report["scope"])
+                    self.assertTrue(
+                        any(
+                            missing == target.name
+                            or missing.startswith(target.name + "/")
+                            for runtime in report["runtimes"].values()
+                            for missing in runtime["components"]["missing_paths"]
+                        )
+                    )
+                    target.unlink()
+                    outside.rename(target)
 
     def test_doctor_fails_closed_on_linked_local_state_root(self) -> None:
         outside = self.root / "outside-context-os"

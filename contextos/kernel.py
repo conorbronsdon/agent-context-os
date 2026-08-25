@@ -3158,14 +3158,23 @@ def doctor(
                 )
                 missing_paths: list[str] = []
                 present_count = 0
+                # Workspace paths have already passed lexical containment or
+                # come from the fixed diagnostic fallback. Do not resolve them
+                # here: resolution would follow the malformed link doctor is
+                # trying to report and could escape before the link scan below.
+                effective_state_root = workspace.state_dir.relative_to(root).as_posix()
+                effective_sessions_root = (
+                    workspace.sessions_dir.relative_to(root).as_posix()
+                )
+                effective_task_file = workspace.task_file.relative_to(root).as_posix()
                 for record in records:
                     materialized_path = record["path"]
                     if record["policy"] == "seed":
                         seed_roots = (
-                            (DEFAULT_PATHS["state_dir"], relative_path(root, workspace.state_dir)),
+                            (DEFAULT_PATHS["state_dir"], effective_state_root),
                             (
                                 DEFAULT_PATHS["sessions_dir"],
-                                relative_path(root, workspace.sessions_dir),
+                                effective_sessions_root,
                             ),
                         )
                         for default_root, effective_root in seed_roots:
@@ -3177,7 +3186,7 @@ def doctor(
                                 ]
                                 break
                         if materialized_path == DEFAULT_PATHS["task_file"]:
-                            materialized_path = relative_path(root, workspace.task_file)
+                            materialized_path = effective_task_file
                     lexical_target = root
                     traverses_link = False
                     for part in PurePosixPath(materialized_path).parts:
