@@ -52,3 +52,5 @@ This is not a general knowledge base, a replacement for every notes app, or an a
 ## Feature hierarchy
 
 Lead with the shared repository and lifecycle. Then show migration and portability. Present integrations as optional expansion. Treat Claude Code auto-memory, `/dream`, and hooks as valuable host-specific extensions, not the definition of the whole product.
+
+Drafts that apply this language live in [launch-copy.md](launch-copy.md). Update them together when positioning changes.

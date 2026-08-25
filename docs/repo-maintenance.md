@@ -2,11 +2,9 @@
 
 Context is useful only when it is current, scoped, and safe to load. Maintenance should remove drift rather than create routine file churn.
 
-## Every working session
+**Scope:** this guide covers the conventions this repository enforces — validation, the staleness rule, archival, the changelog, and instruction size. For the day-to-day rhythm of maintaining your own workspace context, see [maintenance.md](maintenance.md); it owns the session, weekly, and periodic cadence so there is one description of it.
 
-Use `/start` and `/end` in Claude Code, or `$start` and `$end` in Codex. The close workflow proposes a handoff before updating shared state.
-
-Before committing:
+## Before committing
 
 ```bash
 bash scripts/validate-all.sh
@@ -16,7 +14,7 @@ git status --short
 
 Review the actual diff. Validation catches structure and known invariants, not an incorrect personal fact or an overly broad instruction.
 
-## Weekly review
+## Reviewing tracked context
 
 Review `state/current.md`, `state/weekly-priorities.md`, `state/blockers.md`, and recent files under `sessions/`.
 
@@ -28,7 +26,7 @@ Review `state/current.md`, `state/weekly-priorities.md`, `state/blockers.md`, an
 
 `state/current-log.md` records the prior real date when `current.md` advances. It is a small audit trail, not a second copy of current state.
 
-## Monthly review
+## Periodic deep review
 
 Review the most frequently loaded identity, project, routing, and skill files.
 

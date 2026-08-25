@@ -2,6 +2,8 @@
 
 Maintenance should keep context accurate and permissions narrow without creating calendar-driven churn. Update a file when meaning changes, not merely to refresh its date.
 
+**Scope:** this guide covers maintaining *your* workspace — the context files you fill in, their review cadence, and the checks to run before you share them. For the conventions this repository enforces on its own files — the staleness rule, the archival workflow, changelog and instruction-size limits — see [repo-maintenance.md](repo-maintenance.md).
+
 ## Every working session
 
 1. Run `/start` in Claude Code or Hermes, or `$start` in Codex.

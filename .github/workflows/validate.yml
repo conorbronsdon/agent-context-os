@@ -36,3 +36,19 @@ jobs:
 
       - name: Run the Python test suite on Windows
         run: python -m unittest discover -s tests -p "test_*.py" -v
+
+  # The kernel declares a Python floor (str.removeprefix needs 3.9). Nothing
+  # exercised it: the Linux job uses whatever the runner ships and the Windows
+  # job pins 3.13, so the oldest supported version was never actually run. A
+  # floor no job executes is a claim, not a guarantee.
+  tests-minimum-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Run the Python test suite on the minimum supported Python
+        run: python -m unittest discover -s tests -p "test_*.py" -v

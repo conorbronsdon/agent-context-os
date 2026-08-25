@@ -192,12 +192,16 @@ CI runs the same aggregate validator. It checks structure, adapter mappings, lin
 | See every command and portable skill | [Commands and skills](docs/commands-and-skills.md) |
 | Choose an optional add-on | [Integration chooser](docs/integrations-guide.md) and [catalog](references/integrations.md) |
 | Understand product language and boundaries | [Positioning](docs/positioning.md) |
+| Keep context files small and cheap to load | [Optimizing context files](docs/optimizing-context.md) |
+| Keep optional MCP calls inside a token budget | [MCP efficiency](docs/mcp-efficiency.md) |
 | Maintain workspace context and memory | [Workspace maintenance](docs/maintenance.md) |
 | Maintain the repository | [Repository maintenance](docs/repo-maintenance.md) |
 
 ## Contributing
 
-This is a template. Structural contributions, clearer conventions, and reusable skills are welcome. Open an issue with the pattern and the problem it solves.
+This is a template. Structural contributions, clearer conventions, reusable skills, and integration catalog entries are welcome. Open an issue with the pattern and the problem it solves.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the validator, generated files, and conventions, and [SECURITY.md](SECURITY.md) to report a vulnerability privately. Issues labelled [`good first issue`](https://github.com/conorbronsdon/agent-context-os/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) need no external account or credential.
 
 ## Used by
 

@@ -8,6 +8,11 @@
 - `scripts/setup.sh` now detects and offers to launch Claude Code, Codex, Hermes, Cursor CLI, or OpenClaw (`--agent auto|claude|codex|hermes|cursor|openclaw|none`), with per-host next steps.
 
 ### Added
+- `CONTRIBUTING.md` — prerequisites, the validator as the one gate, which files are generated, how to add a catalog entry, skill/adapter structure, and the enforced size limits.
+- `SECURITY.md` — private reporting path, what is in and out of scope, and the design boundaries most likely to be misread (validation is not a publication guarantee; `verified` is a metadata claim; nothing here sandboxes an agent).
+- Issue templates for integration proposals and bug reports, plus contact links routing security reports away from public issues.
+- `scripts/check-doc-reachability.sh` — fails when a tracked doc exists that nothing outside `CHANGELOG.md` points to. `check-links.sh` catches a link whose target is gone; this catches a target nothing links to. Wired into `validate-all.sh`.
+- A CI job running the Python suite on 3.9, the declared minimum. The floor was previously unexercised: the Linux job used the runner default and the Windows job pinned 3.13.
 - Reviewed optional entries for the official GitHub, Linear, and Readwise MCP servers, including read-only starting profiles and explicit sensitive-read, remote-write, publish, overwrite, deletion, OAuth, and destructive confirmation gates.
 - Source-neutral onboarding and migration docs for ChatGPT, Claude, Gemini, and other assistants, with a reviewed migration-packet format and optional import handling in `$context-setup`.
 - Context OS positioning, launch-copy drafts, a task-based getting-started guide, and a generated cross-agent social preview.
@@ -18,6 +23,9 @@
 - First-class Codex onboarding with a root `AGENTS.md`, four explicit-invocation lifecycle skills under `.agents/skills/`, generated skill UI metadata, `--agent codex` setup support, portability tests, and a host-boundary guide.
 
 ### Fixed
+- `docs/optimizing-context.md` and `docs/mcp-efficiency.md` were unreachable — nothing outside the changelog linked them. Both are now in the README documentation table. `docs/launch-copy.md` is linked from `docs/positioning.md`.
+- `docs/maintenance.md` and `docs/repo-maintenance.md` gave two overlapping descriptions of the same session and weekly cadence. Each now states its scope and links the other; the workspace cadence lives in `maintenance.md`, repository conventions in `repo-maintenance.md`.
+- `tests/test_dream_paths.py` and `tests/test_mine_gemini_workflows.py` used PEP 604 unions (`Path | None`) without `from __future__ import annotations`, which raises `TypeError` on Python 3.9. Caught by the new minimum-version CI job.
 - `scripts/setup.sh` no longer relies on GNU-only `sed -i`; literal-name replacement and sample-route cleanup now use the documented Python 3 dependency.
 - Replaced the deprecated Notion npm-server instructions with Notion's hosted OAuth MCP path for Claude Code and Codex.
 - Aligned manual claude.ai setup prompts with portable skill paths and approval-gated local setup instead of claiming slash-command or commit parity.
