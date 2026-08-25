@@ -115,6 +115,12 @@ git diff --check
 git status --short
 ```
 
+With tracked workspace configuration, bare `doctor` validates the selected
+agent set and reports the other shipped adapters as inert. Missing local
+binaries warn without changing support claims. Use `doctor --runtime ID` for a
+strict one-runtime inspection and reserve `doctor --all` for maintainers
+checking every shipped adapter.
+
 Commit and push only after the diff matches what you intend to preserve.
 
 ## Run the daily loop

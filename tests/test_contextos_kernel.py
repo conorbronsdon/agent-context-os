@@ -9,7 +9,7 @@ import threading
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from unittest import mock
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from contextos.kernel import (
@@ -27,6 +27,7 @@ from contextos.kernel import (
     sha256_text,
     start_report,
 )
+from contextos.component_schema import load_component_manifest, resolved_component_paths
 from contextos.workspace_schema import render_workspace_config
 
 
@@ -356,6 +357,23 @@ class KernelTest(unittest.TestCase):
                 f"# {filename}\n\n**Last Updated:** [DATE]\n",
                 encoding="utf-8",
             )
+
+    def _configure_profile(self, *agents: str) -> None:
+        (self.root / "contextos.workspace.json").write_text(
+            root_config(agents=list(agents)), encoding="utf-8"
+        )
+
+    def _materialize_components(self, *component_ids: str) -> None:
+        manifest = load_component_manifest(
+            ROOT / "components" / "manifest.json", root=ROOT, check_paths=False
+        )
+        for record in resolved_component_paths(manifest, component_ids):
+            source = ROOT / record["path"]
+            target = self.root / record["path"]
+            if target.exists():
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, target)
 
     def test_update_propose_apply_writes_receipt_and_history_once(self) -> None:
         current = (
@@ -690,6 +708,7 @@ class KernelTest(unittest.TestCase):
             self.assertEqual(1, content.count("**Last Updated:**"))
         self.assertTrue(start_report(self.root, NOW)["initialized"])
     def test_install_and_doctor_are_machine_local(self) -> None:
+        self._materialize_components("hermes-adapter")
         target, installed = install_runtime(self.root, "hermes")
         self.assertEqual(self.root / ".context-os/hosts.json", target)
         self.assertEqual("hermes", installed["runtime"])
@@ -824,6 +843,12 @@ class KernelTest(unittest.TestCase):
         report = doctor(self.root)
         check = next(item for item in report["checks"] if item["name"] == "local-host-state")
         self.assertEqual("fail", check["status"])
+        self.assertTrue(
+            all(
+                runtime["local_onboarding"]["status"] == "unknown"
+                for runtime in report["runtimes"].values()
+            )
+        )
 
     def test_local_host_write_failure_preserves_previous_bytes(self) -> None:
         local = self.root / ".context-os"
@@ -858,6 +883,7 @@ class KernelTest(unittest.TestCase):
         self.assertFalse((outside / "hosts.json").exists())
 
     def test_doctor_uses_configured_state_and_selected_manifest_only(self) -> None:
+        self._materialize_components("hermes-adapter")
         custom = self.root / "custom-state"
         (self.root / "state").rename(custom)
         (self.root / "workspace.yaml").write_text("state_dir: custom-state\n", encoding="utf-8")
@@ -865,6 +891,135 @@ class KernelTest(unittest.TestCase):
         report = doctor(self.root, "hermes")
         self.assertFalse(any(item["status"] == "fail" for item in report["checks"]))
         self.assertTrue(any(item["name"] == "file:custom-state/current.md" for item in report["checks"]))
+        self.assertEqual(["hermes"], list(report["runtimes"]))
+
+    def test_empty_profile_keeps_every_shipped_runtime_inert(self) -> None:
+        self._configure_profile()
+        manifest = json.loads(
+            (self.root / "runtimes/claude.json").read_text(encoding="utf-8")
+        )
+        manifest["unknown"] = True
+        (self.root / "runtimes/claude.json").write_text(
+            json.dumps(manifest), encoding="utf-8"
+        )
+
+        report = doctor(self.root)
+
+        self.assertEqual("profile", report["scope"])
+        self.assertEqual([], report["workspace"]["configured_agents"])
+        self.assertFalse(any(item["status"] == "fail" for item in report["checks"]))
+        self.assertEqual("invalid-descriptor", report["runtimes"]["claude"]["support"]["status"])
+        self.assertEqual(
+            {
+                "status": "unconfigured",
+                "inert": True,
+                "validation_scope": False,
+            },
+            report["runtimes"]["claude"]["configuration"],
+        )
+
+    def test_profile_scope_comes_from_tracked_agents_not_local_hosts(self) -> None:
+        self._materialize_components("hermes-adapter")
+        install_runtime(self.root, "codex")
+        self._configure_profile("hermes")
+        manifest = json.loads(
+            (self.root / "runtimes/codex.json").read_text(encoding="utf-8")
+        )
+        manifest["unknown"] = True
+        (self.root / "runtimes/codex.json").write_text(
+            json.dumps(manifest), encoding="utf-8"
+        )
+
+        report = doctor(self.root)
+        names = {item["name"] for item in report["checks"]}
+
+        self.assertFalse(any(item["status"] == "fail" for item in report["checks"]))
+        self.assertIn("manifest:hermes", names)
+        self.assertNotIn("manifest:codex", names)
+        self.assertTrue(report["runtimes"]["codex"]["configuration"]["inert"])
+        self.assertEqual(
+            "configured", report["runtimes"]["codex"]["local_onboarding"]["status"]
+        )
+
+    def test_profile_materialization_blocks_only_configured_adapters(self) -> None:
+        self._materialize_components("claude-adapter", "codex-adapter")
+        (self.root / ".codex/hooks.json").unlink()
+        self._configure_profile("codex")
+
+        configured = doctor(self.root)
+        check = next(
+            item for item in configured["checks"] if item["name"] == "components:codex"
+        )
+        self.assertEqual("fail", check["status"])
+
+        self._configure_profile("claude")
+        inert = doctor(self.root)
+        self.assertFalse(any(item["status"] == "fail" for item in inert["checks"]))
+        self.assertEqual("partial", inert["runtimes"]["codex"]["components"]["status"])
+
+    def test_availability_is_independent_from_support_and_onboarding(self) -> None:
+        self._materialize_components("hermes-adapter")
+        self._configure_profile("hermes")
+        with mock.patch(
+            "contextos.kernel.shutil.which",
+            side_effect=lambda command: "git-path" if command == "git" else None,
+        ):
+            report = doctor(self.root)
+        runtime = report["runtimes"]["hermes"]
+        self.assertEqual("supported", runtime["support"]["status"])
+        self.assertEqual("unavailable", runtime["local_availability"]["status"])
+        self.assertEqual("not-configured", runtime["local_onboarding"]["status"])
+        self.assertFalse(any(item["status"] == "fail" for item in report["checks"]))
+
+    def test_evidence_freshness_boundary_is_deterministic(self) -> None:
+        self._materialize_components("hermes-adapter")
+        self._configure_profile("hermes")
+        path = self.root / "runtimes/hermes.json"
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        manifest["evidence"]["checked_on"] = "2026-05-27"
+        path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        fresh = doctor(self.root, today=date(2026, 8, 25))["runtimes"]["hermes"]["evidence"]
+        self.assertEqual(("fresh", 90, 90), (fresh["status"], fresh["age_days"], fresh["stale_after_days"]))
+
+        manifest["evidence"]["checked_on"] = "2026-05-26"
+        path.write_text(json.dumps(manifest), encoding="utf-8")
+        stale_report = doctor(self.root, today=date(2026, 8, 25))
+        stale = stale_report["runtimes"]["hermes"]["evidence"]
+        self.assertEqual(("stale", 91), (stale["status"], stale["age_days"]))
+        self.assertEqual(
+            "warn",
+            next(
+                item
+                for item in stale_report["checks"]
+                if item["name"] == "runtime-evidence:hermes"
+            )["status"],
+        )
+
+    def test_agents_instruction_is_required_only_by_selected_closure(self) -> None:
+        self._materialize_components("claude-adapter", "hermes-adapter")
+        (self.root / "AGENTS.md").unlink()
+        self._configure_profile("claude")
+        claude = doctor(self.root)
+        self.assertFalse(any(item["status"] == "fail" for item in claude["checks"]))
+        self.assertNotIn("file:AGENTS.md", {item["name"] for item in claude["checks"]})
+
+        self._configure_profile("hermes")
+        hermes = doctor(self.root)
+        check = next(
+            item for item in hermes["checks"] if item["name"] == "components:hermes"
+        )
+        self.assertEqual("fail", check["status"])
+
+    def test_all_scope_reports_only_shipped_registry_runtimes(self) -> None:
+        install_runtime(self.root, "hermes")
+        hosts_path = self.root / ".context-os/hosts.json"
+        hosts = json.loads(hosts_path.read_text(encoding="utf-8"))
+        hosts["hosts"]["orphan"] = dict(hosts["hosts"]["hermes"])
+        hosts_path.write_text(json.dumps(hosts), encoding="utf-8")
+
+        report = doctor(self.root, all_runtimes=True)
+        self.assertEqual({"claude", "codex", "hermes"}, set(report["runtimes"]))
 
     def test_bare_doctor_validates_all_manifests_during_setup(self) -> None:
         manifest = json.loads((self.root / "runtimes/claude.json").read_text(encoding="utf-8"))
@@ -921,6 +1076,7 @@ class KernelTest(unittest.TestCase):
         self.assertEqual("fail", check["status"])
 
     def test_doctor_handles_runtime_without_a_cli_surface(self) -> None:
+        self._materialize_components("hermes-adapter")
         path = self.root / "runtimes/hermes.json"
         manifest = json.loads(path.read_text(encoding="utf-8"))
         cloud = manifest["surfaces"].pop("cli")
@@ -944,6 +1100,7 @@ class KernelTest(unittest.TestCase):
         )
 
     def test_doctor_never_executes_descriptor_probe_commands(self) -> None:
+        self._materialize_components("hermes-adapter")
         with mock.patch("contextos.kernel.shutil.which", return_value="resolved-command"), mock.patch(
             "contextos.kernel.subprocess.run",
             side_effect=AssertionError("descriptor probe executed a process"),

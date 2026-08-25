@@ -48,13 +48,19 @@ def parser() -> argparse.ArgumentParser:
     apply.add_argument("--confirm", required=True, help="Exact proposal digest printed by propose")
     apply.add_argument("--runtime", metavar="RUNTIME", required=True)
 
-    install = commands.add_parser("install", help="Record the selected runtime and print host setup steps")
+    install = commands.add_parser(
+        "install", help="Record local onboarding for one runtime and print host setup steps"
+    )
     install.add_argument("--runtime", metavar="RUNTIME", required=True)
 
-    diagnose = commands.add_parser("doctor", help="Check kernel, state, manifests, locks, and runtime")
+    diagnose = commands.add_parser(
+        "doctor", help="Check workspace health with tracked agent-set awareness"
+    )
     diagnose_selection = diagnose.add_mutually_exclusive_group()
     diagnose_selection.add_argument("--runtime", metavar="RUNTIME")
-    diagnose_selection.add_argument("--all", action="store_true", help="Validate every shipped runtime descriptor")
+    diagnose_selection.add_argument(
+        "--all", action="store_true", help="Strictly validate every shipped runtime"
+    )
 
     workspace = commands.add_parser(
         "workspace", help="Inspect tracked workspace intent or preview migration"

@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Changed
+- `doctor` is set-aware when tracked workspace configuration exists. It reports
+  support, component materialization, customization limits, local availability,
+  onboarding, descriptor drift, declared conformance, and evidence freshness
+  independently; inert adapters cannot fail a selected user profile, while
+  explicit and maintainer scopes remain strict.
 - Runtime descriptors move from schema v1 to the discoverable, incompatible
   schema v2 with surface-specific capabilities, resolution-only probes,
   instruction and skill precedence, typed evidence, generated JSON Schema and

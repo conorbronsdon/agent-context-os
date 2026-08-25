@@ -23,6 +23,7 @@ from .component_schema import (
     component_owners,
     load_component_manifest,
     portable_path_identity,
+    resolved_component_paths,
     workspace_path_owner,
     write_generated_file,
 )
@@ -52,6 +53,7 @@ from .workspace_schema import (
 
 SCHEMA_VERSION = 1
 HOST_STATE_SCHEMA_VERSION = 1
+EVIDENCE_STALE_AFTER_DAYS = 90
 AGENT_LIFECYCLE_WORKFLOW = "agent-config"
 WORKSPACE_MIGRATION_OPERATION = "workspace-migrate"
 LOCAL_ARTIFACT_MODE = 0o600
@@ -2896,9 +2898,17 @@ def install_runtime(root: Path, runtime: str) -> tuple[Path, dict[str, Any]]:
 
 
 def doctor(
-    root: Path, runtime: str | None = None, *, all_runtimes: bool = False
+    root: Path,
+    runtime: str | None = None,
+    *,
+    all_runtimes: bool = False,
+    today: date | None = None,
 ) -> dict[str, Any]:
+    if runtime is not None and all_runtimes:
+        raise ContextOSError("doctor runtime selection and --all are mutually exclusive")
+
     checks: list[dict[str, str]] = []
+    effective_today = today or utc_now().date()
 
     def add(name: str, status: str, detail: str) -> None:
         checks.append({"name": name, "status": status, "detail": detail})
@@ -2906,9 +2916,16 @@ def doctor(
     git_location = shutil.which("git")
     add("command:git", "pass" if git_location else "fail", git_location or "not found")
     add("command:python", "pass", sys.executable)
+
+    workspace_source = "invalid"
+    configured_agents: tuple[str, ...] | None = None
+    workspace_valid = False
     try:
         workspace_resolution = resolve_workspace(root)
         workspace = workspace_resolution.workspace
+        workspace_source = workspace_resolution.source
+        configured_agents = workspace_resolution.agents
+        workspace_valid = True
         workspace_status = (
             "pass"
             if workspace_resolution.source == "json" and not workspace_resolution.notices
@@ -2923,22 +2940,31 @@ def doctor(
     except ContextOSError as exc:
         add("workspace-config", "fail", str(exc))
         workspace = _workspace_from_paths(root, dict(DEFAULT_PATHS))
+
+    # Provider-specific instruction files belong to their runtime components,
+    # not the neutral core readiness gate.
     required_paths = [
-        root / "AGENTS.md", workspace.state_dir / "current.md",
-        workspace.state_dir / "current-log.md", workspace.state_dir / "decisions.md",
+        workspace.state_dir / "current.md",
+        workspace.state_dir / "current-log.md",
+        workspace.state_dir / "decisions.md",
     ]
     for path in required_paths:
         rel = relative_path(root, path)
         add(f"file:{rel}", "pass" if path.exists() else "fail", rel)
-    initialized, initialization_files = _initialization_state(workspace, utc_now().date())
+    initialized, initialization_files = _initialization_state(
+        workspace, effective_today
+    )
     gate = relative_path(root, workspace.state_dir / INITIALIZATION_FILE)
     add(
         "initialization-state",
         "pass" if initialized else "warn",
-        "ready" if initialized else f"guided setup required; {gate} carries no real **Last Updated:** date",
+        "ready"
+        if initialized
+        else f"guided setup required; {gate} carries no real **Last Updated:** date",
     )
     unresolved = [
-        path for path, item in initialization_files.items()
+        path
+        for path, item in initialization_files.items()
         if item["freshness_status"] in {"missing", "unknown", "future"}
     ]
     add(
@@ -2948,35 +2974,389 @@ def doctor(
         if not unresolved
         else f"no usable **Last Updated:** date in: {', '.join(unresolved)}",
     )
-    selected = runtime
-    local_hosts: dict[str, Any] | None = None
+
+    local_hosts = {"schema_version": HOST_STATE_SCHEMA_VERSION, "hosts": {}}
+    local_hosts_valid = False
     legacy_runtime: str | None = None
     try:
         local_hosts, legacy_runtime = _hosts_with_legacy(root)
+        local_hosts_valid = True
         local_detail = f"{len(local_hosts['hosts'])} configured host(s)"
         if legacy_runtime is not None:
             local_detail += (
                 f"; legacy runtime.json for {legacy_runtime!r} is readable but retained; "
-                "run workspace migrate-local-runtime"
+                "run bash scripts/contextos.sh workspace migrate-local-runtime"
             )
         add("local-host-state", "warn" if legacy_runtime else "pass", local_detail)
     except ContextOSError as exc:
         add("local-host-state", "fail", str(exc))
-    if selected is None and local_hosts is not None:
+
+    try:
+        registry_ids = runtime_ids(root)
+    except ContextOSError as exc:
+        registry_ids = []
+        add("manifest-registry", "fail", str(exc))
+
+    if all_runtimes:
+        scope = "maintainer-all"
+        validation_ids = list(registry_ids)
+    elif runtime is not None:
+        scope = "runtime"
+        validation_ids = [runtime]
+    elif workspace_valid and configured_agents is not None:
+        scope = "profile"
+        validation_ids = list(configured_agents)
+    elif not workspace_valid:
+        scope = "invalid"
+        validation_ids = []
+    else:
+        scope = "legacy"
         configured_hosts = list(local_hosts["hosts"])
-        if len(configured_hosts) == 1:
-            selected = configured_hosts[0]
-    hosts = runtime_ids(root) if all_runtimes or not selected else [selected]
-    if not hosts:
-        add("manifest-registry", "fail", "no runtime descriptors found")
-    for host in hosts:
+        validation_ids = (
+            configured_hosts if len(configured_hosts) == 1 else list(registry_ids)
+        )
+
+    if not registry_ids and not (scope == "profile" and not validation_ids):
+        if not any(item["name"] == "manifest-registry" for item in checks):
+            add("manifest-registry", "fail", "no runtime descriptors found")
+    elif not any(item["name"] == "manifest-registry" for item in checks):
+        add(
+            "manifest-registry",
+            "pass",
+            f"{len(registry_ids)} shipped descriptor(s); {len(validation_ids)} in validation scope",
+        )
+
+    component_inventory: dict[str, Any] | None = None
+    try:
+        component_inventory = load_component_manifest(
+            root / "components" / "manifest.json", root=root, check_paths=False
+        )
+        add("component-inventory", "pass", "structurally valid")
+    except (ComponentManifestError, OSError, UnicodeError) as exc:
+        add("component-inventory", "fail", str(exc))
+
+    report_ids = (
+        [runtime]
+        if scope == "runtime" and runtime is not None
+        else list(registry_ids)
+        if scope == "maintainer-all"
+        else sorted(
+            set(registry_ids)
+            | set(configured_agents or ())
+            | set(local_hosts["hosts"])
+        )
+    )
+    validation_set = set(validation_ids)
+    runtime_reports: dict[str, Any] = {}
+    for runtime_id in report_ids:
+        if scope == "maintainer-all":
+            role = "maintainer"
+        elif scope == "runtime" and runtime_id == runtime:
+            role = "explicit"
+        elif configured_agents is not None:
+            role = "configured" if runtime_id in configured_agents else "inert"
+        elif runtime_id in local_hosts["hosts"]:
+            role = "legacy-local"
+        elif runtime_id in validation_set:
+            role = "legacy"
+        else:
+            role = "inert"
+        scoped = runtime_id in validation_set
+        configuration_status = (
+            "configured"
+            if configured_agents is not None and runtime_id in configured_agents
+            else "unconfigured"
+            if configured_agents is not None
+            else "unknown"
+        )
+
+        manifest: dict[str, Any] | None = None
+        manifest_error: str | None = None
         try:
-            manifest = runtime_manifest(root, host)
-            add(f"manifest:{host}", "pass", f"schema {manifest['schema_version']}")
+            manifest = runtime_manifest(root, runtime_id, check_paths=False)
+            if scoped:
+                add(
+                    f"manifest:{runtime_id}",
+                    "pass",
+                    f"schema {manifest['schema_version']}",
+                )
         except ContextOSError as exc:
-            add(f"manifest:{host}", "fail", str(exc))
+            manifest_error = str(exc)
+            if scoped:
+                add(f"manifest:{runtime_id}", "fail", manifest_error)
+
+        if manifest is not None and scope in {"runtime", "maintainer-all"}:
+            try:
+                validate_runtime_manifest(
+                    manifest,
+                    runtime_id=runtime_id,
+                    root=root,
+                    today=effective_today,
+                    check_paths=True,
+                )
+                add(f"runtime-paths:{runtime_id}", "pass", "referenced paths exist")
+            except (RuntimeManifestError, OSError, UnicodeError) as exc:
+                add(f"runtime-paths:{runtime_id}", "fail", str(exc))
+
+        component_report: dict[str, Any]
+        if manifest is None or component_inventory is None:
+            component_report = {
+                "status": "unknown",
+                "closure": [],
+                "missing_paths": [],
+            }
+        else:
+            try:
+                closure = component_closure(
+                    component_inventory, manifest["components"]
+                )
+                records = resolved_component_paths(
+                    component_inventory, manifest["components"]
+                )
+                missing_paths: list[str] = []
+                present_count = 0
+                for record in records:
+                    materialized_path = record["path"]
+                    if record["policy"] == "seed":
+                        seed_roots = (
+                            (DEFAULT_PATHS["state_dir"], relative_path(root, workspace.state_dir)),
+                            (
+                                DEFAULT_PATHS["sessions_dir"],
+                                relative_path(root, workspace.sessions_dir),
+                            ),
+                        )
+                        for default_root, effective_root in seed_roots:
+                            if materialized_path == default_root or materialized_path.startswith(
+                                default_root + "/"
+                            ):
+                                materialized_path = effective_root + materialized_path[
+                                    len(default_root) :
+                                ]
+                                break
+                        if materialized_path == DEFAULT_PATHS["task_file"]:
+                            materialized_path = relative_path(root, workspace.task_file)
+                    try:
+                        target = safe_repo_path(root, materialized_path)
+                    except ContextOSError:
+                        missing_paths.append(materialized_path)
+                        continue
+                    if target.is_file() and not target.is_symlink():
+                        present_count += 1
+                    else:
+                        missing_paths.append(materialized_path)
+                component_status = (
+                    "materialized"
+                    if not missing_paths
+                    else "absent"
+                    if present_count == 0
+                    else "partial"
+                )
+                component_report = {
+                    "status": component_status,
+                    "closure": closure,
+                    "missing_paths": missing_paths,
+                }
+                if scoped:
+                    materialization_status = (
+                        "fail"
+                        if component_status != "materialized"
+                        and scope in {"profile", "runtime", "maintainer-all"}
+                        else "warn"
+                        if component_status != "materialized"
+                        else "pass"
+                    )
+                    add(
+                        f"components:{runtime_id}",
+                        materialization_status,
+                        "materialized"
+                        if component_status == "materialized"
+                        else (
+                            f"{component_status}; {len(missing_paths)} missing; "
+                            f"first: {', '.join(missing_paths[:5])}"
+                        ),
+                    )
+            except (ComponentManifestError, ContextOSError) as exc:
+                component_report = {
+                    "status": "invalid",
+                    "closure": [],
+                    "missing_paths": [],
+                    "detail": str(exc),
+                }
+                if scoped:
+                    add(f"components:{runtime_id}", "fail", str(exc))
+
+        probe_reports: list[dict[str, Any]] = []
+        availability_results: list[bool] = []
+        conformance_tests: set[str] = set()
+        if manifest is not None:
+            for surface_id, surface in manifest["surfaces"].items():
+                conformance_tests.update(surface["conformance_tests"])
+                for probe in surface["binary_probes"]:
+                    locations = {
+                        candidate: shutil.which(candidate)
+                        for candidate in probe["candidates"]
+                    }
+                    resolved = any(locations.values())
+                    if probe["purpose"] == "availability":
+                        availability_results.append(resolved)
+                    probe_reports.append(
+                        {
+                            "surface": surface_id,
+                            "purpose": probe["purpose"],
+                            "candidates": locations,
+                            "resolved": resolved,
+                            "executed": False,
+                        }
+                    )
+                    if scoped:
+                        detail = "resolution only; not executed; " + ", ".join(
+                            f"{candidate}={location or 'not installed'}"
+                            for candidate, location in locations.items()
+                        )
+                        add(
+                            f"runtime:{runtime_id}:{surface_id}:{probe['purpose']}",
+                            "pass" if resolved else "warn",
+                            detail,
+                        )
+        availability_status = (
+            "available"
+            if availability_results and all(availability_results)
+            else "mixed"
+            if any(availability_results)
+            else "unavailable"
+            if availability_results
+            else "unknown"
+        )
+
+        host_entry = local_hosts["hosts"].get(runtime_id) if local_hosts_valid else None
+        onboarding_status = (
+            "unknown"
+            if not local_hosts_valid
+            else "configured"
+            if host_entry is not None
+            else "not-configured"
+        )
+        if not local_hosts_valid:
+            drift_status = "unknown"
+        elif host_entry is None:
+            drift_status = "not-recorded"
+        elif manifest is None:
+            drift_status = "unknown"
+        else:
+            expected_source = sha256_text(canonical_json(manifest))
+            drift_status = (
+                "current"
+                if host_entry["source_manifest_sha256"] == expected_source
+                else "drifted"
+            )
+
+        evidence = manifest.get("evidence") if manifest is not None else None
+        if evidence is None:
+            evidence_report = {
+                "status": "invalid",
+                "checked_on": None,
+                "age_days": None,
+                "stale_after_days": EVIDENCE_STALE_AFTER_DAYS,
+            }
+        else:
+            checked_on = evidence["checked_on"]
+            checked_date = date.fromisoformat(checked_on)
+            evidence_age = (effective_today - checked_date).days
+            evidence_status = (
+                "future"
+                if evidence_age < 0
+                else "stale"
+                if evidence_age > EVIDENCE_STALE_AFTER_DAYS
+                else "fresh"
+            )
+            evidence_report = {
+                "status": evidence_status,
+                "checked_on": checked_on,
+                "age_days": evidence_age,
+                "stale_after_days": EVIDENCE_STALE_AFTER_DAYS,
+            }
+
+        if scoped and manifest is not None:
+            add(
+                f"runtime-onboarding:{runtime_id}",
+                "pass" if onboarding_status == "configured" else "warn",
+                onboarding_status,
+            )
+            if evidence_report["status"] in {"stale", "future", "invalid"}:
+                add(
+                    f"runtime-evidence:{runtime_id}",
+                    "warn" if evidence_report["status"] == "stale" else "fail",
+                    f"{evidence_report['status']}; checked_on={evidence_report['checked_on']}",
+                )
+
+        runtime_reports[runtime_id] = {
+            "role": role,
+            "configuration": {
+                "status": configuration_status,
+                "inert": (
+                    configuration_status == "unconfigured"
+                    if configuration_status != "unknown"
+                    else None
+                ),
+                "validation_scope": scoped,
+            },
+            "support": {
+                "status": "supported" if manifest is not None else "invalid-descriptor",
+                "tier": manifest["support_tier"] if manifest is not None else None,
+                "summary": manifest["support_summary"] if manifest is not None else manifest_error,
+            },
+            "components": component_report,
+            "customization": {
+                "status": "not-verifiable",
+                "reason": "owned-file base hashes require the immutable bundle lock",
+            },
+            "local_availability": {
+                "status": availability_status,
+                "probes": probe_reports,
+            },
+            "local_onboarding": {
+                "status": onboarding_status,
+                "installed_at": host_entry["installed_at"] if host_entry else None,
+            },
+            "descriptor_drift": {"status": drift_status},
+            "conformance": {
+                "status": "declared" if manifest is not None else "invalid",
+                "tests": sorted(conformance_tests),
+                "executed": False,
+            },
+            "evidence": evidence_report,
+        }
+
+    drift_targets = [
+        runtime_id
+        for runtime_id in validation_ids
+        if runtime_id in local_hosts["hosts"]
+    ]
+    if scope == "legacy" and len(local_hosts["hosts"]) != 1:
+        drift_targets = list(local_hosts["hosts"])
+    for drift_runtime in drift_targets:
+        drift_name = (
+            "runtime-manifest-drift"
+            if len(drift_targets) == 1
+            else f"runtime-manifest-drift:{drift_runtime}"
+        )
+        drift_status = runtime_reports.get(drift_runtime, {}).get(
+            "descriptor_drift", {}
+        ).get("status", "unknown")
+        add(
+            drift_name,
+            "pass" if drift_status == "current" else "warn",
+            "current"
+            if drift_status == "current"
+            else "rerun bash scripts/contextos.sh install --runtime " + drift_runtime,
+        )
+
     lock = root / ".context-os" / "apply.lock"
-    add("transaction-lock", "warn" if lock.exists() else "pass", str(lock) if lock.exists() else "none")
+    add(
+        "transaction-lock",
+        "warn" if lock.exists() else "pass",
+        str(lock) if lock.exists() else "none",
+    )
     journals = root / ".context-os" / "journals"
     if journals.is_symlink() or (journals.exists() and not journals.is_dir()):
         add("transaction-journals", "fail", f"invalid journal path: {journals}")
@@ -3009,60 +3389,39 @@ def doctor(
     )
     cutoff = utc_now().timestamp() - (30 * 24 * 60 * 60)
     old_artifacts = [
-        path for folder in ("proposals", "receipts")
+        path
+        for folder in ("proposals", "receipts")
         for path in (root / ".context-os" / folder).glob("*.json")
         if path.stat().st_mtime < cutoff
     ]
     add(
-        "local-artifact-retention", "warn" if old_artifacts else "pass",
-        f"{len(old_artifacts)} artifacts older than 30 days" if old_artifacts else "none older than 30 days",
+        "local-artifact-retention",
+        "warn" if old_artifacts else "pass",
+        f"{len(old_artifacts)} artifacts older than 30 days"
+        if old_artifacts
+        else "none older than 30 days",
     )
-    drift_targets = (
-        [selected]
-        if selected
-        else list(local_hosts["hosts"])
-        if local_hosts is not None
-        else []
+
+    status = (
+        "fail"
+        if any(item["status"] == "fail" for item in checks)
+        else "warn"
+        if any(item["status"] == "warn" for item in checks)
+        else "pass"
     )
-    for drift_runtime in drift_targets:
-        drift_name = (
-            "runtime-manifest-drift"
-            if len(drift_targets) == 1
-            else f"runtime-manifest-drift:{drift_runtime}"
-        )
-        try:
-            drift_manifest = runtime_manifest(root, drift_runtime)
-            expected_source = sha256_text(canonical_json(drift_manifest))
-            if local_hosts is not None and drift_runtime in local_hosts["hosts"]:
-                recorded_source = local_hosts["hosts"][drift_runtime]["source_manifest_sha256"]
-                add(
-                    drift_name,
-                    "pass" if recorded_source == expected_source else "warn",
-                    "current" if recorded_source == expected_source else "rerun context-os install",
-                )
-        except ContextOSError as exc:
-            add(drift_name, "fail", str(exc))
-    if selected:
-        selected_manifest: dict[str, Any] | None = None
-        try:
-            selected_manifest = runtime_manifest(root, selected)
-        except ContextOSError:
-            selected_manifest = None
-        if selected_manifest:
-            for surface_id, surface in selected_manifest["surfaces"].items():
-                for probe in surface["binary_probes"]:
-                    locations = {
-                        candidate: shutil.which(candidate) for candidate in probe["candidates"]
-                    }
-                    executable = next((location for location in locations.values() if location), None)
-                    check_name = f"runtime:{selected}:{surface_id}:{probe['purpose']}"
-                    detail = ", ".join(
-                        f"{candidate}={location or 'not installed'}"
-                        for candidate, location in locations.items()
-                    )
-                    add(check_name, "pass" if executable else "warn", detail)
-    status = "fail" if any(item["status"] == "fail" for item in checks) else "warn" if any(item["status"] == "warn" for item in checks) else "pass"
-    return {"schema_version": SCHEMA_VERSION, "status": status, "checks": checks}
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "status": status,
+        "scope": scope,
+        "workspace": {
+            "source": workspace_source,
+            "configured_agents": (
+                list(configured_agents) if configured_agents is not None else None
+            ),
+        },
+        "runtimes": runtime_reports,
+        "checks": checks,
+    }
 
 
 def _hook_targets(payload: dict[str, Any]) -> set[str]:

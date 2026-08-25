@@ -98,6 +98,20 @@ listed executable candidates with `PATH`, but runtime descriptors cannot supply
 arguments or cause a process to execute. Native diagnostic execution requires a
 separate code-owned trust policy.
 
+Bare `doctor` follows tracked `agents` when `contextos.workspace.json` exists.
+Shipped but unselected adapters remain visible as inert and cannot make that
+profile fail. Without tracked JSON, the legacy compatibility scope remains: one
+locally onboarded host narrows the check, while zero or multiple hosts inspect
+the registry. `doctor --runtime ID` explicitly inspects one runtime and
+`doctor --all` applies the strict maintainer scope to every shipped descriptor.
+
+The report keeps separate facts separate: declared support, selected-component
+materialization, customization (not verifiable until immutable bundle hashes
+exist), local executable availability, local onboarding, descriptor drift,
+declared conformance, and evidence freshness. A missing binary is unavailable,
+not unsupported. Declared conformance is not reported as executed, and binary
+resolution never launches the candidate.
+
 ## Conformance policy
 
 Every lifecycle mutation needs:

@@ -38,8 +38,8 @@ means core-only. The CLI token `none` maps to that empty set but is never stored
 intent. `generic` is reserved for operation receipts and is not a runtime ID.
 
 Version 1 intentionally uses only `full-template`. Selecting agents records
-intent; set-aware validation scope and removal of unselected adapters are later
-transaction-backed work.
+intent and controls bare `doctor` validation scope. Removal of unselected
+adapters remains later transaction-backed work.
 
 The public template ships `workspace/example.json` with `agents: []`, but no
 live root configuration. This avoids overriding an existing clone's legacy YAML
@@ -157,6 +157,13 @@ preserves an unchanged runtime's original timestamp.
 Host-state writes use `.context-os/hosts.lock`. A crash can leave that lock
 behind; `doctor` warns with recovery guidance. Remove it only after confirming
 that no install or migration process is still running.
+
+Local host records never activate a tracked runtime. Bare `doctor` validates
+the JSON `agents` set, reports unselected shipped adapters as inert, and treats
+availability, onboarding, descriptor drift, component materialization,
+conformance declarations, and evidence freshness as independent dimensions.
+An empty `agents` array is therefore a real core-only profile, even when a host
+has additional runtimes installed locally.
 
 ## Setup compatibility contract
 
