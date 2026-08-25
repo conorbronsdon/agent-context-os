@@ -19,7 +19,7 @@ Save continuity with minimal churn through the deterministic lifecycle kernel.
 3. Run:
 
    ```text
-   python3 -m contextos propose update --input <payload.json>
+   bash scripts/contextos.sh propose update --input <payload.json>
    ```
 
    The kernel owns session append behavior, dates, the single `Last Updated`
@@ -29,7 +29,7 @@ Save continuity with minimal churn through the deterministic lifecycle kernel.
 4. Wait for explicit approval of that exact proposal. Then run:
 
    ```text
-   python3 -m contextos apply <proposal> --confirm <digest> --runtime <active-runtime>
+   bash scripts/contextos.sh apply <proposal> --confirm <digest> --runtime <active-runtime>
    ```
 
    If any target changed after proposal creation, create and review a new

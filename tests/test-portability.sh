@@ -146,6 +146,45 @@ fallback_python=$(
 )
 [ "$fallback_python" = "python" ] || fail "Python resolver did not fall back from python3 to python"
 
+# An explicit CONTEXTOS_PYTHON is an instruction, not a hint. A working override
+# must win, and a broken one must fail loudly instead of silently resolving to a
+# different interpreter than the one that was asked for.
+override_python=$(
+  CONTEXTOS_PYTHON="$resolved_python" "$resolved_bash" -c \
+    'source "$1"; printf "%s" "$CONTEXTOS_PYTHON_CMD"' _ "$ROOT/scripts/python-env.sh"
+)
+[ "$override_python" = "$resolved_python" ] || fail "CONTEXTOS_PYTHON override was not honored"
+
+if CONTEXTOS_PYTHON="$portability_tmp/no-such-python" "$resolved_bash" -c \
+  'source "$1"' _ "$ROOT/scripts/python-env.sh" >/dev/null 2>&1; then
+  fail "unresolvable CONTEXTOS_PYTHON silently fell back to another interpreter"
+fi
+
+# The kernel uses str.removeprefix, so a Python 3 older than 3.9 must be rejected
+# rather than accepted and left to fail later.
+old_python_bin="$portability_tmp/old-python-bin"
+mkdir -p "$old_python_bin"
+printf '#!%s\nif [ "$1" = "-c" ]; then exit 1; fi\nexit 1\n' "$resolved_bash" > "$old_python_bin/python3"
+chmod +x "$old_python_bin/python3"
+old_python_path="$old_python_bin"
+if command -v cygpath >/dev/null 2>&1; then
+  old_python_path=$(cygpath -u "$old_python_bin")
+fi
+if PATH="$old_python_path" CONTEXTOS_PYTHON= "$resolved_bash" -c \
+  'source "$1"' _ "$ROOT/scripts/python-env.sh" >/dev/null 2>&1; then
+  fail "Python resolver accepted an interpreter that failed the version probe"
+fi
+
+# The lifecycle wrapper must run the kernel through the resolver.
+"$resolved_bash" "$ROOT/scripts/contextos.sh" doctor >/dev/null \
+  || fail "scripts/contextos.sh could not run the lifecycle kernel"
+
+# User-facing documentation must use the same interpreter-neutral entry point
+# that setup and lifecycle skills use. CHANGELOG preserves historical commands.
+if git grep -n -F 'python3 -m contextos' -- '*.md' ':(exclude)CHANGELOG.md'; then
+  fail "user-facing documentation bypasses scripts/contextos.sh"
+fi
+
 invalid_metadata="$portability_tmp/invalid-openai.yaml"
 cp .agents/skills/context-start/agents/openai.yaml "$invalid_metadata"
 printf 'malformed: [\n' >> "$invalid_metadata"
@@ -305,8 +344,11 @@ name_line=$(grep -n 'Name to place in CLAUDE.md' scripts/setup.sh | cut -d: -f1)
 test -n "$warning_line" && test -n "$name_line" && test "$warning_line" -lt "$name_line" || fail "privacy warning did not precede personalization"
 
 for skill in context-setup context-update context-end; do
-  grep -Fq 'python3 -m contextos propose' ".agents/skills/$skill/SKILL.md" || fail "$skill does not route mutation through the kernel"
-  grep -Fq 'python3 -m contextos apply' ".agents/skills/$skill/SKILL.md" || fail "$skill does not route approval through the kernel"
+  grep -Fq 'scripts/contextos.sh propose' ".agents/skills/$skill/SKILL.md" || fail "$skill does not route mutation through the kernel"
+  if grep -Fq 'python3 -m contextos' ".agents/skills/$skill/SKILL.md"; then
+    fail "$skill hardcodes python3 instead of the resolved interpreter wrapper"
+  fi
+  grep -Fq 'scripts/contextos.sh apply' ".agents/skills/$skill/SKILL.md" || fail "$skill does not route approval through the kernel"
 done
 
 test -f .codex/hooks.json || fail "missing Codex hook adapter"

@@ -7,8 +7,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)/scripts/context-os-hook.py\" codex session-start",
-            "commandWindows": "powershell.exe -NoProfile -NonInteractive -Command \"$root = git rev-parse --show-toplevel; python (Join-Path $root 'scripts/context-os-hook.py') codex session-start\"",
+            "command": "bash \"$(git rev-parse --show-toplevel)/scripts/context-os-hook.sh\" codex session-start",
+            "commandWindows": "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$root = git rev-parse --show-toplevel; & (Join-Path $root 'scripts/context-os-hook.ps1') codex session-start\"",
             "timeout": 10
           }
         ]
@@ -20,8 +20,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)/scripts/context-os-hook.py\" codex pre-write",
-            "commandWindows": "powershell.exe -NoProfile -NonInteractive -Command \"$root = git rev-parse --show-toplevel; python (Join-Path $root 'scripts/context-os-hook.py') codex pre-write\"",
+            "command": "bash \"$(git rev-parse --show-toplevel)/scripts/context-os-hook.sh\" codex pre-write",
+            "commandWindows": "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$root = git rev-parse --show-toplevel; & (Join-Path $root 'scripts/context-os-hook.ps1') codex pre-write\"",
             "timeout": 10
           }
         ]

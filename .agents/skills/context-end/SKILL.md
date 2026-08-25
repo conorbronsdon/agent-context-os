@@ -28,7 +28,7 @@ Create a reviewed JSON payload under `.context-os/inputs/` with:
   `blockers_markdown`, or `weekly_priorities_markdown`, only when that state
   materially changed.
 
-Run `python3 -m contextos propose end --input <payload.json>`. The kernel owns
+Run `bash scripts/contextos.sh propose end --input <payload.json>`. The kernel owns
 session append behavior, decision rows, dates, exact paths, the single
 `Last Updated` line, and same-day history. Present every returned diff and its
 proposal digest. The digest binds the exact content but does not authenticate a
@@ -39,7 +39,7 @@ human approver; rely on the host permission boundary for explicit confirmation.
 After explicit approval of that exact diff, run:
 
 ```text
-python3 -m contextos apply <proposal> --confirm <digest> --runtime <active-runtime>
+bash scripts/contextos.sh apply <proposal> --confirm <digest> --runtime <active-runtime>
 ```
 
 The kernel must refuse altered proposals, changed targets, path escapes, or a

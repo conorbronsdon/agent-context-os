@@ -70,6 +70,13 @@ class KernelTest(unittest.TestCase):
     def _apply(self, path: Path, document: dict, runtime: str = "codex"):
         return apply_proposal(self.root, path, document["proposal_digest"], runtime)
 
+    def _write_undated_state(self, *filenames: str) -> None:
+        for filename in filenames:
+            (self.root / "state" / filename).write_text(
+                f"# {filename}\n\n**Last Updated:** [DATE]\n",
+                encoding="utf-8",
+            )
+
     def test_update_propose_apply_writes_receipt_and_history_once(self) -> None:
         current = (
             "# Current State\n\n**Last Updated:** 2026-08-20\n\n"
@@ -283,8 +290,7 @@ class KernelTest(unittest.TestCase):
         self.assertIsNone(report["next_action"])
 
     def test_fresh_clone_reports_setup_required_from_real_templates(self) -> None:
-        for filename in ("current.md", "weekly-priorities.md", "blockers.md"):
-            (self.root / "state" / filename).write_bytes((ROOT / "state" / filename).read_bytes())
+        self._write_undated_state("current.md", "weekly-priorities.md", "blockers.md")
 
         report = start_report(self.root, NOW)
         self.assertFalse(report["initialized"])
@@ -312,6 +318,10 @@ class KernelTest(unittest.TestCase):
         self.assertLess(current["age_days"], 0)
         self.assertIsNone(current["stale"])
         self.assertFalse(report["initialized"])
+        messages = [
+            finding["message"] for finding in hook_report(self.root, "session-start", {})["findings"]
+        ]
+        self.assertTrue(any("not initialized" in message for message in messages), messages)
 
         diagnosis = doctor(self.root)
         initialization = next(
@@ -320,6 +330,68 @@ class KernelTest(unittest.TestCase):
         self.assertEqual("warn", initialization["status"])
         self.assertIn("state/current.md", initialization["detail"])
 
+    def test_readiness_predicate_is_shared_by_start_doctor_and_hook(self) -> None:
+        """current.md gates readiness, and all three consumers must agree on it."""
+        self._write_undated_state("weekly-priorities.md", "blockers.md")
+
+        # current.md is dated; the other two are untouched shipped templates.
+        report = start_report(self.root, NOW)
+        self.assertTrue(report["initialized"])
+        self.assertIsNone(report["next_action"])
+        self.assertEqual([], hook_report(self.root, "session-start", {})["findings"])
+        initialization = next(
+            item for item in doctor(self.root)["checks"] if item["name"] == "initialization-state"
+        )
+        self.assertEqual("pass", initialization["status"])
+
+        # Reverting current.md to the template must flip all three together.
+        self._write_undated_state("current.md")
+        self.assertFalse(start_report(self.root, NOW)["initialized"])
+        messages = [
+            finding["message"] for finding in hook_report(self.root, "session-start", {})["findings"]
+        ]
+        self.assertTrue(any("not initialized" in message for message in messages), messages)
+        initialization = next(
+            item for item in doctor(self.root)["checks"] if item["name"] == "initialization-state"
+        )
+        self.assertEqual("warn", initialization["status"])
+
+    def test_unset_optional_state_is_reported_without_blocking_readiness(self) -> None:
+        """An empty blockers file is a valid steady state, not an unfinished setup."""
+        self._write_undated_state("blockers.md")
+        report = start_report(self.root, NOW)
+        self.assertTrue(report["initialized"])
+        self.assertEqual("unknown", report["state"]["state/blockers.md"]["freshness_status"])
+        freshness = next(
+            item for item in doctor(self.root)["checks"] if item["name"] == "state-freshness"
+        )
+        self.assertEqual("warn", freshness["status"])
+        self.assertIn("state/blockers.md", freshness["detail"])
+
+    def test_next_action_names_the_command_to_run(self) -> None:
+        self._write_undated_state("current.md")
+        self.assertIn("scripts/setup.sh", start_report(self.root, NOW)["next_action"])
+
+    def test_setup_stamps_freshness_on_tracked_state_files(self) -> None:
+        """A completed setup must report as initialized without hand-written dates."""
+        payload = {
+            "files": {
+                "state/current.md": (
+                    "# Current State\n\n## Active priorities\n\n1. Ship the fix\n"
+                ),
+                "state/blockers.md": (
+                    "# Blockers\n\n**Last Updated:** [DATE]\n\n- Waiting on review\n"
+                ),
+            },
+            "replace_populated": ["state/current.md", "state/blockers.md"],
+        }
+        proposal_path, proposal = self._propose("setup", payload)
+        self._apply(proposal_path, proposal)
+        for filename in ("current.md", "blockers.md"):
+            content = (self.root / "state" / filename).read_text(encoding="utf-8")
+            self.assertIn("**Last Updated:** 2026-08-23", content)
+            self.assertEqual(1, content.count("**Last Updated:**"))
+        self.assertTrue(start_report(self.root, NOW)["initialized"])
     def test_install_and_doctor_are_machine_local(self) -> None:
         target, installed = install_runtime(self.root, "hermes")
         self.assertEqual(self.root / ".context-os/runtime.json", target)
