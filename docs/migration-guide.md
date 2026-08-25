@@ -149,6 +149,6 @@ Before committing:
 - [ ] `ROUTING.md` points to each new project or skill
 - [ ] Populated files were merged, not silently replaced
 - [ ] The final diff contains only intended context
-- [ ] `bash scripts/validate-all.sh` passes
+- [ ] `bash scripts/validate-all.sh --workspace` passes
 
 When the packet is approved, run `/setup` in Claude Code or `$setup` in Codex and provide the packet as the selected import material. The setup workflow will inventory the current workspace, propose a file map, and wait before overwriting populated files.

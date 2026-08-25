@@ -185,12 +185,14 @@ class ComponentManifestTest(unittest.TestCase):
             ):
                 self.validate(manifest, check_paths=False)
 
-        managed_user_path = fixture()
-        managed_user_path["components"][0]["paths"][0] = {
-            "path": "extensions/user-file.md", "policy": "managed"
+        managed_extension = fixture()
+        managed_extension["components"][0]["paths"][0] = {
+            "path": "extensions/product-owned.md", "policy": "managed"
         }
-        with self.assertRaisesRegex(ComponentManifestError, "user-owned seed policy"):
-            self.validate(managed_user_path, check_paths=False)
+        self.assertIs(
+            managed_extension,
+            self.validate(managed_extension, check_paths=False),
+        )
 
     def test_unicode_nfc_casefold_duplicates_and_prefixes_are_rejected(self) -> None:
         path_duplicate = fixture()
@@ -375,6 +377,32 @@ class ComponentManifestTest(unittest.TestCase):
         self.assertIn(".agents/skills/start/agents/openai.yaml", paths)
         self.assertNotIn("adapters/hermes/README.md", paths)
         self.assertNotIn("tests/test_component_manifests.py", paths)
+
+        tracked_with_workspace_extensions = [
+            *owners,
+            ".agents/skills/standup/SKILL.md",
+            ".claude/commands/standup.md",
+            "sessions/2026-08-25.md",
+        ]
+        self.assertEqual(
+            [
+                ".agents/skills/standup/SKILL.md",
+                ".claude/commands/standup.md",
+                "sessions/2026-08-25.md",
+            ],
+            unclassified_tracked_paths(
+                manifest, tracked_with_workspace_extensions, root=ROOT
+            ),
+        )
+        self.assertEqual(
+            [],
+            unclassified_tracked_paths(
+                manifest,
+                tracked_with_workspace_extensions,
+                root=ROOT,
+                allow_extensible=True,
+            ),
+        )
 
 
 if __name__ == "__main__":

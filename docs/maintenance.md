@@ -24,7 +24,8 @@ Maintenance should keep context accurate and permissions narrow without creating
 - Archive completed project context while preserving any durable decision that still matters.
 - Inspect optional integration permissions and remove entries that no longer serve a concrete task.
 - Review session logs for a genuinely repeatable workflow before creating a skill.
-- Run `bash scripts/validate-all.sh` and treat secret scanning as a limited tripwire, not a publication guarantee.
+- Run `bash scripts/validate-all.sh --workspace` and treat secret scanning as a
+  limited tripwire, not a publication guarantee.
 
 ## Portable continuity versus Claude memory
 

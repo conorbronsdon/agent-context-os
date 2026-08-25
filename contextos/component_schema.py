@@ -263,14 +263,6 @@ def validate_component_manifest(
             policy = _text(path_entry.get("policy"), f"{path_field}.policy")
             if policy not in PATH_POLICIES:
                 _fail(f"{path_field}.policy", f"unsupported value {policy!r}")
-            path_parts = tuple(_identity(path).split("/"))
-            root_parts = [tuple(_identity(item).split("/")) for item in extensible_roots]
-            if (any(path_parts[:len(prefix)] == prefix for prefix in root_parts)
-                    and policy != "seed"):
-                _fail(
-                    f"{path_field}.policy",
-                    "paths below extensible roots must use the user-owned seed policy",
-                )
             all_paths.append((path, f"{path_field}.path"))
             if check_paths:
                 _check_regular_file(root, path, f"{path_field}.path")

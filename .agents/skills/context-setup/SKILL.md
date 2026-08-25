@@ -62,5 +62,5 @@ bash scripts/contextos.sh apply <proposal> --confirm <digest> --runtime <active-
 The kernel must refuse path escapes, writes outside context paths, unapproved
 populated replacements, changed targets, or concurrent applies.
 
-Run `bash scripts/validate-all.sh`, report the receipt and result, and offer a
+Run `bash scripts/validate-all.sh --workspace`, report the receipt and result, and offer a
 commit only after final diff review. Suggest `$start` next and `$end` to close.

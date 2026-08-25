@@ -21,14 +21,13 @@ Every currently tracked file has exactly one component owner and one policy:
 - `development`: repository maintenance, tests, CI, or contribution files.
   These prove or build the product but are not runtime workspace outputs.
 
-The roots `content/`, `identity/`, `inbox/`, `projects/`, `sessions/`, `state/`,
-and `writing/` are extensible. Their checked-in seeds are inventoried, while new
-user files below those roots are workspace-owned rather than component-owned.
-The maintainer check remains strict over the repository's tracked source set;
-future operational callers must opt into the extensible-root exception when
-validating a customized workspace. `bash scripts/validate-all.sh --workspace`
-selects that operational mode; CI and product contributors use the strict
-default.
+The roots `.agents/skills/`, `.claude/commands/`, `content/`, `identity/`,
+`inbox/`, `projects/`, `sessions/`, `state/`, and `writing/` are extensible.
+Checked-in files below them retain their explicit owner and policy, while new
+user files are workspace-owned rather than component-owned. The maintainer
+check remains strict over the repository's tracked source set;
+`bash scripts/validate-all.sh --workspace` selects the operational exception
+for a customized workspace. CI and product contributors use the strict default.
 
 ## Components
 

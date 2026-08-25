@@ -65,5 +65,7 @@ remain supported.
 
 ## Validation
 
-Run `bash scripts/validate-all.sh` after changing instructions, skills,
-commands, hooks, scripts, manifests, or generated references.
+Run `bash scripts/validate-all.sh --workspace` after changing personal context
+or adding workspace-owned skills and commands. Product contributors and CI run
+the strict form without `--workspace` after changing instructions, hooks,
+scripts, manifests, or generated references.

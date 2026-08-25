@@ -95,7 +95,7 @@ Run it in Claude Code with `/standup`. `allowed-tools` is a pre-approval grant, 
 ## 5. Validate and inspect
 
 ```bash
-bash scripts/validate-all.sh
+bash scripts/validate-all.sh --workspace
 git diff -- .agents/skills/standup .claude/commands/standup.md
 ```
 
