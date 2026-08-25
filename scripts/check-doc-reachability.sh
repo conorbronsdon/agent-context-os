@@ -59,15 +59,20 @@ for doc in "${DOCS[@]}"; do
   fi
   CHECKED=$((CHECKED + 1))
   base=${doc##*/}
+  # Tracked doc names use portable filename characters, so only the dot needs
+  # escaping before the basename is used in an ERE boundary check.
+  base_regex=${base//./\\.}
   found=0
   for referrer in "${ALL_MD[@]}"; do
     [ -z "$referrer" ] && continue
     [ -f "$referrer" ] || continue
     [ "$referrer" = "$doc" ] && continue
     [ "$referrer" = "CHANGELOG.md" ] && continue
-    # Match the repo-relative path or the bare filename: links from inside
-    # docs/ are relative, links from the root are not.
-    if grep -qF -e "$doc" -e "$base" "$referrer" 2>/dev/null; then
+    # Match the repo-relative path, or a complete bare filename for links from
+    # inside docs/. Boundaries keep maintenance.md from riding on a mention of
+    # repo-maintenance.md (or any other longer filename).
+    if grep -qF "$doc" "$referrer" 2>/dev/null ||
+       grep -qE "(^|[^[:alnum:]_./-])${base_regex}([^[:alnum:]_.-]|$)" "$referrer" 2>/dev/null; then
       found=1
       break
     fi

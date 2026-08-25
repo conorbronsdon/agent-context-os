@@ -2,11 +2,6 @@
 
 ## [Unreleased]
 
-### Changed
-- **Repository renamed `claude-context-os` → `agent-context-os`.** Self-references updated across the README (badges, clone commands, UTM), docs, setup remote check, test fixtures, and the og-image SVG; old GitHub URLs redirect automatically. Re-render and re-upload `docs/assets/og-image.png` via Settings → Social preview.
-- Added first-class Hermes Agent support: an AGENTS.md Hermes section (Hermes loads `AGENTS.md` as project rules), a memory-mapping guide (`docs/memory-across-agents.md`) covering native Hermes memory and its Curator versus repository state and `/dream`, a hooks-equivalents note, and a new [memory across agents](docs/memory-across-agents.md) README row in host support.
-- `scripts/setup.sh` now detects and offers to launch Claude Code, Codex, Hermes, Cursor CLI, or OpenClaw (`--agent auto|claude|codex|hermes|cursor|openclaw|none`), with per-host next steps.
-
 ### Added
 - `CONTRIBUTING.md` — prerequisites, the validator as the one gate, which files are generated, how to add a catalog entry, skill/adapter structure, and the enforced size limits.
 - `SECURITY.md` — private reporting path, what is in and out of scope, and the design boundaries most likely to be misread (validation is not a publication guarantee; `verified` is a metadata claim; nothing here sandboxes an agent).
@@ -52,6 +47,9 @@
 - `.claude/commands/dream-apply.md` — the moved file's own outbound links were never repointed, so every archived file's references silently broke on the move.
 
 ### Changed
+- **Repository renamed `claude-context-os` → `agent-context-os`.** Self-references updated across the README (badges, clone commands, UTM), docs, setup remote check, test fixtures, and the og-image SVG; old GitHub URLs redirect automatically. Re-render and re-upload `docs/assets/og-image.png` via Settings → Social preview.
+- Added first-class Hermes Agent support: an AGENTS.md Hermes section (Hermes loads `AGENTS.md` as project rules), a memory-mapping guide (`docs/memory-across-agents.md`) covering native Hermes memory and its Curator versus repository state and `/dream`, a hooks-equivalents note, and a new [memory across agents](docs/memory-across-agents.md) README row in host support.
+- `scripts/setup.sh` now detects and offers to launch Claude Code, Codex, Hermes, Cursor CLI, or OpenClaw (`--agent auto|claude|codex|hermes|cursor|openclaw|none`), with per-host next steps.
 - The public product name is Context OS; the existing `claude-context-os` repository slug remains for link continuity.
 - The README now follows the complete user journey: privacy-aware setup, selective import, honest host support, opt-in integrations, maintenance, and a task-based documentation map.
 - Repository maintenance now includes session, weekly, monthly, archive, privacy, browser-sync, and integration-review routines, all using `scripts/validate-all.sh`.
