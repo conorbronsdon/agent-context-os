@@ -10,8 +10,8 @@ are scoped to be finishable without any external account or credential.
 
 ## Prerequisites
 
-Git, Bash, and Python 3.9 or newer. Python may be installed as either `python3`
-or `python`.
+Git, Bash, and Python 3.10 or newer. Python may be installed as either
+`python3` or `python`. CI runs the suite on 3.10 so the floor stays real.
 
 There is nothing to install — no package manager, no dependencies, no build
 step. Clone the repository and run the validator.
