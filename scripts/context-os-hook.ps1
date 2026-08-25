@@ -49,6 +49,7 @@ if (-not $pythonCommand) {
 }
 
 $previousErrorActionPreference = $ErrorActionPreference
+$hookExitCode = 1
 try {
     # PowerShell 7.4+ can promote a non-zero native exit to a terminating error
     # under Stop. Preserve the hook's exact exit code instead.
