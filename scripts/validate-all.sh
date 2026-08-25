@@ -6,6 +6,16 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 source "$ROOT/scripts/python-env.sh"
 
+COMPONENT_CHECK_ARGS=(check)
+if [[ ${1:-} == "--workspace" ]]; then
+  COMPONENT_CHECK_ARGS+=(--allow-extensible)
+  shift
+fi
+if (( $# )); then
+  echo "Usage: bash scripts/validate-all.sh [--workspace]" >&2
+  exit 2
+fi
+
 bash scripts/validate-skills.sh
 bash scripts/check-links.sh
 bash scripts/check-doc-reachability.sh
@@ -18,7 +28,7 @@ done < <(find .claude/hooks scripts tests -name '*.sh' -print0)
 
 "$CONTEXTOS_PYTHON_CMD" -m unittest discover -s tests -p 'test_*.py'
 "$CONTEXTOS_PYTHON_CMD" scripts/integrations.py check
-"$CONTEXTOS_PYTHON_CMD" scripts/component-manifests.py check
+"$CONTEXTOS_PYTHON_CMD" scripts/component-manifests.py "${COMPONENT_CHECK_ARGS[@]}"
 "$CONTEXTOS_PYTHON_CMD" scripts/runtime-manifests.py check
 
 "$CONTEXTOS_PYTHON_CMD" - <<'PY'

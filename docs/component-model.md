@@ -26,7 +26,9 @@ and `writing/` are extensible. Their checked-in seeds are inventoried, while new
 user files below those roots are workspace-owned rather than component-owned.
 The maintainer check remains strict over the repository's tracked source set;
 future operational callers must opt into the extensible-root exception when
-validating a customized workspace.
+validating a customized workspace. `bash scripts/validate-all.sh --workspace`
+selects that operational mode; CI and product contributors use the strict
+default.
 
 ## Components
 

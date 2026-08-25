@@ -103,7 +103,7 @@ Then run:
 
 ```bash
 bash scripts/contextos.sh doctor
-bash scripts/validate-all.sh
+bash scripts/validate-all.sh --workspace
 git diff --check
 git status --short
 ```
@@ -143,6 +143,9 @@ Install and authenticate one add-on at a time. Run its narrow health check befor
 - Keep one fact in one canonical file and route to it elsewhere.
 - Review files that pass their staleness threshold.
 - Use one git worktree per concurrent agent session.
-- Run `bash scripts/validate-all.sh` after changing instructions, skills, scripts, or generated references.
+- Run `bash scripts/validate-all.sh --workspace` after changing instructions,
+  skills, scripts, generated references, or tracked personal context. The
+  contributor and CI form omits `--workspace` to enforce complete product-file
+  ownership.
 
 See [repository maintenance](repo-maintenance.md) and the [safety contract](safety-contract.md) for the operating rules.

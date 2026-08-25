@@ -7,12 +7,16 @@ Context is useful only when it is current, scoped, and safe to load. Maintenance
 ## Before committing
 
 ```bash
-bash scripts/validate-all.sh
+bash scripts/validate-all.sh --workspace
 git diff --check
 git status --short
 ```
 
 Review the actual diff. Validation catches structure and known invariants, not an incorrect personal fact or an overly broad instruction.
+
+`--workspace` permits new tracked files only below the component catalog's
+declared extensible roots. Product contributors and CI omit that flag so every
+tracked template file must have an explicit component owner.
 
 ## Reviewing tracked context
 

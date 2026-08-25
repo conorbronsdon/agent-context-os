@@ -180,13 +180,19 @@ Claude Code auto-memory is a separate, host-specific layer. The repository inclu
 - Use one git worktree per concurrent agent session.
 - Follow [`docs/safety-contract.md`](docs/safety-contract.md) before external writes, destructive actions, or permission changes.
 
-Run the full local check after changing instructions, skills, scripts, adapters, or generated references:
+Run the full local check after changing instructions, skills, scripts, adapters,
+generated references, or tracked personal context:
 
 ```bash
-bash scripts/validate-all.sh
+bash scripts/validate-all.sh --workspace
 ```
 
-CI runs the same aggregate validator. It checks structure, adapter mappings, links, shell syntax, hook behavior, JSON, tests, and generated integration documentation. It cannot prove the behavior of an installed agent version or an external service.
+The workspace mode permits new tracked files only below the component catalog's
+declared extensible roots. CI and product contributors run the strict form
+without `--workspace`, so every tracked template file still requires an owner.
+Both forms check structure, adapter mappings, links, shell syntax, hook behavior,
+JSON, tests, and generated integration documentation. They cannot prove the
+behavior of an installed agent version or an external service.
 
 ## Documentation
 

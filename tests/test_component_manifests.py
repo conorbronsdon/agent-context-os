@@ -239,6 +239,22 @@ class ComponentManifestTest(unittest.TestCase):
             with self.assertRaisesRegex(ComponentManifestError, "symlink"):
                 self.validate(symlink)
 
+        real_directory = self.root / "real-directory"
+        real_directory.mkdir()
+        (real_directory / "nested.txt").write_text("fixture\n", encoding="utf-8")
+        linked_directory = self.root / "linked-directory"
+        try:
+            linked_directory.symlink_to(real_directory, target_is_directory=True)
+        except OSError:
+            pass
+        else:
+            ancestor = fixture()
+            ancestor["components"][0]["paths"][0]["path"] = (
+                "linked-directory/nested.txt"
+            )
+            with self.assertRaisesRegex(ComponentManifestError, "symlink"):
+                self.validate(ancestor)
+
     def test_generated_write_rejects_symlink_leaf_and_ancestor(self) -> None:
         generated = self.root / "generated"
         generated.mkdir()

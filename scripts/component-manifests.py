@@ -56,6 +56,7 @@ def git_tracked_paths(root: Path) -> list[str]:
 def check(
     root: Path = ROOT, manifest_path: Path | None = None,
     schema_path: Path | None = None,
+    *, allow_extensible: bool = False,
 ) -> tuple[int, int]:
     manifest_path = manifest_path or root / "components" / "manifest.json"
     schema_path = schema_path or root / "components" / "schema.json"
@@ -66,7 +67,9 @@ def check(
             "components/schema.json is stale; run scripts/component-manifests.py generate"
         )
     tracked = git_tracked_paths(root)
-    missing = unclassified_tracked_paths(manifest, tracked, root=root)
+    missing = unclassified_tracked_paths(
+        manifest, tracked, root=root, allow_extensible=allow_extensible
+    )
     if missing:
         preview = ", ".join(missing[:20])
         if len(missing) > 20:
@@ -85,7 +88,17 @@ def check(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("generate", "check"))
+    parser.add_argument(
+        "--allow-extensible",
+        action="store_true",
+        help=(
+            "allow unowned tracked files below declared extensible roots; "
+            "use only when validating a personalized workspace"
+        ),
+    )
     args = parser.parse_args(argv)
+    if args.command != "check" and args.allow_extensible:
+        parser.error("--allow-extensible is only valid with check")
     try:
         if args.command == "generate":
             # Validate structure before writing. Full path and coverage checks run
@@ -94,7 +107,9 @@ def main(argv: list[str] | None = None) -> int:
             write_generated_file(SCHEMA_PATH, schema_text(), root=ROOT)
             component_count, path_count = check()
         else:
-            component_count, path_count = check()
+            component_count, path_count = check(
+                allow_extensible=args.allow_extensible
+            )
     except (ComponentManifestError, OSError, UnicodeError, json.JSONDecodeError) as exc:
         print(f"component-manifests: {exc}", file=sys.stderr)
         return 1
