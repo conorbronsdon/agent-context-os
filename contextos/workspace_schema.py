@@ -379,10 +379,12 @@ def workspace_schema_document() -> dict[str, Any]:
     }
     path = {
         **text,
-        "pattern": r"^(?!\s)(?![A-Za-z]:)(?![/\\])(?!.*\\)"
+        "pattern": r"^(?!\s)"
+        r"(?![^\u0000-\u001f\u007f]*[\u0000-\u001f\u007f])"
+        r"(?![A-Za-z]:)(?![/\\])(?!.*\\)"
         r"(?!.*(?:^|/)\.\.?(?:/|$))"
         r"(?!.*//)(?!.*(?:^|/)(?:\.git|\.context-os)(?:/|$))"
-        r"(?:[^\u0000-\u001f\u007f]*\S)$",
+        r"(?:[^\u0000-\u001f\u007f]*[^\u0000-\u001f\u007f\s])$",
     }
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",

@@ -216,6 +216,10 @@ class WorkspaceConfigTest(unittest.TestCase):
             " state",
             "state ",
             "state\t",
+            "state\n",
+            "state\x00",
+            "state\x08",
+            "state\x7f",
         ):
             with self.subTest(rejected=rejected):
                 self.assertIsNone(re.match(pattern, rejected))
