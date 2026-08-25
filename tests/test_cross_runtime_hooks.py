@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import unittest
@@ -9,6 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts/context-os-hook.py"
+WINDOWS_WRAPPER = ROOT / "scripts/context-os-hook.ps1"
 
 
 class CrossRuntimeHookTest(unittest.TestCase):
@@ -27,11 +29,65 @@ class CrossRuntimeHookTest(unittest.TestCase):
         self.assertEqual({"SessionStart", "PreToolUse"}, set(config["hooks"]))
         serialized = json.dumps(config)
         self.assertIn("context-os-hook.sh", serialized)
-        self.assertIn("context-os-hook.py", serialized)
+        self.assertIn("context-os-hook.ps1", serialized)
         self.assertIn("commandWindows", serialized)
         self.assertIn("powershell.exe", serialized)
+        self.assertNotIn("; python ", serialized)
         pre_tool = config["hooks"]["PreToolUse"][0]
         self.assertEqual("^apply_patch$", pre_tool["matcher"])
+
+    @unittest.skipUnless(sys.platform == "win32", "native PowerShell adapter test")
+    def test_windows_wrapper_honors_override_and_hook_controls(self) -> None:
+        environment = os.environ.copy()
+        environment["CONTEXTOS_PYTHON"] = sys.executable
+        command = [
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(WINDOWS_WRAPPER),
+            "codex",
+            "pre-write",
+        ]
+
+        must_fire = subprocess.run(
+            command,
+            cwd=ROOT,
+            env=environment,
+            input=json.dumps({"tool_input": {"file_path": str(ROOT / "state/current.md")}}),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(0, must_fire.returncode, must_fire.stderr)
+        self.assertIn("proposal/apply", json.loads(must_fire.stdout)["systemMessage"])
+
+        must_not_fire = subprocess.run(
+            command,
+            cwd=ROOT,
+            env=environment,
+            input=json.dumps({"tool_input": {"file_path": str(ROOT / "README.md")}}),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(0, must_not_fire.returncode, must_not_fire.stderr)
+        self.assertEqual("", must_not_fire.stdout)
+
+        environment["CONTEXTOS_PYTHON"] = str(ROOT / "no-such-python")
+        invalid_override = subprocess.run(
+            command,
+            cwd=ROOT,
+            env=environment,
+            input="{}",
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertNotEqual(0, invalid_override.returncode)
+        self.assertIn("never silently replaced", invalid_override.stderr)
 
     def test_codex_pre_write_must_fire_control(self) -> None:
         result = self.run_hook(

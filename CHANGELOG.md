@@ -21,6 +21,7 @@
 
 ### Fixed
 - Workspace readiness now has one definition. `start`, `doctor`, and the session-start hook share a single predicate keyed on `state/current.md`; previously the hook and `start` could report opposite verdicts for the same workspace. `weekly-priorities.md` and `blockers.md` freshness is still reported, under a separate `state-freshness` check, but no longer gates readiness — leaving them empty is a valid steady state, not an unfinished setup.
+- Future-dated `state/current.md` timestamps no longer satisfy the shared readiness predicate, and the native Windows Codex hooks now honor the same `CONTEXTOS_PYTHON` override and Python 3.9 floor as POSIX hooks.
 - `setup` now stamps `**Last Updated:**` on the state files that `start` and `doctor` read, so a completed setup reports as initialized without depending on the agent to hand-write the line.
 - `start`'s `next_action` names the command to run instead of referring to "the explicit setup workflow" abstractly.
 - `CONTEXTOS_PYTHON` is honored exactly: an override that does not resolve to a working interpreter now fails loudly instead of silently falling back to a different one. The interpreter floor is Python 3.9, matching the kernel's use of `str.removeprefix`, instead of any Python 3.
