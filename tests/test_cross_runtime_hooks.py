@@ -39,7 +39,7 @@ class CrossRuntimeHookTest(unittest.TestCase):
     @unittest.skipUnless(sys.platform == "win32", "native PowerShell adapter test")
     def test_windows_wrapper_honors_override_and_hook_controls(self) -> None:
         environment = os.environ.copy()
-        environment["CONTEXTOS_PYTHON"] = sys.executable
+        environment.pop("CONTEXTOS_PYTHON", None)
         command = [
             "powershell.exe",
             "-NoProfile",
@@ -64,6 +64,19 @@ class CrossRuntimeHookTest(unittest.TestCase):
         self.assertEqual(0, must_fire.returncode, must_fire.stderr)
         self.assertIn("proposal/apply", json.loads(must_fire.stdout)["systemMessage"])
 
+        session_start = subprocess.run(
+            [*command[:-1], "session-start"],
+            cwd=ROOT,
+            env=environment,
+            input="{}",
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(0, session_start.returncode, session_start.stderr)
+        self.assertIn("not initialized", json.loads(session_start.stdout)["systemMessage"])
+
+        environment["CONTEXTOS_PYTHON"] = sys.executable
         must_not_fire = subprocess.run(
             command,
             cwd=ROOT,
@@ -87,6 +100,7 @@ class CrossRuntimeHookTest(unittest.TestCase):
             check=False,
         )
         self.assertNotEqual(0, invalid_override.returncode)
+        self.assertIn(str(ROOT / "no-such-python"), invalid_override.stderr)
         self.assertIn("never silently replaced", invalid_override.stderr)
 
     def test_codex_pre_write_must_fire_control(self) -> None:
