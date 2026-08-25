@@ -652,7 +652,7 @@ def _state_freshness(path: Path, today: date, threshold: int) -> dict[str, Any]:
     }
 
 
-def _is_initialized(workspace: Workspace) -> bool:
+def _is_initialized(workspace: Workspace, today: date | None = None) -> bool:
     """Single readiness predicate shared by start, doctor, and the session hook.
 
     Only current.md gates readiness. weekly-priorities.md and blockers.md are
@@ -661,13 +661,12 @@ def _is_initialized(workspace: Workspace) -> bool:
     needing setup forever. Their freshness is still reported separately.
     """
     current = workspace.state_dir / INITIALIZATION_FILE
-    if not current.exists():
-        return False
-    content = current.read_text(encoding="utf-8")
-    if PLACEHOLDER_DATE in content:
-        return False
-    match = LAST_UPDATED_RE.search(content)
-    return bool(match and REAL_DATE_RE.fullmatch(match.group(1).strip()))
+    freshness = _state_freshness(
+        current,
+        today if today is not None else utc_now().date(),
+        STATE_THRESHOLDS[INITIALIZATION_FILE],
+    )
+    return freshness["freshness_status"] in {"fresh", "stale"}
 
 
 def _initialization_state(
@@ -679,7 +678,7 @@ def _initialization_state(
         )
         for filename, threshold in STATE_THRESHOLDS.items()
     }
-    return _is_initialized(workspace), state
+    return _is_initialized(workspace, today), state
 
 
 def start_report(root: Path, now: datetime) -> dict[str, Any]:

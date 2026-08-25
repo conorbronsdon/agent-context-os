@@ -312,6 +312,10 @@ class KernelTest(unittest.TestCase):
         self.assertLess(current["age_days"], 0)
         self.assertIsNone(current["stale"])
         self.assertFalse(report["initialized"])
+        messages = [
+            finding["message"] for finding in hook_report(self.root, "session-start", {})["findings"]
+        ]
+        self.assertTrue(any("not initialized" in message for message in messages), messages)
 
         diagnosis = doctor(self.root)
         initialization = next(
@@ -319,6 +323,7 @@ class KernelTest(unittest.TestCase):
         )
         self.assertEqual("warn", initialization["status"])
         self.assertIn("state/current.md", initialization["detail"])
+
     def test_readiness_predicate_is_shared_by_start_doctor_and_hook(self) -> None:
         """current.md gates readiness, and all three consumers must agree on it."""
         for filename in ("weekly-priorities.md", "blockers.md"):
