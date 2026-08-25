@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -33,6 +34,9 @@ class CrossRuntimeHookTest(unittest.TestCase):
         self.assertIn("commandWindows", serialized)
         self.assertIn("powershell.exe", serialized)
         self.assertNotIn("; python ", serialized)
+        hermes_readme = (ROOT / "adapters/hermes/README.md").read_text(encoding="utf-8")
+        self.assertIn("context-os-hook.ps1", hermes_readme)
+        self.assertNotIn("; python ", hermes_readme)
         pre_tool = config["hooks"]["PreToolUse"][0]
         self.assertEqual("^apply_patch$", pre_tool["matcher"])
 
@@ -64,17 +68,47 @@ class CrossRuntimeHookTest(unittest.TestCase):
         self.assertEqual(0, must_fire.returncode, must_fire.stderr)
         self.assertIn("proposal/apply", json.loads(must_fire.stdout)["systemMessage"])
 
-        session_start = subprocess.run(
-            [*command[:-1], "session-start"],
-            cwd=ROOT,
-            env=environment,
-            input="{}",
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        self.assertEqual(0, session_start.returncode, session_start.stderr)
-        self.assertIn("not initialized", json.loads(session_start.stdout)["systemMessage"])
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            fake_python = Path(temporary_directory) / "python.cmd"
+            fake_python.write_text(
+                '@echo off\nif "%~1"=="-c" exit /b 0\n'
+                'echo {"systemMessage":"%~3 forwarded"}\n',
+                encoding="utf-8",
+            )
+            environment["CONTEXTOS_PYTHON"] = str(fake_python)
+            session_start = subprocess.run(
+                [*command[:-1], "session-start"],
+                cwd=ROOT,
+                env=environment,
+                input="{}",
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(0, session_start.returncode, session_start.stderr)
+            self.assertEqual(
+                "session-start forwarded",
+                json.loads(session_start.stdout)["systemMessage"],
+            )
+
+            chatty_python = Path(temporary_directory) / "chatty-python.cmd"
+            chatty_python.write_text(
+                '@echo off\necho not-a-working-interpreter\nexit /b 1\n',
+                encoding="utf-8",
+            )
+            environment["CONTEXTOS_PYTHON"] = str(chatty_python)
+            rejected_chatty_override = subprocess.run(
+                command,
+                cwd=ROOT,
+                env=environment,
+                input="{}",
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertNotEqual(0, rejected_chatty_override.returncode)
+            self.assertEqual("", rejected_chatty_override.stdout)
+            self.assertIn("never silently replaced", rejected_chatty_override.stderr)
 
         environment["CONTEXTOS_PYTHON"] = sys.executable
         must_not_fire = subprocess.run(

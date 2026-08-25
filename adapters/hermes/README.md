@@ -12,9 +12,9 @@ runtimes. Merge it into user configuration only after reviewing its commands.
 Kernel proposal/apply enforcement does not depend on these hooks.
 
 The YAML example is POSIX-oriented. On Windows, use an equivalent command such
-as `powershell.exe -NoProfile -NonInteractive -Command "$root = git rev-parse
---show-toplevel; python (Join-Path $root 'scripts/context-os-hook.py') hermes
-pre-write"` for the pre-tool event (and replace `pre-write` with
+as `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command
+"$root = git rev-parse --show-toplevel; & (Join-Path $root
+'scripts/context-os-hook.ps1') hermes pre-write"` for the pre-tool event (and replace `pre-write` with
 `session-start` for the session event). Hermes hook policy remains advisory.
 
 Hermes `MEMORY.md` and `USER.md` remain host-local. Never point the kernel at

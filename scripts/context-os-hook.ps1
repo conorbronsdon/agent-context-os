@@ -12,7 +12,7 @@ function Test-ContextOsPython {
         return $false
     }
     try {
-        & $Candidate -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)" 2>$null
+        & $Candidate -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)" >$null 2>&1
         return $LASTEXITCODE -eq 0
     } catch {
         return $false
