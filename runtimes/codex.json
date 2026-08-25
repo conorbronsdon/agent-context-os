@@ -37,11 +37,15 @@
       },
       "hook_output": "system-message",
       "binary_probes": [
-        {"purpose": "availability", "candidates": ["codex"], "args": [], "success_exit_codes": [0]},
-        {"purpose": "version", "candidates": ["codex"], "args": ["--version"], "success_exit_codes": [0]}
+        {"purpose": "availability", "candidates": ["codex"]},
+        {"purpose": "version", "candidates": ["codex"]}
       ],
-      "conformance_test": "tests/test_runtime_conformance.py",
-      "evidence": ["codex-agents", "codex-commands", "codex-conformance"]
+      "conformance_tests": [
+        "tests/test_contextos_kernel.py",
+        "tests/test_cross_runtime_hooks.py",
+        "tests/test_runtime_conformance.py"
+      ],
+      "evidence": ["codex-agents", "codex-commands", "codex-kernel", "codex-conformance"]
     }
   },
   "evidence": {
@@ -61,10 +65,16 @@
         "claims": ["explicit_invocation", "invocation"]
       },
       {
+        "id": "codex-kernel",
+        "type": "conformance",
+        "location": "tests/test_contextos_kernel.py",
+        "claims": ["proposal_apply"]
+      },
+      {
         "id": "codex-conformance",
         "type": "conformance",
         "location": "tests/test_runtime_conformance.py",
-        "claims": ["proposal_apply", "support"]
+        "claims": ["support"]
       }
     ]
   }

@@ -38,11 +38,15 @@
       },
       "hook_output": "system-message",
       "binary_probes": [
-        {"purpose": "availability", "candidates": ["claude"], "args": [], "success_exit_codes": [0]},
-        {"purpose": "version", "candidates": ["claude"], "args": ["--version"], "success_exit_codes": [0]}
+        {"purpose": "availability", "candidates": ["claude"]},
+        {"purpose": "version", "candidates": ["claude"]}
       ],
-      "conformance_test": "tests/test_runtime_conformance.py",
-      "evidence": ["claude-settings", "claude-hooks", "claude-conformance"]
+      "conformance_tests": [
+        "tests/test_contextos_kernel.py",
+        "tests/test_cross_runtime_hooks.py",
+        "tests/test_runtime_conformance.py"
+      ],
+      "evidence": ["claude-settings", "claude-hooks", "claude-kernel", "claude-conformance"]
     }
   },
   "evidence": {
@@ -62,10 +66,16 @@
         "claims": ["project_hooks", "blocking_pre_tool_hook", "hook_output"]
       },
       {
+        "id": "claude-kernel",
+        "type": "conformance",
+        "location": "tests/test_contextos_kernel.py",
+        "claims": ["proposal_apply"]
+      },
+      {
         "id": "claude-conformance",
         "type": "conformance",
         "location": "tests/test_runtime_conformance.py",
-        "claims": ["proposal_apply", "support"]
+        "claims": ["support"]
       }
     ]
   }

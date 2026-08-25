@@ -93,7 +93,7 @@
         "required": [
           "binary_probes",
           "capabilities",
-          "conformance_test",
+          "conformance_tests",
           "evidence",
           "hook_output",
           "instruction_sources",
@@ -374,10 +374,8 @@
               "type": "object",
               "additionalProperties": false,
               "required": [
-                "args",
                 "candidates",
-                "purpose",
-                "success_exit_codes"
+                "purpose"
               ],
               "properties": {
                 "purpose": {
@@ -395,31 +393,19 @@
                     "type": "string",
                     "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
                   }
-                },
-                "args": {
-                  "type": "array",
-                  "uniqueItems": true,
-                  "items": {
-                    "type": "string",
-                    "minLength": 1,
-                    "pattern": "^(?!\\s)(?:[^\\x00-\\x1f]*\\S)$"
-                  }
-                },
-                "success_exit_codes": {
-                  "type": "array",
-                  "minItems": 1,
-                  "uniqueItems": true,
-                  "items": {
-                    "type": "integer"
-                  }
                 }
               }
             }
           },
-          "conformance_test": {
-            "type": "string",
-            "minLength": 1,
-            "pattern": "^(?!\\s)(?:[^\\x00-\\x1f]*\\S)$"
+          "conformance_tests": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!\\s)(?:[^\\x00-\\x1f]*\\S)$"
+            }
           },
           "evidence": {
             "type": "array",

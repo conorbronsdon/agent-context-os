@@ -28,7 +28,7 @@ def main() -> int:
     surface_id = sys.argv[3] if len(sys.argv) == 4 else None
     hook_output: str | None = "system-message"
     try:
-        manifest = runtime_manifest(ROOT, runtime)
+        manifest = runtime_manifest(ROOT, runtime, check_paths=False)
         hook_output = runtime_surface(manifest, surface_id).get("hook_output")
         raw = sys.stdin.read().strip()
         payload = json.loads(raw) if raw else {}

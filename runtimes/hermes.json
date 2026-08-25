@@ -39,11 +39,18 @@
       },
       "hook_output": "allow-message",
       "binary_probes": [
-        {"purpose": "availability", "candidates": ["hermes"], "args": [], "success_exit_codes": [0]},
-        {"purpose": "version", "candidates": ["hermes"], "args": ["--version"], "success_exit_codes": [0]}
+        {"purpose": "availability", "candidates": ["hermes"]},
+        {"purpose": "version", "candidates": ["hermes"]}
       ],
-      "conformance_test": "tests/test_runtime_conformance.py",
-      "evidence": ["hermes-overview", "hermes-hooks", "hermes-conformance"]
+      "conformance_tests": [
+        "tests/test_contextos_kernel.py",
+        "tests/test_cross_runtime_hooks.py",
+        "tests/test_runtime_conformance.py"
+      ],
+      "evidence": [
+        "hermes-overview", "hermes-hooks", "hermes-kernel",
+        "hermes-hook-conformance", "hermes-conformance"
+      ]
     }
   },
   "evidence": {
@@ -63,10 +70,22 @@
         "claims": ["hook_output"]
       },
       {
+        "id": "hermes-kernel",
+        "type": "conformance",
+        "location": "tests/test_contextos_kernel.py",
+        "claims": ["proposal_apply"]
+      },
+      {
+        "id": "hermes-hook-conformance",
+        "type": "conformance",
+        "location": "tests/test_cross_runtime_hooks.py",
+        "claims": ["project_hooks", "blocking_pre_tool_hook"]
+      },
+      {
         "id": "hermes-conformance",
         "type": "conformance",
         "location": "tests/test_runtime_conformance.py",
-        "claims": ["agent_skills", "explicit_invocation", "project_hooks", "blocking_pre_tool_hook", "proposal_apply", "support"]
+        "claims": ["agent_skills", "explicit_invocation", "support"]
       }
     ]
   }

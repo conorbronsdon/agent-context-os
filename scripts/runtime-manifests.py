@@ -34,6 +34,8 @@ def support_block(registry: dict[str, dict[str, object]]) -> str:
         "|---|---|---|",
     ]
     for manifest in registry.values():
+        if manifest["support_tier"] not in {"first-class", "experimental"}:
+            continue
         lines.append(
             f"| {cell(manifest['display_name'])} | {cell(manifest['support_tier'])} | "
             f"{cell(manifest['support_summary'])} |"

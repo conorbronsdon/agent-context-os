@@ -600,7 +600,9 @@ def runtime_ids(root: Path) -> list[str]:
     return identifiers
 
 
-def runtime_manifest(root: Path, runtime: str) -> dict[str, Any]:
+def runtime_manifest(
+    root: Path, runtime: str, *, check_paths: bool = True
+) -> dict[str, Any]:
     if not isinstance(runtime, str) or runtime == "generic" or not RUNTIME_ID_RE.fullmatch(runtime):
         raise ContextOSError(f"invalid runtime id: {runtime}")
     manifest_path = root / "runtimes" / f"{runtime}.json"
@@ -608,7 +610,9 @@ def runtime_manifest(root: Path, runtime: str) -> dict[str, Any]:
         raise ContextOSError(f"missing runtime manifest: {manifest_path}")
     manifest = read_json(manifest_path)
     try:
-        validate_runtime_manifest(manifest, runtime_id=runtime, root=root)
+        validate_runtime_manifest(
+            manifest, runtime_id=runtime, root=root, check_paths=check_paths
+        )
     except RuntimeManifestError as exc:
         raise ContextOSError(f"invalid runtime manifest: {manifest_path} ({exc})") from exc
     return manifest
@@ -616,7 +620,7 @@ def runtime_manifest(root: Path, runtime: str) -> dict[str, Any]:
 
 def validate_execution_runtime(root: Path, runtime: str) -> None:
     if runtime != "generic":
-        runtime_manifest(root, runtime)
+        runtime_manifest(root, runtime, check_paths=False)
 
 
 def runtime_registry(root: Path) -> dict[str, dict[str, Any]]:
@@ -625,12 +629,16 @@ def runtime_registry(root: Path) -> dict[str, dict[str, Any]]:
 
 def runtime_surface(manifest: dict[str, Any], surface_id: str | None = None) -> dict[str, Any]:
     surfaces = manifest.get("surfaces", {})
+    if surface_id is not None and surface_id not in surfaces:
+        raise ContextOSError(
+            f"runtime {manifest.get('runtime', 'unknown')} has no surface {surface_id!r}"
+        )
     selected = surface_id or ("cli" if "cli" in surfaces else None)
     if selected is None and len(surfaces) == 1:
         selected = next(iter(surfaces))
     if selected not in surfaces:
         raise ContextOSError(
-            f"runtime {manifest.get('runtime', 'unknown')} has no unambiguous surface"
+            f"runtime {manifest.get('runtime', 'unknown')} requires an explicit surface"
         )
     return surfaces[selected]
 
@@ -638,8 +646,14 @@ def runtime_surface(manifest: dict[str, Any], surface_id: str | None = None) -> 
 def runtime_hook_payload(
     manifest: dict[str, Any], messages: list[str], surface_id: str | None = None
 ) -> dict[str, str] | None:
-    message = "\n".join(messages)
     hook_output = runtime_surface(manifest, surface_id).get("hook_output")
+    return render_hook_payload(hook_output, messages)
+
+
+def render_hook_payload(
+    hook_output: str | None, messages: list[str]
+) -> dict[str, str] | None:
+    message = "\n".join(messages)
     if hook_output is None:
         return None
     if hook_output == "system-message":
@@ -784,6 +798,8 @@ def doctor(
     if selected is None and local_runtime.exists():
         selected = read_json(local_runtime).get("runtime")
     hosts = runtime_ids(root) if all_runtimes or not selected else [selected]
+    if not hosts:
+        add("manifest-registry", "fail", "no runtime descriptors found")
     for host in hosts:
         try:
             manifest = runtime_manifest(root, host)
@@ -824,27 +840,11 @@ def doctor(
                     }
                     executable = next((location for location in locations.values() if location), None)
                     check_name = f"runtime:{selected}:{surface_id}:{probe['purpose']}"
-                    if probe["purpose"] == "availability" or executable is None:
-                        detail = ", ".join(
-                            f"{candidate}={location or 'not installed'}"
-                            for candidate, location in locations.items()
-                        )
-                        add(check_name, "pass" if executable else "warn", detail)
-                        continue
-                    try:
-                        completed = subprocess.run(
-                            [executable, *probe["args"]], text=True, capture_output=True,
-                            timeout=10, check=False,
-                        )
-                        output = (completed.stdout or completed.stderr).strip().splitlines()
-                        detail = output[0][:240] if output else f"exit {completed.returncode}"
-                        add(
-                            check_name,
-                            "pass" if completed.returncode in probe["success_exit_codes"] else "warn",
-                            detail,
-                        )
-                    except (OSError, subprocess.SubprocessError) as exc:
-                        add(check_name, "warn", str(exc))
+                    detail = ", ".join(
+                        f"{candidate}={location or 'not installed'}"
+                        for candidate, location in locations.items()
+                    )
+                    add(check_name, "pass" if executable else "warn", detail)
     status = "fail" if any(item["status"] == "fail" for item in checks) else "warn" if any(item["status"] == "warn" for item in checks) else "pass"
     return {"schema_version": SCHEMA_VERSION, "status": status, "checks": checks}
 

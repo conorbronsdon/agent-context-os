@@ -2,10 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+- Runtime descriptors move from schema v1 to the discoverable, incompatible
+  schema v2 with surface-specific capabilities, resolution-only probes,
+  instruction and skill precedence, typed evidence, generated JSON Schema and
+  README support claims, plus strict maintainer and conformance checks.
+
 ### Added
-- A discoverable schema-v2 runtime registry with surface-specific capabilities,
-  probes, instruction and skill precedence, typed evidence, generated JSON Schema
-  and README support claims, plus strict maintainer and conformance checks.
 - `CONTRIBUTING.md` — prerequisites, the validator as the one gate, which files are generated, how to add a catalog entry, skill/adapter structure, and the enforced size limits.
 - `SECURITY.md` — private reporting path, what is in and out of scope, and the design boundaries most likely to be misread (validation is not a publication guarantee; `verified` is a metadata claim; nothing here sandboxes an agent).
 - Issue templates for integration proposals and bug reports, plus contact links routing security reports away from public issues.

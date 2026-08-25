@@ -206,6 +206,38 @@ class CrossRuntimeHookTest(unittest.TestCase):
         self.assertEqual(0, result.returncode)
         self.assertIn("could not run", json.loads(result.stdout)["systemMessage"])
 
+    def test_cli_malformed_hermes_input_preserves_allow_envelope(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable, "-m", "contextos", "--root", str(ROOT), "hook",
+                "pre-write", "--runtime", "hermes",
+            ],
+            cwd=ROOT,
+            input="not-json",
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        output = json.loads(result.stdout)
+        self.assertEqual("allow", output["action"])
+        self.assertIn("could not run", output["message"])
+
+    def test_cli_invalid_surface_remains_advisory(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable, "-m", "contextos", "--root", str(ROOT), "hook",
+                "pre-write", "--runtime", "hermes", "--surface", "bogus",
+            ],
+            cwd=ROOT,
+            input="not-json",
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("no surface 'bogus'", json.loads(result.stdout)["systemMessage"])
+
 
 if __name__ == "__main__":
     unittest.main()

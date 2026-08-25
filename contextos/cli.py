@@ -16,8 +16,9 @@ from .kernel import (
     install_runtime,
     parse_now,
     read_json,
-    runtime_hook_payload,
+    render_hook_payload,
     runtime_manifest,
+    runtime_surface,
     start_report,
 )
 
@@ -62,6 +63,9 @@ def emit(value: object) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
+    hook_manifest: dict | None = None
+    hook_output: str | None = None
+    hook_output_resolved = False
     try:
         root = discover_root(args.root)
         if args.command == "start":
@@ -86,20 +90,28 @@ def main(argv: list[str] | None = None) -> int:
             emit(report)
             return 1 if report["status"] == "fail" else 0
         elif args.command == "hook":
-            manifest = runtime_manifest(root, args.runtime)
+            hook_manifest = runtime_manifest(root, args.runtime, check_paths=False)
+            hook_output = runtime_surface(hook_manifest, args.surface).get("hook_output")
+            hook_output_resolved = True
             raw = sys.stdin.read().strip()
             payload = json.loads(raw) if raw else {}
             if not isinstance(payload, dict):
                 raise ContextOSError("hook input must be a JSON object")
             report = hook_report(root, args.event, payload)
             messages = [item["message"] for item in report["findings"]]
-            rendered = runtime_hook_payload(manifest, messages, args.surface)
+            rendered = render_hook_payload(hook_output, messages)
             if rendered is not None:
                 emit(rendered)
         return 0
     except (ContextOSError, json.JSONDecodeError, OSError, UnicodeError) as exc:
         if getattr(args, "command", None) == "hook":
-            emit({"systemMessage": f"Context OS advisory hook could not run: {exc}"})
+            message = f"Context OS advisory hook could not run: {exc}"
+            rendered = (
+                render_hook_payload(hook_output, [message])
+                if hook_output_resolved else {"systemMessage": message}
+            )
+            if rendered is not None:
+                emit(rendered)
             return 0
         print(f"context-os: {exc}", file=sys.stderr)
         return 2

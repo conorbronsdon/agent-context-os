@@ -70,6 +70,11 @@ Adapters may improve presentation or catch errors earlier, but unsupported hooks
 never weaken kernel enforcement. Hermes copied skills can drift, so installation
 and `doctor` report that boundary explicitly.
 
+Binary probes are declarative, resolution-only checks. `doctor` may resolve the
+listed executable candidates with `PATH`, but runtime descriptors cannot supply
+arguments or cause a process to execute. Native diagnostic execution requires a
+separate code-owned trust policy.
+
 ## Conformance policy
 
 Every lifecycle mutation needs:

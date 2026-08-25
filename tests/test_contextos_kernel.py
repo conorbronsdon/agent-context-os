@@ -17,6 +17,7 @@ from contextos.kernel import (
     hook_report,
     install_runtime,
     read_json,
+    runtime_manifest,
     canonical_json,
     sha256_text,
     start_report,
@@ -444,6 +445,12 @@ class KernelTest(unittest.TestCase):
         check = next(item for item in report["checks"] if item["name"] == "manifest:claude")
         self.assertEqual("fail", check["status"])
 
+    def test_bare_doctor_fails_when_registry_is_empty(self) -> None:
+        shutil.rmtree(self.root / "runtimes")
+        report = doctor(self.root)
+        check = next(item for item in report["checks"] if item["name"] == "manifest-registry")
+        self.assertEqual("fail", check["status"])
+
     def test_doctor_handles_runtime_without_a_cli_surface(self) -> None:
         path = self.root / "runtimes/hermes.json"
         manifest = json.loads(path.read_text(encoding="utf-8"))
@@ -467,11 +474,31 @@ class KernelTest(unittest.TestCase):
             any(item["name"].startswith("runtime:hermes:cloud:") for item in report["checks"])
         )
 
+    def test_doctor_never_executes_descriptor_probe_commands(self) -> None:
+        with mock.patch("contextos.kernel.shutil.which", return_value="resolved-command"), mock.patch(
+            "contextos.kernel.subprocess.run",
+            side_effect=AssertionError("descriptor probe executed a process"),
+        ) as run:
+            report = doctor(self.root, "hermes")
+        run.assert_not_called()
+        self.assertTrue(
+            any(item["name"] == "runtime:hermes:cli:version" for item in report["checks"])
+        )
+
     def test_runtime_manifest_is_required_for_receipt_claim(self) -> None:
         proposal_path, proposal = self._propose("update", {"progress": ["One"]})
         os.remove(self.root / "runtimes/codex.json")
         with self.assertRaisesRegex(ContextOSError, "missing runtime manifest"):
             self._apply(proposal_path, proposal)
+
+    def test_apply_does_not_require_maintainer_docs_or_tests(self) -> None:
+        proposal_path, proposal = self._propose("update", {"progress": ["One"]})
+        for directory in ("docs", "tests", ".agents"):
+            shutil.rmtree(self.root / directory)
+        receipt_path, _ = self._apply(proposal_path, proposal)
+        self.assertTrue(receipt_path.is_file())
+        with self.assertRaisesRegex(ContextOSError, "path does not exist"):
+            runtime_manifest(self.root, "codex")
 
     def test_hook_must_fire_and_must_not_fire_controls(self) -> None:
         must_fire = hook_report(

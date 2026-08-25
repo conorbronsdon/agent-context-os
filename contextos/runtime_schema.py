@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import date
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 from urllib.parse import urlparse
 
@@ -36,7 +36,7 @@ TOP_LEVEL_KEYS = {
 }
 SURFACE_KEYS = {
     "kind", "support_tier", "instruction_sources", "skill_sources", "invocation",
-    "capabilities", "hook_output", "binary_probes", "conformance_test", "evidence",
+    "capabilities", "hook_output", "binary_probes", "conformance_tests", "evidence",
 }
 POSITIVE_CAPABILITIES = CAPABILITY_VALUES - {"unsupported"}
 EVIDENCE_CLAIMS = CAPABILITY_KEYS | {
@@ -103,7 +103,7 @@ def _unique_strings(value: Any, field: str, *, minimum: int = 0) -> list[str]:
     return result
 
 
-def _repo_path(root: Path, value: Any, field: str) -> str:
+def _repo_path(root: Path, value: Any, field: str, *, must_exist: bool = True) -> str:
     raw = _string(value, field)
     if "\\" in raw:
         _fail(field, "must use repository-relative POSIX separators")
@@ -115,12 +115,14 @@ def _repo_path(root: Path, value: Any, field: str) -> str:
         resolved.relative_to(root.resolve())
     except ValueError:
         _fail(field, "must not escape the repository")
-    if not resolved.exists():
+    if must_exist and not resolved.exists():
         _fail(field, f"path does not exist: {raw}")
     return raw
 
 
-def _source_reference(root: Path, value: Any, field: str) -> None:
+def _source_reference(
+    root: Path, value: Any, field: str, *, check_paths: bool
+) -> None:
     source = _exact_keys(value, SOURCE_KEYS, field)
     scope = _enum(source.get("scope"), SOURCE_SCOPES, f"{field}.scope")
     _enum(source.get("role"), SOURCE_ROLES, f"{field}.role")
@@ -129,8 +131,13 @@ def _source_reference(root: Path, value: Any, field: str) -> None:
     if type(precedence) is not int or precedence < 0:
         _fail(f"{field}.precedence", "must be a non-negative integer")
     if scope == "repository":
-        _repo_path(root, path, f"{field}.path")
-    elif Path(path).is_absolute() or "\\" in path or ".." in Path(path).parts:
+        _repo_path(root, path, f"{field}.path", must_exist=check_paths)
+    elif (
+        PurePosixPath(path).is_absolute()
+        or PureWindowsPath(path).is_absolute()
+        or "\\" in path
+        or ".." in PurePosixPath(path).parts
+    ):
         _fail(f"{field}.path", "must be a safe logical relative path")
 
 
@@ -139,7 +146,8 @@ def _schema_string() -> dict[str, Any]:
 
 
 def validate_runtime_manifest(
-    manifest: Any, *, runtime_id: str, root: Path, today: date | None = None
+    manifest: Any, *, runtime_id: str, root: Path, today: date | None = None,
+    check_paths: bool = True,
 ) -> dict[str, Any]:
     if runtime_id == "generic" or not RUNTIME_ID_RE.fullmatch(runtime_id):
         _fail("runtime", f"invalid or reserved runtime id {runtime_id!r}")
@@ -160,17 +168,21 @@ def validate_runtime_manifest(
     install = _exact_keys(document.get("install"), {"mode", "next_steps"}, "install")
     _string(install.get("mode"), "install.mode")
     _unique_strings(install.get("next_steps"), "install.next_steps", minimum=1)
-    _repo_path(root, document.get("onboarding_doc"), "onboarding_doc")
+    _repo_path(
+        root, document.get("onboarding_doc"), "onboarding_doc", must_exist=check_paths
+    )
 
     evidence = _exact_keys(
         document.get("evidence"), {"checked_on", "tested_versions", "sources"}, "evidence"
     )
     checked_on = _string(evidence.get("checked_on"), "evidence.checked_on")
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", checked_on):
+        _fail("evidence.checked_on", "must use YYYY-MM-DD format")
     try:
         checked_date = date.fromisoformat(checked_on)
     except ValueError:
         _fail("evidence.checked_on", "must be an ISO-8601 date")
-    if checked_date > (today or date.today()):
+    if check_paths and checked_date > (today or date.today()):
         _fail("evidence.checked_on", "must not be in the future")
 
     sources = evidence.get("sources")
@@ -192,7 +204,7 @@ def validate_runtime_manifest(
             if parsed.scheme != "https" or not parsed.netloc:
                 _fail(f"{field}.location", "official evidence must be an absolute HTTPS URL")
         else:
-            _repo_path(root, location, f"{field}.location")
+            _repo_path(root, location, f"{field}.location", must_exist=check_paths)
         claims = _unique_strings(item.get("claims"), f"{field}.claims", minimum=1)
         for claim_index, claim in enumerate(claims):
             _enum(claim, EVIDENCE_CLAIMS, f"{field}.claims[{claim_index}]")
@@ -220,7 +232,7 @@ def validate_runtime_manifest(
             seen_precedence: set[int] = set()
             for index, reference in enumerate(references):
                 reference_field = f"{field}.{source_field}[{index}]"
-                _source_reference(root, reference, reference_field)
+                _source_reference(root, reference, reference_field, check_paths=check_paths)
                 identity = (reference["scope"], reference["path"])
                 if identity in seen_references:
                     _fail(f"{field}.{source_field}", f"duplicate source {identity!r}")
@@ -247,9 +259,7 @@ def validate_runtime_manifest(
         probe_purposes: set[str] = set()
         for index, probe in enumerate(probes):
             probe_field = f"{field}.binary_probes[{index}]"
-            item = _exact_keys(
-                probe, {"purpose", "candidates", "args", "success_exit_codes"}, probe_field
-            )
+            item = _exact_keys(probe, {"purpose", "candidates"}, probe_field)
             purpose = _enum(item.get("purpose"), PROBE_PURPOSES, f"{probe_field}.purpose")
             if purpose in probe_purposes:
                 _fail(f"{field}.binary_probes", f"duplicate purpose {purpose!r}")
@@ -258,15 +268,15 @@ def validate_runtime_manifest(
             for candidate_index, candidate in enumerate(candidates):
                 if not EXECUTABLE_RE.fullmatch(candidate):
                     _fail(f"{probe_field}.candidates[{candidate_index}]", "invalid executable name")
-            _unique_strings(item.get("args"), f"{probe_field}.args")
-            codes = item.get("success_exit_codes")
-            if not isinstance(codes, list) or not codes or any(type(code) is not int for code in codes):
-                _fail(f"{probe_field}.success_exit_codes", "must be a non-empty array of integers")
-            if len(codes) != len(set(codes)):
-                _fail(f"{probe_field}.success_exit_codes", "must not contain duplicates")
 
-        _repo_path(root, surface.get("conformance_test"), f"{field}.conformance_test")
-        conformance_test = surface["conformance_test"]
+        conformance_tests = _unique_strings(
+            surface.get("conformance_tests"), f"{field}.conformance_tests", minimum=1
+        )
+        for index, conformance_test in enumerate(conformance_tests):
+            _repo_path(
+                root, conformance_test, f"{field}.conformance_tests[{index}]",
+                must_exist=check_paths,
+            )
         evidence_ids = _unique_strings(surface.get("evidence"), f"{field}.evidence", minimum=1)
         unknown_evidence = sorted(set(evidence_ids) - set(source_claims))
         if unknown_evidence:
@@ -296,7 +306,7 @@ def validate_runtime_manifest(
                 and capability in source_claims[evidence_id][1]
                 and (
                     required_type != "conformance"
-                    or source_claims[evidence_id][2] == conformance_test
+                    or source_claims[evidence_id][2] in conformance_tests
                 )
                 for evidence_id in evidence_ids
             ):
@@ -369,16 +379,15 @@ def runtime_schema_document() -> dict[str, Any]:
             "hook_output": {"oneOf": [{"enum": sorted(HOOK_OUTPUT_MODES)}, {"type": "null"}]},
             "binary_probes": {"type": "array", "items": {"type": "object",
                 "additionalProperties": False,
-                "required": ["args", "candidates", "purpose", "success_exit_codes"],
+                "required": ["candidates", "purpose"],
                 "properties": {
                     "purpose": {"enum": sorted(PROBE_PURPOSES)},
                     "candidates": {"type": "array", "minItems": 1, "uniqueItems": True,
                         "items": {"type": "string", "pattern": EXECUTABLE_RE.pattern}},
-                    "args": {"type": "array", "uniqueItems": True, "items": text},
-                    "success_exit_codes": {"type": "array", "minItems": 1, "uniqueItems": True,
-                        "items": {"type": "integer"}},
                 }}},
-            "conformance_test": text,
+            "conformance_tests": {
+                "type": "array", "minItems": 1, "uniqueItems": True, "items": text
+            },
             "evidence": {"type": "array", "minItems": 1, "uniqueItems": True, "items": text},
         },
     }

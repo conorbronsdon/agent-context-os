@@ -56,6 +56,12 @@ class RuntimeManifestTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeManifestError, "capabilities.mcp"):
             validate_runtime_manifest(manifest, runtime_id="codex", root=ROOT)
 
+    def test_probe_contract_rejects_executable_arguments(self) -> None:
+        manifest = load("codex")
+        manifest["surfaces"]["cli"]["binary_probes"][0]["args"] = ["-c", "do_work()"]
+        with self.assertRaisesRegex(RuntimeManifestError, "unknown args"):
+            validate_runtime_manifest(manifest, runtime_id="codex", root=ROOT)
+
     def test_contract_rejects_unknown_keys_claims_future_and_mismatch(self) -> None:
         manifest = load("codex")
         mutations = []
@@ -65,10 +71,26 @@ class RuntimeManifestTest(unittest.TestCase):
         future = copy.deepcopy(manifest)
         future["evidence"]["checked_on"] = "2999-01-01"
         mutations.append((future, "codex", "future"))
+        compact_date = copy.deepcopy(manifest)
+        compact_date["evidence"]["checked_on"] = "20260824"
+        mutations.append((compact_date, "codex", "YYYY-MM-DD"))
+        week_date = copy.deepcopy(manifest)
+        week_date["evidence"]["checked_on"] = "2026-W35-1"
+        mutations.append((week_date, "codex", "YYYY-MM-DD"))
         uncovered = copy.deepcopy(manifest)
-        for source in uncovered["evidence"]["sources"]:
-            if "support" in source["claims"]:
-                source["claims"].remove("support")
+        support_ids = {
+            source["id"] for source in uncovered["evidence"]["sources"]
+            if "support" in source["claims"]
+        }
+        uncovered["evidence"]["sources"] = [
+            source for source in uncovered["evidence"]["sources"]
+            if source["id"] not in support_ids
+        ]
+        for surface in uncovered["surfaces"].values():
+            surface["evidence"] = [
+                evidence_id for evidence_id in surface["evidence"]
+                if evidence_id not in support_ids
+            ]
         mutations.append((uncovered, "codex", "does not cover claims"))
         unknown_claim = copy.deepcopy(manifest)
         unknown_claim["evidence"]["sources"][0]["claims"].append("magic")
@@ -80,6 +102,27 @@ class RuntimeManifestTest(unittest.TestCase):
             validate_runtime_manifest(manifest, runtime_id="generic", root=ROOT)
         with self.assertRaisesRegex(RuntimeManifestError, "match filename"):
             validate_runtime_manifest(manifest, runtime_id="other", root=ROOT)
+
+    def test_operational_validation_ignores_clock_skew_but_keeps_date_shape(self) -> None:
+        manifest = load("codex")
+        validate_runtime_manifest(
+            manifest, runtime_id="codex", root=ROOT, today=date(2020, 1, 1),
+            check_paths=False,
+        )
+        manifest["evidence"]["checked_on"] = "20260824"
+        with self.assertRaisesRegex(RuntimeManifestError, "YYYY-MM-DD"):
+            validate_runtime_manifest(
+                manifest, runtime_id="codex", root=ROOT, check_paths=False
+            )
+
+    def test_logical_sources_reject_posix_absolute_paths_on_every_platform(self) -> None:
+        manifest = load("codex")
+        manifest["surfaces"]["cli"]["instruction_sources"][0] = {
+            "scope": "workspace", "role": "canonical", "path": "/etc/passwd",
+            "precedence": 100,
+        }
+        with self.assertRaisesRegex(RuntimeManifestError, "safe logical relative path"):
+            validate_runtime_manifest(manifest, runtime_id="codex", root=ROOT)
 
     def test_generic_is_apply_only_not_a_descriptor(self) -> None:
         with self.assertRaisesRegex(ContextOSError, "invalid runtime id"):
@@ -112,7 +155,7 @@ class RuntimeManifestTest(unittest.TestCase):
             manifest["display_name"] = "Future Agent"
             manifest["onboarding_doc"] = "docs/onboarding.md"
             surface = manifest["surfaces"]["cli"]
-            surface["conformance_test"] = "tests/conformance.py"
+            surface["conformance_tests"] = ["tests/conformance.py"]
             for source in manifest["evidence"]["sources"]:
                 if source["type"] == "conformance":
                     source["location"] = "tests/conformance.py"
@@ -151,8 +194,7 @@ class RuntimeManifestTest(unittest.TestCase):
         messaging["kind"] = "messaging"
         messaging["hook_output"] = None
         cli["binary_probes"].append(
-            {"purpose": "native-doctor", "candidates": ["openclaw", "openclaw-agent"],
-             "args": ["doctor"], "success_exit_codes": [0]}
+            {"purpose": "native-doctor", "candidates": ["openclaw", "openclaw-agent"]}
         )
         manifest["surfaces"] = {"cli": cli, "messaging": messaging}
         manifest["evidence"]["tested_versions"] = []

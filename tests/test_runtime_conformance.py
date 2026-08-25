@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import unittest
 from pathlib import Path
+from unittest import mock
 
+from contextos.cli import main as cli_main
 from contextos.kernel import runtime_hook_payload, runtime_registry, runtime_surface
 
 
@@ -19,6 +23,10 @@ class RuntimeConformanceTest(unittest.TestCase):
                     if surface["support_tier"] == "first-class":
                         self.assertTrue(all(surface["invocation"].values()))
                         self.assertEqual("adapter", surface["capabilities"]["proposal_apply"])
+                        self.assertTrue(surface["conformance_tests"])
+                    for source in surface["skill_sources"]:
+                        if source["scope"] == "repository":
+                            self.assertTrue((ROOT / source["path"]).exists())
 
     def test_registered_hook_envelopes_are_renderable(self) -> None:
         registry = runtime_registry(ROOT)
@@ -39,6 +47,18 @@ class RuntimeConformanceTest(unittest.TestCase):
         for manifest in runtime_registry(ROOT).values():
             for surface_id, expected in manifest["surfaces"].items():
                 self.assertIs(expected, runtime_surface(manifest, surface_id))
+
+    def test_null_hook_surface_stays_silent_on_malformed_input(self) -> None:
+        manifest = {"runtime": "fixture", "surfaces": {"messaging": {"hook_output": None}}}
+        stdout = io.StringIO()
+        with mock.patch("contextos.cli.discover_root", return_value=ROOT), mock.patch(
+            "contextos.cli.runtime_manifest", return_value=manifest
+        ), mock.patch("sys.stdin", io.StringIO("not-json")), contextlib.redirect_stdout(stdout):
+            status = cli_main(
+                ["hook", "pre-write", "--runtime", "fixture", "--surface", "messaging"]
+            )
+        self.assertEqual(0, status)
+        self.assertEqual("", stdout.getvalue())
 
 
 if __name__ == "__main__":
