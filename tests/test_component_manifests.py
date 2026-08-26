@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import copy
+import importlib.util
 import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from contextos.component_schema import (
     COMPONENT_MANIFEST_SCHEMA_VERSION,
@@ -27,6 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def fixture() -> dict:
     return {
         "schema_version": 1,
+        "extensible_paths": ["workspace.yaml"],
         "extensible_roots": ["extensions"],
         "components": [
             {
@@ -61,9 +64,15 @@ class ComponentManifestTest(unittest.TestCase):
         for relative in ("feature.txt", "foundation.txt", "adapters/codex.txt"):
             (self.root / relative).write_text("fixture\n", encoding="utf-8")
 
-    def validate(self, manifest: dict, *, check_paths: bool = True) -> dict:
+    def validate(
+        self, manifest: dict, *, check_paths: bool = True,
+        allow_missing_seed: bool = False,
+    ) -> dict:
         return validate_component_manifest(
-            manifest, root=self.root, check_paths=check_paths
+            manifest,
+            root=self.root,
+            check_paths=check_paths,
+            allow_missing_seed=allow_missing_seed,
         )
 
     def test_valid_contract_and_deterministic_dependency_closure(self) -> None:
@@ -177,6 +186,13 @@ class ComponentManifestTest(unittest.TestCase):
             ):
                 self.validate(manifest, check_paths=False)
 
+            manifest = fixture()
+            manifest["extensible_paths"] = [value]
+            with self.subTest(value=f"exact:{value}"), self.assertRaisesRegex(
+                ComponentManifestError, "must not claim"
+            ):
+                self.validate(manifest, check_paths=False)
+
         for value in ("folder/name.", "folder/CON", "folder/file:stream"):
             manifest = fixture()
             manifest["components"][0]["paths"][0]["path"] = value
@@ -216,6 +232,21 @@ class ComponentManifestTest(unittest.TestCase):
         root_prefix["extensible_roots"] = ["extensions", "extensions/nested"]
         with self.assertRaisesRegex(ComponentManifestError, "prefix conflict"):
             self.validate(root_prefix, check_paths=False)
+
+        exact_duplicate = fixture()
+        exact_duplicate["extensible_paths"] = ["Workspace.yaml", "workspace.yaml"]
+        with self.assertRaisesRegex(ComponentManifestError, "Unicode NFC case-folding"):
+            self.validate(exact_duplicate, check_paths=False)
+
+        exact_prefix = fixture()
+        exact_prefix["extensible_paths"] = ["workspace", "workspace/nested"]
+        with self.assertRaisesRegex(ComponentManifestError, "prefix conflict"):
+            self.validate(exact_prefix, check_paths=False)
+
+        owned_extension = fixture()
+        owned_extension["extensible_paths"] = ["feature.txt"]
+        with self.assertRaisesRegex(ComponentManifestError, "component-owned"):
+            self.validate(owned_extension, check_paths=False)
 
     def test_paths_must_be_existing_regular_non_symlink_files(self) -> None:
         missing = fixture()
@@ -334,14 +365,22 @@ class ComponentManifestTest(unittest.TestCase):
                 fixture(), ["unowned.txt", "UNOWNED.txt"], root=self.root
             )
 
-    def test_workspace_extensions_reject_secrets_and_sibling_prefixes(self) -> None:
+    def test_workspace_extensions_allow_personal_files_but_not_sibling_prefixes(self) -> None:
         manifest = fixture()
-        with self.assertRaisesRegex(ComponentManifestError, "must not claim"):
+        self.assertEqual(
+            [],
             unclassified_tracked_paths(
                 manifest,
                 ["extensions/.env.local"],
                 root=self.root,
                 allow_extensible=True,
+            ),
+        )
+        with self.assertRaisesRegex(ComponentManifestError, "must not claim"):
+            unclassified_tracked_paths(
+                manifest,
+                ["extensions/.env.local"],
+                root=self.root,
             )
         self.assertEqual(
             ["extensions-extra/user.md"],
@@ -352,6 +391,98 @@ class ComponentManifestTest(unittest.TestCase):
                 allow_extensible=True,
             ),
         )
+
+    def test_workspace_extensions_allow_personal_names_and_exact_config_paths(self) -> None:
+        manifest = fixture()
+        self.assertEqual(
+            [],
+            unclassified_tracked_paths(
+                manifest,
+                ["extensions/what next?.md", "extensions/deck.key", "workspace.yaml"],
+                root=self.root,
+                allow_extensible=True,
+            ),
+        )
+        with self.assertRaisesRegex(ComponentManifestError, "Windows-aliased"):
+            unclassified_tracked_paths(
+                manifest, ["extensions/what next?.md"], root=self.root
+            )
+
+    def test_workspace_validation_allows_missing_seed_but_not_managed_files(self) -> None:
+        manifest = fixture()
+        (self.root / "adapters/codex.txt").unlink()
+        self.validate(manifest, allow_missing_seed=True)
+        self.assertEqual(
+            [],
+            untracked_owned_paths(
+                manifest,
+                ["feature.txt", "foundation.txt"],
+                root=self.root,
+                allow_missing_seed=True,
+            ),
+        )
+        (self.root / "foundation.txt").unlink()
+        with self.assertRaisesRegex(ComponentManifestError, "foundation.txt"):
+            self.validate(manifest, allow_missing_seed=True)
+
+    def test_git_source_set_deduplicates_unmerged_index_stages(self) -> None:
+        script = ROOT / "scripts/component-manifests.py"
+        spec = importlib.util.spec_from_file_location("component_manifests_script", script)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with mock.patch.object(module.subprocess, "run") as run:
+            run.return_value = mock.Mock(
+                stdout=b"feature.txt\0feature.txt\0foundation.txt\0"
+            )
+            self.assertEqual(
+                ["feature.txt", "foundation.txt"],
+                module.git_tracked_paths(self.root),
+            )
+
+    def test_workspace_check_composes_seed_and_extension_exceptions(self) -> None:
+        script = ROOT / "scripts/component-manifests.py"
+        spec = importlib.util.spec_from_file_location("component_manifests_check", script)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        components = self.root / "components"
+        components.mkdir()
+        manifest_path = components / "manifest.json"
+        schema_path = components / "schema.json"
+        manifest_path.write_text(json.dumps(fixture()), encoding="utf-8")
+        schema_path.write_text(module.schema_text(), encoding="utf-8")
+        (self.root / "adapters/codex.txt").unlink()
+        tracked = [
+            "feature.txt",
+            "foundation.txt",
+            "extensions/what next?.md",
+            "workspace.yaml",
+        ]
+        with mock.patch.object(module, "git_tracked_paths", return_value=tracked):
+            self.assertEqual(
+                (3, 3),
+                module.check(
+                    self.root,
+                    manifest_path,
+                    schema_path,
+                    allow_extensible=True,
+                ),
+            )
+            with self.assertRaisesRegex(ComponentManifestError, "adapters/codex.txt"):
+                module.check(self.root, manifest_path, schema_path)
+
+            (self.root / "foundation.txt").unlink()
+            with self.assertRaisesRegex(ComponentManifestError, "foundation.txt"):
+                module.check(
+                    self.root,
+                    manifest_path,
+                    schema_path,
+                    allow_extensible=True,
+                )
 
     def test_every_owned_path_must_come_from_the_tracked_source_set(self) -> None:
         tracked = ["feature.txt", "foundation.txt", "adapters/codex.txt"]

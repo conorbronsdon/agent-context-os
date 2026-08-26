@@ -6,12 +6,22 @@
   "additionalProperties": false,
   "required": [
     "components",
+    "extensible_paths",
     "extensible_roots",
     "schema_version"
   ],
   "properties": {
     "schema_version": {
       "const": 1
+    },
+    "extensible_paths": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!\\s)(?:[^\\u0000-\\u001f\\u007f]*\\S)$"
+      }
     },
     "extensible_roots": {
       "type": "array",

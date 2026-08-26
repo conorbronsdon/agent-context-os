@@ -1,12 +1,18 @@
 {
     "schema_version": 1,
+    "extensible_paths": [
+        "contextos.workspace.json",
+        "workspace.yaml"
+    ],
     "extensible_roots": [
         ".agents/skills",
+        ".claude/agents",
         ".claude/commands",
         "content",
         "identity",
         "inbox",
         "projects",
+        "references",
         "sessions",
         "state",
         "writing"

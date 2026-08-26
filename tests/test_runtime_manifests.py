@@ -165,6 +165,7 @@ class RuntimeManifestTest(unittest.TestCase):
             (root / "components").mkdir()
             component_manifest = {
                 "schema_version": 1,
+                "extensible_paths": [],
                 "extensible_roots": [],
                 "components": [
                     {

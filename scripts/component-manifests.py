@@ -50,7 +50,11 @@ def git_tracked_paths(root: Path) -> list[str]:
         raise ComponentManifestError(f"git ls-files returned a non-UTF-8 path: {exc}") from None
     if decoded and not decoded.endswith("\0"):
         raise ComponentManifestError("git ls-files -z returned an unterminated path")
-    return decoded.rstrip("\0").split("\0") if decoded else []
+    paths = decoded.rstrip("\0").split("\0") if decoded else []
+    # An unresolved index can list one pathname once per stage. Preserve
+    # distinct spellings so portable collisions still fail, but collapse exact
+    # stage duplicates before applying the source-set contract.
+    return list(dict.fromkeys(paths))
 
 
 def check(
@@ -60,7 +64,12 @@ def check(
 ) -> tuple[int, int]:
     manifest_path = manifest_path or root / "components" / "manifest.json"
     schema_path = schema_path or root / "components" / "schema.json"
-    manifest = load_component_manifest(manifest_path, root=root, check_paths=True)
+    manifest = load_component_manifest(
+        manifest_path,
+        root=root,
+        check_paths=True,
+        allow_missing_seed=allow_extensible,
+    )
     if (not schema_path.exists()
             or schema_path.read_text(encoding="utf-8") != schema_text()):
         raise ComponentManifestError(
@@ -75,7 +84,9 @@ def check(
         if len(missing) > 20:
             preview += f", ... ({len(missing) - 20} more)"
         raise ComponentManifestError(f"unclassified tracked paths: {preview}")
-    untracked_owned = untracked_owned_paths(manifest, tracked, root=root)
+    untracked_owned = untracked_owned_paths(
+        manifest, tracked, root=root, allow_missing_seed=allow_extensible
+    )
     if untracked_owned:
         preview = ", ".join(untracked_owned[:20])
         if len(untracked_owned) > 20:

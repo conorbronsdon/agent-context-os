@@ -15,7 +15,9 @@ from typing import Any, Iterable, Sequence
 COMPONENT_MANIFEST_SCHEMA_VERSION = 1
 COMPONENT_ID_RE = re.compile(r"^[a-z][a-z0-9-]*$")
 PATH_POLICIES = {"managed", "seed", "development"}
-TOP_LEVEL_KEYS = {"schema_version", "extensible_roots", "components"}
+TOP_LEVEL_KEYS = {
+    "schema_version", "extensible_paths", "extensible_roots", "components",
+}
 COMPONENT_KEYS = {"id", "description", "depends_on", "paths"}
 PATH_KEYS = {"path", "policy"}
 RESERVED_OWNERSHIP_PATHS = {
@@ -140,7 +142,9 @@ def _reject_prefix_conflicts(paths: Sequence[tuple[str, str]], field: str) -> No
             _fail(field, f"prefix conflict between {left_path!r} and {right_path!r}")
 
 
-def _check_regular_file(root: Path, relative: str, field: str) -> None:
+def _check_regular_file(
+    root: Path, relative: str, field: str, *, allow_missing: bool = False,
+) -> None:
     root_resolved = root.resolve()
     candidate = root / Path(*PurePosixPath(relative).parts)
     current = root
@@ -150,6 +154,10 @@ def _check_regular_file(root: Path, relative: str, field: str) -> None:
             _fail(field, f"must not be a symlink or traverse one: {relative}")
     try:
         resolved = candidate.resolve(strict=True)
+    except FileNotFoundError:
+        if allow_missing:
+            return
+        _fail(field, f"path does not exist: {relative}")
     except OSError:
         _fail(field, f"path does not exist: {relative}")
     try:
@@ -204,6 +212,7 @@ def write_generated_file(path: Path, content: str, *, root: Path) -> None:
 
 def validate_component_manifest(
     manifest: Any, *, root: Path, check_paths: bool = True,
+    allow_missing_seed: bool = False,
 ) -> dict[str, Any]:
     """Validate and return a component manifest.
 
@@ -230,6 +239,22 @@ def validate_component_manifest(
     _reject_prefix_conflicts(
         [(path, f"extensible_roots[{index}]") for index, path in enumerate(extensible_roots)],
         "extensible_roots",
+    )
+
+    paths_value = document.get("extensible_paths")
+    if not isinstance(paths_value, list):
+        _fail("extensible_paths", "must be an array")
+    extensible_paths = [
+        _ownership_path(item, f"extensible_paths[{index}]")
+        for index, item in enumerate(paths_value)
+    ]
+    _reject_normalized_duplicates(
+        ((path, f"extensible_paths[{index}]") for index, path in enumerate(extensible_paths)),
+        "extensible_paths",
+    )
+    _reject_prefix_conflicts(
+        [(path, f"extensible_paths[{index}]") for index, path in enumerate(extensible_paths)],
+        "extensible_paths",
     )
 
     raw_components = document.get("components")
@@ -265,13 +290,25 @@ def validate_component_manifest(
                 _fail(f"{path_field}.policy", f"unsupported value {policy!r}")
             all_paths.append((path, f"{path_field}.path"))
             if check_paths:
-                _check_regular_file(root, path, f"{path_field}.path")
+                _check_regular_file(
+                    root, path, f"{path_field}.path",
+                    allow_missing=allow_missing_seed and policy == "seed",
+                )
         component_ids.append((component_id, f"{field}.id"))
         parsed_components.append(component)
 
     _reject_normalized_duplicates(component_ids, "components")
     _reject_normalized_duplicates(all_paths, "components.paths")
     _reject_prefix_conflicts(all_paths, "components.paths")
+    owned_identities = {_identity(path) for path, _ in all_paths}
+    overlapping_extensions = sorted(
+        path for path in extensible_paths if _identity(path) in owned_identities
+    )
+    if overlapping_extensions:
+        _fail(
+            "extensible_paths",
+            "must not also be component-owned: " + ", ".join(overlapping_extensions),
+        )
 
     ids_by_identity = {_identity(component_id): component_id for component_id, _ in component_ids}
     graph: dict[str, list[str]] = {}
@@ -315,6 +352,7 @@ def validate_component_manifest(
 
 def load_component_manifest(
     path: Path, *, root: Path | None = None, check_paths: bool = True,
+    allow_missing_seed: bool = False,
 ) -> dict[str, Any]:
     try:
         with path.open(encoding="utf-8") as handle:
@@ -330,6 +368,7 @@ def load_component_manifest(
     return validate_component_manifest(
         manifest, root=root if root is not None else path.parent.parent,
         check_paths=check_paths,
+        allow_missing_seed=allow_missing_seed,
     )
 
 
@@ -443,6 +482,9 @@ def component_schema_document() -> dict[str, Any]:
         "required": sorted(TOP_LEVEL_KEYS),
         "properties": {
             "schema_version": {"const": COMPONENT_MANIFEST_SCHEMA_VERSION},
+            "extensible_paths": {
+                "type": "array", "uniqueItems": True, "items": text,
+            },
             "extensible_roots": {
                 "type": "array", "uniqueItems": True, "items": text,
             },
@@ -471,10 +513,11 @@ def unclassified_tracked_paths(
     }
     extensible = [tuple(_identity(path).split("/"))
                   for path in document["extensible_roots"]]
+    extensible_paths = {_identity(path) for path in document["extensible_paths"]}
     seen: dict[str, str] = {}
     missing: list[str] = []
     for index, value in enumerate(tracked_paths):
-        path = _ownership_path(value, f"tracked_paths[{index}]")
+        path = _safe_posix_path(value, f"tracked_paths[{index}]")
         key = _identity(path)
         if key in seen:
             _fail("tracked_paths", f"portable path collision: {seen[key]!r} and {path!r}")
@@ -482,14 +525,19 @@ def unclassified_tracked_paths(
         if key in classified:
             continue
         parts = tuple(key.split("/"))
-        if allow_extensible and any(parts[:len(prefix)] == prefix for prefix in extensible):
+        if allow_extensible and (
+            key in extensible_paths
+            or any(parts[:len(prefix)] == prefix for prefix in extensible)
+        ):
             continue
+        _ownership_path(path, f"tracked_paths[{index}]")
         missing.append(path)
     return sorted(missing, key=_identity)
 
 
 def untracked_owned_paths(
     manifest: Any, tracked_paths: Iterable[str], *, root: Path,
+    allow_missing_seed: bool = False,
 ) -> list[str]:
     """Return owned catalog paths that are absent from the Git source set."""
     document = validate_component_manifest(manifest, root=root, check_paths=False)
@@ -502,6 +550,7 @@ def untracked_owned_paths(
             path_entry["path"]
             for component in document["components"]
             for path_entry in component["paths"]
+            if not (allow_missing_seed and path_entry["policy"] == "seed")
             if _identity(path_entry["path"]) not in tracked
         ),
         key=_identity,

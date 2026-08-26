@@ -21,13 +21,18 @@ Every currently tracked file has exactly one component owner and one policy:
 - `development`: repository maintenance, tests, CI, or contribution files.
   These prove or build the product but are not runtime workspace outputs.
 
-The roots `.agents/skills/`, `.claude/commands/`, `content/`, `identity/`,
-`inbox/`, `projects/`, `sessions/`, `state/`, and `writing/` are extensible.
+The roots `.agents/skills/`, `.claude/agents/`, `.claude/commands/`, `content/`,
+`identity/`, `inbox/`, `projects/`, `references/`, `sessions/`, `state/`, and
+`writing/` are extensible. The root configuration files `workspace.yaml` and
+`contextos.workspace.json` are exact extensible paths rather than directory
+roots.
 Checked-in files below them retain their explicit owner and policy, while new
 user files are workspace-owned rather than component-owned. The maintainer
 check remains strict over the repository's tracked source set;
 `bash scripts/validate-all.sh --workspace` selects the operational exception
-for a customized workspace. CI and product contributors use the strict default.
+for a customized workspace. That operational check also permits intentionally
+removed `seed` files, while missing `managed` or `development` files still fail.
+CI and product contributors use the strict default.
 
 ## Components
 
