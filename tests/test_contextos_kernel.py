@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 import tempfile
 import threading
 import unittest
@@ -31,6 +32,20 @@ from contextos.workspace_schema import render_workspace_config
 
 ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime.fromisoformat("2026-08-23T14:30:00-07:00")
+
+
+def make_directory_link(link: Path, target: Path) -> None:
+    if os.name == "nt":
+        result = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise OSError(result.stderr or result.stdout)
+    else:
+        link.symlink_to(target, target_is_directory=True)
 
 
 def root_config(*, canonical: bool = True, agents: list[str] | None = None) -> str:
@@ -188,10 +203,10 @@ class RootDiscoveryTest(unittest.TestCase):
         (nested / ".git").mkdir()
         linked = nested / "linked"
         try:
-            linked.symlink_to(self.root, target_is_directory=True)
+            make_directory_link(linked, self.root)
         except OSError:
-            self.skipTest("directory symlink creation is unavailable")
-        with self.assertRaisesRegex(ContextOSError, "symlink or reparse point"):
+            self.skipTest("directory link creation is unavailable")
+        with self.assertRaisesRegex(ContextOSError, "escape repository boundary"):
             discover_root(linked)
 
     def test_symlinked_ancestor_without_git_boundary_remains_compatible(self) -> None:
@@ -202,10 +217,67 @@ class RootDiscoveryTest(unittest.TestCase):
         self.write_json(workspace)
         linked_parent = self.root / "linked-parent"
         try:
-            linked_parent.symlink_to(real_parent, target_is_directory=True)
+            make_directory_link(linked_parent, real_parent)
         except OSError:
-            self.skipTest("directory symlink creation is unavailable")
+            self.skipTest("directory link creation is unavailable")
         self.assertEqual(workspace, discover_root(linked_parent / "workspace"))
+
+    def test_internal_directory_link_remains_within_repository_boundary(self) -> None:
+        repository = self.root / "repo"
+        repository.mkdir()
+        (repository / ".git").mkdir()
+        (repository / "AGENTS.md").write_text("# fixture\n", encoding="utf-8")
+        (repository / "state").mkdir()
+        docs = repository / "docs"
+        deep = docs / "deep"
+        deep.mkdir(parents=True)
+        linked = repository / "linked-docs"
+        try:
+            make_directory_link(linked, docs)
+        except OSError:
+            self.skipTest("directory link creation is unavailable")
+        self.assertEqual(repository, discover_root(linked / "deep"))
+
+    def test_link_to_repository_entrypoint_remains_compatible(self) -> None:
+        repository = self.root / "repo"
+        repository.mkdir()
+        (repository / ".git").mkdir()
+        (repository / "AGENTS.md").write_text("# fixture\n", encoding="utf-8")
+        (repository / "state").mkdir()
+        current = self.root / "current"
+        try:
+            make_directory_link(current, repository)
+        except OSError:
+            self.skipTest("directory link creation is unavailable")
+        self.assertEqual(repository, discover_root(current / "state"))
+
+    def test_alias_scan_skips_intermediate_and_unrelated_ancestors(self) -> None:
+        workspace = self.root / "workspace"
+        workspace.mkdir()
+        self.write_json(workspace)
+        intermediate = workspace / "intermediate"
+        child = intermediate / "child"
+        child.mkdir(parents=True)
+        original_iterdir = Path.iterdir
+
+        def guarded_iterdir(path: Path):
+            if path == intermediate:
+                raise PermissionError("traverse-only fixture")
+            return original_iterdir(path)
+
+        with mock.patch.object(Path, "iterdir", guarded_iterdir):
+            self.assertEqual(workspace, discover_root(child))
+
+        if os.name == "nt":
+            return
+        unrelated = self.root / "unrelated"
+        leaf = unrelated / "leaf"
+        leaf.mkdir(parents=True)
+        (unrelated / "ContextOS.Workspace.json").write_text(
+            "not a workspace\n", encoding="utf-8"
+        )
+        with self.assertRaisesRegex(ContextOSError, "could not find a Context OS root"):
+            discover_root(leaf)
 
     @unittest.skipIf(os.name == "nt", "Windows aliases trailing dots at creation time")
     def test_windows_trailing_dot_filename_alias_fails_portably(self) -> None:

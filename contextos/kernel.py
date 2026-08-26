@@ -180,10 +180,6 @@ def discover_root(start: Path | None = None) -> Path:
             raise ContextOSError(f"root discovery start path does not exist: {raw_start}")
         candidate = raw_start.parent
     else:
-        if _is_link_like(raw_start):
-            raise ContextOSError(
-                f"root discovery start path must not be a symlink or reparse point: {raw_start}"
-            )
         if not raw_start.exists():
             raise ContextOSError(f"root discovery start path does not exist: {raw_start}")
         if raw_start.is_file():
@@ -195,32 +191,47 @@ def discover_root(start: Path | None = None) -> Path:
                 f"root discovery start path is not a directory or file: {raw_start}"
             )
 
-    # Reject linked components below a lexical repository boundary before
-    # resolving the start. Links above that boundary are irrelevant, and
-    # symlinked system ancestors such as macOS /tmp remain compatible. Without
-    # any repository boundary, normal resolution preserves legacy behavior.
-    linked_below_boundary: Path | None = None
+    # A link may be an ordinary internal repository path. Reject it only when
+    # resolving the start would escape the nearest lexical repository boundary.
+    # Do not treat `.git` reached through the link itself as lexical ownership;
+    # that preserves common `~/current -> repo` entrypoints.
+    lexical_boundary: Path | None = None
     for lexical in (candidate, *candidate.parents):
-        if _is_link_like(lexical) and linked_below_boundary is None:
-            linked_below_boundary = lexical
+        if _is_link_like(lexical):
+            continue
         git_marker = lexical / ".git"
         if git_marker.exists() or _is_link_like(git_marker):
-            if linked_below_boundary is not None:
-                raise ContextOSError(
-                    "root discovery start path must not traverse a symlink or "
-                    f"reparse point below repository boundary {lexical}: "
-                    f"{linked_below_boundary}"
-                )
+            lexical_boundary = lexical
             break
-    candidate = candidate.resolve()
+    resolved_candidate = candidate.resolve()
+    if lexical_boundary is not None:
+        try:
+            resolved_candidate.relative_to(lexical_boundary.resolve())
+        except ValueError as exc:
+            raise ContextOSError(
+                "root discovery start path must not escape repository boundary "
+                f"{lexical_boundary}: {candidate}"
+            ) from exc
+    candidate = resolved_candidate
 
-    for path in (candidate, *candidate.parents):
+    for index, path in enumerate((candidate, *candidate.parents)):
         # The tracked JSON marker is authoritative at the nearest candidate.
-        # Reject portable aliases before looking for the exact spelling so an
-        # invalid inner marker can never silently fall through to an outer root.
-        _reject_config_aliases(path, "contextos.workspace.json")
         marker = path / "contextos.workspace.json"
-        if marker.exists() or _is_link_like(marker):
+        marker_present = marker.exists() or _is_link_like(marker)
+        legacy_present = (path / "AGENTS.md").is_file() and (
+            (path / "state").is_dir() or (path / "workspace.yaml").is_file()
+        )
+        git_marker = path / ".git"
+        boundary_present = git_marker.exists() or _is_link_like(git_marker)
+
+        # Directory enumeration is needed only where a marker/root is actually
+        # plausible, plus the explicit start directory for alias-only controls.
+        # Intermediate traverse-only directories and unrelated outer ancestors
+        # remain compatible with legacy discovery.
+        if index == 0 or marker_present or legacy_present or boundary_present:
+            _reject_config_aliases(path, "contextos.workspace.json")
+
+        if marker_present:
             if _is_link_like(marker):
                 raise ContextOSError(
                     "invalid tracked workspace configuration: "
@@ -244,16 +255,13 @@ def discover_root(start: Path | None = None) -> Path:
             return path
 
         # Preserve the original legacy compound marker for existing clones.
-        if (path / "AGENTS.md").is_file() and (
-            (path / "state").is_dir() or (path / "workspace.yaml").is_file()
-        ):
+        if legacy_present:
             return path
 
         # A nested repository without its own Context OS marker must not be
         # captured by an outer repository. Check the candidate before stopping
         # so a marker at a worktree or submodule root still wins.
-        git_marker = path / ".git"
-        if git_marker.exists() or _is_link_like(git_marker):
+        if boundary_present:
             raise ContextOSError(
                 "could not find a Context OS root before repository boundary: "
                 f"{path}"
