@@ -91,8 +91,14 @@ def main(argv: list[str] | None = None) -> int:
             return 1 if report["status"] == "fail" else 0
         elif args.command == "hook":
             hook_manifest = runtime_manifest(root, args.runtime, check_paths=False)
-            hook_output = runtime_surface(hook_manifest, args.surface).get("hook_output")
+            surface_outputs = {
+                surface.get("hook_output")
+                for surface in hook_manifest["surfaces"].values()
+            }
+            if len(surface_outputs) == 1:
+                hook_output = next(iter(surface_outputs))
             hook_output_resolved = True
+            hook_output = runtime_surface(hook_manifest, args.surface).get("hook_output")
             raw = sys.stdin.read().strip()
             payload = json.loads(raw) if raw else {}
             if not isinstance(payload, dict):

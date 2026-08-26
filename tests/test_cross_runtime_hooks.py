@@ -236,7 +236,9 @@ class CrossRuntimeHookTest(unittest.TestCase):
             check=False,
         )
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertIn("no surface 'bogus'", json.loads(result.stdout)["systemMessage"])
+        output = json.loads(result.stdout)
+        self.assertEqual("allow", output["action"])
+        self.assertIn("no surface 'bogus'", output["message"])
 
 
 if __name__ == "__main__":

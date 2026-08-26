@@ -60,6 +60,24 @@ class RuntimeConformanceTest(unittest.TestCase):
         self.assertEqual(0, status)
         self.assertEqual("", stdout.getvalue())
 
+    def test_invalid_ambiguous_surface_stays_silent(self) -> None:
+        manifest = {
+            "runtime": "fixture",
+            "surfaces": {
+                "chat": {"hook_output": "system-message"},
+                "cli": {"hook_output": "allow-message"},
+            },
+        }
+        stdout = io.StringIO()
+        with mock.patch("contextos.cli.discover_root", return_value=ROOT), mock.patch(
+            "contextos.cli.runtime_manifest", return_value=manifest
+        ), contextlib.redirect_stdout(stdout):
+            status = cli_main(
+                ["hook", "pre-write", "--runtime", "fixture", "--surface", "bogus"]
+            )
+        self.assertEqual(0, status)
+        self.assertEqual("", stdout.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
