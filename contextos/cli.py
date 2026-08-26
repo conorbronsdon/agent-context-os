@@ -63,9 +63,7 @@ def emit(value: object) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
-    hook_manifest: dict | None = None
     hook_output: str | None = None
-    hook_output_resolved = False
     try:
         root = discover_root(args.root)
         if args.command == "start":
@@ -97,7 +95,6 @@ def main(argv: list[str] | None = None) -> int:
             }
             if len(surface_outputs) == 1:
                 hook_output = next(iter(surface_outputs))
-            hook_output_resolved = True
             hook_output = runtime_surface(hook_manifest, args.surface).get("hook_output")
             raw = sys.stdin.read().strip()
             payload = json.loads(raw) if raw else {}
@@ -112,10 +109,9 @@ def main(argv: list[str] | None = None) -> int:
     except (ContextOSError, json.JSONDecodeError, OSError, UnicodeError) as exc:
         if getattr(args, "command", None) == "hook":
             message = f"Context OS advisory hook could not run: {exc}"
-            rendered = (
-                render_hook_payload(hook_output, [message])
-                if hook_output_resolved else {"systemMessage": message}
-            )
+            # If no validated descriptor established a host protocol, silence
+            # is safer than emitting another runtime's incompatible envelope.
+            rendered = render_hook_payload(hook_output, [message])
             if rendered is not None:
                 emit(rendered)
             return 0

@@ -7,7 +7,12 @@ from pathlib import Path
 from unittest import mock
 
 from contextos.cli import main as cli_main
-from contextos.kernel import runtime_hook_payload, runtime_registry, runtime_surface
+from contextos.kernel import (
+    ContextOSError,
+    runtime_hook_payload,
+    runtime_registry,
+    runtime_surface,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -75,6 +80,16 @@ class RuntimeConformanceTest(unittest.TestCase):
             status = cli_main(
                 ["hook", "pre-write", "--runtime", "fixture", "--surface", "bogus"]
             )
+        self.assertEqual(0, status)
+        self.assertEqual("", stdout.getvalue())
+
+    def test_manifest_load_failure_stays_silent_without_a_known_protocol(self) -> None:
+        stdout = io.StringIO()
+        with mock.patch("contextos.cli.discover_root", return_value=ROOT), mock.patch(
+            "contextos.cli.runtime_manifest",
+            side_effect=ContextOSError("missing runtime manifest"),
+        ), contextlib.redirect_stdout(stdout):
+            status = cli_main(["hook", "pre-write", "--runtime", "hermes"])
         self.assertEqual(0, status)
         self.assertEqual("", stdout.getvalue())
 
