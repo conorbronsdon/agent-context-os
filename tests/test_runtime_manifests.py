@@ -103,6 +103,13 @@ class RuntimeManifestTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeManifestError, "match filename"):
             validate_runtime_manifest(manifest, runtime_id="other", root=ROOT)
 
+    def test_contract_tolerates_one_day_of_evidence_clock_skew(self) -> None:
+        manifest = load("codex")
+        manifest["evidence"]["checked_on"] = "2026-08-25"
+        validate_runtime_manifest(
+            manifest, runtime_id="codex", root=ROOT, today=date(2026, 8, 24)
+        )
+
     def test_operational_validation_ignores_clock_skew_but_keeps_date_shape(self) -> None:
         manifest = load("codex")
         validate_runtime_manifest(

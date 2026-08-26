@@ -957,6 +957,39 @@ class KernelTest(unittest.TestCase):
         self.assertFalse(any(item["status"] == "fail" for item in inert["checks"]))
         self.assertEqual("partial", inert["runtimes"]["codex"]["components"]["status"])
 
+    def test_profile_missing_user_owned_seed_warns_but_managed_path_still_fails(self) -> None:
+        self._materialize_components("hermes-adapter")
+        self._configure_profile("hermes")
+        (self.root / "content/log.md").unlink()
+
+        seed_report = doctor(self.root)
+        seed_check = next(
+            item
+            for item in seed_report["checks"]
+            if item["name"] == "components:hermes"
+        )
+        self.assertEqual("warn", seed_check["status"])
+        self.assertFalse(any(item["status"] == "fail" for item in seed_report["checks"]))
+        self.assertIn(
+            "content/log.md",
+            seed_report["runtimes"]["hermes"]["components"]["missing_by_policy"]["seed"],
+        )
+        maintainer_check = next(
+            item
+            for item in doctor(self.root, all_runtimes=True)["checks"]
+            if item["name"] == "components:hermes"
+        )
+        self.assertEqual("fail", maintainer_check["status"])
+
+        (self.root / "AGENTS.md").unlink()
+        managed_report = doctor(self.root)
+        managed_check = next(
+            item
+            for item in managed_report["checks"]
+            if item["name"] == "components:hermes"
+        )
+        self.assertEqual("fail", managed_check["status"])
+
     def test_availability_is_independent_from_support_and_onboarding(self) -> None:
         self._materialize_components("hermes-adapter")
         self._configure_profile("hermes")
@@ -992,6 +1025,25 @@ class KernelTest(unittest.TestCase):
             next(
                 item
                 for item in stale_report["checks"]
+                if item["name"] == "runtime-evidence:hermes"
+            )["status"],
+        )
+
+        manifest["evidence"]["checked_on"] = "2026-08-26"
+        path.write_text(json.dumps(manifest), encoding="utf-8")
+        skew_report = doctor(self.root, today=date(2026, 8, 25))
+        skew = skew_report["runtimes"]["hermes"]["evidence"]
+        self.assertEqual(("fresh", -1), (skew["status"], skew["age_days"]))
+        self.assertFalse(any(item["status"] == "fail" for item in skew_report["checks"]))
+
+        future_report = doctor(self.root, today=date(2026, 8, 24))
+        future = future_report["runtimes"]["hermes"]["evidence"]
+        self.assertEqual(("future", -2), (future["status"], future["age_days"]))
+        self.assertEqual(
+            "warn",
+            next(
+                item
+                for item in future_report["checks"]
                 if item["name"] == "runtime-evidence:hermes"
             )["status"],
         )

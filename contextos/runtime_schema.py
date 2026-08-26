@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 from urllib.parse import urlparse
@@ -182,8 +182,8 @@ def validate_runtime_manifest(
         checked_date = date.fromisoformat(checked_on)
     except ValueError:
         _fail("evidence.checked_on", "must be an ISO-8601 date")
-    if check_paths and checked_date > (today or date.today()):
-        _fail("evidence.checked_on", "must not be in the future")
+    if check_paths and checked_date > (today or date.today()) + timedelta(days=1):
+        _fail("evidence.checked_on", "must not be more than one day in the future")
 
     sources = evidence.get("sources")
     if not isinstance(sources, list) or not sources:

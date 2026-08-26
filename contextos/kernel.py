@@ -3157,6 +3157,11 @@ def doctor(
                     component_inventory, manifest["components"]
                 )
                 missing_paths: list[str] = []
+                missing_by_policy: dict[str, list[str]] = {
+                    "managed": [],
+                    "seed": [],
+                    "development": [],
+                }
                 present_count = 0
                 # Workspace paths have already passed lexical containment or
                 # come from the fixed diagnostic fallback. Do not resolve them
@@ -3196,16 +3201,19 @@ def doctor(
                             break
                     if traverses_link:
                         missing_paths.append(materialized_path)
+                        missing_by_policy[record["policy"]].append(materialized_path)
                         continue
                     try:
                         target = safe_repo_path(root, materialized_path)
                     except ContextOSError:
                         missing_paths.append(materialized_path)
+                        missing_by_policy[record["policy"]].append(materialized_path)
                         continue
                     if target.is_file() and not _is_link_like(target):
                         present_count += 1
                     else:
                         missing_paths.append(materialized_path)
+                        missing_by_policy[record["policy"]].append(materialized_path)
                 component_status = (
                     "materialized"
                     if not missing_paths
@@ -3217,12 +3225,17 @@ def doctor(
                     "status": component_status,
                     "closure": closure,
                     "missing_paths": missing_paths,
+                    "missing_by_policy": missing_by_policy,
                 }
                 if scoped:
+                    blocking_missing = (
+                        missing_paths
+                        if scope == "maintainer-all"
+                        else missing_by_policy["managed"]
+                    )
                     materialization_status = (
                         "fail"
-                        if component_status != "materialized"
-                        and scope in {"profile", "runtime", "maintainer-all"}
+                        if blocking_missing
                         else "warn"
                         if component_status != "materialized"
                         else "pass"
@@ -3326,7 +3339,7 @@ def doctor(
             evidence_age = (effective_today - checked_date).days
             evidence_status = (
                 "future"
-                if evidence_age < 0
+                if evidence_age < -1
                 else "stale"
                 if evidence_age > EVIDENCE_STALE_AFTER_DAYS
                 else "fresh"
@@ -3347,7 +3360,15 @@ def doctor(
             if evidence_report["status"] in {"stale", "future", "invalid"}:
                 add(
                     f"runtime-evidence:{runtime_id}",
-                    "warn" if evidence_report["status"] == "stale" else "fail",
+                    (
+                        "fail"
+                        if evidence_report["status"] == "invalid"
+                        or (
+                            evidence_report["status"] == "future"
+                            and scope == "maintainer-all"
+                        )
+                        else "warn"
+                    ),
                     f"{evidence_report['status']}; checked_on={evidence_report['checked_on']}",
                 )
 
