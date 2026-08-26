@@ -1092,8 +1092,14 @@ class KernelTest(unittest.TestCase):
         )
         report = doctor(self.root)
         names = {item["name"] for item in report["checks"]}
+        self.assertEqual("legacy", report["scope"])
         self.assertIn("manifest:hermes", names)
         self.assertNotIn("manifest:claude", names)
+        components = next(
+            item for item in report["checks"] if item["name"] == "components:hermes"
+        )
+        self.assertEqual("warn", components["status"])
+        self.assertFalse(any(item["status"] == "fail" for item in report["checks"]))
 
     def test_bare_doctor_checks_drift_for_every_installed_host(self) -> None:
         install_runtime(self.root, "hermes")

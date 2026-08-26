@@ -3232,6 +3232,8 @@ def doctor(
                         missing_paths
                         if scope == "maintainer-all"
                         else missing_by_policy["managed"]
+                        if scope in {"profile", "runtime"}
+                        else []
                     )
                     materialization_status = (
                         "fail"
