@@ -35,6 +35,7 @@ class IntegrationCatalogTests(unittest.TestCase):
                 "linear-mcp",
                 "markitdown-mcp",
                 "notion-mcp",
+                "pandoc",
                 "readwise-mcp",
             }.issubset(
                 {item["id"] for item in self.catalog["integrations"]}
@@ -63,6 +64,23 @@ class IntegrationCatalogTests(unittest.TestCase):
         self.assertTrue(
             any(url.endswith("/packages/markitdown-mcp/src/markitdown_mcp/__main__.py") for url in item["evidence"])
         )
+
+    def test_pandoc_types_network_reads_and_pdf_execution(self) -> None:
+        item = self.entry("pandoc")
+        for capability in ("sensitive_read", "write", "overwrite", "arbitrary_execution", "destructive"):
+            self.assertTrue(item["capabilities"][capability])
+        for gate in ("read_sensitive", "write", "overwrite", "arbitrary_execution", "destructive"):
+            self.assertIn(gate, item["confirmation"]["required_for"])
+        for tag in ("sensitive-read", "network-capable", "overwrite-capable", "arbitrary-execution"):
+            self.assertIn(tag, item["risk_tags"])
+        prerequisites = " ".join(item["installation"]["prerequisites"])
+        reads = " ".join(item["data_boundary"]["reads"])
+        details = " ".join(item["capabilities"]["details"])
+        self.assertIn("PDF engine", prerequisites)
+        self.assertIn("HTTP or HTTPS", reads)
+        self.assertIn("--sandbox", details)
+        self.assertIn("does not constrain filters or PDF production", details)
+        self.assertIn("--pdf-engine-opt", details)
 
     def test_issue_22_connectors_have_typed_sensitive_and_mutating_gates(self) -> None:
         for integration_id in ("google-workspace-cli", "notion-mcp"):

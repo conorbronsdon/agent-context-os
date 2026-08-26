@@ -16,7 +16,7 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [MarkItDown MCP](https://github.com/microsoft/markitdown/tree/main/packages/markitdown-mcp) | `mcp_server` | verified | No | No | No | Yes | No | 2026-08-24 |
 | [Notion MCP](https://developers.notion.com/guides/mcp/get-started-with-mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-15 |
 | [Obsidian CLI](https://obsidian.md/help/cli) | `editor_guide` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-15 |
-| [Pandoc](https://github.com/jgm/pandoc) | `connector` | verified | Yes | No | No | No | Yes | 2026-08-25 |
+| [Pandoc](https://github.com/jgm/pandoc) | `connector` | verified | Yes | No | No | Yes | Yes | 2026-08-25 |
 | [Readwise MCP](https://docs.readwise.io/tools/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-18 |
 | [Substack MCP](https://github.com/conorbronsdon/substack-mcp) | `mcp_server` | verified | Yes | Yes | Yes | Yes | No | 2026-08-15 |
 | [Tolaria MCP](https://github.com/refactoringhq/tolaria) | `local_workspace` | verified | Yes | No | No | Yes | Yes | 2026-08-15 |
@@ -295,28 +295,29 @@ Capabilities and limits:
 
 ## Pandoc
 
-A local document-conversion CLI for turning reviewed Markdown into DOCX, PDF, EPUB, or HTML while keeping Markdown canonical in Git.
+A document-conversion CLI for turning reviewed Markdown into DOCX, PDF, EPUB, or HTML while keeping Markdown canonical in Git.
 
 - **Supported agents:** `generic`
 - **Install scope:** `project_or_user`; never automatic
-- **Prerequisites:** Pandoc CLI
+- **Prerequisites:** Pandoc CLI; A separately installed and reviewed PDF engine when producing PDF output
 - **Credentials:** None
-- **Reads:** Explicitly selected local input Markdown files and explicitly referenced local assets
-- **Writes / external effects:** Explicitly selected local output files, including overwrite of an existing output path when approved
-- **Typed safety signals:** overwrite, arbitrary execution
-- **Required confirmation gates:** `external_install`, `write`, `overwrite`, `arbitrary_execution`, `destructive`
-- **Confirmation:** Confirm exact input and output paths before each run; separately confirm overwrite and any filter, custom writer, include, or remote-fetch option.
-- **Risk tags:** `external-install`, `local-files`, `overwrite-capable`, `arbitrary-execution`, `destructive-capable`
+- **Reads:** Explicitly selected local input files and assets in the bounded profile; Absolute HTTP or HTTPS inputs, URL-valued resources, and local or remote iframe sources when those surfaces are used; Additional files and resources reachable by approved include directives, filters, custom writers, or PDF engines and their options
+- **Writes / external effects:** Explicitly selected local output files, including overwrite of an existing output path when approved; Temporary files used during PDF production and any additional filesystem side effects introduced by approved filters, custom writers, or PDF engines
+- **Typed safety signals:** sensitive read, overwrite, arbitrary execution
+- **Required confirmation gates:** `external_install`, `read_sensitive`, `write`, `overwrite`, `arbitrary_execution`, `destructive`
+- **Confirmation:** Confirm exact input and output paths before each run. Separately confirm any remote input or resource, include directive, filter, custom writer, overwrite, or PDF production; for PDF, name the reviewed engine and exact engine options.
+- **Risk tags:** `external-install`, `local-data`, `sensitive-read`, `network-capable`, `overwrite-capable`, `arbitrary-execution`, `destructive-capable`, `open-world`
 - **Evidence:** [1](https://github.com/jgm/pandoc); [2](https://github.com/jgm/pandoc/releases/tag/3.10.2); [3](https://pandoc.org/MANUAL.html)
-- **Health check:** Run pandoc --version, then convert one known local Markdown file to a local output path without filters/includes and verify output is created at the expected path.
-- **Uninstall:** Uninstall Pandoc using the platform package manager and keep generated documents unless the user explicitly asks to remove them. (removes user data: No)
+- **Health check:** Run pandoc --version, then use --sandbox to convert one non-sensitive local Markdown fixture to a new local HTML output path without remote resources, includes, filters, custom writers, or PDF production.
+- **Uninstall:** Uninstall Pandoc using the platform package manager and keep generated documents unless the user explicitly asks to remove them; review any separately installed PDF engine independently. (removes user data: No)
 
 Capabilities and limits:
 
-- Default bounded usage converts one exact input path to one exact output path
-- Require explicit confirmation before overwrite of an existing output file
-- Disallow filters, custom writers, include flags, and remote resource fetching in the default recipe
-- Pandoc's full flag surface can enable arbitrary execution via user-supplied filters or custom writers
+- The bounded non-PDF profile uses --sandbox with one exact local input and a new exact local output path; reject remote inputs and resources, include directives, filters, custom writers, and overwrite
+- Pandoc accepts absolute HTTP or HTTPS inputs, and its HTML reader can fetch local or remote iframe sources; treat those as sensitive network reads outside the bounded profile
+- --sandbox limits reader and writer IO to files named on the command line, but does not constrain filters or PDF production and can prevent formats such as DOCX from loading filesystem data files
+- PDF output invokes a separately installed engine; audit and confirm the exact --pdf-engine and every --pdf-engine-opt because the engine can widen filesystem, network, and execution risk
+- Pandoc's full flag surface can enable arbitrary execution and additional side effects through filters, custom writers, and PDF engines
 
 ## Readwise MCP
 
