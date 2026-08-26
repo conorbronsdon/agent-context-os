@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import io
+import os
 import re
+import subprocess
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -34,6 +36,20 @@ from contextos.workspace_schema import (
 
 ROOT = Path(__file__).resolve().parents[1]
 KNOWN = {"claude", "codex", "hermes"}
+
+
+def make_directory_link(link: Path, target: Path) -> None:
+    if os.name == "nt":
+        result = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise OSError(result.stderr or result.stdout)
+    else:
+        link.symlink_to(target, target_is_directory=True)
 
 
 def config(**overrides: object) -> dict[str, object]:
@@ -474,12 +490,45 @@ class WorkspaceConfigTest(unittest.TestCase):
         real.mkdir()
         link = self.root / "linked-state"
         try:
-            link.symlink_to(real, target_is_directory=True)
+            make_directory_link(link, real)
         except OSError:
-            self.skipTest("symlink creation is unavailable")
+            self.skipTest("directory link creation is unavailable")
         self.write_json(config(paths={**DEFAULT_PATHS, "state_dir": "linked-state"}))
         with self.assertRaisesRegex(ContextOSError, "symlink"):
             resolve_workspace(self.root)
+
+    def test_default_path_symlink_keeps_legacy_runtime_behavior_but_cannot_migrate(self) -> None:
+        real = self.root / "real-state"
+        real.mkdir()
+        (self.root / "state").rmdir()
+        try:
+            make_directory_link(self.root / "state", real)
+        except OSError:
+            self.skipTest("directory link creation is unavailable")
+
+        resolution = resolve_workspace(self.root)
+        self.assertEqual("defaults", resolution.source)
+        self.assertEqual(real.resolve(), resolution.workspace.state_dir)
+        with self.assertRaisesRegex(ContextOSError, "cannot be activated safely"):
+            plan_workspace_migration(self.root, ["claude"])
+
+    def test_legacy_linked_path_cannot_preview_unloadable_json(self) -> None:
+        real = self.root / "real-state"
+        real.mkdir()
+        linked = self.root / "linked-state"
+        try:
+            make_directory_link(linked, real)
+        except OSError:
+            self.skipTest("directory link creation is unavailable")
+        (self.root / "workspace.yaml").write_text(
+            "state_dir: linked-state\n", encoding="utf-8"
+        )
+
+        resolution = resolve_workspace(self.root)
+        self.assertEqual("legacy-yaml", resolution.source)
+        self.assertEqual(real.resolve(), resolution.workspace.state_dir)
+        with self.assertRaisesRegex(ContextOSError, "cannot be activated safely"):
+            plan_workspace_migration(self.root, ["claude"])
 
     def test_legacy_analyzer_reports_every_ambiguous_line(self) -> None:
         analysis = analyze_legacy_workspace(

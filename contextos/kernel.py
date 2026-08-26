@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 from contextlib import contextmanager
@@ -144,6 +145,22 @@ def _reject_config_aliases(root: Path, canonical_name: str) -> None:
         )
 
 
+def _is_link_like(path: Path) -> bool:
+    """Recognize symlinks and Windows reparse points without following them."""
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        raise ContextOSError(f"cannot inspect path without following links {path}: {exc}") from exc
+    reparse_tag = getattr(metadata, "st_reparse_tag", 0)
+    link_tags = {
+        getattr(stat, "IO_REPARSE_TAG_SYMLINK", -1),
+        getattr(stat, "IO_REPARSE_TAG_MOUNT_POINT", -2),
+    }
+    return stat.S_ISLNK(metadata.st_mode) or reparse_tag in link_tags
+
+
 def _legacy_repo_path(root: Path, raw: str, field: str) -> Path:
     relative = Path(raw)
     if relative.is_absolute():
@@ -251,7 +268,10 @@ def resolve_workspace(root: Path) -> WorkspaceResolution:
             ),
         })
     return WorkspaceResolution(
-        workspace=_workspace_from_paths(root, values, legacy=source == "legacy-yaml"),
+        # Repositories without tracked configuration use the same historical
+        # path semantics as workspace.yaml. Tight path rules begin only after
+        # a canonical JSON configuration is explicitly adopted.
+        workspace=_workspace_from_paths(root, values, legacy=True),
         config=None,
         source=source,
         agents=None,
@@ -273,8 +293,10 @@ def safe_repo_path(root: Path, raw: str) -> Path:
     current = root
     for part in PurePosixPath(relative).parts:
         current /= part
-        if current.is_symlink():
-            raise ContextOSError(f"workspace path must not traverse a symlink: {raw}")
+        if _is_link_like(current):
+            raise ContextOSError(
+                f"workspace path must not traverse a symlink or reparse point: {raw}"
+            )
     resolved = candidate.resolve()
     try:
         resolved.relative_to(root.resolve())
@@ -393,6 +415,12 @@ def plan_workspace_migration(
         config = validate_workspace_config(candidate, known_runtime_ids=known)
     except WorkspaceConfigError as exc:
         raise ContextOSError(f"invalid workspace migration target: {exc}") from exc
+    try:
+        _workspace_from_paths(root, config["paths"])
+    except ContextOSError as exc:
+        raise ContextOSError(
+            f"workspace migration target cannot be activated safely: {exc}"
+        ) from exc
     target_text = render_workspace_config(config)
     action = "noop" if current_text == target_text else "update" if existing else "add"
     diff = "" if action == "noop" else "".join(difflib.unified_diff(
