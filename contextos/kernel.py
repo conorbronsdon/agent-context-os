@@ -1838,7 +1838,7 @@ def _rmtree_readonly_artifacts(
             shutil.rmtree(path, onexc=handle_exception)
         else:
             shutil.rmtree(path, onerror=handle_error)
-    except OSError:
+    except (OSError, ContextOSError):
         if not ignore_errors:
             raise
 

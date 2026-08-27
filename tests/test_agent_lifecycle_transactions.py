@@ -1085,6 +1085,26 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
 
         self.assertFalse(tree.exists())
 
+    @unittest.skipUnless(os.name == "nt", "Windows read-only fallback")
+    def test_readonly_tree_best_effort_suppresses_sharing_violation(self) -> None:
+        tree = self.root / ".context-os/staging/held-tree"
+        artifact = tree / "artifact"
+        artifact.parent.mkdir(parents=True)
+        artifact.write_bytes(b"held tree inode\n")
+        os.chmod(artifact, 0o444)
+
+        with mock.patch(
+            "contextos.kernel._windows_unlink_readonly",
+            side_effect=ctypes.WinError(32),
+        ), mock.patch(
+            "contextos.kernel.os.chmod",
+            side_effect=AssertionError("sharing violations must not chmod"),
+        ):
+            _rmtree_readonly_artifacts(tree, ignore_errors=True)
+
+        self.assertTrue(artifact.exists())
+        self.assertFalse(artifact.stat().st_mode & 0o200)
+
     def test_readonly_hardlink_tree_cleanup_preserves_workspace_mode(self) -> None:
         survivor = self.root / "state/current.md"
         survivor.write_bytes(b"shared tree inode\n")
