@@ -935,7 +935,8 @@ def agent_list_report(root: Path) -> dict[str, Any]:
     """Report tracked activation and machine-local registration separately."""
     resolution = resolve_workspace(root)
     configured = set(resolution.agents or ())
-    local_hosts = _read_hosts_state(root)["hosts"]
+    local_state, legacy_runtime = _hosts_with_legacy(root)
+    local_hosts = local_state["hosts"]
     return {
         "schema_version": SCHEMA_VERSION,
         "source": resolution.source,
@@ -949,6 +950,7 @@ def agent_list_report(root: Path) -> dict[str, Any]:
             for runtime in runtime_ids(root)
         ],
         "notices": list(resolution.notices),
+        "legacy_local_runtime": legacy_runtime,
     }
 
 
@@ -1657,6 +1659,11 @@ def _validate_agent_proposal_shape(
             )
         before_set = set(before_agents)
         after_set = set(after_agents)
+        for field in ("schema_version", "mode", "paths", "template"):
+            if after_config[field] != resolution.config[field]:
+                raise ContextOSError(
+                    f"stale or invalid {operation} proposal may change only agents"
+                )
         if operation == AGENT_ENABLE_OPERATION and not (
             before_set < after_set and len(after_set - before_set) == 1
         ):
@@ -2288,12 +2295,13 @@ def _recover_agent_journal(
         if workflow == AGENT_LIFECYCLE_WORKFLOW:
             recovery_policy = {
                 "contextos.workspace.json": ("write", "workspace-config", "managed"),
-                "workspace.yaml": (
+            }
+            if manifest.get("operation") == WORKSPACE_MIGRATION_OPERATION:
+                recovery_policy["workspace.yaml"] = (
                     "delete",
                     "legacy-workspace-config",
                     "migration-only",
-                ),
-            }
+                )
             if relative not in recovery_policy:
                 raise ContextOSError(f"journal path is not recoverable: {relative}")
             allowed_action, allowed_owner, allowed_policy = recovery_policy[relative]

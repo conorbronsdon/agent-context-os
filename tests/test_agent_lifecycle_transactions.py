@@ -370,6 +370,28 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         with self.assertRaisesRegex(ContextOSError, "remove exactly one"):
             self.apply(path, proposal)
 
+    def test_crafted_activation_cannot_rewrite_workspace_paths(self) -> None:
+        path, proposal = self.propose(("claude",))
+        self.apply(path, proposal)
+        path, proposal = create_agent_activation_proposal(
+            self.root, "codex", True, NOW.replace(second=1)
+        )
+        assert path is not None and proposal is not None
+        after_config = json.loads(proposal["changes"][0]["after_text"])
+        after_config["paths"]["state_dir"] = "redirected-state"
+        after_text = json.dumps(after_config, indent=2) + "\n"
+        proposal["changes"][0] = _agent_change(
+            self.root,
+            "agent-enable",
+            "contextos.workspace.json",
+            action="write",
+            after_text=after_text,
+        )
+        self.resign(path, proposal)
+
+        with self.assertRaisesRegex(ContextOSError, "may change only agents"):
+            self.apply(path, proposal)
+
     def test_activation_committed_journal_recovers_with_its_exact_operation(self) -> None:
         path, proposal = self.propose(("claude",))
         self.apply(path, proposal)
@@ -436,6 +458,46 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
             (self.root / "contextos.workspace.json").read_text(encoding="utf-8")
         )
         self.assertEqual(["claude"], configured["agents"])
+
+        local = self.root / ".context-os"
+        (local / "runtime.json").write_text(
+            json.dumps({
+                "schema_version": 1,
+                "runtime": "codex",
+                "installed_at": "2026-08-20T12:00:00+00:00",
+                "source_manifest_sha256": "a" * 64,
+            }),
+            encoding="utf-8",
+        )
+        legacy_report = agent_list_report(self.root)
+        legacy_statuses = {item["id"]: item for item in legacy_report["agents"]}
+        self.assertTrue(legacy_statuses["codex"]["locally_registered"])
+        self.assertEqual("codex", legacy_report["legacy_local_runtime"])
+
+    def test_activation_recovery_rejects_legacy_path_under_enable_operation(self) -> None:
+        path, proposal = self.propose()
+        backups = {
+            safe_repo_path(self.root, item["path"]): (
+                safe_repo_path(self.root, item["path"]).read_bytes()
+                if safe_repo_path(self.root, item["path"]).exists()
+                else None
+            )
+            for item in proposal["changes"]
+        }
+        modes = {
+            target: target.stat().st_mode & 0o7777 if target.exists() else None
+            for target in backups
+        }
+        receipt = self.root / ".context-os/receipts" / f"{proposal['proposal_id']}.json"
+        journal = _create_agent_journal(self.root, proposal, backups, modes, receipt)
+        manifest = read_json(journal / "journal.json")
+        manifest["operation"] = "agent-enable"
+        (journal / "journal.json").write_text(
+            json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+        )
+
+        with self.assertRaisesRegex(ContextOSError, "path is not recoverable"):
+            _recover_pending_agent_journals(self.root)
 
     def test_exact_digest_tamper_and_unowned_path_fail_before_writes(self) -> None:
         path, proposal = self.propose()
