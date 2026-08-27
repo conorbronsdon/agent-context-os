@@ -38,7 +38,11 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        # Hosted Windows can expose TEMP through an 8.3 short path while
+        # safe_repo_path() returns the resolved long path. Keep fault-injection
+        # path comparisons canonical so an injected failure cannot silently
+        # miss the operation it is meant to prove.
+        self.root = Path(self.temporary.name).resolve()
         for directory in ("state", "sessions", "runtimes", "components", "workspace"):
             (self.root / directory).mkdir()
         (self.root / "AGENTS.md").write_text("# Fixture\n", encoding="utf-8")
