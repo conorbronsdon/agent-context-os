@@ -56,10 +56,12 @@ HOST_STATE_SCHEMA_VERSION = 1
 EVIDENCE_STALE_AFTER_DAYS = 90
 AGENT_LIFECYCLE_WORKFLOW = "agent-config"
 WORKSPACE_MIGRATION_OPERATION = "workspace-migrate"
+WORKSPACE_SETUP_OPERATION = "workspace-setup"
 AGENT_ENABLE_OPERATION = "agent-enable"
 AGENT_DISABLE_OPERATION = "agent-disable"
 AGENT_SET_OPERATIONS = {
     WORKSPACE_MIGRATION_OPERATION,
+    WORKSPACE_SETUP_OPERATION,
     AGENT_ENABLE_OPERATION,
     AGENT_DISABLE_OPERATION,
 }
@@ -683,7 +685,10 @@ def _agent_lifecycle_authorization(
         raise ContextOSError(
             f"{operation} cannot mutate unowned or component path: {relative}"
         )
-    if relative == "workspace.yaml" and operation != WORKSPACE_MIGRATION_OPERATION:
+    if relative == "workspace.yaml" and operation not in {
+        WORKSPACE_MIGRATION_OPERATION,
+        WORKSPACE_SETUP_OPERATION,
+    }:
         raise ContextOSError(f"{operation} cannot mutate legacy workspace.yaml")
     _reject_config_aliases(root, relative)
     safe_repo_path(root, relative)
@@ -793,6 +798,7 @@ def _create_workspace_config_proposal(
     agents: Sequence[str],
     now: datetime,
     *,
+    operation: str,
     allow_initial: bool,
     allow_agent_expansion: bool,
 ) -> tuple[Path | None, dict[str, Any] | None]:
@@ -828,7 +834,7 @@ def _create_workspace_config_proposal(
         changes.append(
             _agent_change(
                 root,
-                WORKSPACE_MIGRATION_OPERATION,
+                operation,
                 "contextos.workspace.json",
                 action="write",
                 after_text=preview["content"],
@@ -839,7 +845,7 @@ def _create_workspace_config_proposal(
         changes.append(
             _agent_change(
                 root,
-                WORKSPACE_MIGRATION_OPERATION,
+                operation,
                 "workspace.yaml",
                 action="delete",
                 after_text=None,
@@ -855,7 +861,7 @@ def _create_workspace_config_proposal(
     document: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "workflow": workflow,
-        "operation": WORKSPACE_MIGRATION_OPERATION,
+        "operation": operation,
         "created_at": now.isoformat(),
         "proposal_id": proposal_id(workflow, now, changes),
         "changes": changes,
@@ -895,6 +901,7 @@ def create_workspace_migration_proposal(
         root,
         agents,
         now,
+        operation=WORKSPACE_MIGRATION_OPERATION,
         allow_initial=False,
         allow_agent_expansion=False,
     )
@@ -926,6 +933,7 @@ def create_workspace_setup_proposal(
         root,
         selected,
         now,
+        operation=WORKSPACE_SETUP_OPERATION,
         allow_initial=True,
         allow_agent_expansion=True,
     )
@@ -934,7 +942,8 @@ def create_workspace_setup_proposal(
 def agent_list_report(root: Path) -> dict[str, Any]:
     """Report tracked activation and machine-local registration separately."""
     resolution = resolve_workspace(root)
-    configured = set(resolution.agents or ())
+    configured_agents = resolution.agents
+    configured = set(configured_agents or ())
     local_state, legacy_runtime = _hosts_with_legacy(root)
     local_hosts = local_state["hosts"]
     return {
@@ -944,7 +953,9 @@ def agent_list_report(root: Path) -> dict[str, Any]:
         "agents": [
             {
                 "id": runtime,
-                "enabled": runtime in configured,
+                "enabled": (
+                    runtime in configured if configured_agents is not None else None
+                ),
                 "locally_registered": runtime in local_hosts,
             }
             for runtime in runtime_ids(root)
@@ -1632,7 +1643,7 @@ def _validate_agent_proposal_shape(
             or after_mode is not None
         ):
             raise ContextOSError(f"delete action must not carry after content: {relative}")
-    if operation == WORKSPACE_MIGRATION_OPERATION:
+    if operation in {WORKSPACE_MIGRATION_OPERATION, WORKSPACE_SETUP_OPERATION}:
         valid_paths = (
             ["contextos.workspace.json"],
             ["workspace.yaml"],
@@ -1652,6 +1663,29 @@ def _validate_agent_proposal_shape(
         after_config = resolution.config
     before_agents = list(resolution.agents) if resolution.agents is not None else None
     after_agents = list(after_config["agents"])
+    if operation in {WORKSPACE_MIGRATION_OPERATION, WORKSPACE_SETUP_OPERATION}:
+        expected_after = plan_workspace_migration(root, after_agents)["config"]
+        if after_config != expected_after:
+            raise ContextOSError(
+                f"stale or invalid {operation} proposal changes non-agent configuration"
+            )
+    if before_agents is not None and operation == WORKSPACE_MIGRATION_OPERATION:
+        if after_config != resolution.config:
+            raise ContextOSError(
+                "stale or invalid workspace-migrate proposal cannot change tracked configuration"
+            )
+    if before_agents is not None and operation == WORKSPACE_SETUP_OPERATION:
+        before_set = set(before_agents)
+        after_set = set(after_agents)
+        if not before_set.issubset(after_set):
+            raise ContextOSError(
+                "stale or invalid workspace-setup proposal cannot shrink tracked agents"
+            )
+        for field in ("schema_version", "mode", "paths", "template"):
+            if after_config[field] != resolution.config[field]:
+                raise ContextOSError(
+                    "stale or invalid workspace-setup proposal may change only agents"
+                )
     if operation in {AGENT_ENABLE_OPERATION, AGENT_DISABLE_OPERATION}:
         if before_agents is None:
             raise ContextOSError(
@@ -2296,7 +2330,10 @@ def _recover_agent_journal(
             recovery_policy = {
                 "contextos.workspace.json": ("write", "workspace-config", "managed"),
             }
-            if manifest.get("operation") == WORKSPACE_MIGRATION_OPERATION:
+            if manifest.get("operation") in {
+                WORKSPACE_MIGRATION_OPERATION,
+                WORKSPACE_SETUP_OPERATION,
+            }:
                 recovery_policy["workspace.yaml"] = (
                     "delete",
                     "legacy-workspace-config",

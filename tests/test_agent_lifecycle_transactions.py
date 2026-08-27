@@ -206,6 +206,7 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         self.assertIsNotNone(path)
         self.assertIsNotNone(proposal)
         assert path is not None and proposal is not None
+        self.assertEqual("workspace-setup", proposal["operation"])
         self.assertEqual(["contextos.workspace.json"], [
             change["path"] for change in proposal["changes"]
         ])
@@ -390,6 +391,19 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         self.resign(path, proposal)
 
         with self.assertRaisesRegex(ContextOSError, "may change only agents"):
+            self.apply(path, proposal)
+
+    def test_crafted_migration_cannot_bypass_disable_or_setup_semantics(self) -> None:
+        path, proposal = self.propose(("claude",))
+        self.apply(path, proposal)
+        path, proposal = create_workspace_setup_proposal(
+            self.root, ("codex",), NOW.replace(second=1)
+        )
+        assert path is not None and proposal is not None
+        proposal["operation"] = "workspace-migrate"
+        self.resign(path, proposal)
+
+        with self.assertRaisesRegex(ContextOSError, "cannot change tracked configuration"):
             self.apply(path, proposal)
 
     def test_activation_committed_journal_recovers_with_its_exact_operation(self) -> None:
