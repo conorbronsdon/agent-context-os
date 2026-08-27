@@ -544,7 +544,10 @@ class KernelTest(unittest.TestCase):
         real_replace = os.replace
 
         def race_before_capture(source, destination, *args, **kwargs):
-            if Path(source) == current and Path(destination).parent.name == "forward":
+            if (
+                Path(source) == current.resolve()
+                and Path(destination).parent.name == "forward"
+            ):
                 current.write_bytes(concurrent)
             return real_replace(source, destination, *args, **kwargs)
 
@@ -578,7 +581,7 @@ class KernelTest(unittest.TestCase):
 
         def race_after_publish(source, destination):
             result = real_publish(source, destination)
-            if Path(destination) == current:
+            if Path(destination) == current.resolve():
                 current.write_bytes(concurrent)
             return result
 
@@ -607,41 +610,32 @@ class KernelTest(unittest.TestCase):
                 ),
             },
         )
+        current_resolved = current.resolve()
         real_publish = _publish_exclusive
-        real_stat = os.stat
+        real_samestat = os.path.samestat
         armed = False
         raced = False
-        target_stat_calls = 0
 
         def arm_after_publish(source, destination):
             nonlocal armed
             result = real_publish(source, destination)
-            if Path(destination) == current:
+            if Path(destination) == current_resolved:
                 armed = True
             return result
 
-        def replace_before_path_identity_check(path, *args, **kwargs):
-            nonlocal raced, target_stat_calls
-            if (
-                armed
-                and not raced
-                and Path(path) == current
-                and kwargs.get("follow_symlinks") is False
-            ):
-                target_stat_calls += 1
-                if target_stat_calls == 2:
-                    raced = True
-                    metadata = real_stat(path, *args, **kwargs)
-                    changed = mock.Mock()
-                    changed.st_mode = metadata.st_mode
-                    changed.st_dev = metadata.st_dev
-                    changed.st_ino = metadata.st_ino + 1
-                    return changed
-            return real_stat(path, *args, **kwargs)
+        def reject_published_path_identity(left, right):
+            nonlocal raced
+            if armed and not raced:
+                raced = True
+                return False
+            return real_samestat(left, right)
 
         with mock.patch(
             "contextos.kernel._publish_exclusive", side_effect=arm_after_publish
-        ), mock.patch("contextos.kernel.os.stat", side_effect=replace_before_path_identity_check):
+        ), mock.patch(
+            "contextos.kernel.os.path.samestat",
+            side_effect=reject_published_path_identity,
+        ):
             with self.assertRaisesRegex(ContextOSError, "rolled back"):
                 self._apply(proposal_path, proposal)
         self.assertTrue(raced)
@@ -664,41 +658,41 @@ class KernelTest(unittest.TestCase):
                 ),
             },
         )
+        current_resolved = current.resolve()
         before = current.read_bytes()
         real_publish = _publish_exclusive
-        real_stat = os.stat
+        real_fstat = os.fstat
         armed = False
         raced = False
-        target_stat_calls = 0
+        target_fstat_calls = 0
 
         def arm_after_publish(source, destination):
             nonlocal armed
             result = real_publish(source, destination)
-            if Path(destination) == current:
+            if Path(destination) == current_resolved:
                 armed = True
             return result
 
-        def mutate_before_final_metadata_check(path, *args, **kwargs):
-            nonlocal raced, target_stat_calls
-            if (
-                armed
-                and not raced
-                and Path(path) == current
-                and kwargs.get("follow_symlinks") is False
-            ):
-                target_stat_calls += 1
-                if target_stat_calls == 2:
-                    metadata = real_stat(path, *args, **kwargs)
+        def mutate_before_final_metadata_check(descriptor):
+            nonlocal raced, target_fstat_calls
+            metadata = real_fstat(descriptor)
+            if armed and not raced:
+                target_fstat_calls += 1
+                if target_fstat_calls == 2:
                     os.utime(
                         current,
                         ns=(metadata.st_atime_ns, metadata.st_mtime_ns + 1_000_000_000),
                     )
                     raced = True
-            return real_stat(path, *args, **kwargs)
+                    return real_fstat(descriptor)
+            return metadata
 
         with mock.patch(
             "contextos.kernel._publish_exclusive", side_effect=arm_after_publish
-        ), mock.patch("contextos.kernel.os.stat", side_effect=mutate_before_final_metadata_check):
+        ), mock.patch(
+            "contextos.kernel.os.fstat",
+            side_effect=mutate_before_final_metadata_check,
+        ):
             with self.assertRaisesRegex(ContextOSError, "rolled back"):
                 self._apply(proposal_path, proposal)
         self.assertTrue(raced)
@@ -742,7 +736,7 @@ import contextos.kernel as kernel
 root = Path(sys.argv[1])
 proposal = Path(sys.argv[2])
 digest = sys.argv[3]
-first = Path(sys.argv[4])
+first = Path(sys.argv[4]).resolve()
 after = bytes.fromhex(sys.argv[5])
 real_sync = kernel._fsync_directory
 
@@ -762,7 +756,7 @@ with mock.patch("contextos.kernel._fsync_directory", side_effect=crash_after_fir
                 str(self.root),
                 str(proposal_path),
                 proposal["proposal_digest"],
-                str(first),
+                str(first.resolve()),
                 proposal["changes"][0]["after_text"].encode("utf-8").hex(),
             ],
             cwd=ROOT,
@@ -1754,9 +1748,10 @@ with mock.patch("contextos.kernel._capture_transaction_before", side_effect=cras
 
     def test_doctor_rejects_link_like_component_inventory(self) -> None:
         inventory = self.root / "components/manifest.json"
+        inventory_resolved = inventory.resolve()
         with mock.patch(
             "contextos.kernel._is_link_like",
-            side_effect=lambda path: path == inventory,
+            side_effect=lambda path: Path(path) == inventory_resolved,
         ):
             report = doctor(self.root)
         check = next(

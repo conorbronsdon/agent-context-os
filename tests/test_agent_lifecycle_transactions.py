@@ -25,8 +25,10 @@ from contextos.kernel import (
     _prepare_publication_anchor,
     _publish_exclusive,
     _recover_pending_agent_journals,
+    _rmtree_readonly_artifacts,
     _restore_transaction_target,
     _transaction_slot,
+    _unlink_readonly_artifact,
     apply_proposal,
     canonical_json,
     create_proposal,
@@ -283,7 +285,7 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         original_replace = os.replace
 
         def fail_legacy(source, destination, *args, **kwargs):
-            if Path(source) == legacy:
+            if Path(source) == legacy.resolve():
                 raise OSError("injected delete failure")
             return original_replace(source, destination, *args, **kwargs)
 
@@ -303,7 +305,7 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         original_replace = os.replace
 
         def race_then_fail(source, destination, *args, **kwargs):
-            if Path(source) == legacy:
+            if Path(source) == legacy.resolve():
                 target.write_bytes(concurrent)
                 raise OSError("injected delete failure after concurrent write")
             return original_replace(source, destination, *args, **kwargs)
@@ -325,7 +327,7 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         original_read_bytes = Path.read_bytes
 
         def fail_legacy(source, destination, *args, **kwargs):
-            if Path(source) == legacy:
+            if Path(source) == legacy.resolve():
                 raise OSError("force rollback after first publication")
             return original_replace(source, destination, *args, **kwargs)
 
@@ -353,7 +355,7 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         original_replace = os.replace
 
         def install_directory_racer(source, destination, *args, **kwargs):
-            if Path(source) == legacy:
+            if Path(source) == legacy.resolve():
                 target.unlink()
                 target.mkdir()
                 (target / "racer.txt").write_text("preserve me\n", encoding="utf-8")
@@ -666,42 +668,32 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
     def test_agent_post_write_snapshot_rejects_inode_swap(self) -> None:
         path, proposal = self.propose()
         target = self.root / "contextos.workspace.json"
+        target_resolved = target.resolve()
         real_publish = _publish_exclusive
-        real_stat = os.stat
         armed = False
         raced = False
-        target_stat_calls = 0
 
         def arm_after_publish(source, destination):
             nonlocal armed
             result = real_publish(source, destination)
-            if Path(destination) == target:
+            if Path(destination) == target_resolved:
                 armed = True
             return result
 
-        def replace_before_path_identity_check(candidate, *args, **kwargs):
-            nonlocal raced, target_stat_calls
-            if (
-                armed
-                and not raced
-                and Path(candidate) == target
-                and kwargs.get("follow_symlinks") is False
-            ):
-                target_stat_calls += 1
-                if target_stat_calls == 3:
-                    raced = True
-                    metadata = real_stat(candidate, *args, **kwargs)
-                    changed = mock.Mock()
-                    changed.st_mode = metadata.st_mode
-                    changed.st_dev = metadata.st_dev
-                    changed.st_ino = metadata.st_ino + 1
-                    return changed
-            return real_stat(candidate, *args, **kwargs)
+        real_samestat = os.path.samestat
+
+        def reject_published_path_identity(left, right):
+            nonlocal raced
+            if armed and not raced:
+                raced = True
+                return False
+            return real_samestat(left, right)
 
         with mock.patch(
             "contextos.kernel._publish_exclusive", side_effect=arm_after_publish
         ), mock.patch(
-            "contextos.kernel.os.stat", side_effect=replace_before_path_identity_check
+            "contextos.kernel.os.path.samestat",
+            side_effect=reject_published_path_identity,
         ):
             with self.assertRaisesRegex(ContextOSError, "rolled back"):
                 self.apply(path, proposal)
@@ -721,7 +713,7 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         original = os.link
 
         def race_receipt(source, destination, *args, **kwargs):
-            if Path(destination) == receipt:
+            if Path(destination) == receipt.resolve():
                 receipt.write_text("{}\n", encoding="utf-8")
             return original(source, destination, *args, **kwargs)
 
@@ -740,7 +732,11 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
 
         def replace_before_sync(directory: Path):
             nonlocal replaced
-            if Path(directory) == receipt.parent and receipt.is_file() and not replaced:
+            if (
+                Path(directory) == receipt.parent.resolve()
+                and receipt.is_file()
+                and not replaced
+            ):
                 replacement = receipt.with_suffix(".replacement")
                 replacement.write_text("{}\n", encoding="utf-8")
                 os.replace(replacement, receipt)
@@ -805,7 +801,7 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
 
         def fail_forward_and_first_restore(source, destination, *args, **kwargs):
             nonlocal target_failures
-            if Path(destination) == target and target_failures < 2:
+            if Path(destination) == target.resolve() and target_failures < 2:
                 target_failures += 1
                 raise OSError("transient link failure")
             return original_link(source, destination, *args, **kwargs)
@@ -831,7 +827,7 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         original = os.link
 
         def race_target(source, destination, *args, **kwargs):
-            if Path(destination) == target:
+            if Path(destination) == target.resolve():
                 target.write_bytes(b"concurrent user bytes\n")
             return original(source, destination, *args, **kwargs)
 
@@ -849,7 +845,7 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
 
         def race_target(source, destination, *args, **kwargs):
             nonlocal raced_identity
-            if Path(destination) == target:
+            if Path(destination) == target.resolve():
                 target.write_bytes(Path(source).read_bytes())
                 metadata = target.stat()
                 raced_identity = (metadata.st_dev, metadata.st_ino)
@@ -879,7 +875,10 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         original = os.replace
 
         def race_delete(source, destination, *args, **kwargs):
-            if Path(source) == legacy and Path(destination).parent.name == "forward":
+            if (
+                Path(source) == legacy.resolve()
+                and Path(destination).parent.name == "forward"
+            ):
                 legacy.write_bytes(concurrent)
             return original(source, destination, *args, **kwargs)
 
@@ -990,6 +989,41 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         if os.name != "nt":
             self.assertEqual(expected_mode, target.stat().st_mode & 0o7777)
         self.assertEqual(0, target.stat().st_mode & 0o111)
+
+    def test_readonly_hardlink_unlink_preserves_surviving_inode_mode(self) -> None:
+        survivor = self.root / "state/current.md"
+        survivor.write_bytes(b"shared inode\n")
+        artifact = self.root / ".context-os/readonly-artifact"
+        artifact.parent.mkdir()
+        os.link(survivor, artifact)
+        os.chmod(survivor, 0o444)
+
+        _unlink_readonly_artifact(artifact)
+
+        self.assertFalse(artifact.exists())
+        self.assertEqual(b"shared inode\n", survivor.read_bytes())
+        if os.name == "nt":
+            self.assertFalse(survivor.stat().st_mode & 0o200)
+        else:
+            self.assertEqual(0o444, survivor.stat().st_mode & 0o7777)
+
+    def test_readonly_hardlink_tree_cleanup_preserves_workspace_mode(self) -> None:
+        survivor = self.root / "state/current.md"
+        survivor.write_bytes(b"shared tree inode\n")
+        tree = self.root / ".context-os/staging/readonly-tree"
+        artifact = tree / "state/current.md"
+        artifact.parent.mkdir(parents=True)
+        os.link(survivor, artifact)
+        os.chmod(survivor, 0o444)
+
+        _rmtree_readonly_artifacts(tree)
+
+        self.assertFalse(tree.exists())
+        self.assertEqual(b"shared tree inode\n", survivor.read_bytes())
+        if os.name == "nt":
+            self.assertFalse(survivor.stat().st_mode & 0o200)
+        else:
+            self.assertEqual(0o444, survivor.stat().st_mode & 0o7777)
 
     def _assert_restore_build_crash_recovers(self, crash_stage: str) -> None:
         before = b"before-state\n"

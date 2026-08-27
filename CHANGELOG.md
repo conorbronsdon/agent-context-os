@@ -54,6 +54,11 @@
 - First-class Codex onboarding with a root `AGENTS.md`, four explicit-invocation lifecycle skills under `.agents/skills/`, generated skill UI metadata, `--agent codex` setup support, portability tests, and a host-boundary guide.
 
 ### Fixed
+- Windows transaction cleanup now removes read-only hard-link names with
+  `FileDispositionInfoEx` instead of temporarily widening the shared inode's
+  mode, closing the process-death window that could wedge recovery or silently
+  make a committed target writable. Hostile fixtures also compare canonical
+  paths and stable snapshot boundaries across Python 3.10 and Windows.
 - Content lifecycle proposals now bind exact change shapes, displayed diffs,
   and kernel-derived invariant claims, preventing a resigned write proposal
   from smuggling an undisclosed delete action into apply.
