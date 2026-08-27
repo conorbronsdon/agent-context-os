@@ -398,10 +398,11 @@ class KernelTest(unittest.TestCase):
         )
         history = (self.root / "state/current-log.md").read_text(encoding="utf-8")
         self.assertEqual(1, sum(line == "2026-08-20" for line in history.splitlines()))
-        self.assertIn(
-            "## Update: 14:30",
-            (self.root / "sessions/2026-08-23.md").read_text(encoding="utf-8"),
+        first_session = (self.root / "sessions/2026-08-23.md").read_text(
+            encoding="utf-8"
         )
+        self.assertTrue(first_session.startswith("# Session — 2026-08-23\n"))
+        self.assertIn("## Update: 14:30", first_session)
 
         second_path, second = create_proposal(
             self.root,

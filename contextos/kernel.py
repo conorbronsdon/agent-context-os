@@ -982,7 +982,7 @@ def _session_append(path: Path, block: str, date: str) -> str:
     if path.exists():
         existing = path.read_text(encoding="utf-8").rstrip()
         return f"{existing}\n\n{block.rstrip()}\n"
-    return f"# Session â€” {date}\n\n{block.rstrip()}\n"
+    return f"# Session — {date}\n\n{block.rstrip()}\n"
 
 
 def _bullets(values: list[str], empty: str = "- None recorded") -> str:
@@ -1678,6 +1678,99 @@ def _mode_matches(actual: int, expected: int) -> bool:
     return actual == expected
 
 
+def _unlink_readonly_artifact(path: Path, *, preserve: Path | None = None) -> None:
+    """Unlink a local artifact without changing a surviving hard link's mode."""
+    try:
+        path.unlink()
+        return
+    except PermissionError:
+        if os.name != "nt":
+            raise
+
+    artifact_mode = path.stat().st_mode & 0o7777
+    preserved: tuple[int, int, int] | None = None
+    if (
+        preserve is not None
+        and preserve.exists()
+        and not _is_link_like(preserve)
+        and preserve.is_file()
+        and _same_file(path, preserve)
+    ):
+        preserved_stat = preserve.stat()
+        preserved = (
+            preserved_stat.st_dev,
+            preserved_stat.st_ino,
+            preserved_stat.st_mode & 0o7777,
+        )
+    try:
+        os.chmod(path, artifact_mode | stat.S_IWRITE)
+        path.unlink()
+    finally:
+        restore = preserve if preserve is not None and preserve.exists() else path
+        if preserved is not None and restore.exists() and not _is_link_like(restore):
+            restored_stat = restore.stat()
+            if (restored_stat.st_dev, restored_stat.st_ino) == preserved[:2]:
+                os.chmod(restore, preserved[2])
+        elif path.exists() and not _is_link_like(path):
+            os.chmod(path, artifact_mode)
+
+
+def _rmtree_readonly_artifacts(
+    path: Path,
+    *,
+    preserve: Sequence[Path] = (),
+    ignore_errors: bool = False,
+) -> None:
+    """Remove a local tree on Windows while preserving workspace file modes."""
+    snapshots: list[tuple[Path, int, int, int]] = []
+    modified_inodes: set[tuple[int, int]] = set()
+    for target in preserve:
+        if target.exists() and not _is_link_like(target) and target.is_file():
+            target_stat = target.stat()
+            snapshots.append(
+                (
+                    target,
+                    target_stat.st_dev,
+                    target_stat.st_ino,
+                    target_stat.st_mode & 0o7777,
+                )
+            )
+
+    def restore_modes() -> None:
+        for target, device, inode, mode in snapshots:
+            if (device, inode) not in modified_inodes:
+                continue
+            if target.exists() and not _is_link_like(target) and target.is_file():
+                target_stat = target.stat()
+                if (target_stat.st_dev, target_stat.st_ino) == (device, inode):
+                    os.chmod(target, mode)
+
+    def handle_error(function: Any, failed_path: str, error: Any) -> None:
+        exception = error[1]
+        if os.name != "nt" or not isinstance(exception, PermissionError):
+            raise exception
+        failed_stat = Path(failed_path).stat()
+        failed_inode = (failed_stat.st_dev, failed_stat.st_ino)
+        if any(
+            (device, inode) == failed_inode
+            for _target, device, inode, _mode in snapshots
+        ):
+            modified_inodes.add(failed_inode)
+        os.chmod(failed_path, stat.S_IWRITE)
+        try:
+            function(failed_path)
+        finally:
+            restore_modes()
+
+    try:
+        shutil.rmtree(path, onerror=handle_error)
+    except OSError:
+        if not ignore_errors:
+            raise
+    finally:
+        restore_modes()
+
+
 def _write_exclusive_bytes(
     path: Path,
     content: bytes,
@@ -2212,7 +2305,11 @@ def _recover_agent_journal(
         _discard_agent_journal(root, journal)
         staging = root / ".context-os" / "staging" / manifest["proposal_id"]
         _guard_local_artifact_path(root, staging)
-        shutil.rmtree(staging, ignore_errors=True)
+        _rmtree_readonly_artifacts(
+            staging,
+            preserve=[target for _entry, target, _content, _mode in recovered],
+            ignore_errors=True,
+        )
         return
     if commit_path.exists() or commit_path.is_symlink():
         if _is_link_like(commit_path) or not commit_path.is_file():
@@ -2267,12 +2364,16 @@ def _recover_agent_journal(
                 raise ContextOSError(
                     f"forward capture cannot be retired before exact restoration: {target}"
                 )
-            forward_capture.unlink()
+            _unlink_readonly_artifact(forward_capture, preserve=target)
             _fsync_directory(forward_capture.parent)
     _discard_agent_journal(root, journal)
     staging = root / ".context-os" / "staging" / manifest["proposal_id"]
     _guard_local_artifact_path(root, staging)
-    shutil.rmtree(staging, ignore_errors=True)
+    _rmtree_readonly_artifacts(
+        staging,
+        preserve=[target for _entry, target, _content, _mode in recovered],
+        ignore_errors=True,
+    )
 
 
 def _recover_pending_agent_journals(root: Path) -> None:
@@ -2290,9 +2391,28 @@ def _recover_pending_agent_journals(root: Path) -> None:
         ):
             # Repository targets are never touched until a complete journal is
             # atomically promoted out of the build namespace.
-            shutil.rmtree(journal)
+            _rmtree_readonly_artifacts(
+                journal,
+                preserve=_journal_workspace_targets(root, journal),
+            )
             continue
         _recover_agent_journal(root, journal)
+
+
+def _journal_workspace_targets(root: Path, journal: Path) -> list[Path]:
+    manifest_path = journal / "journal.json"
+    if _is_link_like(manifest_path) or not manifest_path.is_file():
+        return []
+    try:
+        manifest = read_json(manifest_path)
+        changes = manifest.get("entries", []) if isinstance(manifest, dict) else []
+        return [
+            safe_repo_path(root, entry["path"])
+            for entry in changes
+            if isinstance(entry, dict) and isinstance(entry.get("path"), str)
+        ]
+    except (OSError, ContextOSError):
+        return []
 
 
 def _discard_agent_journal(root: Path, journal: Path) -> None:
@@ -2302,13 +2422,21 @@ def _discard_agent_journal(root: Path, journal: Path) -> None:
         return
     disposable = journal.with_name(f".{journal.name}.discard")
     _guard_local_artifact_path(root, disposable)
+    preserve = _journal_workspace_targets(root, journal)
     if disposable.exists():
         if disposable.is_symlink() or not disposable.is_dir():
             raise ContextOSError(f"invalid disposable journal path: {disposable}")
-        shutil.rmtree(disposable)
+        _rmtree_readonly_artifacts(
+            disposable,
+            preserve=_journal_workspace_targets(root, disposable),
+        )
     journal.rename(disposable)
     _fsync_directory(journal.parent)
-    shutil.rmtree(disposable, ignore_errors=True)
+    _rmtree_readonly_artifacts(
+        disposable,
+        preserve=preserve,
+        ignore_errors=True,
+    )
     _fsync_directory(journal.parent)
 
 
@@ -2397,7 +2525,7 @@ def _probe_rollback_publication(
         ) from exc
     finally:
         if linked and (probe.exists() or probe.is_symlink()):
-            probe.unlink()
+            _unlink_readonly_artifact(probe, preserve=target)
             _fsync_directory(probe.parent)
 
 
@@ -2468,13 +2596,13 @@ def _adopt_forward_capture(
     if not target_present:
         _publish_exclusive(capture, target)
         _fsync_directory(target.parent)
-        capture.unlink()
+        _unlink_readonly_artifact(capture, preserve=target)
         _fsync_directory(capture.parent)
         return None
     target_digest = sha256_bytes(target.read_bytes())
     target_mode = target.stat().st_mode & 0o7777
     if target_digest == sha256_bytes(before) and target_mode == mode:
-        capture.unlink()
+        _unlink_readonly_artifact(capture, preserve=target)
         _fsync_directory(capture.parent)
         return None
     if (
@@ -2537,14 +2665,14 @@ def _restore_transaction_target(
 
     def remove_artifact(path: Path) -> None:
         if path.exists() or path.is_symlink():
-            path.unlink()
+            _unlink_readonly_artifact(path, preserve=target)
             _fsync_directory(path.parent)
 
     def publish(source: Path, *, remove_source: bool = True) -> None:
         _publish_exclusive(source, target)
         _fsync_directory(target.parent)
         if remove_source:
-            source.unlink()
+            _unlink_readonly_artifact(source, preserve=target)
             _fsync_directory(source.parent)
 
     if restore_building.exists() or _is_link_like(restore_building):
@@ -2553,7 +2681,7 @@ def _restore_transaction_target(
                 f"rollback restore build artifact is ambiguous for {target}: "
                 f"{restore_building}"
             )
-        restore_building.unlink()
+        _unlink_readonly_artifact(restore_building)
         _fsync_directory(restore_building.parent)
 
     def publish_before() -> None:
@@ -2571,7 +2699,7 @@ def _restore_transaction_target(
             )
             _publish_exclusive(restore_building, restore)
             _fsync_directory(restore.parent)
-            restore_building.unlink()
+            _unlink_readonly_artifact(restore_building, preserve=restore)
             _fsync_directory(restore_building.parent)
         elif not exact_before(restore, restore_digest):
             raise ContextOSError(f"rollback restore payload mismatch for {target}")
@@ -2775,6 +2903,9 @@ def apply_proposal(root: Path, proposal: Path, confirmation: str, runtime: str) 
         receipt_published = False
         staging_root = root / ".context-os" / "staging" / document["proposal_id"]
         receipt_path = root / ".context-os" / "receipts" / f"{document['proposal_id']}.json"
+        transaction_targets = [
+            safe_repo_path(root, change["path"]) for change in document["changes"]
+        ]
         _guard_local_artifact_path(root, staging_root)
         _guard_local_artifact_path(root, receipt_path)
         if receipt_path.exists() or receipt_path.is_symlink():
@@ -2786,7 +2917,10 @@ def apply_proposal(root: Path, proposal: Path, confirmation: str, runtime: str) 
                     raise ContextOSError(
                         f"invalid transaction staging path: {staging_root}"
                     )
-                shutil.rmtree(staging_root)
+                _rmtree_readonly_artifacts(
+                    staging_root,
+                    preserve=transaction_targets,
+                )
             staging_root.mkdir(parents=True)
             for change_index, change in enumerate(document["changes"]):
                 path = safe_repo_path(root, change["path"])
@@ -3044,7 +3178,11 @@ def apply_proposal(root: Path, proposal: Path, confirmation: str, runtime: str) 
             if journal_path is not None and journal_path.exists():
                 _discard_agent_journal(root, journal_path)
                 building = journal_path.with_name(f".{journal_path.name}.building")
-                shutil.rmtree(building, ignore_errors=True)
+                _rmtree_readonly_artifacts(
+                    building,
+                    preserve=_journal_workspace_targets(root, building),
+                    ignore_errors=True,
+                )
             if isinstance(exc, ContextOSError):
                 if applied:
                     raise ContextOSError(
@@ -3053,7 +3191,11 @@ def apply_proposal(root: Path, proposal: Path, confirmation: str, runtime: str) 
                 raise
             raise ContextOSError(f"apply failed; staged writes were rolled back: {exc}") from exc
         finally:
-            shutil.rmtree(staging_root, ignore_errors=True)
+            _rmtree_readonly_artifacts(
+                staging_root,
+                preserve=transaction_targets,
+                ignore_errors=True,
+            )
         return receipt_path, receipt
 
 

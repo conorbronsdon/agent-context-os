@@ -959,13 +959,9 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         self.assertFalse(journal.exists())
 
     def test_publication_preserves_existing_modes_and_uses_safe_defaults(self) -> None:
-        target = self.root / "state/current.md"
+        target = self.root / "sessions/2026-08-25.md"
         target.write_text(
-            "# Current State\n\n**Last Updated:** 2026-08-24\n",
-            encoding="utf-8",
-        )
-        (self.root / "state/current-log.md").write_text(
-            "# current.md update log\n\n",
+            "# Session — 2026-08-25\n\n## Update: 10:00\n- Began\n",
             encoding="utf-8",
         )
         modes = (0o444, 0o600, 0o640, 0o644) if os.name != "nt" else (0o444, 0o666)
@@ -979,6 +975,10 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
                     NOW,
                 )
                 receipt, _ = self.apply(path, proposal)
+                self.assertIn(
+                    "sessions/2026-08-25.md",
+                    [change["path"] for change in proposal["changes"]],
+                )
                 actual_mode = target.stat().st_mode & 0o7777
                 if os.name == "nt":
                     self.assertEqual(
@@ -987,10 +987,9 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
                 else:
                     self.assertEqual(expected_mode, actual_mode)
                     self.assertEqual(0o600, receipt.stat().st_mode & 0o7777)
-        session = self.root / "sessions/2026-08-25.md"
         if os.name != "nt":
-            self.assertEqual(0o644, session.stat().st_mode & 0o7777)
-        self.assertEqual(0, session.stat().st_mode & 0o111)
+            self.assertEqual(expected_mode, target.stat().st_mode & 0o7777)
+        self.assertEqual(0, target.stat().st_mode & 0o111)
 
     def _assert_restore_build_crash_recovers(self, crash_stage: str) -> None:
         before = b"before-state\n"
