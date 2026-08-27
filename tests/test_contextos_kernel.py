@@ -894,6 +894,7 @@ class KernelTest(unittest.TestCase):
         self.assertEqual(["hermes"], list(report["runtimes"]))
 
     def test_empty_profile_keeps_every_shipped_runtime_inert(self) -> None:
+        self._materialize_components("core")
         self._configure_profile()
         manifest = json.loads(
             (self.root / "runtimes/claude.json").read_text(encoding="utf-8")
@@ -1184,6 +1185,45 @@ class KernelTest(unittest.TestCase):
         )
         self.assertEqual("warn", check["status"])
         self.assertIn("link-like artifact ignored", check["detail"])
+
+    def test_doctor_fails_closed_on_linked_artifact_directory(self) -> None:
+        outside = Path(self.temp.name) / "outside-proposals"
+        outside.mkdir()
+        proposals = self.root / ".context-os/proposals"
+        proposals.parent.mkdir(parents=True, exist_ok=True)
+        if not make_directory_link(proposals, outside):
+            self.skipTest("directory link creation is unavailable")
+        try:
+            report = doctor(self.root)
+        finally:
+            proposals.rmdir() if os.name == "nt" else proposals.unlink()
+        check = next(
+            item
+            for item in report["checks"]
+            if item["name"] == "local-artifact-retention"
+        )
+        self.assertEqual("fail", check["status"])
+        self.assertIn("cannot inspect proposals", check["detail"])
+
+    def test_core_only_profile_checks_managed_core_materialization(self) -> None:
+        self._materialize_components("core")
+        self._configure_profile()
+        (self.root / "docs/getting-started.md").unlink()
+
+        report = doctor(self.root)
+
+        check = next(
+            item for item in report["checks"] if item["name"] == "components:core"
+        )
+        self.assertEqual("fail", check["status"])
+        self.assertIn("docs/getting-started.md", check["detail"])
+
+    def test_doctor_normalizes_an_unresolved_root(self) -> None:
+        unresolved = self.root / "nested" / ".."
+
+        report = doctor(unresolved)
+
+        self.assertIn(report["status"], {"pass", "warn"})
 
     def test_doctor_reports_linked_state_file_without_crashing(self) -> None:
         with tempfile.TemporaryDirectory() as external:

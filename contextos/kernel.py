@@ -2908,6 +2908,7 @@ def doctor(
     all_runtimes: bool = False,
     today: date | None = None,
 ) -> dict[str, Any]:
+    root = root.resolve()
     if runtime is not None and all_runtimes:
         raise ContextOSError("doctor runtime selection and --all are mutually exclusive")
 
@@ -3077,6 +3078,40 @@ def doctor(
         add("component-inventory", "pass", "structurally valid")
     except (ComponentManifestError, OSError, UnicodeError) as exc:
         add("component-inventory", "fail", str(exc))
+
+    if scope == "profile" and not validation_ids and component_inventory is not None:
+        missing_managed: list[str] = []
+        for record in resolved_component_paths(component_inventory, ["core"]):
+            if record["policy"] != "managed":
+                continue
+            materialized_path = record["path"]
+            lexical_target = root
+            traverses_link = False
+            for part in PurePosixPath(materialized_path).parts:
+                lexical_target /= part
+                if _is_link_like(lexical_target):
+                    traverses_link = True
+                    break
+            if traverses_link:
+                missing_managed.append(materialized_path)
+                continue
+            try:
+                target = safe_repo_path(root, materialized_path)
+            except ContextOSError:
+                missing_managed.append(materialized_path)
+                continue
+            if not target.is_file() or _is_link_like(target):
+                missing_managed.append(materialized_path)
+        add(
+            "components:core",
+            "fail" if missing_managed else "pass",
+            (
+                f"{len(missing_managed)} managed path(s) missing or unsafe: "
+                + ", ".join(missing_managed[:3])
+            )
+            if missing_managed
+            else "managed core materialized",
+        )
 
     report_ids = (
         [runtime]
@@ -3486,6 +3521,7 @@ def doctor(
     cutoff = utc_now().timestamp() - (30 * 24 * 60 * 60)
     old_artifacts: list[Path] = []
     artifact_warnings: list[str] = []
+    artifact_directory_failures: list[str] = []
     for folder in ("proposals", "receipts"):
         artifact_dir = root / ".context-os" / folder
         try:
@@ -3493,11 +3529,13 @@ def doctor(
             if _is_link_like(artifact_dir) or (
                 artifact_dir.exists() and not artifact_dir.is_dir()
             ):
-                artifact_warnings.append(f"invalid artifact directory: {folder}")
+                artifact_directory_failures.append(
+                    f"invalid artifact directory: {folder}"
+                )
                 continue
             candidates = list(artifact_dir.glob("*.json"))
         except (ContextOSError, OSError) as exc:
-            artifact_warnings.append(f"cannot inspect {folder}: {exc}")
+            artifact_directory_failures.append(f"cannot inspect {folder}: {exc}")
             continue
         for path in candidates:
             try:
@@ -3519,9 +3557,15 @@ def doctor(
             f"{len(artifact_warnings)} invalid or unreadable artifact(s); "
             + "; ".join(artifact_warnings[:3])
         )
+    if artifact_directory_failures:
+        retention_details.append("; ".join(artifact_directory_failures[:2]))
     add(
         "local-artifact-retention",
-        "warn" if retention_details else "pass",
+        "fail"
+        if artifact_directory_failures
+        else "warn"
+        if retention_details
+        else "pass",
         "; ".join(retention_details) if retention_details else "none older than 30 days",
     )
 
