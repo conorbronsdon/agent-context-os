@@ -11,6 +11,7 @@ from .kernel import (
     apply_proposal,
     create_proposal,
     create_workspace_migration_proposal,
+    create_workspace_setup_proposal,
     discover_root,
     doctor,
     hook_report,
@@ -99,6 +100,22 @@ def parser() -> argparse.ArgumentParser:
     propose_migration.add_argument(
         "--now", help="ISO-8601 timestamp for deterministic proposal IDs"
     )
+    propose_setup = workspace_commands.add_parser(
+        "propose-setup",
+        help="Create an additive digest-bound setup proposal for tracked agents",
+    )
+    setup_selection = propose_setup.add_mutually_exclusive_group(required=True)
+    setup_selection.add_argument(
+        "--agents", action="append", help="Comma-separated runtime ids, or none for core-only"
+    )
+    setup_selection.add_argument(
+        "--agent",
+        action="append",
+        help="Deprecated singleton compatibility alias; use --agents",
+    )
+    propose_setup.add_argument(
+        "--now", help="ISO-8601 timestamp for deterministic proposal IDs"
+    )
     workspace_commands.add_parser(
         "migrate-local-runtime",
         help="Atomically copy legacy local runtime state into hosts.json",
@@ -130,6 +147,58 @@ def selected_workspace_agents(args: argparse.Namespace, root: Path) -> list[str]
     if selected_agents is None:
         raise ContextOSError("workspace migration requires explicit agents")
     return selected_agents
+
+
+def workspace_proposal_report(
+    root: Path,
+    path: Path | None,
+    document: dict[str, object] | None,
+    notices: list[str],
+) -> dict[str, object]:
+    if path is None or document is None:
+        return {
+            "schema_version": 1,
+            "writes": False,
+            "action": "noop",
+            "proposal": None,
+            "proposal_id": None,
+            "proposal_digest": None,
+            "changes": [],
+            "notices": notices,
+        }
+    changes = document["changes"]
+    source_hashes = document["source_hashes"]
+    assert isinstance(changes, list)
+    assert isinstance(source_hashes, dict)
+    return {
+        "schema_version": document["schema_version"],
+        "writes": False,
+        "action": "proposed",
+        "workflow": document["workflow"],
+        "operation": document["operation"],
+        "proposal": path.relative_to(root).as_posix(),
+        "proposal_id": document["proposal_id"],
+        "proposal_digest": document["proposal_digest"],
+        "changes": [
+            {
+                "action": item["action"],
+                "path": item["path"],
+                "owner": item["authorization"]["owner"],
+                "policy": item["authorization"]["policy"],
+                "before_sha256_raw": item["before_raw_sha256"],
+                "after_sha256_raw": item["after_raw_sha256"],
+                "diff": item["diff"],
+            }
+            for item in changes
+        ],
+        "authorization_inputs": [
+            {"path": source, "sha256_raw": digest}
+            for source, digest in source_hashes.items()
+        ],
+        "source_git_head": document["source_git_head"],
+        "authorization": document["authorization"],
+        "notices": notices,
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -180,47 +249,20 @@ def main(argv: list[str] | None = None) -> int:
                     notices.append(
                         "--agent is a deprecated singleton compatibility alias; use --agents"
                     )
-                if path is None or document is None:
-                    emit({
-                        "schema_version": 1,
-                        "writes": False,
-                        "action": "noop",
-                        "proposal": None,
-                        "proposal_id": None,
-                        "proposal_digest": None,
-                        "changes": [],
-                        "notices": notices,
-                    })
-                    return 0
-                emit({
-                    "schema_version": document["schema_version"],
-                    "writes": False,
-                    "action": "proposed",
-                    "workflow": document["workflow"],
-                    "operation": document["operation"],
-                    "proposal": path.relative_to(root).as_posix(),
-                    "proposal_id": document["proposal_id"],
-                    "proposal_digest": document["proposal_digest"],
-                    "changes": [
-                        {
-                            "action": item["action"],
-                            "path": item["path"],
-                            "owner": item["authorization"]["owner"],
-                            "policy": item["authorization"]["policy"],
-                            "before_sha256_raw": item["before_raw_sha256"],
-                            "after_sha256_raw": item["after_raw_sha256"],
-                            "diff": item["diff"],
-                        }
-                        for item in document["changes"]
-                    ],
-                    "authorization_inputs": [
-                        {"path": source, "sha256_raw": digest}
-                        for source, digest in document["source_hashes"].items()
-                    ],
-                    "source_git_head": document["source_git_head"],
-                    "authorization": document["authorization"],
-                    "notices": notices,
-                })
+                emit(workspace_proposal_report(root, path, document, notices))
+            elif args.workspace_command == "propose-setup":
+                selected_agents = selected_workspace_agents(args, root)
+                path, document = create_workspace_setup_proposal(
+                    root, selected_agents, parse_now(args.now)
+                )
+                notices = [
+                    "setup selection is additive and never removes configured agents"
+                ]
+                if args.agent is not None:
+                    notices.append(
+                        "--agent is a deprecated singleton compatibility alias; use --agents"
+                    )
+                emit(workspace_proposal_report(root, path, document, notices))
             elif args.workspace_command == "migrate-local-runtime":
                 path, state, changed, migrated_runtime = migrate_legacy_runtime_state(root)
                 emit({

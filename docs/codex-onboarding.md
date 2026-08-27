@@ -7,14 +7,16 @@ other supported runtimes. The portable boundary is `AGENTS.md`,
 ## Set up
 
 ```bash
-bash scripts/setup.sh --agent codex
+bash scripts/setup.sh --agents codex
 ```
 
 Then launch Codex from the repository root and explicitly invoke `$setup`.
 Use `$start`, `$update`, and `$end` for the daily loop. The namespaced
 `$context-*` forms remain compatibility aliases.
 
-Setup records a gitignored local runtime selection. Inspect it with:
+After you approve the exact setup proposal, setup records Codex in tracked
+repository intent and registers it in the gitignored local host map. Inspect
+the resulting dimensions with:
 
 ```bash
 bash scripts/contextos.sh doctor --runtime codex

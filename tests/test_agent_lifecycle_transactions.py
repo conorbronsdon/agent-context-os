@@ -34,6 +34,7 @@ from contextos.kernel import (
     canonical_json,
     create_proposal,
     create_workspace_migration_proposal,
+    create_workspace_setup_proposal,
     doctor,
     raw_file_digest,
     read_json,
@@ -41,6 +42,7 @@ from contextos.kernel import (
     sha256_bytes,
     sha256_text,
 )
+from contextos.workspace_schema import WorkspaceConfigError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -193,6 +195,84 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         )
         self.assertFalse((self.root / "contextos.workspace.json").exists())
         self.assertTrue((self.root / report["proposal"]).is_file())
+
+    def test_setup_proposal_creates_core_only_config_without_legacy_yaml(self) -> None:
+        (self.root / "workspace.yaml").unlink()
+
+        path, proposal = create_workspace_setup_proposal(self.root, (), NOW)
+
+        self.assertIsNotNone(path)
+        self.assertIsNotNone(proposal)
+        assert path is not None and proposal is not None
+        self.assertEqual(["contextos.workspace.json"], [
+            change["path"] for change in proposal["changes"]
+        ])
+        self.assertIsNone(proposal["authorization"]["before_agents"])
+        self.assertEqual([], proposal["authorization"]["after_agents"])
+        self.apply(path, proposal)
+        configured = json.loads(
+            (self.root / "contextos.workspace.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual([], configured["agents"])
+
+    def test_setup_proposal_is_additive_idempotent_and_never_shrinks(self) -> None:
+        path, proposal = self.propose(("claude",))
+        self.apply(path, proposal)
+
+        for requested in (("claude",), ()):
+            path, proposal = create_workspace_setup_proposal(
+                self.root, requested, NOW.replace(second=1)
+            )
+            self.assertIsNone(path)
+            self.assertIsNone(proposal)
+
+        path, proposal = create_workspace_setup_proposal(
+            self.root, ("codex",), NOW.replace(second=2)
+        )
+        self.assertIsNotNone(path)
+        self.assertIsNotNone(proposal)
+        assert path is not None and proposal is not None
+        self.assertEqual(
+            ["claude", "codex"], proposal["authorization"]["after_agents"]
+        )
+        self.apply(path, proposal)
+
+        path, proposal = create_workspace_setup_proposal(
+            self.root, (), NOW.replace(second=3)
+        )
+        self.assertIsNone(path)
+        self.assertIsNone(proposal)
+        configured = json.loads(
+            (self.root / "contextos.workspace.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(["claude", "codex"], configured["agents"])
+
+    def test_setup_proposal_validates_before_forming_the_additive_union(self) -> None:
+        for requested, message in (
+            (("claude", "claude"), "duplicate"),
+            (("missing",), "unknown"),
+            (("CLAUDE",), "lowercase"),
+        ):
+            with self.subTest(requested=requested), self.assertRaisesRegex(
+                WorkspaceConfigError, message
+            ):
+                create_workspace_setup_proposal(self.root, requested, NOW)
+
+    def test_cli_setup_selection_is_additive_and_alias_is_deprecated(self) -> None:
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(
+                0,
+                cli_main([
+                    "--root", str(self.root), "workspace", "propose-setup",
+                    "--agent", "claude", "--now", NOW.isoformat(),
+                ]),
+            )
+        report = json.loads(output.getvalue())
+        self.assertEqual("proposed", report["action"])
+        self.assertIn("deprecated", " ".join(report["notices"]))
+        self.assertEqual(["claude"], report["authorization"]["after_agents"])
+        self.assertFalse((self.root / "contextos.workspace.json").exists())
 
     def test_exact_digest_tamper_and_unowned_path_fail_before_writes(self) -> None:
         path, proposal = self.propose()

@@ -269,7 +269,8 @@ if "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py --command "$duplica
 fi
 
 help_output=$(bash scripts/setup.sh --help)
-grep -Fq -- '--agent auto|claude|codex|hermes|cursor|openclaw|none' <<<"$help_output" || fail "setup help does not describe agent selection"
+grep -Fq -- '--agents claude,codex|auto|none' <<<"$help_output" || fail "setup help does not describe multi-agent selection"
+grep -Fq -- '--agent auto|RUNTIME|none' <<<"$help_output" || fail "setup help omits the singleton compatibility alias"
 if bash scripts/setup.sh --agent invalid >/dev/null 2>&1; then
   fail "setup accepted an invalid agent"
 fi
@@ -294,6 +295,134 @@ make_setup_fixture() {
   git -C "$destination" commit -qm baseline
   git -C "$destination" remote add origin https://example.invalid/context.git
 }
+
+for invalid_setup_args in \
+  '--agents claude,claude' \
+  '--agents none,claude' \
+  '--agents missing' \
+  '--agent claude,codex' \
+  '--agent claude --agents codex' \
+  '--agents claude --agents codex'; do
+  read -r -a invalid_setup_argv <<<"$invalid_setup_args"
+  if bash scripts/setup.sh "${invalid_setup_argv[@]}" >/dev/null 2>&1; then
+    fail "setup accepted invalid or ambiguous selection: $invalid_setup_args"
+  fi
+done
+
+setup_test_path="$(dirname "$(command -v "$CONTEXTOS_PYTHON_CMD")"):$(dirname "$(command -v git)"):/usr/bin:/bin"
+
+multi_agent_fixture="$portability_tmp/multi-agent-selection"
+make_setup_fixture "$multi_agent_fixture"
+multi_agent_output=$(printf 'y\n\nn\nn\nn\ny\nn\n' | (
+  cd "$multi_agent_fixture" &&
+  PATH="$setup_test_path" bash scripts/setup.sh --agents codex,claude
+) 2>&1)
+"$CONTEXTOS_PYTHON_CMD" - "$multi_agent_fixture/contextos.workspace.json" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+config = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert config["agents"] == ["claude", "codex"], config["agents"]
+PY
+"$CONTEXTOS_PYTHON_CMD" - "$multi_agent_fixture/.context-os/hosts.json" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+hosts = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))["hosts"]
+assert sorted(hosts) == ["claude", "codex"], sorted(hosts)
+PY
+test ! -e "$multi_agent_fixture/workspace.yaml" \
+  || fail "multi-agent setup did not transactionally retire legacy YAML"
+grep -Fq 'Apply this exact tracked-agent proposal?' <<<"$multi_agent_output" \
+  || fail "multi-agent setup did not present an exact proposal approval gate"
+grep -Fq '"runtime_identity": "self-reported"' <<<"$multi_agent_output" \
+  || fail "multi-agent setup did not report its transaction receipt"
+unexpected_setup_paths=$(git -C "$multi_agent_fixture" status --short | \
+  grep -Ev '^( D workspace\.yaml|\?\? contextos\.workspace\.json)$' || true)
+test -z "$unexpected_setup_paths" \
+  || fail "multi-agent setup changed unselected adapter or unrelated paths: $unexpected_setup_paths"
+
+# Subset and none reruns are no-ops; a disjoint selection expands the set.
+subset_output=$(printf 'y\n\nn\nn\nn\n' | (
+  cd "$multi_agent_fixture" &&
+  PATH="$setup_test_path" bash scripts/setup.sh --agents claude
+))
+grep -Fq 'already contains this selection' <<<"$subset_output" \
+  || fail "subset setup rerun did not preserve the configured set"
+printf 'y\n\nn\nn\nn\ny\nn\n' | (
+  cd "$multi_agent_fixture" &&
+  PATH="$setup_test_path" bash scripts/setup.sh --agents hermes
+) >/dev/null
+"$CONTEXTOS_PYTHON_CMD" - "$multi_agent_fixture/contextos.workspace.json" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+config = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert config["agents"] == ["claude", "codex", "hermes"], config["agents"]
+PY
+none_output=$(printf 'y\n\nn\nn\nn\n' | (
+  cd "$multi_agent_fixture" &&
+  PATH="$setup_test_path" bash scripts/setup.sh --agents none
+))
+grep -Fq 'already contains this selection' <<<"$none_output" \
+  || fail "none setup rerun shrank or rewrote a non-empty configured set"
+
+non_tty_fixture="$portability_tmp/non-tty-auto"
+make_setup_fixture "$non_tty_fixture"
+fake_agent_bin="$non_tty_fixture/fake-agent-bin"
+fake_agent_marker="$non_tty_fixture/fake-agent-launched"
+mkdir -p "$fake_agent_bin"
+printf '#!%s\nprintf launched > %q\n' "$resolved_bash" "$fake_agent_marker" > "$fake_agent_bin/claude"
+chmod +x "$fake_agent_bin/claude"
+fake_agent_path="$fake_agent_bin"
+if command -v cygpath >/dev/null 2>&1; then
+  fake_agent_path=$(cygpath -u "$fake_agent_bin")
+fi
+printf 'y\n\nn\nn\nn\n' | (
+  cd "$non_tty_fixture" && PATH="$fake_agent_path:$setup_test_path" bash scripts/setup.sh --agents auto
+) >/dev/null
+test ! -e "$non_tty_fixture/contextos.workspace.json" \
+  || fail "non-TTY auto selection inferred tracked agent intent"
+test ! -e "$fake_agent_marker" \
+  || fail "non-TTY setup launched an installed runtime"
+"$CONTEXTOS_PYTHON_CMD" - "$non_tty_fixture/.context-os/hosts.json" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+hosts = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))["hosts"]
+assert sorted(hosts) == ["claude"], sorted(hosts)
+PY
+
+omitted_non_tty_fixture="$portability_tmp/non-tty-omitted"
+make_setup_fixture "$omitted_non_tty_fixture"
+printf 'y\n\nn\nn\nn\n' | (
+  cd "$omitted_non_tty_fixture" && PATH="$setup_test_path" bash scripts/setup.sh
+) >/dev/null
+test ! -e "$omitted_non_tty_fixture/contextos.workspace.json" \
+  || fail "non-TTY omitted selection inferred tracked agent intent"
+
+if command -v script >/dev/null 2>&1; then
+  tty_fixture="$portability_tmp/tty-selection"
+  make_setup_fixture "$tty_fixture"
+  tty_output=$(printf 'y\nclaude,codex\n\nn\nn\nn\ny\nn\n' | (
+    cd "$tty_fixture" &&
+    script -q -c "env PATH='$setup_test_path' bash scripts/setup.sh" /dev/null
+  ))
+  grep -Fq 'Repository agents (comma-separated' <<<"$tty_output" \
+    || fail "TTY setup did not prompt for repository agents"
+  "$CONTEXTOS_PYTHON_CMD" - "$tty_fixture/contextos.workspace.json" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+config = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert config["agents"] == ["claude", "codex"], config["agents"]
+PY
+fi
 
 # Both inline Python rewrites must preserve an LF checkout on Windows. Without
 # newline="\n", TextIO converts every line to CRLF and turns the reviewed setup
@@ -347,7 +476,7 @@ grep -Fqx "# $special_name — Context" "$setup_fixture/CLAUDE.md" || fail "a se
 commit_fixture="$portability_tmp/commit-scope"
 make_setup_fixture "$commit_fixture"
 printf 'unrelated\n' > "$commit_fixture/unrelated-user-work.txt"
-printf 'y\nAda & Bob\nn\nn\nn\ny\n' | (cd "$commit_fixture" && bash scripts/setup.sh --agent none) >/dev/null
+printf 'y\nAda & Bob\nn\nn\nn\nn\ny\n' | (cd "$commit_fixture" && bash scripts/setup.sh --agent none) >/dev/null
 test "$(git -C "$commit_fixture" rev-list --count HEAD)" -eq 2 || fail "approved setup commit was not created"
 test "$(git -C "$commit_fixture" show --pretty= --name-only HEAD)" = "CLAUDE.md" || fail "setup commit included a path outside its reviewed write set"
 git -C "$commit_fixture" status --short | grep -Fq '?? unrelated-user-work.txt' || fail "setup commit captured unrelated user work"
@@ -370,7 +499,7 @@ git -C "$no_remote_fixture" diff --quiet || fail "no-remote default-no path wrot
 
 memory_notice_fixture="$portability_tmp/claude-memory-notice"
 make_setup_fixture "$memory_notice_fixture"
-memory_notice_output=$(printf 'y\n\nn\nn\nn\n' | (cd "$memory_notice_fixture" && PATH="$(dirname "$(command -v "$CONTEXTOS_PYTHON_CMD")"):$(dirname "$(command -v git)"):/usr/bin:/bin" bash scripts/setup.sh --agent claude))
+memory_notice_output=$(printf 'y\n\nn\nn\nn\ny\nn\n' | (cd "$memory_notice_fixture" && PATH="$(dirname "$(command -v "$CONTEXTOS_PYTHON_CMD")"):$(dirname "$(command -v git)"):/usr/bin:/bin" bash scripts/setup.sh --agent claude))
 grep -Fq 'auto-memory is enabled by default' <<<"$memory_notice_output" || fail "local Claude onboarding omitted auto-memory default"
 grep -Fq 'Inspect it with /memory' <<<"$memory_notice_output" || fail "local Claude onboarding omitted /memory inspection"
 grep -Fq 'autoMemoryEnabled: false' <<<"$memory_notice_output" || fail "local Claude onboarding omitted opt-out setting"

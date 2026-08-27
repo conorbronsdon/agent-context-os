@@ -41,16 +41,18 @@ cd my-context
 git remote rename origin upstream
 git remote add origin <YOUR_PRIVATE_REPO_URL>
 
-# Pick a host, or omit --agent to auto-detect one:
-bash scripts/setup.sh --agent claude
-# bash scripts/setup.sh --agent codex
-# bash scripts/setup.sh --agent hermes
+# Select every agent this repository will use:
+bash scripts/setup.sh --agents claude,codex
+# bash scripts/setup.sh --agents hermes
+# bash scripts/setup.sh --agents none  # core-only
 ```
 
-The current singular `--agent` option chooses what bootstrap launches locally;
-it does not infer or rewrite the tracked runtime set. See [workspace
-configuration](docs/workspace-configuration.md) for the canonical agent-set and
-migration contract.
+Setup presents an exact, digest-bound proposal before recording the selected
+set. Reruns add agents but never remove them; use the explicit lifecycle to
+disable one later. Omit the option, or use `--agents auto`, for local
+auto-detection without changing repository intent. The singular `--agent` form
+is a deprecated singleton alias. See [workspace
+configuration](docs/workspace-configuration.md) for the full contract.
 
 Then start your agent from the repository root:
 

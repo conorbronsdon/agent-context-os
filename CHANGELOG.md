@@ -14,6 +14,9 @@
   README support claims, plus strict maintainer and conformance checks.
 
 ### Added
+- Additive multi-agent setup through `scripts/setup.sh --agents`, with TTY
+  selection, exact digest-bound approval, local registration of every approved
+  runtime, a deprecated singleton alias, and local-only `auto` behavior.
 - A reviewed Pandoc catalog entry with a bounded non-PDF profile, explicit network and sensitive-read boundaries, PDF-engine execution guidance, and overwrite confirmation.
 - A reviewed MarkItDown MCP catalog entry covering its local-file and network read boundary, unauthenticated localhost transport, sandboxing guidance, and pinned v0.1.7 evidence.
 - Provider-neutral root discovery through validated `contextos.workspace.json`,

@@ -39,24 +39,24 @@ Do not push until you have reviewed the placeholder files, example project, and 
 
 ## Run the local setup
 
-Choose the host you expect to use first:
+Choose every registered agent you expect to use with this repository:
 
 ```bash
-bash scripts/setup.sh --agent claude
+bash scripts/setup.sh --agents claude,codex
 # or
-bash scripts/setup.sh --agent codex
-# or
-bash scripts/setup.sh --agent hermes
+bash scripts/setup.sh --agents hermes
+# or, for the provider-neutral core only
+bash scripts/setup.sh --agents none
 ```
 
-You can omit `--agent` to auto-detect an installed host, or use `--agent none` to prepare the repository without launching one.
-
-That bootstrap option is currently a local launch choice. A reviewed
-`workspace propose-migration` transaction can create tracked
-`contextos.workspace.json`; setup-time selection remains separate work. Local
-detection and `.context-os/hosts.json` never infer or rewrite it. See [workspace
-configuration](workspace-configuration.md) for `none`, `auto`, legacy YAML,
-previewed migration, and rerun behavior.
+Setup shows the exact tracked workspace diff and proposal digest, then defaults
+the apply decision to no. An approved selection is additive: rerunning with a
+subset or `none` preserves the existing set, while a new runtime expands it.
+Selected runtimes are also registered in the gitignored local host map. Omit
+the option, or use `--agents auto`, to auto-detect local launch instructions
+without changing tracked intent. `--agent` remains a deprecated singleton
+alias. See [workspace configuration](workspace-configuration.md) for the full
+transaction and rerun contract.
 
 The script can:
 
@@ -64,7 +64,8 @@ The script can:
 - point `origin` at your repository;
 - remove the sample musician project;
 - install the local pre-commit hook; and
-- generate a local, gitignored repository map.
+- generate a local, gitignored repository map; and
+- propose an additive tracked agent set and register approved selections locally.
 
 Each optional change is prompted. The script shows setup-file changes before offering a narrowly scoped commit, and that commit defaults to no.
 

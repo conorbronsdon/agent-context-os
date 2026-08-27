@@ -165,18 +165,26 @@ conformance declarations, and evidence freshness as independent dimensions.
 An empty `agents` array is therefore a real core-only profile, even when a host
 has additional runtimes installed locally.
 
-## Setup compatibility contract
+## Setup selection contract
 
-The current bootstrap still exposes singular `scripts/setup.sh --agent` while
-the multi-select setup work is completed separately. Its semantics are fixed:
+`scripts/setup.sh --agents <comma-separated-runtime-ids>` selects every agent
+the repository is intended to support. On a TTY, omission prompts for that set;
+in non-interactive use omission performs local auto-detection only. Explicit
+`--agents auto` has the same local-only behavior. The singular `--agent` form
+is a deprecated singleton compatibility alias.
 
-- explicit runtime selection may later establish tracked intent through a
-  reviewed transaction;
-- `none` means an intentional empty set only when explicitly selected;
-- omitted selection and `auto` are local launch choices and never tracked;
-- reruns preserve the configured set unless an explicit expansion is reviewed;
-- subset, disjoint, or `none` requests against a non-empty set never silently
-  remove adapters;
+Setup uses the existing proposal/apply transaction boundary. It shows the exact
+workspace diff, source commit, and digest, then defaults approval to no. An
+approved selection is registered in the gitignored host map and updates tracked
+intent with these rules:
+
+- setup is additive and idempotent: requested agents are unioned with the
+  configured set;
+- `none` creates an intentional empty set only for a fresh or legacy workspace;
+- subset or `none` reruns against a non-empty set are no-ops;
+- only the explicit disable lifecycle may shrink the configured set;
+- local launch choice is ephemeral and never creates a stored primary agent;
+- no adapter or component is deleted merely because it was not selected; and
 - Cursor and OpenClaw remain launch/read compatibility names until registered
   runtime descriptors exist, so they cannot be stored in `agents` yet.
 

@@ -8,43 +8,136 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "$REPO_ROOT"
 
-AGENT_TARGET="auto"
+SETUP_USAGE="Usage: bash scripts/setup.sh [--agents claude,codex|auto|none] [--agent auto|RUNTIME|none]"
+AGENT_SELECTION_KIND=""
+AGENT_SELECTION_RAW=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --agent)
+    --agents)
       if [ "$#" -lt 2 ]; then
-        echo "Usage: bash scripts/setup.sh [--agent auto|claude|codex|hermes|cursor|openclaw|none]" >&2
+        echo "$SETUP_USAGE" >&2
         exit 2
       fi
-      AGENT_TARGET="$2"
+      if [ -n "$AGENT_SELECTION_KIND" ]; then
+        echo "Agent selection may be specified only once" >&2
+        exit 2
+      fi
+      AGENT_SELECTION_KIND="agents"
+      AGENT_SELECTION_RAW="$2"
+      shift 2
+      ;;
+    --agents=*)
+      if [ -n "$AGENT_SELECTION_KIND" ]; then
+        echo "Agent selection may be specified only once" >&2
+        exit 2
+      fi
+      AGENT_SELECTION_KIND="agents"
+      AGENT_SELECTION_RAW="${1#--agents=}"
+      shift
+      ;;
+    --agent)
+      if [ "$#" -lt 2 ]; then
+        echo "$SETUP_USAGE" >&2
+        exit 2
+      fi
+      if [ -n "$AGENT_SELECTION_KIND" ]; then
+        echo "Agent selection may be specified only once" >&2
+        exit 2
+      fi
+      AGENT_SELECTION_KIND="agent"
+      AGENT_SELECTION_RAW="$2"
       shift 2
       ;;
     --agent=*)
-      AGENT_TARGET="${1#--agent=}"
+      if [ -n "$AGENT_SELECTION_KIND" ]; then
+        echo "Agent selection may be specified only once" >&2
+        exit 2
+      fi
+      AGENT_SELECTION_KIND="agent"
+      AGENT_SELECTION_RAW="${1#--agent=}"
       shift
       ;;
     -h|--help)
-      echo "Usage: bash scripts/setup.sh [--agent auto|claude|codex|hermes|cursor|openclaw|none]"
+      echo "$SETUP_USAGE"
+      echo "  --agents records an additive tracked runtime set; it never removes agents."
+      echo "  --agent is the deprecated singleton alias and retains auto/Cursor/OpenClaw launch compatibility."
       exit 0
       ;;
     *)
       echo "Unknown argument: $1" >&2
-      echo "Usage: bash scripts/setup.sh [--agent auto|claude|codex|hermes|cursor|openclaw|none]" >&2
+      echo "$SETUP_USAGE" >&2
       exit 2
       ;;
   esac
 done
 
-case "$AGENT_TARGET" in
-  auto|claude|codex|hermes|cursor|openclaw|none) ;;
-  *)
-    echo "Invalid --agent value: $AGENT_TARGET" >&2
-    echo "Expected one of: auto, claude, codex, hermes, cursor, openclaw, none" >&2
-    exit 2
-    ;;
-esac
-
 source "$SCRIPT_DIR/python-env.sh"
+
+TRACKED_AGENT_SELECTION=""
+REQUESTED_REGISTERED_AGENTS=""
+LAUNCH_SELECTION="auto"
+
+validate_agent_selection() {
+  local kind="$1" raw="$2"
+  if [ "$kind" = "agent" ]; then
+    echo "  Note: --agent is deprecated; use --agents for tracked runtime selection."
+    if [[ "$raw" == *,* ]]; then
+      echo "--agent is a deprecated singleton alias and accepts exactly one runtime id" >&2
+      exit 2
+    fi
+    case "$raw" in
+      auto)
+        LAUNCH_SELECTION="auto"
+        return
+        ;;
+      cursor|openclaw)
+        LAUNCH_SELECTION="$raw"
+        echo "  Note: $raw remains launch-only until it has a registered runtime descriptor."
+        return
+        ;;
+      none)
+        TRACKED_AGENT_SELECTION="none"
+        LAUNCH_SELECTION="none"
+        return
+        ;;
+    esac
+  fi
+
+  if [ "$kind" = "agents" ] && [ "$raw" = "auto" ]; then
+    LAUNCH_SELECTION="auto"
+    return
+  fi
+
+  if ! TRACKED_AGENT_SELECTION=$("$CONTEXTOS_PYTHON_CMD" - "$raw" <<'PY'
+from pathlib import Path
+import sys
+
+from contextos.kernel import ContextOSError, runtime_ids
+from contextos.workspace_schema import WorkspaceConfigError, parse_agent_selection
+
+try:
+    selected = parse_agent_selection(
+        sys.argv[1], known_runtime_ids=runtime_ids(Path.cwd())
+    )
+except (ContextOSError, WorkspaceConfigError) as exc:
+    print(f"context-os: {exc}", file=sys.stderr)
+    raise SystemExit(2)
+print(",".join(selected) or "none")
+PY
+  ); then
+    exit 2
+  fi
+  if [ "$TRACKED_AGENT_SELECTION" = "none" ]; then
+    LAUNCH_SELECTION="none"
+  else
+    REQUESTED_REGISTERED_AGENTS="$TRACKED_AGENT_SELECTION"
+    LAUNCH_SELECTION="$TRACKED_AGENT_SELECTION"
+  fi
+}
+
+if [ -n "$AGENT_SELECTION_KIND" ]; then
+  validate_agent_selection "$AGENT_SELECTION_KIND" "$AGENT_SELECTION_RAW"
+fi
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -52,10 +145,16 @@ prompt_yn() {
   local question="$1" default="${2:-y}"
   local yn
   if [ "$default" = "y" ]; then
-    read -rp "$question [Y/n] " yn
+    printf '%s [Y/n] ' "$question" >&2
+    if ! IFS= read -r yn; then
+      return 1
+    fi
     yn="${yn:-y}"
   else
-    read -rp "$question [y/N] " yn
+    printf '%s [y/N] ' "$question" >&2
+    if ! IFS= read -r yn; then
+      return 1
+    fi
     yn="${yn:-n}"
   fi
   [[ "$yn" =~ ^[Yy] ]]
@@ -88,6 +187,23 @@ echo ""
 if ! prompt_yn "  Continue after reviewing this storage and audience boundary?" "n"; then
   echo "  → Setup stopped before collecting or writing personal context"
   exit 0
+fi
+
+if [ -z "$AGENT_SELECTION_KIND" ] && [ -t 0 ]; then
+  REGISTERED_AGENTS=$("$CONTEXTOS_PYTHON_CMD" - <<'PY'
+from pathlib import Path
+from contextos.kernel import runtime_ids
+
+print(",".join(runtime_ids(Path.cwd())))
+PY
+  )
+  echo ""
+  echo "  Registered runtimes: $REGISTERED_AGENTS"
+  read -rp "  Repository agents (comma-separated, none for core-only, Enter for local auto-detection): " AGENT_SELECTION_RAW
+  if [ -n "$AGENT_SELECTION_RAW" ]; then
+    AGENT_SELECTION_KIND="agents"
+    validate_agent_selection "$AGENT_SELECTION_KIND" "$AGENT_SELECTION_RAW"
+  fi
 fi
 
 # ── 1. Your name ────────────────────────────────────────────────────────────
@@ -265,7 +381,70 @@ else
   exit 1
 fi
 
-# ── 7. Initial commit ───────────────────────────────────────────────────────
+# ── 7. Tracked agent selection ──────────────────────────────────────────────
+
+SETUP_SELECTION_ACTIVATED=false
+if [ -n "$TRACKED_AGENT_SELECTION" ]; then
+  echo ""
+  echo "  Preparing additive tracked agent selection: $TRACKED_AGENT_SELECTION"
+  SETUP_PROPOSAL_JSON=$(bash "$SCRIPT_DIR/contextos.sh" workspace propose-setup \
+    --agents "$TRACKED_AGENT_SELECTION")
+  SETUP_PROPOSAL_ACTION=$(printf '%s' "$SETUP_PROPOSAL_JSON" | \
+    "$CONTEXTOS_PYTHON_CMD" -c 'import json,sys; print(json.load(sys.stdin)["action"])')
+
+  if [ "$SETUP_PROPOSAL_ACTION" = "noop" ]; then
+    SETUP_SELECTION_ACTIVATED=true
+    echo "  → Tracked agent set already contains this selection; nothing to apply"
+  else
+    printf '%s' "$SETUP_PROPOSAL_JSON" | "$CONTEXTOS_PYTHON_CMD" -c '
+import json
+import sys
+
+report = json.load(sys.stdin)
+print("  Proposed tracked workspace changes:")
+for change in report["changes"]:
+    print(change["diff"], end="" if change["diff"].endswith("\n") else "\n")
+print("  Source Git commit: {}".format(report["source_git_head"]))
+print("  Proposal digest: {}".format(report["proposal_digest"]))
+'
+    IFS=$'\t' read -r SETUP_PROPOSAL_PATH SETUP_PROPOSAL_DIGEST < <(
+      printf '%s' "$SETUP_PROPOSAL_JSON" | "$CONTEXTOS_PYTHON_CMD" -c '
+import json
+import sys
+
+report = json.load(sys.stdin)
+print("{}\t{}".format(report["proposal"], report["proposal_digest"]))
+'
+    )
+    SETUP_PROPOSAL_PATH="${SETUP_PROPOSAL_PATH%$'\r'}"
+    SETUP_PROPOSAL_DIGEST="${SETUP_PROPOSAL_DIGEST%$'\r'}"
+    if prompt_yn "  Apply this exact tracked-agent proposal?" "n"; then
+      bash "$SCRIPT_DIR/contextos.sh" apply "$SETUP_PROPOSAL_PATH" \
+        --confirm "$SETUP_PROPOSAL_DIGEST" --runtime generic
+      track_setup_path "contextos.workspace.json"
+      track_setup_path "workspace.yaml"
+      SETUP_SELECTION_ACTIVATED=true
+      echo "  → Applied the exact reviewed tracked-agent proposal"
+    else
+      echo "  → Tracked agent set unchanged; proposal retained locally for review"
+    fi
+  fi
+else
+  echo ""
+  echo "  → Local auto-detection does not create or change tracked agent intent"
+fi
+
+if [ "$SETUP_SELECTION_ACTIVATED" = true ] && [ -n "$REQUESTED_REGISTERED_AGENTS" ]; then
+  IFS=',' read -r -a SETUP_RUNTIME_IDS <<<"$REQUESTED_REGISTERED_AGENTS"
+  for setup_runtime in "${SETUP_RUNTIME_IDS[@]}"; do
+    "$CONTEXTOS_PYTHON_CMD" -m contextos install --runtime "$setup_runtime" >/dev/null
+  done
+  echo "  Registered selected runtimes on this host: $REQUESTED_REGISTERED_AGENTS"
+elif [ -n "$REQUESTED_REGISTERED_AGENTS" ]; then
+  LAUNCH_SELECTION="none"
+fi
+
+# ── 8. Initial commit ───────────────────────────────────────────────────────
 
 echo ""
 SETUP_STATUS=""
@@ -298,7 +477,7 @@ else
   echo "  → No setup file changes to commit"
 fi
 
-# ── 8. Next steps ───────────────────────────────────────────────────────────
+# ── 9. Next steps ───────────────────────────────────────────────────────────
 
 echo ""
 echo "  ─────────────────────────────"
@@ -309,7 +488,18 @@ echo "  Bringing existing context: review docs/migration-guide.md first."
 echo "  Adding tools later: review references/integrations.md; nothing is enabled automatically."
 echo ""
 
-SELECTED_AGENT="$AGENT_TARGET"
+SELECTED_AGENT="$LAUNCH_SELECTION"
+if [[ "$SELECTED_AGENT" == *,* ]]; then
+  if [[ ",$SELECTED_AGENT," == *,claude,* ]] && [ "$CLAUDE_FOUND" = true ]; then
+    SELECTED_AGENT="claude"
+  elif [[ ",$SELECTED_AGENT," == *,codex,* ]] && [ "$CODEX_FOUND" = true ]; then
+    SELECTED_AGENT="codex"
+  elif [[ ",$SELECTED_AGENT," == *,hermes,* ]] && [ "$HERMES_FOUND" = true ]; then
+    SELECTED_AGENT="hermes"
+  else
+    SELECTED_AGENT="none"
+  fi
+fi
 if [ "$SELECTED_AGENT" = "auto" ]; then
   if [ "$CLAUDE_FOUND" = true ]; then
     SELECTED_AGENT="claude"
@@ -324,7 +514,9 @@ fi
 
 case "$SELECTED_AGENT" in
   claude)
-    "$CONTEXTOS_PYTHON_CMD" -m contextos install --runtime claude >/dev/null
+    if [ -z "$REQUESTED_REGISTERED_AGENTS" ]; then
+      "$CONTEXTOS_PYTHON_CMD" -m contextos install --runtime claude >/dev/null
+    fi
     echo "  Claude Code auto-memory is enabled by default and may write machine-local memory."
     echo "  Inspect it with /memory; to opt out, set autoMemoryEnabled: false in"
     echo "  .claude/settings.local.json. Setup does not change that host setting."
@@ -334,32 +526,36 @@ case "$SELECTED_AGENT" in
     echo "     Claude will interview you and build your context files."
     echo "     Import and integration choices remain separate, review-gated steps."
     echo ""
-    if [ "$CLAUDE_FOUND" = true ] && prompt_yn "  Launch Claude Code now?" "y"; then
+    if [ -t 0 ] && [ "$CLAUDE_FOUND" = true ] && prompt_yn "  Launch Claude Code now?" "y"; then
       cd "$REPO_ROOT"
       exec claude
     fi
     ;;
   codex)
-    "$CONTEXTOS_PYTHON_CMD" -m contextos install --runtime codex >/dev/null
+    if [ -z "$REQUESTED_REGISTERED_AGENTS" ]; then
+      "$CONTEXTOS_PYTHON_CMD" -m contextos install --runtime codex >/dev/null
+    fi
     printf '  1. cd %q && codex\n' "$REPO_ROOT"
     echo '  2. Type: $setup'
     echo "     Codex will interview you and build your context files."
     echo "     See docs/getting-started.md for migration, integrations, and host limits."
     echo ""
-    if [ "$CODEX_FOUND" = true ] && prompt_yn "  Launch Codex now?" "y"; then
+    if [ -t 0 ] && [ "$CODEX_FOUND" = true ] && prompt_yn "  Launch Codex now?" "y"; then
       cd "$REPO_ROOT"
       exec codex
     fi
     ;;
   hermes)
-    "$CONTEXTOS_PYTHON_CMD" -m contextos install --runtime hermes >/dev/null
+    if [ -z "$REQUESTED_REGISTERED_AGENTS" ]; then
+      "$CONTEXTOS_PYTHON_CMD" -m contextos install --runtime hermes >/dev/null
+    fi
     printf '  1. cd %q && hermes\n' "$REPO_ROOT"
     echo "  2. Hermes reads AGENTS.md automatically. Expose .agents/skills/ as an"
     echo "     external skill directory, then type /setup. If you copy skills instead,"
     echo "     install the short aliases and context-* cores together."
     echo "     See adapters/hermes/ and docs/memory-across-agents.md."
     echo ""
-    if [ "$HERMES_FOUND" = true ] && prompt_yn "  Launch Hermes now?" "y"; then
+    if [ -t 0 ] && [ "$HERMES_FOUND" = true ] && prompt_yn "  Launch Hermes now?" "y"; then
       cd "$REPO_ROOT"
       exec hermes
     fi
@@ -370,7 +566,7 @@ case "$SELECTED_AGENT" in
     echo "     repository root. The portable lifecycle skills in .agents/skills/"
     echo "     can be pasted or referenced in Cursor rules as needed."
     echo ""
-    if [ "$CURSOR_FOUND" = true ] && prompt_yn "  Launch Cursor CLI now?" "y"; then
+    if [ -t 0 ] && [ "$CURSOR_FOUND" = true ] && prompt_yn "  Launch Cursor CLI now?" "y"; then
       cd "$REPO_ROOT"
       if command -v cursor-agent &>/dev/null; then exec cursor-agent; else exec cursor; fi
     fi
@@ -380,7 +576,7 @@ case "$SELECTED_AGENT" in
     echo "  2. OpenClaw reads AGENTS.md and agentskills.io-compatible skills from"
     echo "     .agents/skills/. See AGENTS.md for the session loop."
     echo ""
-    if [ "$OPENCLAW_FOUND" = true ] && prompt_yn "  Launch OpenClaw now?" "y"; then
+    if [ -t 0 ] && [ "$OPENCLAW_FOUND" = true ] && prompt_yn "  Launch OpenClaw now?" "y"; then
       cd "$REPO_ROOT"
       exec openclaw
     fi

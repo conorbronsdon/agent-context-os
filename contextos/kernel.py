@@ -779,10 +779,13 @@ def _agent_change(
     }
 
 
-def create_workspace_migration_proposal(
+def _create_workspace_config_proposal(
     root: Path,
     agents: Sequence[str],
     now: datetime,
+    *,
+    allow_initial: bool,
+    allow_agent_expansion: bool,
 ) -> tuple[Path | None, dict[str, Any] | None]:
     target = root / "contextos.workspace.json"
     target_content: str | None = None
@@ -796,12 +799,16 @@ def create_workspace_migration_proposal(
                 "contextos.workspace.json"
             ) from exc
     resolution = resolve_workspace(root)
-    if resolution.source == "defaults":
+    if resolution.source == "defaults" and not allow_initial:
         raise ContextOSError(
             "workspace migration requires legacy workspace.yaml; "
             "initial agent selection belongs to setup"
         )
-    if resolution.source == "json" and list(agents) != list(resolution.agents or []):
+    if (
+        resolution.source == "json"
+        and list(agents) != list(resolution.agents or [])
+        and not allow_agent_expansion
+    ):
         raise ContextOSError(
             "workspace migration cannot change an existing agent set; "
             "use the agent lifecycle"
@@ -868,6 +875,51 @@ def create_workspace_migration_proposal(
         root=root,
     )
     return proposal_path, document
+
+
+def create_workspace_migration_proposal(
+    root: Path,
+    agents: Sequence[str],
+    now: datetime,
+) -> tuple[Path | None, dict[str, Any] | None]:
+    return _create_workspace_config_proposal(
+        root,
+        agents,
+        now,
+        allow_initial=False,
+        allow_agent_expansion=False,
+    )
+
+
+def create_workspace_setup_proposal(
+    root: Path,
+    requested_agents: Sequence[str],
+    now: datetime,
+) -> tuple[Path | None, dict[str, Any] | None]:
+    """Create an additive setup proposal without inferring tracked intent."""
+    requested_config = validate_workspace_config(
+        {
+            "schema_version": WORKSPACE_SCHEMA_VERSION,
+            "mode": WORKSPACE_MODE,
+            "agents": list(requested_agents),
+            "paths": dict(DEFAULT_PATHS),
+            "template": {
+                "version": DEFAULT_TEMPLATE_VERSION,
+                "source": DEFAULT_TEMPLATE_SOURCE,
+            },
+        },
+        known_runtime_ids=runtime_ids(root),
+    )
+    resolution = resolve_workspace(root)
+    configured = set(resolution.agents or ())
+    selected = sorted(configured | set(requested_config["agents"]))
+    return _create_workspace_config_proposal(
+        root,
+        selected,
+        now,
+        allow_initial=True,
+        allow_agent_expansion=True,
+    )
 
 
 def relative_path(root: Path, path: Path) -> str:
