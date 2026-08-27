@@ -69,6 +69,10 @@ The script can:
 
 Each optional change is prompted. The script shows setup-file changes before offering a narrowly scoped commit, and that commit defaults to no.
 
+Later, inspect or change the tracked set with `agent list`, `agent enable`, and
+`agent disable`. Each change is an exact proposal that requires a separate
+digest-confirmed `apply`; disabling never deletes the bundled adapter.
+
 ## Choose fresh setup or migration
 
 ### Start from your answers

@@ -54,6 +54,11 @@ auto-detection without changing repository intent. The singular `--agent` form
 is a deprecated singleton alias. See [workspace
 configuration](docs/workspace-configuration.md) for the full contract.
 
+After setup, `bash scripts/contextos.sh agent list` shows tracked activation and
+local registration separately. `agent enable` (or `agent add`) creates an
+additive proposal; `agent disable` creates the only proposal allowed to shrink
+the set. Neither operation deletes bundled adapter files.
+
 Then start your agent from the repository root:
 
 | Starting point | Next action |

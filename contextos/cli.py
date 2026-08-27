@@ -8,7 +8,9 @@ from pathlib import Path
 from . import __version__
 from .kernel import (
     ContextOSError,
+    agent_list_report,
     apply_proposal,
+    create_agent_activation_proposal,
     create_proposal,
     create_workspace_migration_proposal,
     create_workspace_setup_proposal,
@@ -53,6 +55,27 @@ def parser() -> argparse.ArgumentParser:
         "install", help="Record local onboarding for one runtime and print host setup steps"
     )
     install.add_argument("--runtime", metavar="RUNTIME", required=True)
+
+    agent = commands.add_parser(
+        "agent", help="Inspect or propose changes to tracked agent activation"
+    )
+    agent_commands = agent.add_subparsers(dest="agent_command", required=True)
+    agent_commands.add_parser(
+        "list", help="List registered runtimes and their tracked/local status"
+    )
+    for agent_command in ("add", "enable", "disable"):
+        activation = agent_commands.add_parser(
+            agent_command,
+            help=(
+                "Create an exact proposal to disable one tracked runtime"
+                if agent_command == "disable"
+                else "Create an exact proposal to enable one bundled runtime"
+            ),
+        )
+        activation.add_argument("--runtime", metavar="RUNTIME", required=True)
+        activation.add_argument(
+            "--now", help="ISO-8601 timestamp for deterministic proposal IDs"
+        )
 
     diagnose = commands.add_parser(
         "doctor", help="Check workspace health with tracked agent-set awareness"
@@ -224,6 +247,22 @@ def main(argv: list[str] | None = None) -> int:
             path, manifest = install_runtime(root, args.runtime)
             relative = path.relative_to(root).as_posix()
             emit({"host_state": relative, "runtime_file": relative, **manifest})
+        elif args.command == "agent":
+            if args.agent_command == "list":
+                emit(agent_list_report(root))
+            else:
+                enabled = args.agent_command in {"add", "enable"}
+                path, document = create_agent_activation_proposal(
+                    root, args.runtime, enabled, parse_now(args.now)
+                )
+                notices = [
+                    "agent add is an alias for agent enable"
+                    if args.agent_command == "add"
+                    else "agent disable changes tracked intent only; bundled files remain"
+                    if not enabled
+                    else "agent enable changes tracked intent only",
+                ]
+                emit(workspace_proposal_report(root, path, document, notices))
         elif args.command == "doctor":
             report = doctor(root, args.runtime, all_runtimes=args.all)
             emit(report)

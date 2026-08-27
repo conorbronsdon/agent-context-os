@@ -56,6 +56,13 @@ HOST_STATE_SCHEMA_VERSION = 1
 EVIDENCE_STALE_AFTER_DAYS = 90
 AGENT_LIFECYCLE_WORKFLOW = "agent-config"
 WORKSPACE_MIGRATION_OPERATION = "workspace-migrate"
+AGENT_ENABLE_OPERATION = "agent-enable"
+AGENT_DISABLE_OPERATION = "agent-disable"
+AGENT_SET_OPERATIONS = {
+    WORKSPACE_MIGRATION_OPERATION,
+    AGENT_ENABLE_OPERATION,
+    AGENT_DISABLE_OPERATION,
+}
 LOCAL_ARTIFACT_MODE = 0o600
 NEW_CONTENT_MODE = 0o666 if os.name == "nt" else 0o644
 PROPOSAL_ID_RE = re.compile(
@@ -658,7 +665,7 @@ def plan_workspace_migration(
 def _agent_lifecycle_authorization(
     root: Path, operation: str, relative: str
 ) -> dict[str, str]:
-    if operation != WORKSPACE_MIGRATION_OPERATION:
+    if operation not in AGENT_SET_OPERATIONS:
         raise ContextOSError(f"unsupported agent lifecycle operation: {operation}")
     expected = {
         "contextos.workspace.json": {
@@ -676,6 +683,8 @@ def _agent_lifecycle_authorization(
         raise ContextOSError(
             f"{operation} cannot mutate unowned or component path: {relative}"
         )
+    if relative == "workspace.yaml" and operation != WORKSPACE_MIGRATION_OPERATION:
+        raise ContextOSError(f"{operation} cannot mutate legacy workspace.yaml")
     _reject_config_aliases(root, relative)
     safe_repo_path(root, relative)
     component_path = safe_repo_path(root, "components/manifest.json")
@@ -920,6 +929,94 @@ def create_workspace_setup_proposal(
         allow_initial=True,
         allow_agent_expansion=True,
     )
+
+
+def agent_list_report(root: Path) -> dict[str, Any]:
+    """Report tracked activation and machine-local registration separately."""
+    resolution = resolve_workspace(root)
+    configured = set(resolution.agents or ())
+    local_hosts = _read_hosts_state(root)["hosts"]
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "source": resolution.source,
+        "mode": resolution.config["mode"] if resolution.config else None,
+        "agents": [
+            {
+                "id": runtime,
+                "enabled": runtime in configured,
+                "locally_registered": runtime in local_hosts,
+            }
+            for runtime in runtime_ids(root)
+        ],
+        "notices": list(resolution.notices),
+    }
+
+
+def create_agent_activation_proposal(
+    root: Path,
+    runtime: str,
+    enabled: bool,
+    now: datetime,
+) -> tuple[Path | None, dict[str, Any] | None]:
+    """Create one exact enable/disable proposal for tracked full-template intent."""
+    runtime_manifest(root, runtime, check_paths=False)
+    resolution = resolve_workspace(root)
+    if resolution.source != "json" or resolution.config is None:
+        raise ContextOSError(
+            "agent activation requires contextos.workspace.json; run setup or migration first"
+        )
+    if not resolution.canonical:
+        raise ContextOSError(
+            "agent activation requires canonical contextos.workspace.json"
+        )
+    before_agents = list(resolution.config["agents"])
+    selected = set(before_agents)
+    operation = AGENT_ENABLE_OPERATION if enabled else AGENT_DISABLE_OPERATION
+    if enabled:
+        selected.add(runtime)
+    else:
+        selected.discard(runtime)
+    after_agents = sorted(selected)
+    if after_agents == before_agents:
+        return None, None
+
+    after_config = {**resolution.config, "agents": after_agents}
+    after_text = render_workspace_config(after_config)
+    change = _agent_change(
+        root,
+        operation,
+        "contextos.workspace.json",
+        action="write",
+        after_text=after_text,
+    )
+    document: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "workflow": AGENT_LIFECYCLE_WORKFLOW,
+        "operation": operation,
+        "created_at": now.isoformat(),
+        "proposal_id": proposal_id(AGENT_LIFECYCLE_WORKFLOW, now, [change]),
+        "changes": [change],
+        "authorization": {
+            "policy": "agent-config-v1",
+            "before_agents": before_agents,
+            "after_agents": after_agents,
+            "before_components": _selection_components(root, before_agents),
+            "after_components": _selection_components(root, after_agents),
+        },
+        "source_hashes": _agent_source_hashes(root),
+        "source_git_head": git_head(root),
+        "invariants": list(AGENT_MIGRATION_INVARIANTS),
+    }
+    document["proposal_digest"] = sha256_text(canonical_json(document))
+    proposal_path = (
+        root / ".context-os" / "proposals" / f"{document['proposal_id']}.json"
+    )
+    _write_exclusive_text(
+        proposal_path,
+        json.dumps(document, indent=2, ensure_ascii=False) + "\n",
+        root=root,
+    )
+    return proposal_path, document
 
 
 def relative_path(root: Path, path: Path) -> str:
@@ -1451,7 +1548,7 @@ def _validate_agent_proposal_shape(
     if set(document) != required:
         raise ContextOSError("agent-config proposal has an invalid top-level shape")
     operation = document.get("operation")
-    if operation != WORKSPACE_MIGRATION_OPERATION:
+    if operation not in AGENT_SET_OPERATIONS:
         raise ContextOSError(f"unsupported agent lifecycle operation: {operation}")
     created_at = parse_now(ensure_text(document.get("created_at"), "created_at"))
     changes = document.get("changes")
@@ -1533,10 +1630,16 @@ def _validate_agent_proposal_shape(
             or after_mode is not None
         ):
             raise ContextOSError(f"delete action must not carry after content: {relative}")
-    if paths not in (["contextos.workspace.json"], ["workspace.yaml"], [
-        "contextos.workspace.json", "workspace.yaml"
-    ]):
-        raise ContextOSError("workspace migration has an invalid ordered path set")
+    if operation == WORKSPACE_MIGRATION_OPERATION:
+        valid_paths = (
+            ["contextos.workspace.json"],
+            ["workspace.yaml"],
+            ["contextos.workspace.json", "workspace.yaml"],
+        )
+    else:
+        valid_paths = (["contextos.workspace.json"],)
+    if paths not in valid_paths:
+        raise ContextOSError(f"{operation} has an invalid ordered path set")
 
     resolution = resolve_workspace(root)
     if after_config is None:
@@ -1547,6 +1650,25 @@ def _validate_agent_proposal_shape(
         after_config = resolution.config
     before_agents = list(resolution.agents) if resolution.agents is not None else None
     after_agents = list(after_config["agents"])
+    if operation in {AGENT_ENABLE_OPERATION, AGENT_DISABLE_OPERATION}:
+        if before_agents is None:
+            raise ContextOSError(
+                "agent activation requires existing tracked workspace configuration"
+            )
+        before_set = set(before_agents)
+        after_set = set(after_agents)
+        if operation == AGENT_ENABLE_OPERATION and not (
+            before_set < after_set and len(after_set - before_set) == 1
+        ):
+            raise ContextOSError(
+                "stale or invalid agent-enable proposal must add exactly one configured runtime"
+            )
+        if operation == AGENT_DISABLE_OPERATION and not (
+            after_set < before_set and len(before_set - after_set) == 1
+        ):
+            raise ContextOSError(
+                "stale or invalid agent-disable proposal must remove exactly one configured runtime"
+            )
     expected_authorization = {
         "policy": "agent-config-v1",
         "before_agents": before_agents,
@@ -2083,7 +2205,7 @@ def _recover_agent_journal(
         raise ContextOSError(f"invalid transaction journal: {journal}")
     created_at = parse_now(ensure_text(manifest.get("created_at"), "created_at"))
     if workflow == AGENT_LIFECYCLE_WORKFLOW:
-        if manifest.get("operation") != WORKSPACE_MIGRATION_OPERATION:
+        if manifest.get("operation") not in AGENT_SET_OPERATIONS:
             raise ContextOSError(f"invalid agent transaction journal: {journal}")
         evidence = manifest.get("agent_evidence")
         if (
@@ -2374,7 +2496,7 @@ def _recover_agent_journal(
             }
             if (
                 value.get("workflow") != AGENT_LIFECYCLE_WORKFLOW
-                or value.get("operation") != WORKSPACE_MIGRATION_OPERATION
+                or value.get("operation") != manifest.get("operation")
                 or value.get("confirmation")
                 != {"method": "exact-digest-echo", "human_authenticated": False}
                 or value.get("authorization") != expected_authorization

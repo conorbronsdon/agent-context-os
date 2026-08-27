@@ -91,8 +91,8 @@ bash scripts/contextos.sh workspace migrate --agents none
 The singular `--agent` form remains a deprecated singleton compatibility alias.
 `--agent` and `--agents` are mutually exclusive. A repeated preview with the
 same set is a no-op; explicit expansion can be previewed; shrinking, replacing,
-or clearing an existing non-empty set is rejected and must use the later
-disable lifecycle. Omitted or `auto` selection never infers intent from binaries
+or clearing an existing non-empty set is rejected and must use `agent disable`.
+Omitted or `auto` selection never infers intent from binaries
 or local state.
 
 Create a local, digest-bound migration proposal after reviewing the preview:
@@ -119,7 +119,7 @@ Legacy-only migration writes JSON and deletes YAML as one recoverable transactio
 under the agent configuration policy. A shadowed YAML file can be deleted when
 canonical JSON already exists and the requested agent set is unchanged. A
 workspace without legacy YAML is setup work, and changing an existing JSON agent
-set belongs to the later agent lifecycle. A repeated completed migration returns
+set belongs to the agent lifecycle. A repeated completed migration returns
 a structured no-op and produces no proposal.
 The transaction authorizer owns only those two exact root paths; ordinary
 setup/update/end proposals cannot use it to widen their path policy.
@@ -136,6 +136,33 @@ shared apply lock; after confirming no apply process is active and removing the
 stale lock, the next agent-configuration apply recovers the journal before
 revalidating and applying its proposal. POSIX mode bits are exact; Windows
 validates only its meaningful writable/read-only behavior.
+
+## Agent activation lifecycle
+
+List every bundled runtime while keeping tracked activation and machine-local
+registration visibly separate:
+
+```bash
+bash scripts/contextos.sh agent list
+```
+
+Create an activation proposal with `agent enable`; `agent add` is an alias.
+`agent disable` is the only operation permitted to shrink tracked intent:
+
+```bash
+bash scripts/contextos.sh agent enable --runtime codex
+bash scripts/contextos.sh agent disable --runtime claude
+bash scripts/contextos.sh apply .context-os/proposals/<proposal-id>.json \
+  --confirm <proposal-digest> --runtime generic
+```
+
+These commands write only an ignored proposal and return the exact config diff,
+authorization evidence, source commit, and digest. Repeating an already-satisfied
+operation is a no-op. Apply revalidates the exact before set and raw config bytes,
+so a stale enable or disable cannot overwrite a newer selection. Activation
+changes only `contextos.workspace.json`: bundled adapters remain in full-template
+mode, and host credentials, local registration, native memory, integrations,
+binaries, and context/state files are outside the transaction.
 
 ## Local scalar runtime migration
 
@@ -182,7 +209,7 @@ intent with these rules:
   configured set;
 - `none` creates an intentional empty set only for a fresh or legacy workspace;
 - subset or `none` reruns against a non-empty set are no-ops;
-- only the explicit disable lifecycle may shrink the configured set;
+- only `agent disable` may shrink the configured set;
 - local launch choice is ephemeral and never creates a stored primary agent;
 - no adapter or component is deleted merely because it was not selected; and
 - Cursor and OpenClaw remain launch/read compatibility names until registered

@@ -14,6 +14,9 @@
   README support claims, plus strict maintainer and conformance checks.
 
 ### Added
+- Transactional `agent list`, `agent add`/`enable`, and configuration-only
+  `agent disable` commands with idempotent exact-set proposals and no adapter,
+  host-state, credential, integration, binary, or context-file mutation.
 - Additive multi-agent setup through `scripts/setup.sh --agents`, with TTY
   selection, exact digest-bound approval, local registration of every approved
   runtime, a deprecated singleton alias, and local-only `auto` behavior.
