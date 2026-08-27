@@ -69,7 +69,9 @@ class RootDiscoveryTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        # Hosted Windows may spell TEMP with an 8.3 short path, while
+        # discover_root() intentionally returns the resolved canonical path.
+        self.root = Path(self.temporary.name).resolve()
 
     def write_json(self, root: Path, content: str | None = None) -> Path:
         marker = root / "contextos.workspace.json"
