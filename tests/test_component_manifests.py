@@ -595,7 +595,6 @@ class ComponentManifestTest(unittest.TestCase):
             [
                 ".agents/skills/standup/SKILL.md",
                 ".claude/commands/standup.md",
-                "contextos.workspace.json",
                 "sessions/2026-08-25.md",
             ],
             unclassified_tracked_paths(

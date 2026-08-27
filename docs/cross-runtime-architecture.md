@@ -58,12 +58,17 @@ process kill can leave partial state and a stale lock. `doctor` surfaces the
 lock and never deletes it silently.
 
 The `agent-config` workspace-migration workflow adds raw-byte target and source
-hashes, workflow-specific ownership, write/delete rollback, and a durable local
-journal. After an interrupted apply, an operator first confirms no apply process
-is active and removes the stale lock; the next agent-configuration apply restores
-the journaled bytes before revalidation. This stronger boundary currently owns
-only `contextos.workspace.json` and migration-only deletion of `workspace.yaml`;
-it is not a generic component file writer.
+hashes, proposal-bound before/after modes, workflow-specific ownership,
+write/delete rollback, and a durable local journal. New tracked content is
+non-executable; existing targets preserve their approved mode. After an
+interrupted apply, an operator first confirms no apply process is active and
+removes the stale lock; the next agent-configuration apply restores the
+journaled state before revalidation. A valid committed receipt does not retire
+that journal until every target still matches its receipt-bound bytes and mode.
+POSIX mode bits are enforced exactly; Windows enforces its meaningful
+writable/read-only boundary without claiming POSIX fidelity. This stronger
+boundary currently owns only `contextos.workspace.json` and migration-only
+deletion of `workspace.yaml`; it is not a generic component file writer.
 
 Proposals and receipts can contain full state text. They remain local and ignored
 by Git; `doctor` warns when artifacts are older than 30 days so the owner can

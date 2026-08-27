@@ -14,8 +14,9 @@
 - A workflow-specific `agent-config` transaction for workspace migration. It
   creates digest-bound write/delete proposals, revalidates raw target and
   authorization-source hashes under the shared lock, records exact virtual
-  ownership in receipts, restores exact bytes and modes after ordinary
-  failures, and keeps a durable recovery journal across process interruption.
+  ownership plus planned file modes in receipts, restores exact bytes and modes
+  after ordinary failures, verifies committed targets before retiring recovery
+  evidence, and keeps a durable recovery journal across process interruption.
 - Canonical tracked `contextos.workspace.json` with strict set and path
   semantics, whole-document precedence over legacy `workspace.yaml`,
   loss-aware preview-only migration, generated schema validation, and atomic

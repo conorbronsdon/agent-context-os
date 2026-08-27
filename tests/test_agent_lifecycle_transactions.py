@@ -13,10 +13,10 @@ from datetime import datetime
 from pathlib import Path
 from unittest import mock
 
+import contextos.kernel as kernel
 from contextos.cli import main as cli_main
 from contextos.kernel import (
     ContextOSError,
-    _agent_change,
     _create_agent_journal,
     apply_proposal,
     canonical_json,
@@ -114,6 +114,23 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
             [change["owner"] for change in receipt["files_changed"]],
         )
         self.assertNotIn("after_text", receipt["files_changed"][0])
+        self.assertEqual(
+            proposal["changes"][0]["after_mode"],
+            receipt["files_changed"][0]["mode_after"],
+        )
+        self.assertIsNone(receipt["files_changed"][0]["mode_before"])
+
+    @unittest.skipIf(os.name == "nt", "POSIX permission bits are not portable on Windows")
+    def test_published_content_is_non_executable_and_artifacts_are_private(self) -> None:
+        path, proposal = self.propose()
+        receipt_path, _ = self.apply(path, proposal)
+
+        self.assertEqual(
+            0o644,
+            (self.root / "contextos.workspace.json").stat().st_mode & 0o7777,
+        )
+        self.assertEqual(0o600, receipt_path.stat().st_mode & 0o7777)
+        self.assertEqual(0o600, path.stat().st_mode & 0o7777)
 
     def test_legacy_shadowed_yaml_noop_and_scope_boundaries(self) -> None:
         path, proposal = self.propose(("claude",))
@@ -202,17 +219,17 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         self.assertEqual("{}\n", sentinel.read_text(encoding="utf-8"))
         self.assertTrue(crafted.exists())
 
-    def test_agent_change_reports_directory_target_as_context_error(self) -> None:
+    def test_proposal_reports_directory_target_as_context_error(self) -> None:
         target = self.root / "contextos.workspace.json"
         target.mkdir()
         with self.assertRaisesRegex(ContextOSError, "regular file"):
-            _agent_change(
-                self.root,
-                "workspace-migrate",
-                "contextos.workspace.json",
-                action="write",
-                after_text="{}\n",
-            )
+            self.propose()
+
+    def test_proposal_reports_non_utf8_target_as_context_error(self) -> None:
+        target = self.root / "contextos.workspace.json"
+        target.write_bytes(b"\xff")
+        with self.assertRaisesRegex(ContextOSError, "valid UTF-8"):
+            self.propose()
 
     def test_raw_target_and_source_staleness_fail_closed(self) -> None:
         path, proposal = self.propose(("claude",))
@@ -295,6 +312,158 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         self.assertEqual(original, legacy.read_bytes())
         self.assert_no_transaction_artifacts()
 
+    def test_target_directory_fsync_failure_rolls_back_owned_publication(self) -> None:
+        path, proposal = self.propose()
+        target = self.root / "contextos.workspace.json"
+        original_fsync = kernel._fsync_directory
+        failed = False
+
+        def fail_after_publication(directory):
+            nonlocal failed
+            if not failed and Path(directory) == self.root and target.exists():
+                failed = True
+                raise OSError("injected target directory fsync failure")
+            return original_fsync(directory)
+
+        with mock.patch(
+            "contextos.kernel._fsync_directory", side_effect=fail_after_publication
+        ):
+            with self.assertRaisesRegex(ContextOSError, "rolled back"):
+                self.apply(path, proposal)
+        self.assertTrue(failed)
+        self.assertFalse(target.exists())
+        self.assertTrue((self.root / "workspace.yaml").exists())
+        self.assert_no_transaction_artifacts()
+
+    def test_delete_directory_fsync_failure_restores_captured_inode(self) -> None:
+        path, proposal = self.propose()
+        legacy = self.root / "workspace.yaml"
+        original = legacy.read_bytes()
+        original_fsync = kernel._fsync_directory
+        failed = False
+
+        def fail_after_capture(directory):
+            nonlocal failed
+            if not failed and Path(directory) == self.root and not legacy.exists():
+                failed = True
+                raise OSError("injected delete directory fsync failure")
+            return original_fsync(directory)
+
+        with mock.patch(
+            "contextos.kernel._fsync_directory", side_effect=fail_after_capture
+        ):
+            with self.assertRaisesRegex(ContextOSError, "rolled back"):
+                self.apply(path, proposal)
+        self.assertTrue(failed)
+        self.assertEqual(original, legacy.read_bytes())
+        self.assertFalse((self.root / "contextos.workspace.json").exists())
+        self.assert_no_transaction_artifacts()
+
+    def test_receipt_directory_fsync_failure_keeps_committed_state_and_journal(self) -> None:
+        path, proposal = self.propose()
+        receipt = self.root / ".context-os/receipts" / f"{proposal['proposal_id']}.json"
+        journal = self.root / ".context-os/journals" / proposal["proposal_id"]
+        original_fsync = kernel._fsync_directory
+        failed = False
+
+        def fail_after_receipt_link(directory):
+            nonlocal failed
+            if (
+                not failed
+                and Path(directory) == receipt.parent
+                and receipt.exists()
+            ):
+                failed = True
+                raise OSError("injected receipt directory fsync failure")
+            return original_fsync(directory)
+
+        with mock.patch(
+            "contextos.kernel._fsync_directory", side_effect=fail_after_receipt_link
+        ):
+            with self.assertRaisesRegex(ContextOSError, "commit point"):
+                self.apply(path, proposal)
+        self.assertTrue(failed)
+        self.assertTrue(receipt.exists())
+        self.assertTrue(journal.exists())
+        self.assertTrue((self.root / "contextos.workspace.json").exists())
+        self.assertFalse((self.root / "workspace.yaml").exists())
+
+        recovery_failed = False
+
+        def fail_recovery_receipt_sync(directory):
+            nonlocal recovery_failed
+            if not recovery_failed and Path(directory) == receipt.parent:
+                recovery_failed = True
+                raise OSError("injected recovery receipt fsync failure")
+            return original_fsync(directory)
+
+        with mock.patch(
+            "contextos.kernel._fsync_directory",
+            side_effect=fail_recovery_receipt_sync,
+        ):
+            with self.assertRaisesRegex(
+                OSError, "injected recovery receipt fsync failure"
+            ):
+                self.apply(path, proposal)
+        self.assertTrue(recovery_failed)
+        self.assertTrue(journal.exists())
+
+        with self.assertRaisesRegex(ContextOSError, "existing receipt"):
+            self.apply(path, proposal)
+        self.assertFalse(journal.exists())
+
+    def test_receipt_commit_rechecks_target_inode_ownership(self) -> None:
+        path, proposal = self.propose()
+        target = self.root / "contextos.workspace.json"
+        receipt = self.root / ".context-os/receipts" / f"{proposal['proposal_id']}.json"
+        journal = self.root / ".context-os/journals" / proposal["proposal_id"]
+        expected = proposal["changes"][0]["after_text"].encode("utf-8")
+        original_link = os.link
+        replaced = False
+
+        def replace_target_before_receipt(source, destination, *args, **kwargs):
+            nonlocal replaced
+            result = original_link(source, destination, *args, **kwargs)
+            if not replaced and Path(destination) == receipt:
+                foreign = self.root / "foreign-workspace.json"
+                foreign.write_bytes(expected)
+                foreign.chmod(proposal["changes"][0]["after_mode"])
+                os.replace(foreign, target)
+                replaced = True
+            return result
+
+        with mock.patch(
+            "contextos.kernel.os.link", side_effect=replace_target_before_receipt
+        ):
+            with self.assertRaisesRegex(ContextOSError, "commit point"):
+                self.apply(path, proposal)
+
+        self.assertTrue(replaced)
+        self.assertEqual(expected, target.read_bytes())
+        self.assertTrue(receipt.exists())
+        self.assertTrue(journal.exists())
+        self.assertFalse(
+            os.path.samefile(target, journal / "publications/0.after")
+        )
+
+    def test_journal_rejects_backup_bytes_not_bound_to_the_proposal(self) -> None:
+        path, proposal = self.propose()
+        original = _create_agent_journal
+        legacy_bytes = (self.root / "workspace.yaml").read_bytes()
+
+        def poison_backup(root, document, backups, modes, receipt):
+            backups[self.root / "workspace.yaml"] = b"attacker-controlled\n"
+            return original(root, document, backups, modes, receipt)
+
+        with mock.patch(
+            "contextos.kernel._create_agent_journal", side_effect=poison_backup
+        ):
+            with self.assertRaisesRegex(ContextOSError, "backup changed"):
+                self.apply(path, proposal)
+        self.assertEqual(legacy_bytes, (self.root / "workspace.yaml").read_bytes())
+        self.assertFalse((self.root / "contextos.workspace.json").exists())
+        self.assert_no_transaction_artifacts()
+
     def test_durable_journal_recovers_partial_crash_before_reapply(self) -> None:
         legacy = self.root / "workspace.yaml"
         legacy_bytes = b"state_dir: state\n"
@@ -315,10 +484,12 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         }
         receipt = self.root / ".context-os/receipts" / f"{proposal['proposal_id']}.json"
         _create_agent_journal(self.root, proposal, backups, modes, receipt)
-        (self.root / "contextos.workspace.json").write_bytes(
-            changes[0]["after_text"].encode("utf-8")
+        journal = self.root / ".context-os/journals" / proposal["proposal_id"]
+        os.link(
+            journal / "publications/0.after",
+            self.root / "contextos.workspace.json",
         )
-        legacy.unlink()
+        os.replace(legacy, journal / "forward/1.current")
 
         lock = self.root / ".context-os/apply.lock"
         lock.write_text("pid=999999\n", encoding="utf-8")
@@ -424,12 +595,12 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         original = os.replace
 
         def race_delete(source, destination, *args, **kwargs):
-            if Path(source) == legacy and Path(destination).parent.name == "deleted":
+            if Path(source) == legacy and Path(destination).parent.name == "forward":
                 legacy.write_bytes(concurrent)
             return original(source, destination, *args, **kwargs)
 
         with mock.patch("contextos.kernel.os.replace", side_effect=race_delete):
-            with self.assertRaisesRegex(ContextOSError, "changed during delete"):
+            with self.assertRaisesRegex(ContextOSError, "changed during capture"):
                 self.apply(path, proposal)
         self.assertEqual(concurrent, legacy.read_bytes())
         self.assertFalse((self.root / "contextos.workspace.json").exists())
@@ -503,6 +674,55 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
             self.apply(path, proposal)
         self.assertFalse(journal.exists())
 
+    def test_committed_journal_is_retained_when_a_target_is_missing(self) -> None:
+        path, proposal = self.propose()
+        journal = self.root / ".context-os/journals" / proposal["proposal_id"]
+        with mock.patch(
+            "contextos.kernel._discard_agent_journal",
+            side_effect=OSError("injected cleanup failure"),
+        ):
+            self.apply(path, proposal)
+        target = self.root / "contextos.workspace.json"
+        target.unlink()
+
+        with self.assertRaisesRegex(
+            ContextOSError, "journal retained for recovery: contextos.workspace.json"
+        ):
+            self.apply(path, proposal)
+
+        self.assertTrue(journal.is_dir())
+        self.assertFalse(target.exists())
+
+    @unittest.skipIf(os.name == "nt", "POSIX permission bits are not portable on Windows")
+    def test_committed_journal_is_retained_when_target_mode_is_stale(self) -> None:
+        path, proposal = self.propose()
+        journal = self.root / ".context-os/journals" / proposal["proposal_id"]
+        with mock.patch(
+            "contextos.kernel._discard_agent_journal",
+            side_effect=OSError("injected cleanup failure"),
+        ):
+            self.apply(path, proposal)
+        target = self.root / "contextos.workspace.json"
+        target.chmod(0o600)
+
+        with self.assertRaisesRegex(ContextOSError, "invalid publication anchor"):
+            self.apply(path, proposal)
+
+        self.assertTrue(journal.is_dir())
+        self.assertEqual(0o600, target.stat().st_mode & 0o7777)
+
+    @unittest.skipIf(os.name == "nt", "POSIX permission bits are not portable on Windows")
+    def test_mode_drift_invalidates_the_proposal_before_mutation(self) -> None:
+        legacy = self.root / "workspace.yaml"
+        path, proposal = self.propose()
+        legacy.chmod(0o600)
+
+        with self.assertRaisesRegex(ContextOSError, "target mode changed"):
+            self.apply(path, proposal)
+
+        self.assertTrue(legacy.exists())
+        self.assertFalse((self.root / "contextos.workspace.json").exists())
+
     def test_recovery_refuses_unrecognized_post_crash_edits(self) -> None:
         path, proposal = self.propose()
         changes = proposal["changes"]
@@ -525,13 +745,62 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         )
         (self.root / "workspace.yaml").unlink()
 
-        with self.assertRaisesRegex(ContextOSError, "unrecognized post-crash edit"):
+        with self.assertRaisesRegex(ContextOSError, "concurrent target"):
             self.apply(path, proposal)
         self.assertEqual(
             '{"third_party": true}\n',
             (self.root / "contextos.workspace.json").read_text(encoding="utf-8"),
         )
         self.assertFalse((self.root / "workspace.yaml").exists())
+
+    def test_recovery_preserves_an_exact_byte_foreign_target(self) -> None:
+        path, proposal = self.propose()
+        changes = proposal["changes"]
+        backups = {
+            safe_repo_path(self.root, item["path"]): (
+                safe_repo_path(self.root, item["path"]).read_bytes()
+                if safe_repo_path(self.root, item["path"]).exists()
+                else None
+            )
+            for item in changes
+        }
+        modes = {
+            target: target.stat().st_mode & 0o7777 if target.exists() else None
+            for target in backups
+        }
+        receipt = self.root / ".context-os/receipts" / f"{proposal['proposal_id']}.json"
+        _create_agent_journal(self.root, proposal, backups, modes, receipt)
+        target = self.root / "contextos.workspace.json"
+        target.write_bytes(changes[0]["after_text"].encode("utf-8"))
+
+        with self.assertRaisesRegex(ContextOSError, "concurrent target"):
+            self.apply(path, proposal)
+
+        self.assertEqual(
+            changes[0]["after_text"].encode("utf-8"), target.read_bytes()
+        )
+        self.assertTrue(
+            (self.root / ".context-os/journals" / proposal["proposal_id"]).exists()
+        )
+
+    @unittest.skipUnless(os.name == "nt", "Windows permission semantics only")
+    def test_windows_committed_recovery_rejects_readonly_mode_drift(self) -> None:
+        path, proposal = self.propose()
+        journal = self.root / ".context-os/journals" / proposal["proposal_id"]
+        with mock.patch(
+            "contextos.kernel._discard_agent_journal",
+            side_effect=OSError("injected cleanup failure"),
+        ):
+            self.apply(path, proposal)
+        target = self.root / "contextos.workspace.json"
+        target.chmod(0o444)
+        self.addCleanup(lambda: target.chmod(0o666) if target.exists() else None)
+
+        with self.assertRaisesRegex(ContextOSError, "invalid publication anchor"):
+            self.apply(path, proposal)
+
+        self.assertTrue(journal.exists())
+        self.assertFalse(target.stat().st_mode & 0o200)
 
     def test_replay_existing_receipt_and_generic_path_widening_are_rejected(self) -> None:
         path, proposal = self.propose()
