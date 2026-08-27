@@ -230,7 +230,9 @@ class WorkspaceConfigTest(unittest.TestCase):
         )
         resolution = resolve_workspace(self.root)
         self.assertEqual("json", resolution.source)
-        self.assertEqual(self.root / "state", resolution.workspace.state_dir)
+        self.assertEqual(
+            (self.root / "state").resolve(), resolution.workspace.state_dir
+        )
         self.assertIn("conflicts", resolution.notices[0]["message"])
 
         self.write_json("{")
@@ -307,12 +309,17 @@ class WorkspaceConfigTest(unittest.TestCase):
         )
         resolution = resolve_workspace(self.root)
         self.assertEqual("legacy-yaml", resolution.source)
-        self.assertEqual(self.root / "second", resolution.workspace.state_dir)
+        self.assertEqual(
+            (self.root / "second").resolve(), resolution.workspace.state_dir
+        )
         with self.assertRaisesRegex(ContextOSError, "cannot be migrated losslessly"):
             plan_workspace_migration(self.root, ["claude"])
 
         legacy.write_text('state_dir: "foo#bar"\n', encoding="utf-8")
-        self.assertEqual(self.root / "foo", resolve_workspace(self.root).workspace.state_dir)
+        self.assertEqual(
+            (self.root / "foo").resolve(),
+            resolve_workspace(self.root).workspace.state_dir,
+        )
         with self.assertRaisesRegex(ContextOSError, "historical reader"):
             plan_workspace_migration(self.root, ["claude"])
 
