@@ -387,14 +387,19 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         legacy = self.root / "workspace.yaml"
         path, proposal = self.propose()
         target = self.root / "contextos.workspace.json"
+        legacy_resolved = legacy.resolve()
+        target_resolved = target.resolve()
         original_replace = os.replace
 
         def race_during_capture(source, destination, *args, **kwargs):
-            source_path = Path(source)
-            destination_path = Path(destination)
-            if source_path == legacy:
+            source_path = Path(source).resolve()
+            destination_path = Path(destination).resolve()
+            if source_path == legacy_resolved:
                 raise OSError("force rollback after first publication")
-            if source_path == target and destination_path.name.endswith(".current"):
+            if (
+                source_path == target_resolved
+                and destination_path.name.endswith(".current")
+            ):
                 target.unlink()
                 target.mkdir()
                 (target / "racer.txt").write_text("captured\n", encoding="utf-8")
@@ -650,10 +655,11 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
     def test_post_write_verification_failure_rolls_back(self) -> None:
         path, proposal = self.propose()
         target = self.root / "contextos.workspace.json"
+        target_resolved = target.resolve()
         original = raw_file_digest
 
         def fail_after_publish(candidate: Path):
-            if candidate == target and candidate.exists():
+            if Path(candidate).resolve() == target_resolved and candidate.exists():
                 raise OSError("injected post-write hash failure")
             return original(candidate)
 
@@ -715,10 +721,11 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
     def test_receipt_publication_never_overwrites_a_racer(self) -> None:
         path, proposal = self.propose()
         receipt = self.root / ".context-os/receipts" / f"{proposal['proposal_id']}.json"
+        receipt_resolved = receipt.resolve()
         original = os.link
 
         def race_receipt(source, destination, *args, **kwargs):
-            if Path(destination) == receipt.resolve():
+            if Path(destination).resolve() == receipt_resolved:
                 receipt.write_text("{}\n", encoding="utf-8")
             return original(source, destination, *args, **kwargs)
 
@@ -732,13 +739,14 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
     def test_receipt_replacement_before_directory_sync_is_not_committed(self) -> None:
         path, proposal = self.propose()
         receipt = self.root / ".context-os/receipts" / f"{proposal['proposal_id']}.json"
+        receipt_parent_resolved = receipt.parent.resolve()
         real_sync = _fsync_directory
         replaced = False
 
         def replace_before_sync(directory: Path):
             nonlocal replaced
             if (
-                Path(directory) == receipt.parent.resolve()
+                Path(directory).resolve() == receipt_parent_resolved
                 and receipt.is_file()
                 and not replaced
             ):
