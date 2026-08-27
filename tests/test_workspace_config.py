@@ -100,7 +100,15 @@ class WorkspaceConfigTest(unittest.TestCase):
         self.assertEqual([], loaded["agents"])
         self.assertEqual(__version__, loaded["template"]["version"])
         self.assertEqual(__version__, DEFAULT_TEMPLATE_VERSION)
-        self.assertFalse((ROOT / "contextos.workspace.json").exists())
+        live_path = ROOT / "contextos.workspace.json"
+        if os.environ.get("CONTEXTOS_VALIDATION_PROFILE") == "workspace" \
+                and live_path.exists():
+            live, _live_canonical = load_workspace_config(
+                live_path, root=ROOT, known_runtime_ids=KNOWN
+            )
+            self.assertLessEqual(set(live["agents"]), KNOWN)
+        else:
+            self.assertFalse(live_path.exists())
         self.assertEqual(
             workspace_schema_document(),
             json.loads((ROOT / "workspace/schema.json").read_text(encoding="utf-8")),

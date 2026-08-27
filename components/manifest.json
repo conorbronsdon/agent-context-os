@@ -1,6 +1,7 @@
 {
     "schema_version": 1,
     "extensible_paths": [
+        "contextos.workspace.json",
         "workspace.yaml"
     ],
     "extensible_roots": [

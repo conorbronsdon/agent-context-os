@@ -24,7 +24,9 @@ Every currently tracked file has exactly one component owner and one policy:
 The roots `.agents/skills/`, `.claude/commands/`, `content/`, `identity/`,
 `inbox/`, `projects/`, `references/`, `sessions/`, `state/`, and `writing/` are
 extensible. The legacy root configuration file `workspace.yaml` is an exact
-extensible path rather than a directory root.
+extensible path rather than a directory root. The canonical tracked
+`contextos.workspace.json` created by reviewed setup transactions is the other
+exact extensible path.
 Checked-in files below them retain their explicit owner and policy, while new
 user files are workspace-owned rather than component-owned. The maintainer
 check remains strict over the repository's tracked source set;
