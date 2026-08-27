@@ -188,7 +188,9 @@ chooses the nearest recognized root. After evaluating a directory, it stops at
 an exact `.git` file, directory, or symlink, so an unconfigured nested repository
 cannot accidentally inherit an outer repository's Context OS state. Pass an
 explicit `--root` only when deliberately operating on an outer workspace. A
-discovery start may be a real directory or regular file, but a link or Windows
-mount-point start is rejected. Link-like path components below a nested `.git`
-boundary are also rejected before resolution; symlinked system ancestors above
-the boundary and non-Git legacy paths remain compatible.
+discovery start may be a real directory, regular file, or link-like entrypoint.
+Internal links and entrypoints such as `current -> repo` remain compatible when
+their resolved start stays inside the nearest lexical `.git` boundary. A link
+that escapes that boundary fails before an outer workspace can be selected;
+symlinked system ancestors above the boundary and non-Git legacy paths remain
+compatible.

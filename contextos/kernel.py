@@ -290,22 +290,6 @@ def _reject_config_aliases(root: Path, canonical_name: str) -> None:
         )
 
 
-def _is_link_like(path: Path) -> bool:
-    """Recognize symlinks and Windows reparse points without following them."""
-    try:
-        metadata = path.lstat()
-    except FileNotFoundError:
-        return False
-    except OSError as exc:
-        raise ContextOSError(f"cannot inspect path without following links {path}: {exc}") from exc
-    reparse_tag = getattr(metadata, "st_reparse_tag", 0)
-    link_tags = {
-        getattr(stat, "IO_REPARSE_TAG_SYMLINK", -1),
-        getattr(stat, "IO_REPARSE_TAG_MOUNT_POINT", -2),
-    }
-    return stat.S_ISLNK(metadata.st_mode) or reparse_tag in link_tags
-
-
 def _legacy_repo_path(root: Path, raw: str, field: str) -> Path:
     relative = Path(raw)
     if relative.is_absolute():
