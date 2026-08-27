@@ -7,8 +7,10 @@ cd "$ROOT"
 source "$ROOT/scripts/python-env.sh"
 
 COMPONENT_CHECK_ARGS=(check)
+VALIDATION_PROFILE=maintainer
 if [[ ${1:-} == "--workspace" ]]; then
   COMPONENT_CHECK_ARGS+=(--allow-extensible)
+  VALIDATION_PROFILE=workspace
   shift
 fi
 if (( $# )); then
@@ -26,7 +28,8 @@ while IFS= read -r -d '' script; do
   bash -n "$script"
 done < <(find .claude/hooks scripts tests -name '*.sh' -print0)
 
-"$CONTEXTOS_PYTHON_CMD" -m unittest discover -s tests -p 'test_*.py'
+CONTEXTOS_VALIDATION_PROFILE="$VALIDATION_PROFILE" \
+  "$CONTEXTOS_PYTHON_CMD" -m unittest discover -s tests -p 'test_*.py'
 "$CONTEXTOS_PYTHON_CMD" scripts/integrations.py check
 "$CONTEXTOS_PYTHON_CMD" scripts/component-manifests.py "${COMPONENT_CHECK_ARGS[@]}"
 "$CONTEXTOS_PYTHON_CMD" scripts/runtime-manifests.py check

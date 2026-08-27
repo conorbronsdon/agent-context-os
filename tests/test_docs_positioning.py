@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import subprocess
 import sys
@@ -280,10 +281,14 @@ class DocumentationPositioningTests(unittest.TestCase):
 
     def test_command_index_covers_shipped_commands_and_portable_skills(self) -> None:
         index = self.text("docs/commands-and-skills.md")
+        workspace = os.environ.get("CONTEXTOS_VALIDATION_PROFILE") == "workspace"
         shipped_commands = {path.stem for path in (ROOT / ".claude/commands").glob("*.md")}
         indexed_commands = set(re.findall(r"`/([a-z0-9]+(?:-[a-z0-9]+)*)`", index))
-        self.assertEqual(shipped_commands, indexed_commands)
-        for command in shipped_commands:
+        if workspace:
+            self.assertLessEqual(indexed_commands, shipped_commands)
+        else:
+            self.assertEqual(shipped_commands, indexed_commands)
+        for command in indexed_commands:
             rows = [line for line in index.splitlines() if line.startswith("|") and f"`/{command}`" in line]
             self.assertEqual(1, len(rows), f"/{command} must have exactly one indexed table row")
             cells = [cell.strip() for cell in rows[0].strip("|").split("|")]
@@ -291,11 +296,17 @@ class DocumentationPositioningTests(unittest.TestCase):
 
         shipped_skills = {path.parent.name for path in (ROOT / ".agents/skills").glob("*/SKILL.md")}
         indexed_skills = set(re.findall(r"`\$([a-z0-9]+(?:-[a-z0-9]+)*)`", index))
-        self.assertEqual(shipped_skills, indexed_skills)
+        if workspace:
+            self.assertLessEqual(indexed_skills, shipped_skills)
+        else:
+            self.assertEqual(shipped_skills, indexed_skills)
 
         command_table = self.text("CLAUDE.md").split("## Slash Commands", 1)[1].split("Add more commands", 1)[0]
         claude_commands = set(re.findall(r"^\| `/([a-z0-9]+(?:-[a-z0-9]+)*)`", command_table, re.MULTILINE))
-        self.assertEqual(shipped_commands, claude_commands)
+        if workspace:
+            self.assertLessEqual(claude_commands, shipped_commands)
+        else:
+            self.assertEqual(shipped_commands, claude_commands)
         self.assertIn("does not activate", index)
 
     def test_maintenance_separates_portable_and_host_local_state(self) -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -90,7 +91,13 @@ class ComponentManifestTest(unittest.TestCase):
     def test_repository_manifest_validates(self) -> None:
         path = ROOT / "components/manifest.json"
         manifest = json.loads(path.read_text(encoding="utf-8"))
-        validated = validate_component_manifest(manifest, root=ROOT)
+        validated = validate_component_manifest(
+            manifest,
+            root=ROOT,
+            allow_missing_seed=(
+                os.environ.get("CONTEXTOS_VALIDATION_PROFILE") == "workspace"
+            ),
+        )
         self.assertEqual(COMPONENT_MANIFEST_SCHEMA_VERSION, validated["schema_version"])
 
     def test_checked_in_schema_matches_authoritative_contract(self) -> None:
@@ -365,17 +372,20 @@ class ComponentManifestTest(unittest.TestCase):
                 fixture(), ["unowned.txt", "UNOWNED.txt"], root=self.root
             )
 
-    def test_workspace_extensions_allow_personal_files_but_not_sibling_prefixes(self) -> None:
+    def test_workspace_extensions_reject_secret_state_and_sibling_prefixes(self) -> None:
         manifest = fixture()
-        self.assertEqual(
-            [],
-            unclassified_tracked_paths(
-                manifest,
-                ["extensions/.env.local"],
-                root=self.root,
-                allow_extensible=True,
-            ),
-        )
+        for path in (
+            "extensions/.env.local",
+            "extensions/deck.key",
+            "extensions/debug.log",
+            "extensions/node_modules/package.js",
+        ):
+            with self.subTest(path=path), self.assertRaisesRegex(
+                ComponentManifestError, "must not claim"
+            ):
+                unclassified_tracked_paths(
+                    manifest, [path], root=self.root, allow_extensible=True
+                )
         with self.assertRaisesRegex(ComponentManifestError, "must not claim"):
             unclassified_tracked_paths(
                 manifest,
@@ -398,7 +408,7 @@ class ComponentManifestTest(unittest.TestCase):
             [],
             unclassified_tracked_paths(
                 manifest,
-                ["extensions/what next?.md", "extensions/deck.key", "workspace.yaml"],
+                ["extensions/what next?.md", "workspace.yaml"],
                 root=self.root,
                 allow_extensible=True,
             ),

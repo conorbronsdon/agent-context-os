@@ -84,6 +84,10 @@ for alias_name in "${aliases[@]}"; do
   grep -Fq "\$$alias_name" AGENTS.md || fail "AGENTS.md does not route to \$$alias_name"
 done
 
+portable_skill_roots=(.agents/skills)
+if [ -d projects/example-musician/workflow-examples ]; then
+  portable_skill_roots+=(projects/example-musician/workflow-examples)
+fi
 while IFS= read -r portable_skill; do
   frontmatter=$(awk '
     NR == 1 && $0 == "---" { inside = 1; next }
@@ -93,7 +97,7 @@ while IFS= read -r portable_skill; do
   if grep -Eq '^(requires|allowed-tools):' <<<"$frontmatter"; then
     fail "$portable_skill puts nonstandard dependencies or host permissions in portable frontmatter"
   fi
-done < <(find .agents/skills projects/example-musician/workflow-examples -name SKILL.md -type f | sort)
+done < <(find "${portable_skill_roots[@]}" -name SKILL.md -type f | sort)
 
 test ! -d projects/example-musician/skills || fail "example project still presents a nested skills directory as discoverable"
 
@@ -278,6 +282,10 @@ make_setup_fixture() {
   local destination="$1"
   mkdir -p "$destination"
   tar --exclude='.git' -cf - . | tar -xf - -C "$destination"
+  # Setup's prompt sequence must remain stable after a user removes the optional
+  # seed project from their own workspace. An empty fixture directory is enough
+  # to exercise the removal prompt without fabricating tracked source content.
+  mkdir -p "$destination/projects/example-musician"
   git -C "$destination" init -q
   git -C "$destination" config user.name "Portability Test"
   git -C "$destination" config user.email "portability@example.invalid"

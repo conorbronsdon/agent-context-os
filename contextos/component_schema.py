@@ -94,7 +94,6 @@ def _safe_posix_path(value: Any, field: str) -> str:
 def _ownership_path(value: Any, field: str) -> str:
     raw = _safe_posix_path(value, field)
     parts = PurePosixPath(raw).parts
-    portable = _identity(raw)
     portable_parts = tuple(_identity(part) for part in parts)
     if any(
         part.endswith((".", " "))
@@ -103,6 +102,13 @@ def _ownership_path(value: Any, field: str) -> str:
         for part in portable_parts
     ):
         _fail(field, "must not use a Windows-aliased or illegal path segment")
+    return _reserved_ownership_path(raw, field)
+
+
+def _reserved_ownership_path(raw: str, field: str) -> str:
+    """Reject secret and generated-state names without enforcing host portability."""
+    portable = _identity(raw)
+    portable_parts = tuple(_identity(part) for part in PurePosixPath(raw).parts)
     if (portable in RESERVED_OWNERSHIP_PATHS
             or portable.endswith("/.ds_store") or portable == ".ds_store"
             or portable.endswith("/.lsoverride") or portable == ".lsoverride"
@@ -529,6 +535,7 @@ def unclassified_tracked_paths(
             key in extensible_paths
             or any(parts[:len(prefix)] == prefix for prefix in extensible)
         ):
+            _reserved_ownership_path(path, f"tracked_paths[{index}]")
             continue
         _ownership_path(path, f"tracked_paths[{index}]")
         missing.append(path)
