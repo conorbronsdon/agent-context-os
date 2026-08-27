@@ -1681,6 +1681,7 @@ def _windows_unlink_readonly(path: Path) -> None:
     share_all = 0x00000001 | 0x00000002 | 0x00000004
     open_existing = 3
     open_reparse_point = 0x00200000
+    backup_semantics = 0x02000000
     file_disposition_info_ex = 21
     disposition_delete = 0x00000001
     disposition_posix_semantics = 0x00000002
@@ -1714,9 +1715,11 @@ def _windows_unlink_readonly(path: Path) -> None:
     close_handle.restype = wintypes.BOOL
 
     raw = os.path.abspath(path)
-    if raw.startswith("\\\\"):
+    if raw.startswith(("\\\\?\\", "\\\\.\\")):
+        pass
+    elif raw.startswith("\\\\"):
         raw = "\\\\?\\UNC\\" + raw[2:]
-    elif not raw.startswith("\\\\?\\"):
+    else:
         raw = "\\\\?\\" + raw
     handle = create_file(
         raw,
@@ -1724,7 +1727,7 @@ def _windows_unlink_readonly(path: Path) -> None:
         share_all,
         None,
         open_existing,
-        open_reparse_point,
+        open_reparse_point | backup_semantics,
         None,
     )
     invalid_handle = ctypes.c_void_p(-1).value
@@ -1755,7 +1758,36 @@ def _unlink_readonly_artifact(path: Path) -> None:
     except PermissionError:
         if os.name != "nt":
             raise
-    _windows_unlink_readonly(path)
+    try:
+        _windows_unlink_readonly(path)
+        return
+    except OSError as exc:
+        try:
+            metadata = path.lstat()
+        except OSError as inspect_exc:
+            raise ContextOSError(
+                f"cannot inspect read-only transaction artifact {path}: {inspect_exc}"
+            ) from inspect_exc
+        if (
+            _is_link_like(path)
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+        ):
+            raise ContextOSError(
+                "filesystem cannot safely remove a read-only transaction artifact "
+                f"without changing a shared inode: {path}; use a Windows NTFS "
+                "workspace with FileDispositionInfoEx support"
+            ) from exc
+        original_mode = metadata.st_mode & 0o7777
+        os.chmod(path, original_mode | stat.S_IWRITE)
+        try:
+            path.unlink()
+        except OSError as unlink_exc:
+            if path.exists() and not _is_link_like(path):
+                os.chmod(path, original_mode)
+            raise ContextOSError(
+                f"cannot remove read-only transaction artifact {path}: {unlink_exc}"
+            ) from unlink_exc
 
 
 def _rmtree_readonly_artifacts(

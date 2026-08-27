@@ -625,7 +625,11 @@ class KernelTest(unittest.TestCase):
 
         def reject_published_path_identity(left, right):
             nonlocal raced
-            if armed and not raced:
+            if (
+                armed
+                and not raced
+                and real_samestat(right, current_resolved.stat())
+            ):
                 raced = True
                 return False
             return real_samestat(left, right)
@@ -676,7 +680,11 @@ class KernelTest(unittest.TestCase):
         def mutate_before_final_metadata_check(descriptor):
             nonlocal raced, target_fstat_calls
             metadata = real_fstat(descriptor)
-            if armed and not raced:
+            if (
+                armed
+                and not raced
+                and os.path.samestat(metadata, current_resolved.stat())
+            ):
                 target_fstat_calls += 1
                 if target_fstat_calls == 2:
                     os.utime(

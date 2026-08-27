@@ -684,7 +684,11 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
 
         def reject_published_path_identity(left, right):
             nonlocal raced
-            if armed and not raced:
+            if (
+                armed
+                and not raced
+                and real_samestat(right, target_resolved.stat())
+            ):
                 raced = True
                 return False
             return real_samestat(left, right)
@@ -998,7 +1002,11 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         os.link(survivor, artifact)
         os.chmod(survivor, 0o444)
 
-        _unlink_readonly_artifact(artifact)
+        with mock.patch(
+            "contextos.kernel.os.chmod",
+            side_effect=AssertionError("shared-inode cleanup must not chmod"),
+        ):
+            _unlink_readonly_artifact(artifact)
 
         self.assertFalse(artifact.exists())
         self.assertEqual(b"shared inode\n", survivor.read_bytes())
@@ -1006,6 +1014,40 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
             self.assertFalse(survivor.stat().st_mode & 0o200)
         else:
             self.assertEqual(0o444, survivor.stat().st_mode & 0o7777)
+
+    @unittest.skipUnless(os.name == "nt", "Windows read-only fallback")
+    def test_readonly_single_link_uses_safe_unsupported_api_fallback(self) -> None:
+        artifact = self.root / ".context-os/single-readonly-artifact"
+        artifact.parent.mkdir()
+        artifact.write_bytes(b"single inode\n")
+        os.chmod(artifact, 0o444)
+
+        with mock.patch(
+            "contextos.kernel._windows_unlink_readonly",
+            side_effect=OSError("unsupported disposition class"),
+        ):
+            _unlink_readonly_artifact(artifact)
+
+        self.assertFalse(artifact.exists())
+
+    @unittest.skipUnless(os.name == "nt", "Windows read-only fallback")
+    def test_readonly_shared_inode_fails_cleanly_when_api_is_unsupported(self) -> None:
+        survivor = self.root / "state/current.md"
+        survivor.write_bytes(b"shared fallback inode\n")
+        artifact = self.root / ".context-os/shared-readonly-artifact"
+        artifact.parent.mkdir()
+        os.link(survivor, artifact)
+        os.chmod(survivor, 0o444)
+
+        with mock.patch(
+            "contextos.kernel._windows_unlink_readonly",
+            side_effect=OSError("unsupported disposition class"),
+        ), self.assertRaisesRegex(ContextOSError, "shared inode"):
+            _unlink_readonly_artifact(artifact)
+
+        self.assertTrue(artifact.exists())
+        self.assertEqual(b"shared fallback inode\n", survivor.read_bytes())
+        self.assertFalse(survivor.stat().st_mode & 0o200)
 
     def test_readonly_hardlink_tree_cleanup_preserves_workspace_mode(self) -> None:
         survivor = self.root / "state/current.md"
