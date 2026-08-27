@@ -1218,6 +1218,26 @@ class KernelTest(unittest.TestCase):
         self.assertEqual("fail", check["status"])
         self.assertIn("docs/getting-started.md", check["detail"])
 
+    def test_core_only_profile_reports_shadowed_directory_as_a_failure(self) -> None:
+        self._materialize_components("core")
+        self._configure_profile()
+        shutil.rmtree(self.root / "docs")
+        (self.root / "docs").write_text("not a directory\n", encoding="utf-8")
+
+        report = doctor(self.root)
+
+        check = next(
+            item for item in report["checks"] if item["name"] == "components:core"
+        )
+        self.assertEqual("fail", check["status"])
+        self.assertEqual("fail", report["status"])
+
+    def test_maintainer_scope_includes_development_component_paths(self) -> None:
+        report = doctor(self.root, all_runtimes=True)
+
+        missing = report["runtimes"]["claude"]["components"]["missing_by_policy"]
+        self.assertIn("CONTRIBUTING.md", missing["development"])
+
     def test_doctor_normalizes_an_unresolved_root(self) -> None:
         unresolved = self.root / "nested" / ".."
 

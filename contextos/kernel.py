@@ -3080,38 +3080,41 @@ def doctor(
         add("component-inventory", "fail", str(exc))
 
     if scope == "profile" and not validation_ids and component_inventory is not None:
-        missing_managed: list[str] = []
-        for record in resolved_component_paths(component_inventory, ["core"]):
-            if record["policy"] != "managed":
-                continue
-            materialized_path = record["path"]
-            lexical_target = root
-            traverses_link = False
-            for part in PurePosixPath(materialized_path).parts:
-                lexical_target /= part
-                if _is_link_like(lexical_target):
-                    traverses_link = True
-                    break
-            if traverses_link:
-                missing_managed.append(materialized_path)
-                continue
-            try:
-                target = safe_repo_path(root, materialized_path)
-            except ContextOSError:
-                missing_managed.append(materialized_path)
-                continue
-            if not target.is_file() or _is_link_like(target):
-                missing_managed.append(materialized_path)
-        add(
-            "components:core",
-            "fail" if missing_managed else "pass",
-            (
-                f"{len(missing_managed)} managed path(s) missing or unsafe: "
-                + ", ".join(missing_managed[:3])
+        try:
+            missing_managed: list[str] = []
+            for record in resolved_component_paths(component_inventory, ["core"]):
+                if record["policy"] != "managed":
+                    continue
+                materialized_path = record["path"]
+                lexical_target = root
+                traverses_link = False
+                for part in PurePosixPath(materialized_path).parts:
+                    lexical_target /= part
+                    if _is_link_like(lexical_target):
+                        traverses_link = True
+                        break
+                if traverses_link:
+                    missing_managed.append(materialized_path)
+                    continue
+                try:
+                    target = safe_repo_path(root, materialized_path)
+                except ContextOSError:
+                    missing_managed.append(materialized_path)
+                    continue
+                if not target.is_file() or _is_link_like(target):
+                    missing_managed.append(materialized_path)
+            add(
+                "components:core",
+                "fail" if missing_managed else "pass",
+                (
+                    f"{len(missing_managed)} managed path(s) missing or unsafe: "
+                    + ", ".join(missing_managed[:3])
+                )
+                if missing_managed
+                else "managed core materialized",
             )
-            if missing_managed
-            else "managed core materialized",
-        )
+        except (ComponentManifestError, ContextOSError, OSError) as exc:
+            add("components:core", "fail", str(exc))
 
     report_ids = (
         [runtime]
@@ -3189,7 +3192,9 @@ def doctor(
                     component_inventory, manifest["components"]
                 )
                 records = resolved_component_paths(
-                    component_inventory, manifest["components"]
+                    component_inventory,
+                    manifest["components"],
+                    include_development=scope == "maintainer-all",
                 )
                 missing_paths: list[str] = []
                 missing_by_policy: dict[str, list[str]] = {
