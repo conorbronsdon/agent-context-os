@@ -690,6 +690,13 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
 
         self.assertTrue(journal.is_dir())
         self.assertFalse(target.exists())
+        journal_check = next(
+            check
+            for check in doctor(self.root)["checks"]
+            if check["name"] == "transaction-journals"
+        )
+        self.assertIn("restore the reported path", journal_check["detail"])
+        self.assertIn("do not delete the journal", journal_check["detail"])
 
     @unittest.skipIf(os.name == "nt", "POSIX permission bits are not portable on Windows")
     def test_committed_journal_is_retained_when_target_mode_is_stale(self) -> None:

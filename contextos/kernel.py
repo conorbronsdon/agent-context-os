@@ -2874,7 +2874,10 @@ def doctor(
             (
                 f"{len(pending_journals)} pending journal artifact(s); confirm no "
                 "apply process is active, remove a stale apply.lock if present, "
-                "then rerun the approved agent-config apply to recover"
+                "then rerun the approved agent-config apply to inspect and recover. "
+                "If recovery reports a committed target mismatch, restore the "
+                "reported path to its receipt-bound bytes and mode before rerunning; "
+                "do not delete the journal as a shortcut"
             )
             if pending_journals
             else "none",
