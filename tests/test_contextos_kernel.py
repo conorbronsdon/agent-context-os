@@ -990,6 +990,26 @@ class KernelTest(unittest.TestCase):
         )
         self.assertEqual("fail", managed_check["status"])
 
+    def test_profile_missing_core_state_seed_warns_without_failing(self) -> None:
+        self._materialize_components("hermes-adapter")
+        self._configure_profile("hermes")
+        (self.root / "state/current.md").unlink()
+
+        report = doctor(self.root)
+        file_check = next(
+            item
+            for item in report["checks"]
+            if item["name"] == "file:state/current.md"
+        )
+        component_check = next(
+            item
+            for item in report["checks"]
+            if item["name"] == "components:hermes"
+        )
+        self.assertEqual("warn", file_check["status"])
+        self.assertEqual("warn", component_check["status"])
+        self.assertFalse(any(item["status"] == "fail" for item in report["checks"]))
+
     def test_availability_is_independent_from_support_and_onboarding(self) -> None:
         self._materialize_components("hermes-adapter")
         self._configure_profile("hermes")
@@ -1126,6 +1146,26 @@ class KernelTest(unittest.TestCase):
         )
         self.assertEqual("warn", check["status"])
         self.assertIn("confirming no install or migration is running", check["detail"])
+
+    def test_doctor_fails_closed_on_linked_apply_lock(self) -> None:
+        local = self.root / ".context-os"
+        local.mkdir()
+        lock = local / "apply.lock"
+        with tempfile.TemporaryDirectory() as external:
+            try:
+                make_directory_link(lock, Path(external))
+            except OSError:
+                self.skipTest("directory link creation is unavailable")
+            try:
+                report = doctor(self.root)
+            finally:
+                lock.rmdir() if os.name == "nt" else lock.unlink()
+
+        check = next(
+            item for item in report["checks"] if item["name"] == "transaction-lock"
+        )
+        self.assertEqual("fail", check["status"])
+        self.assertIn("symlink or reparse point", check["detail"])
 
     def test_doctor_reports_dangling_local_artifact_link_without_crashing(self) -> None:
         proposals = self.root / ".context-os/proposals"

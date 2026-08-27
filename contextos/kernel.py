@@ -2973,7 +2973,7 @@ def doctor(
         error = state_path_errors.get(path)
         add(
             f"file:{rel}",
-            "fail" if error else "pass" if path.exists() else "fail",
+            "fail" if error else "pass" if path.exists() else "warn",
             error or rel,
         )
     unsafe_freshness = [
@@ -3437,11 +3437,15 @@ def doctor(
         )
 
     lock = root / ".context-os" / "apply.lock"
-    add(
-        "transaction-lock",
-        "warn" if lock.exists() else "pass",
-        str(lock) if lock.exists() else "none",
-    )
+    try:
+        _guard_local_state_path(root, lock)
+        add(
+            "transaction-lock",
+            "warn" if lock.exists() else "pass",
+            str(lock) if lock.exists() else "none",
+        )
+    except ContextOSError as exc:
+        add("transaction-lock", "fail", str(exc))
     journals = root / ".context-os" / "journals"
     try:
         _guard_local_state_path(root, journals)
