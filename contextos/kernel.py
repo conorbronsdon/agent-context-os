@@ -1704,10 +1704,13 @@ def _write_exclusive_bytes(
             if written <= 0:
                 raise OSError("short write while creating local artifact")
             view = view[written:]
+        if os.name != "nt" and hasattr(os, "fchmod"):
+            os.fchmod(descriptor, mode)
+        else:
+            os.chmod(path, mode)
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
-    _chmod_and_fsync(path, mode)
     _fsync_directory(path.parent)
 
 
@@ -2166,7 +2169,9 @@ def _recover_agent_journal(
             if entry["action"] == "delete":
                 if target.exists() or _is_link_like(target):
                     raise ContextOSError(
-                        f"committed transaction target was not deleted: {target}"
+                        "committed transaction target was recreated after deletion: "
+                        f"{target}; review it and remove it only if safe, then retry "
+                        "the approved apply without deleting the journal"
                     )
                 _fsync_directory(target.parent)
                 continue
@@ -2190,7 +2195,9 @@ def _recover_agent_journal(
             ):
                 raise ContextOSError(
                     "committed transaction target does not match receipt-bound "
-                    f"bytes and mode: {target}"
+                    f"bytes and mode: {target}; restore it from {publication_anchor} "
+                    f"with mode {entry['after_mode']:#o}, then retry the approved "
+                    "apply without deleting the journal"
                 )
             _fsync_directory(target.parent)
         _fsync_directory(receipt.parent)
@@ -2365,15 +2372,6 @@ def _validated_publication_anchor(
     if raw_file_digest(anchor) != expected_hash:
         raise ContextOSError(f"publication anchor hash mismatch: {anchor}")
     return anchor
-
-
-def _chmod_and_fsync(path: Path, mode: int) -> None:
-    descriptor = os.open(path, os.O_RDWR | getattr(os, "O_BINARY", 0))
-    try:
-        os.chmod(path, mode)
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
 
 
 def _probe_rollback_publication(

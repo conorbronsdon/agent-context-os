@@ -51,20 +51,19 @@ Proposal files contain exact after-content, unified diffs, and before/after
 SHA-256 values. Their proposal digest covers the entire unsigned proposal. It
 binds integrity; the host permission prompt supplies the human approval boundary.
 Apply requires that exact digest, re-hashes every target, takes an exclusive
-`O_EXCL` lock, writes using UTF-8/LF, and emits a receipt inside the rollback
-boundary. The content lifecycle (`setup`, `update`, and `end`) provides
-best-effort multi-file rollback: individual replacements are atomic, but a
-process kill can leave partial state and a stale lock. `doctor` surfaces the
-lock and never deletes it silently.
+`O_EXCL` lock, writes using UTF-8/LF, and emits a receipt inside a durable,
+path-bound journal. The journal gives `setup`, `update`, `end`, and
+`agent-config` resumable multi-file rollback across process death. New tracked
+content is non-executable; existing targets preserve their approved mode.
 
-The `agent-config` workspace-migration workflow adds raw-byte target and source
-hashes, proposal-bound before/after modes, workflow-specific ownership,
-write/delete rollback, and a durable local journal. New tracked content is
-non-executable; existing targets preserve their approved mode. After an
+The `agent-config` workspace-migration workflow additionally binds raw-byte
+target and source hashes, proposal-bound before/after modes,
+workflow-specific ownership, and write/delete authorization. After an
 interrupted apply, an operator first confirms no apply process is active and
-removes the stale lock; the next agent-configuration apply restores the
-journaled state before revalidation. A valid committed receipt does not retire
-that journal until every target still matches its receipt-bound bytes and mode.
+removes the stale lock; the next approved proposal apply restores the
+journaled state before revalidation. `doctor` surfaces both artifacts and never
+deletes them silently. A valid committed receipt does not retire its journal
+until every target still matches its receipt-bound bytes and mode.
 POSIX mode bits are enforced exactly; Windows enforces its meaningful
 writable/read-only boundary without claiming POSIX fidelity. This stronger
 boundary currently owns only `contextos.workspace.json` and migration-only

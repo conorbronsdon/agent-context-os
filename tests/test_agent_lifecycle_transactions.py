@@ -968,7 +968,7 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
             "# current.md update log\n\n",
             encoding="utf-8",
         )
-        modes = (0o600, 0o640, 0o644) if os.name != "nt" else (0o444, 0o666)
+        modes = (0o444, 0o600, 0o640, 0o644) if os.name != "nt" else (0o444, 0o666)
         for index, expected_mode in enumerate(modes):
             with self.subTest(mode=oct(expected_mode)):
                 os.chmod(target, expected_mode)
@@ -1022,7 +1022,6 @@ mode = int(sys.argv[6], 8)
 before = b"before-state\n"
 after = b"after-state\n"
 real_write = kernel._write_exclusive_bytes
-real_chmod = kernel._chmod_and_fsync
 
 def crash_write(path, content, **kwargs):
     candidate = Path(path)
@@ -1036,13 +1035,16 @@ def crash_write(path, content, **kwargs):
         os._exit(88)
     return real_write(path, content, **kwargs)
 
-def crash_chmod(path, mode):
-    if crash_stage == "chmod" and Path(path).name.endswith(".before.building"):
+def crash_mode(*args, **kwargs):
+    if crash_stage == "chmod":
         os._exit(89)
-    return real_chmod(path, mode)
 
-with mock.patch("contextos.kernel._write_exclusive_bytes", side_effect=crash_write), \
-     mock.patch("contextos.kernel._chmod_and_fsync", side_effect=crash_chmod):
+mode_patch = (
+    mock.patch("contextos.kernel.os.fchmod", side_effect=crash_mode)
+    if os.name != "nt" and hasattr(os, "fchmod")
+    else mock.patch("contextos.kernel.os.chmod", side_effect=crash_mode)
+)
+with mock.patch("contextos.kernel._write_exclusive_bytes", side_effect=crash_write), mode_patch:
     kernel._restore_transaction_target(
         root,
         target,
@@ -1145,7 +1147,7 @@ with mock.patch("contextos.kernel._write_exclusive_bytes", side_effect=crash_wri
         target = self.root / "contextos.workspace.json"
         target.unlink()
 
-        with self.assertRaisesRegex(ContextOSError, "receipt-bound bytes and mode"):
+        with self.assertRaisesRegex(ContextOSError, "restore it from .*publications"):
             _recover_pending_agent_journals(self.root)
 
         self.assertTrue(receipt.is_file())
