@@ -994,7 +994,13 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
     def _assert_restore_build_crash_recovers(self, crash_stage: str) -> None:
         before = b"before-state\n"
         after = b"after-state\n"
-        mode = 0o640 if os.name != "nt" else 0o666
+        mode = (
+            0o444
+            if crash_stage == "publish"
+            else 0o640
+            if os.name != "nt"
+            else 0o666
+        )
         target = self.root / "state/current.md"
         journal = self.root / ".context-os/journals/recovery-fixture"
         work_dir = journal / "rollback"
@@ -1021,6 +1027,7 @@ mode = int(sys.argv[6], 8)
 before = b"before-state\n"
 after = b"after-state\n"
 real_write = kernel._write_exclusive_bytes
+real_publish = kernel._publish_exclusive
 
 def crash_write(path, content, **kwargs):
     candidate = Path(path)
@@ -1038,12 +1045,20 @@ def crash_mode(*args, **kwargs):
     if crash_stage == "chmod":
         os._exit(89)
 
+def crash_publish(source, destination):
+    result = real_publish(source, destination)
+    if crash_stage == "publish" and Path(destination).name.endswith(".before"):
+        os._exit(90)
+    return result
+
 mode_patch = (
     mock.patch("contextos.kernel.os.fchmod", side_effect=crash_mode)
     if os.name != "nt" and hasattr(os, "fchmod")
     else mock.patch("contextos.kernel.os.chmod", side_effect=crash_mode)
 )
-with mock.patch("contextos.kernel._write_exclusive_bytes", side_effect=crash_write), mode_patch:
+with mock.patch("contextos.kernel._write_exclusive_bytes", side_effect=crash_write), \
+     mock.patch("contextos.kernel._publish_exclusive", side_effect=crash_publish), \
+     mode_patch:
     kernel._restore_transaction_target(
         root,
         target,
@@ -1071,7 +1086,7 @@ with mock.patch("contextos.kernel._write_exclusive_bytes", side_effect=crash_wri
             check=False,
         )
         self.assertEqual(
-            88 if crash_stage == "write" else 89,
+            {"write": 88, "chmod": 89, "publish": 90}[crash_stage],
             result.returncode,
             [path.relative_to(journal).as_posix() for path in journal.rglob("*")]
             if journal.exists()
@@ -1101,6 +1116,9 @@ with mock.patch("contextos.kernel._write_exclusive_bytes", side_effect=crash_wri
 
     def test_process_death_before_restore_chmod_is_resumable(self) -> None:
         self._assert_restore_build_crash_recovers("chmod")
+
+    def test_process_death_after_restore_publication_is_resumable(self) -> None:
+        self._assert_restore_build_crash_recovers("publish")
 
     def test_foreign_final_restore_payload_blocks_without_clobbering(self) -> None:
         before = b"before-state\n"

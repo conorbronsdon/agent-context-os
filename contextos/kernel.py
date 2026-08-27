@@ -1749,17 +1749,29 @@ def _rmtree_readonly_artifacts(
         exception = error[1]
         if os.name != "nt" or not isinstance(exception, PermissionError):
             raise exception
-        failed_stat = Path(failed_path).stat()
+        failed = Path(failed_path)
+        try:
+            failed_stat = failed.stat()
+        except FileNotFoundError:
+            return
         failed_inode = (failed_stat.st_dev, failed_stat.st_ino)
+        failed_mode = failed_stat.st_mode & 0o7777
         if any(
             (device, inode) == failed_inode
             for _target, device, inode, _mode in snapshots
         ):
             modified_inodes.add(failed_inode)
-        os.chmod(failed_path, stat.S_IWRITE)
+        os.chmod(failed, failed_mode | stat.S_IWRITE)
         try:
-            function(failed_path)
+            try:
+                function(failed_path)
+            except FileNotFoundError:
+                pass
         finally:
+            if failed.exists() and not _is_link_like(failed):
+                current_stat = failed.stat()
+                if (current_stat.st_dev, current_stat.st_ino) == failed_inode:
+                    os.chmod(failed, failed_mode)
             restore_modes()
 
     try:
@@ -2681,7 +2693,7 @@ def _restore_transaction_target(
                 f"rollback restore build artifact is ambiguous for {target}: "
                 f"{restore_building}"
             )
-        _unlink_readonly_artifact(restore_building)
+        _unlink_readonly_artifact(restore_building, preserve=restore)
         _fsync_directory(restore_building.parent)
 
     def publish_before() -> None:
