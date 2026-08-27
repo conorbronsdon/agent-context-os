@@ -25,6 +25,7 @@ from contextos.kernel import (
     _prepare_publication_anchor,
     _publish_exclusive,
     _recover_pending_agent_journals,
+    _restore_transaction_target,
     _transaction_slot,
     apply_proposal,
     canonical_json,
@@ -34,6 +35,7 @@ from contextos.kernel import (
     raw_file_digest,
     read_json,
     safe_repo_path,
+    sha256_bytes,
     sha256_text,
 )
 
@@ -955,6 +957,199 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         with self.assertRaisesRegex(ContextOSError, "existing receipt"):
             self.apply(path, proposal)
         self.assertFalse(journal.exists())
+
+    def test_publication_preserves_existing_modes_and_uses_safe_defaults(self) -> None:
+        target = self.root / "state/current.md"
+        target.write_text(
+            "# Current State\n\n**Last Updated:** 2026-08-24\n",
+            encoding="utf-8",
+        )
+        (self.root / "state/current-log.md").write_text(
+            "# current.md update log\n\n",
+            encoding="utf-8",
+        )
+        modes = (0o600, 0o640, 0o644) if os.name != "nt" else (0o444, 0o666)
+        for index, expected_mode in enumerate(modes):
+            with self.subTest(mode=oct(expected_mode)):
+                os.chmod(target, expected_mode)
+                path, proposal = create_proposal(
+                    self.root,
+                    "update",
+                    {"progress": [f"Mode pass {index}"]},
+                    NOW,
+                )
+                receipt, _ = self.apply(path, proposal)
+                actual_mode = target.stat().st_mode & 0o7777
+                if os.name == "nt":
+                    self.assertEqual(
+                        bool(expected_mode & 0o200), bool(actual_mode & 0o200)
+                    )
+                else:
+                    self.assertEqual(expected_mode, actual_mode)
+                    self.assertEqual(0o600, receipt.stat().st_mode & 0o7777)
+        session = self.root / "sessions/2026-08-25.md"
+        if os.name != "nt":
+            self.assertEqual(0o644, session.stat().st_mode & 0o7777)
+        self.assertEqual(0, session.stat().st_mode & 0o111)
+
+    def _assert_restore_build_crash_recovers(self, crash_stage: str) -> None:
+        before = b"before-state\n"
+        after = b"after-state\n"
+        mode = 0o640 if os.name != "nt" else 0o666
+        target = self.root / "state/current.md"
+        journal = self.root / ".context-os/journals/recovery-fixture"
+        work_dir = journal / "rollback"
+        anchor = journal / "publications/0000-fixture.after"
+        work_dir.mkdir(parents=True)
+        anchor.parent.mkdir()
+        anchor.write_bytes(after)
+        os.chmod(anchor, mode)
+        capture = work_dir / "0000-fixture.current"
+        os.link(anchor, capture)
+        script = r'''
+import os
+import sys
+from pathlib import Path
+from unittest import mock
+import contextos.kernel as kernel
+
+root = Path(sys.argv[1])
+target = Path(sys.argv[2])
+anchor = Path(sys.argv[3])
+work_dir = Path(sys.argv[4])
+crash_stage = sys.argv[5]
+mode = int(sys.argv[6], 8)
+before = b"before-state\n"
+after = b"after-state\n"
+real_write = kernel._write_exclusive_bytes
+real_chmod = kernel._chmod_and_fsync
+
+def crash_write(path, content, **kwargs):
+    candidate = Path(path)
+    if crash_stage == "write" and candidate.name.endswith(".before.building"):
+        descriptor = os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        try:
+            os.write(descriptor, content[: max(1, len(content) // 2)])
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        os._exit(88)
+    return real_write(path, content, **kwargs)
+
+def crash_chmod(path, mode):
+    if crash_stage == "chmod" and Path(path).name.endswith(".before.building"):
+        os._exit(89)
+    return real_chmod(path, mode)
+
+with mock.patch("contextos.kernel._write_exclusive_bytes", side_effect=crash_write), \
+     mock.patch("contextos.kernel._chmod_and_fsync", side_effect=crash_chmod):
+    kernel._restore_transaction_target(
+        root,
+        target,
+        before,
+        mode,
+        kernel.sha256_bytes(after),
+        anchor,
+        work_dir=work_dir,
+        slot="0000-fixture",
+    )
+'''
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                script,
+                str(self.root),
+                str(target),
+                str(anchor),
+                str(work_dir),
+                crash_stage,
+                oct(mode),
+            ],
+            cwd=ROOT,
+            check=False,
+        )
+        self.assertEqual(
+            88 if crash_stage == "write" else 89,
+            result.returncode,
+            [path.relative_to(journal).as_posix() for path in journal.rglob("*")]
+            if journal.exists()
+            else "journal was retired",
+        )
+        building = list((journal / "rollback").glob(".*.before.building"))
+        self.assertEqual(1, len(building))
+
+        _restore_transaction_target(
+            self.root,
+            target,
+            before,
+            mode,
+            sha256_bytes(after),
+            anchor,
+            work_dir=work_dir,
+            slot="0000-fixture",
+        )
+
+        self.assertEqual(before, target.read_bytes())
+        self.assertEqual(mode, target.stat().st_mode & 0o7777)
+        self.assertFalse(building[0].exists())
+        self.assertFalse(capture.exists())
+
+    def test_process_death_during_restore_bytes_is_resumable(self) -> None:
+        self._assert_restore_build_crash_recovers("write")
+
+    def test_process_death_before_restore_chmod_is_resumable(self) -> None:
+        self._assert_restore_build_crash_recovers("chmod")
+
+    def test_foreign_final_restore_payload_blocks_without_clobbering(self) -> None:
+        before = b"before-state\n"
+        after = b"after-state\n"
+        mode = 0o640 if os.name != "nt" else 0o666
+        target = self.root / "state/current.md"
+        journal = self.root / ".context-os/journals/recovery-fixture"
+        work_dir = journal / "rollback"
+        anchor = journal / "publications/0000-fixture.after"
+        work_dir.mkdir(parents=True)
+        anchor.parent.mkdir()
+        anchor.write_bytes(after)
+        os.chmod(anchor, mode)
+        capture = work_dir / "0000-fixture.current"
+        os.link(anchor, capture)
+        restore = work_dir / "0000-fixture.before"
+        restore.write_bytes(b"foreign\n")
+
+        with self.assertRaisesRegex(ContextOSError, "restore payload mismatch"):
+            _restore_transaction_target(
+                self.root,
+                target,
+                before,
+                mode,
+                sha256_bytes(after),
+                anchor,
+                work_dir=work_dir,
+                slot="0000-fixture",
+            )
+
+        self.assertEqual(b"foreign\n", restore.read_bytes())
+        self.assertFalse(target.exists())
+        self.assertTrue(capture.exists())
+
+    def test_committed_journal_retains_evidence_when_target_is_missing(self) -> None:
+        path, proposal = self.propose()
+        journal = self.root / ".context-os/journals" / proposal["proposal_id"]
+        with mock.patch(
+            "contextos.kernel._discard_agent_journal",
+            side_effect=OSError("retain committed journal"),
+        ):
+            receipt, _ = self.apply(path, proposal)
+        target = self.root / "contextos.workspace.json"
+        target.unlink()
+
+        with self.assertRaisesRegex(ContextOSError, "receipt-bound bytes and mode"):
+            _recover_pending_agent_journals(self.root)
+
+        self.assertTrue(receipt.is_file())
+        self.assertTrue(journal.is_dir())
 
     def test_receipt_directory_is_synced_before_journal_retirement(self) -> None:
         path, proposal = self.propose()

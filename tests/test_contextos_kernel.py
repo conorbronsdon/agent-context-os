@@ -392,21 +392,32 @@ class KernelTest(unittest.TestCase):
         receipt_path, receipt = self._apply(proposal_path, proposal)
         self.assertTrue(receipt_path.exists())
         self.assertEqual("codex", receipt["runtime"])
-        self.assertIn("**Last Updated:** 2026-08-23", (self.root / "state/current.md").read_text())
-        history = (self.root / "state/current-log.md").read_text()
+        self.assertIn(
+            "**Last Updated:** 2026-08-23",
+            (self.root / "state/current.md").read_text(encoding="utf-8"),
+        )
+        history = (self.root / "state/current-log.md").read_text(encoding="utf-8")
         self.assertEqual(1, sum(line == "2026-08-20" for line in history.splitlines()))
-        self.assertIn("## Update: 14:30", (self.root / "sessions/2026-08-23.md").read_text())
+        self.assertIn(
+            "## Update: 14:30",
+            (self.root / "sessions/2026-08-23.md").read_text(encoding="utf-8"),
+        )
 
         second_path, second = create_proposal(
             self.root,
             "update",
-            {"progress": ["Ran tests"], "current_markdown": (self.root / "state/current.md").read_text()},
+            {
+                "progress": ["Ran tests"],
+                "current_markdown": (self.root / "state/current.md").read_text(
+                    encoding="utf-8"
+                ),
+            },
             datetime.fromisoformat("2026-08-23T16:00:00-07:00"),
         )
         self._apply(second_path, second)
-        history = (self.root / "state/current-log.md").read_text()
+        history = (self.root / "state/current-log.md").read_text(encoding="utf-8")
         self.assertEqual(1, sum(line == "2026-08-20" for line in history.splitlines()))
-        session = (self.root / "sessions/2026-08-23.md").read_text()
+        session = (self.root / "sessions/2026-08-23.md").read_text(encoding="utf-8")
         self.assertIn("## Update: 14:30", session)
         self.assertIn("## Update: 16:00", session)
 
@@ -1155,7 +1166,9 @@ with mock.patch("contextos.kernel._capture_transaction_before", side_effect=cras
         report = doctor(self.root, "hermes")
         self.assertIn(report["status"], {"pass", "warn"})
         self.assertFalse(any(item["status"] == "fail" for item in report["checks"]))
-        manifest = json.loads((self.root / "runtimes/hermes.json").read_text())
+        manifest = json.loads(
+            (self.root / "runtimes/hermes.json").read_text(encoding="utf-8")
+        )
         manifest["support_summary"] += " (updated)"
         (self.root / "runtimes/hermes.json").write_text(json.dumps(manifest), encoding="utf-8")
         drift = doctor(self.root, "hermes")
