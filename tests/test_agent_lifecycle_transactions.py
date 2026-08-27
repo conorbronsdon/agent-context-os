@@ -412,7 +412,7 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
             self.apply(path, proposal)
         self.assertFalse(journal.exists())
 
-    def test_receipt_commit_rechecks_target_inode_ownership(self) -> None:
+    def test_receipt_commit_accepts_equivalent_target_replacement(self) -> None:
         path, proposal = self.propose()
         target = self.root / "contextos.workspace.json"
         receipt = self.root / ".context-os/receipts" / f"{proposal['proposal_id']}.json"
@@ -435,16 +435,14 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         with mock.patch(
             "contextos.kernel.os.link", side_effect=replace_target_before_receipt
         ):
-            with self.assertRaisesRegex(ContextOSError, "commit point"):
-                self.apply(path, proposal)
+            receipt_path, result = self.apply(path, proposal)
 
         self.assertTrue(replaced)
+        self.assertEqual(proposal["proposal_id"], result["proposal_id"])
         self.assertEqual(expected, target.read_bytes())
+        self.assertEqual(receipt, receipt_path)
         self.assertTrue(receipt.exists())
-        self.assertTrue(journal.exists())
-        self.assertFalse(
-            os.path.samefile(target, journal / "publications/0.after")
-        )
+        self.assertFalse(journal.exists())
 
     def test_journal_rejects_backup_bytes_not_bound_to_the_proposal(self) -> None:
         path, proposal = self.propose()

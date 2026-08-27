@@ -1684,7 +1684,7 @@ def _probe_rollback_publication(
 def _verify_committed_agent_targets(
     root: Path, entries: Any, *, journal: Path
 ) -> None:
-    """Retain recovery evidence unless every committed target is present exactly."""
+    """Retain evidence unless every committed target has its receipt-bound state."""
     expected_keys = {
         "path",
         "action",
@@ -1739,15 +1739,18 @@ def _verify_committed_agent_targets(
         if action == "delete":
             committed = current_hash is None
         else:
-            anchor = _publication_anchor(root, journal, index, entry)
+            # The receipt is the commit point. Once it exists, a user tool may
+            # legitimately rewrite an equivalent file through a new inode. The
+            # publication anchor proves ownership before commit and during
+            # rollback; after commit, receipt-bound bytes and mode are the
+            # durable user-facing contract.
+            _publication_anchor(root, journal, index, entry)
             current_mode = (
                 stat.S_IMODE(target.stat().st_mode) if target.exists() else None
             )
             committed = (
                 current_hash == after_hash
-                and anchor is not None
                 and target.exists()
-                and _same_file(target, anchor)
                 and type(current_mode) is int
                 and type(after_mode) is int
                 and _mode_matches(current_mode, after_mode)

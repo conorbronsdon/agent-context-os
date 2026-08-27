@@ -126,14 +126,16 @@ setup/update/end proposals cannot use it to widen their path policy.
 
 Agent-configuration transactions keep raw-byte backups in a durable local
 journal until the receipt is committed. An ordinary failure restores exact
-bytes and modes immediately. Before a committed journal is retired, recovery
-also verifies every target against the receipt-bound after bytes and mode; a
-missing, stale, or foreign target retains the evidence and fails with an
-actionable error. A process kill can leave both the journal and the shared apply
-lock; after confirming no apply process is active and removing the stale lock,
-the next agent-configuration apply recovers the journal before revalidating and
-applying its proposal. POSIX mode bits are exact; Windows validates only its
-meaningful writable/read-only behavior.
+bytes and modes immediately, using inode ownership to avoid overwriting a
+concurrent target. Once the receipt exists, recovery verifies the receipt-bound
+after bytes and mode rather than requiring the original publication inode; this
+lets Git and editors rewrite an equivalent committed file without wedging every
+later apply. A missing or stale committed target retains the evidence and fails
+with an actionable error. A process kill can leave both the journal and the
+shared apply lock; after confirming no apply process is active and removing the
+stale lock, the next agent-configuration apply recovers the journal before
+revalidating and applying its proposal. POSIX mode bits are exact; Windows
+validates only its meaningful writable/read-only behavior.
 
 ## Local scalar runtime migration
 
