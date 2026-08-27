@@ -1762,6 +1762,11 @@ def _unlink_readonly_artifact(path: Path) -> None:
         _windows_unlink_readonly(path)
         return
     except OSError as exc:
+        unsupported_disposition_errors = {1, 50, 87}
+        if getattr(exc, "winerror", None) not in unsupported_disposition_errors:
+            raise ContextOSError(
+                f"cannot atomically remove read-only transaction artifact {path}: {exc}"
+            ) from exc
         try:
             metadata = path.lstat()
         except OSError as inspect_exc:
@@ -1812,7 +1817,7 @@ def _rmtree_readonly_artifacts(
             or stat.S_ISLNK(failed_stat.st_mode)
             or _is_link_like(failed)
         ):
-            _windows_unlink_readonly(failed)
+            _unlink_readonly_artifact(failed)
             return
         original_mode = failed_stat.st_mode & 0o7777
         os.chmod(failed, original_mode | stat.S_IWRITE)

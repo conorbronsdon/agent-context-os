@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import json
 import io
 import os
@@ -1024,7 +1025,7 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
 
         with mock.patch(
             "contextos.kernel._windows_unlink_readonly",
-            side_effect=OSError("unsupported disposition class"),
+            side_effect=ctypes.WinError(87),
         ):
             _unlink_readonly_artifact(artifact)
 
@@ -1041,13 +1042,48 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
 
         with mock.patch(
             "contextos.kernel._windows_unlink_readonly",
-            side_effect=OSError("unsupported disposition class"),
+            side_effect=ctypes.WinError(87),
         ), self.assertRaisesRegex(ContextOSError, "shared inode"):
             _unlink_readonly_artifact(artifact)
 
         self.assertTrue(artifact.exists())
         self.assertEqual(b"shared fallback inode\n", survivor.read_bytes())
         self.assertFalse(survivor.stat().st_mode & 0o200)
+
+    @unittest.skipUnless(os.name == "nt", "Windows read-only fallback")
+    def test_readonly_sharing_violation_never_enters_chmod_fallback(self) -> None:
+        artifact = self.root / ".context-os/sharing-violation-artifact"
+        artifact.parent.mkdir()
+        artifact.write_bytes(b"held inode\n")
+        os.chmod(artifact, 0o444)
+
+        with mock.patch(
+            "contextos.kernel._windows_unlink_readonly",
+            side_effect=ctypes.WinError(32),
+        ), mock.patch(
+            "contextos.kernel.os.chmod",
+            side_effect=AssertionError("sharing violations must not chmod"),
+        ), self.assertRaisesRegex(ContextOSError, "cannot atomically remove"):
+            _unlink_readonly_artifact(artifact)
+
+        self.assertTrue(artifact.exists())
+        self.assertFalse(artifact.stat().st_mode & 0o200)
+
+    @unittest.skipUnless(os.name == "nt", "Windows read-only fallback")
+    def test_readonly_tree_uses_safe_single_link_unsupported_api_fallback(self) -> None:
+        tree = self.root / ".context-os/staging/unsupported-tree"
+        artifact = tree / "artifact"
+        artifact.parent.mkdir(parents=True)
+        artifact.write_bytes(b"single tree inode\n")
+        os.chmod(artifact, 0o444)
+
+        with mock.patch(
+            "contextos.kernel._windows_unlink_readonly",
+            side_effect=ctypes.WinError(87),
+        ):
+            _rmtree_readonly_artifacts(tree)
+
+        self.assertFalse(tree.exists())
 
     def test_readonly_hardlink_tree_cleanup_preserves_workspace_mode(self) -> None:
         survivor = self.root / "state/current.md"
