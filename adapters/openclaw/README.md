@@ -144,8 +144,10 @@ execution-policy preset. It then selects `host: gateway`, `security: full`,
 `ask: off`, and the `yolo` preset only for the explicitly acknowledged
 disposable fixture. It drives one ACP client turn per
 lifecycle prompt with `--cwd` bound to the repository. Its stdio driver waits
-for the ACP end-turn marker
-before sending `exit`, so an eagerly queued exit cannot truncate a turn. It
+for the ACP end-turn marker before sending `exit`, so an eagerly queued exit
+cannot truncate a turn. It disables OpenClaw's launcher respawn only for those
+piped ACP subprocesses so Windows cannot consume the queued prompt in an
+intermediate wrapper before the final readline loop starts. It
 tests a wrong proposal digest and pauses for the operator to type every exact
 approved digest. It never auto-approves a proposal digest. Its redacted JSON
 evidence contains hashes and control results, not prompts, credentials, or raw

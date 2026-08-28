@@ -70,6 +70,7 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
             acp_runner=fake,
         )
         self.assertIs(fake, harness.acp_runner)
+        self.assertEqual("1", harness.env["OPENCLAW_NO_RESPAWN"])
 
     def test_linked_path_is_rejected_when_supported(self) -> None:
         target = self.scratch / "actual"

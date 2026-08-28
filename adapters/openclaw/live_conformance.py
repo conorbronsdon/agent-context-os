@@ -446,6 +446,10 @@ class LiveHarness:
         self.env = os.environ.copy()
         self.env["OPENCLAW_STATE_DIR"] = str(self.state)
         self.env["OPENCLAW_CONFIG_PATH"] = str(self.state / "openclaw.json")
+        # The Windows launcher otherwise respawns the piped ACP client to add a
+        # Node stack-size flag. The wrapper can consume the queued prompt before
+        # the final child's readline loop starts, leaving the turn idle.
+        self.env["OPENCLAW_NO_RESPAWN"] = "1"
         self.evidence = Evidence(expected_version=expected_version)
         self.gateway: subprocess.Popen[str] | None = None
 
