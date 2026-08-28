@@ -3719,12 +3719,13 @@ def _is_initialized(workspace: Workspace, today: date | None = None) -> bool:
 def _initialization_state(
     workspace: Workspace, today: date
 ) -> tuple[bool, dict[str, dict[str, Any]]]:
-    state = {
-        relative_path(workspace.root, workspace.state_dir / filename): _state_freshness(
-            workspace.state_dir / filename, today, threshold
+    state: dict[str, dict[str, Any]] = {}
+    for filename, threshold in STATE_THRESHOLDS.items():
+        path = workspace.state_dir / filename
+        _guard_local_state_path(workspace.root, path)
+        state[relative_path(workspace.root, path)] = _state_freshness(
+            path, today, threshold
         )
-        for filename, threshold in STATE_THRESHOLDS.items()
-    }
     return _is_initialized(workspace, today), state
 
 
@@ -4815,12 +4816,18 @@ def _hook_targets(payload: dict[str, Any]) -> set[str]:
     return targets
 
 
-def hook_report(root: Path, event: str, payload: dict[str, Any]) -> dict[str, Any]:
+def hook_report(
+    root: Path,
+    event: str,
+    payload: dict[str, Any],
+    *,
+    today: date | None = None,
+) -> dict[str, Any]:
     findings: list[dict[str, str]] = []
     workspace = load_workspace(root)
     if event == "session-start":
         initialized, initialization_files = _initialization_state(
-            workspace, utc_now().date()
+            workspace, today if today is not None else utc_now().date()
         )
         if not initialized:
             findings.append({
