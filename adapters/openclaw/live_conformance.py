@@ -333,6 +333,12 @@ class LiveHarness:
         self.repo, self.state, self.workspace, self.evidence_path = validate_paths(
             repo, state, workspace, evidence_path,
         )
+        for path, label in (
+            (self.state, "state directory"),
+            (self.workspace, "private workspace"),
+        ):
+            if path.exists():
+                raise HarnessError(f"{label} must not exist before the live run: {path}")
         self.port = port
         self.claude_binary = reject_linked_path(claude_binary, "Claude binary")
         if not self.claude_binary.is_file():
@@ -508,7 +514,11 @@ class LiveHarness:
             raise HarnessError(
                 "disposable repository HEAD must exactly match the harness source commit"
             )
-        sync_report = load_sync_helper()(self.workspace)
+        self.workspace.mkdir(parents=True)
+        try:
+            sync_report = load_sync_helper()(self.workspace)
+        except (OSError, RuntimeError) as exc:
+            raise HarnessError(f"lifecycle skill synchronization failed safely: {exc}") from exc
         json.dumps(sync_report)
         if not isinstance(sync_report, dict) or sync_report.get("source_git_sha") != source_sha:
             raise HarnessError("skill synchronization provenance does not match the harness source commit")

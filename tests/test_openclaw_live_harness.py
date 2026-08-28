@@ -50,6 +50,15 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         with self.assertRaisesRegex(live.HarnessError, "separate, non-nested"):
             live.validate_paths(self.repo, self.repo / "state", self.workspace, self.evidence)
 
+    def test_harness_requires_unused_state_and_private_workspace(self) -> None:
+        self.state.mkdir()
+        with self.assertRaisesRegex(live.HarnessError, "state directory must not exist"):
+            live.LiveHarness(
+                binary="openclaw", expected_version="OpenClaw fixture",
+                repo=self.repo, state=self.state, workspace=self.workspace,
+                evidence_path=self.evidence, port=18789, claude_binary=self.claude,
+            )
+
     def test_linked_path_is_rejected_when_supported(self) -> None:
         target = self.scratch / "actual"
         target.mkdir()
