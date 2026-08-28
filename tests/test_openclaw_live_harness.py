@@ -83,24 +83,24 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
             live.write_openclaw_config(self.state, self.workspace, 18789, self.claude)
 
     def test_gateway_agent_command_has_repo_cwd_and_unique_idempotency(self) -> None:
-        first = live.gateway_agent_command(("openclaw",), self.repo, "synthetic", "start", 18789)
-        second = live.gateway_agent_command(("openclaw",), self.repo, "synthetic", "start", 18789)
+        first = live.gateway_agent_command(("openclaw",), self.repo, "synthetic", "start")
+        second = live.gateway_agent_command(("openclaw",), self.repo, "synthetic", "start")
         self.assertEqual(["openclaw", "gateway", "call", "agent"], first[:4])
         self.assertIn("--expect-final", first)
         self.assertIn("--json", first)
-        self.assertEqual("ws://127.0.0.1:18789", first[first.index("--url") + 1])
+        self.assertNotIn("--url", first)
         self.assertEqual("650000", first[first.index("--timeout") + 1])
         params = json.loads(first[first.index("--params") + 1])
         other = json.loads(second[second.index("--params") + 1])
         self.assertEqual(str(self.repo), params["cwd"])
         self.assertEqual("main", params["agentId"])
         self.assertEqual(live.MODEL_ROUTE, params["model"])
-        self.assertIn("sessionKey", params)
+        self.assertTrue(params["sessionKey"].startswith("agent:main:contextos-live-start-"))
         self.assertNotEqual(params["idempotencyKey"], other["idempotencyKey"])
 
     def test_gateway_command_supports_node_entrypoint_prefix(self) -> None:
         command = live.gateway_agent_command(
-            ("node", "C:/fixture/openclaw.mjs"), self.repo, "synthetic", "start", 18789,
+            ("node", "C:/fixture/openclaw.mjs"), self.repo, "synthetic", "start",
         )
         self.assertEqual(["node", "C:/fixture/openclaw.mjs", "gateway", "call", "agent"], command[:5])
 

@@ -188,20 +188,20 @@ def write_openclaw_config(
 
 
 def gateway_agent_command(
-    command_prefix: Sequence[str], repo: Path, prompt: str, phase: str, port: int,
+    command_prefix: Sequence[str], repo: Path, prompt: str, phase: str,
 ) -> list[str]:
     params = {
         "agentId": "main",
         "cwd": str(repo),
         "message": prompt,
         "model": MODEL_ROUTE,
-        "sessionKey": f"contextos-live-{phase}-{uuid.uuid4()}",
+        "sessionKey": f"agent:main:contextos-live-{phase}-{uuid.uuid4()}",
         "idempotencyKey": f"contextos-live-{phase}-{uuid.uuid4()}",
     }
     return [
         *command_prefix, "gateway", "call", "agent", "--params",
         json.dumps(params, separators=(",", ":")), "--expect-final", "--json",
-        "--url", f"ws://127.0.0.1:{port}", "--timeout", "650000",
+        "--timeout", "650000",
     ]
 
 
@@ -363,11 +363,17 @@ class LiveHarness:
 
     def rpc(self, prompt: str, phase: str, *, show_output: bool = False) -> dict[str, str]:
         result = self.run_command(
-            gateway_agent_command(self.command_prefix, self.repo, prompt, phase, self.port),
+            gateway_agent_command(self.command_prefix, self.repo, prompt, phase),
             timeout=700,
         )
         if result.returncode:
-            raise HarnessError(f"OpenClaw agent RPC failed during {phase}; see evidence hashes")
+            detail = redact(
+                (result.stderr or result.stdout).strip()[:1000],
+                (self.repo, self.workspace, self.state),
+            )
+            raise HarnessError(
+                f"OpenClaw agent RPC failed during {phase}: {detail or 'no diagnostic output'}"
+            )
         if show_output:
             print(f"\n--- OpenClaw {phase} output (not retained in evidence) ---\n{result.stdout}\n--- end output ---")
         return parse_lifecycle_result(result.stdout)
