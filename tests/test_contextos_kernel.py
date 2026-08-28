@@ -1074,7 +1074,10 @@ with mock.patch("contextos.kernel._capture_transaction_before", side_effect=cras
         self.assertIsNone(current["stale"])
         self.assertFalse(report["initialized"])
         messages = [
-            finding["message"] for finding in hook_report(self.root, "session-start", {})["findings"]
+            finding["message"]
+            for finding in hook_report(
+                self.root, "session-start", {}, today=NOW.date()
+            )["findings"]
         ]
         self.assertTrue(any("not initialized" in message for message in messages), messages)
 
@@ -1094,6 +1097,24 @@ with mock.patch("contextos.kernel._capture_transaction_before", side_effect=cras
             item for item in diagnosis["checks"] if item["name"] == "state-freshness"
         )
         self.assertIn("future", freshness["detail"])
+
+    def test_start_and_session_hook_reject_linked_state_before_reading(self) -> None:
+        with tempfile.TemporaryDirectory() as external:
+            outside = Path(external) / "outside-current.md"
+            outside.write_text(
+                "# External\n\n**Last Updated:** 2026-08-23\n", encoding="utf-8"
+            )
+            current = self.root / "state/current.md"
+            current.unlink()
+            try:
+                current.symlink_to(outside)
+            except OSError:
+                self.skipTest("symlink creation is unavailable")
+
+            with self.assertRaisesRegex(ContextOSError, "symlink or reparse point"):
+                start_report(self.root, NOW)
+            with self.assertRaisesRegex(ContextOSError, "symlink or reparse point"):
+                hook_report(self.root, "session-start", {}, today=NOW.date())
 
     def test_shipped_state_templates_retain_date_placeholders(self) -> None:
         for filename in ("current.md", "weekly-priorities.md", "blockers.md"):

@@ -83,9 +83,14 @@ printf '%s' "$SESSION_READY_OUTPUT" | grep -q 'Tip: Run /start' \
 mkdir -p "$TEMP_ROOT/bin"
 printf '%s\n' '#!/usr/bin/env bash' 'exit 127' > "$TEMP_ROOT/bin/git"
 chmod +x "$TEMP_ROOT/bin/git"
+set +e
 SESSION_NO_GIT_OUTPUT=$(cd "$SESSION_REPO" && PATH="$TEMP_ROOT/bin:$PATH" \
   bash .claude/hooks/session-start.sh)
+SESSION_NO_GIT_STATUS=$?
+set -e
 rm "$TEMP_ROOT/bin/git"
+[ "$SESSION_NO_GIT_STATUS" -eq 0 ] \
+  || fail "Claude session-start returned $SESSION_NO_GIT_STATUS when Git was absent"
 printf '%s' "$SESSION_NO_GIT_OUTPUT" | grep -q 'Tip: Run /start' \
   || fail "Claude session-start made Git a prerequisite instead of an advisory"
 
