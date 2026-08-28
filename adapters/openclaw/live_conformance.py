@@ -188,8 +188,8 @@ def write_openclaw_config(
     return target
 
 
-def acp_client_command(command_prefix: Sequence[str], repo: Path) -> list[str]:
-    return [*command_prefix, "acp", "client", "--cwd", str(repo)]
+def acp_server_command(command_prefix: Sequence[str]) -> list[str]:
+    return [*command_prefix, "acp"]
 
 
 AcpRunner = Callable[[Sequence[str], Path, Mapping[str, str], str, float], CommandResult]
@@ -198,72 +198,144 @@ AcpRunner = Callable[[Sequence[str], Path, Mapping[str, str], str, float], Comma
 def default_acp_runner(
     argv: Sequence[str], cwd: Path, env: Mapping[str, str], prompt: str, timeout: float,
 ) -> CommandResult:
-    """Drive one ACP prompt, waiting for its stop reason before queuing exit."""
+    """Drive one ACP turn over the server's newline-delimited JSON-RPC stdio."""
+    spawn_env = dict(env)
+    spawn_env["OPENCLAW_NO_RESPAWN"] = "1"
     process = subprocess.Popen(
-        list(argv), cwd=cwd, env=dict(env), stdin=subprocess.PIPE,
+        list(argv), cwd=cwd, env=spawn_env, stdin=subprocess.PIPE,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        encoding="utf-8", errors="replace", bufsize=0,
+        encoding="utf-8", errors="replace", bufsize=1,
     )
     if process.stdin is None or process.stdout is None or process.stderr is None:
         process.kill()
-        raise HarnessError("could not open ACP client stdio")
-    events: queue.Queue[tuple[str, str | None]] = queue.Queue()
+        raise HarnessError("could not open ACP server stdio")
+    stdout_lines: queue.Queue[str | None] = queue.Queue()
+    stderr_parts: list[str] = []
 
-    def pump(name: str, stream: Any) -> None:
-        while True:
-            chunk = stream.read(1)
-            if chunk == "":
-                events.put((name, None))
-                return
-            events.put((name, chunk))
+    def pump_stdout() -> None:
+        for line in process.stdout:
+            stdout_lines.put(line)
+        stdout_lines.put(None)
 
-    pumps: list[threading.Thread] = []
-    for name, stream in (("stdout", process.stdout), ("stderr", process.stderr)):
-        thread = threading.Thread(target=pump, args=(name, stream), daemon=True)
+    def pump_stderr() -> None:
+        for chunk in iter(lambda: process.stderr.read(1024), ""):
+            stderr_parts.append(chunk)
+
+    pumps = [
+        threading.Thread(target=pump_stdout, daemon=True),
+        threading.Thread(target=pump_stderr, daemon=True),
+    ]
+    for thread in pumps:
         thread.start()
-        pumps.append(thread)
-    stdout: list[str] = []
-    stderr: list[str] = []
+    rendered: list[str] = []
     deadline = time.monotonic() + timeout
-    prompt_line = prompt.replace("\r", " ").replace("\n", " ") + "\n"
-    prompt_sent = False
-    stopped = False
-    try:
-        while time.monotonic() < deadline:
+
+    def send(message: Mapping[str, Any]) -> None:
+        process.stdin.write(json.dumps(dict(message), separators=(",", ":")) + "\n")
+        process.stdin.flush()
+
+    def request(identifier: int, method: str, params: Mapping[str, Any]) -> None:
+        send({"jsonrpc": "2.0", "id": identifier, "method": method, "params": dict(params)})
+
+    def next_message() -> dict[str, Any]:
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise HarnessError("ACP JSON-RPC turn timed out")
             try:
-                source, chunk = events.get(timeout=0.1)
+                line = stdout_lines.get(timeout=min(remaining, 0.5))
             except queue.Empty:
                 if process.poll() is not None:
-                    break
+                    raise HarnessError("ACP server exited before completing the turn")
                 continue
-            if chunk is not None:
-                (stdout if source == "stdout" else stderr).append(chunk)
-            rendered = "".join(stdout)
-            if not prompt_sent and 'Type a prompt, or "exit" to quit.' in rendered:
-                process.stdin.write(prompt_line)
-                process.stdin.flush()
-                prompt_sent = True
-            if prompt_sent and re.search(r"\r?\n\[[A-Za-z0-9_-]+\]\r?\n", rendered):
-                stopped = True
-                process.stdin.write("exit\n")
-                process.stdin.flush()
-                break
-        if not prompt_sent:
-            raise HarnessError("ACP client ended or timed out before its readiness banner")
-        if not stopped:
-            raise HarnessError("ACP client ended or timed out before an end-turn stop reason")
-        try:
-            process.wait(timeout=30)
-        except subprocess.TimeoutExpired as exc:
-            raise HarnessError("ACP client did not exit after the completed turn") from exc
-        for thread in pumps:
-            thread.join(timeout=1)
-        while not events.empty():
-            source, chunk = events.get_nowait()
-            if chunk is not None:
-                (stdout if source == "stdout" else stderr).append(chunk)
-        return CommandResult(list(argv), process.returncode or 0, "".join(stdout), "".join(stderr))
+            if line is None:
+                raise HarnessError("ACP server closed stdout before completing the turn")
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise HarnessError("ACP server emitted non-JSON stdout") from exc
+            if not isinstance(message, dict) or message.get("jsonrpc") != "2.0":
+                raise HarnessError("ACP server emitted an invalid JSON-RPC message")
+            return message
+
+    def handle_incoming(message: dict[str, Any]) -> None:
+        method = message.get("method")
+        params = message.get("params") if isinstance(message.get("params"), dict) else {}
+        if method == "session/update":
+            update = params.get("update") if isinstance(params.get("update"), dict) else {}
+            kind = update.get("sessionUpdate")
+            if kind == "agent_message_chunk":
+                content = update.get("content") if isinstance(update.get("content"), dict) else {}
+                if content.get("type") == "text" and isinstance(content.get("text"), str):
+                    rendered.append(content["text"])
+            elif kind == "tool_call":
+                rendered.append(
+                    f"\n[tool] {update.get('title', 'tool')} "
+                    f"({update.get('status', 'unknown')})\n"
+                )
+            elif kind == "tool_call_update":
+                rendered.append(
+                    f"\n[tool update] {update.get('toolCallId', 'unknown')}: "
+                    f"{update.get('status', 'unknown')}\n"
+                )
+            return
+        if "id" not in message:
+            return
+        if method == "session/request_permission":
+            send({
+                "jsonrpc": "2.0", "id": message["id"],
+                "result": {"outcome": {"outcome": "cancelled"}},
+            })
+            return
+        send({
+            "jsonrpc": "2.0", "id": message["id"],
+            "error": {"code": -32601, "message": "Method not supported by conformance client"},
+        })
+
+    def await_response(identifier: int) -> dict[str, Any]:
+        while True:
+            message = next_message()
+            if message.get("id") == identifier and "method" not in message:
+                if "error" in message:
+                    raise HarnessError(f"ACP request {identifier} failed")
+                result = message.get("result")
+                if not isinstance(result, dict):
+                    raise HarnessError("ACP response result was not an object")
+                return result
+            handle_incoming(message)
+
+    try:
+        request(1, "initialize", {
+            "protocolVersion": 1,
+            "clientCapabilities": {
+                "fs": {"readTextFile": False, "writeTextFile": False},
+                "terminal": False,
+            },
+            "clientInfo": {"name": "contextos-live-harness", "version": "1"},
+        })
+        initialized = await_response(1)
+        if initialized.get("protocolVersion") != 1:
+            raise HarnessError("ACP protocol version mismatch")
+        request(2, "session/new", {"cwd": str(cwd), "mcpServers": []})
+        session = await_response(2)
+        session_id = session.get("sessionId")
+        if not isinstance(session_id, str) or not session_id:
+            raise HarnessError("ACP session/new returned no session id")
+        request(3, "session/prompt", {
+            "sessionId": session_id,
+            "prompt": [{"type": "text", "text": prompt}],
+        })
+        response = await_response(3)
+        stop_reason = response.get("stopReason")
+        if not isinstance(stop_reason, str) or not stop_reason:
+            raise HarnessError("ACP prompt returned no stop reason")
+        rendered.append(f"\n[{stop_reason}]\n")
+        return CommandResult(list(argv), 0, "".join(rendered), "".join(stderr_parts))
     finally:
+        try:
+            process.stdin.close()
+        except OSError:
+            pass
         if process.poll() is None:
             process.terminate()
             try:
@@ -273,7 +345,6 @@ def default_acp_runner(
                 process.wait(timeout=5)
         for thread in pumps:
             thread.join(timeout=1)
-        process.stdin.close()
         process.stdout.close()
         process.stderr.close()
 
@@ -469,7 +540,7 @@ class LiveHarness:
         return result
 
     def rpc(self, prompt: str, phase: str, *, show_output: bool = False) -> dict[str, str]:
-        command = acp_client_command(self.command_prefix, self.repo)
+        command = acp_server_command(self.command_prefix)
         result = self.acp_runner(
             command, self.repo, self.env, prompt, 700,
         )

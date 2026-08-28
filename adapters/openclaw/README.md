@@ -142,12 +142,11 @@ Gateway that inherits the authenticated Claude environment, selects the
 denial with both `host: gateway`/`security: deny` and the isolated `deny-all`
 execution-policy preset. It then selects `host: gateway`, `security: full`,
 `ask: off`, and the `yolo` preset only for the explicitly acknowledged
-disposable fixture. It drives one ACP client turn per
-lifecycle prompt with `--cwd` bound to the repository. Its stdio driver waits
-for the ACP end-turn marker before sending `exit`, so an eagerly queued exit
-cannot truncate a turn. It disables OpenClaw's launcher respawn only for those
-piped ACP subprocesses so Windows cannot consume the queued prompt in an
-intermediate wrapper before the final readline loop starts. It
+disposable fixture. It drives each lifecycle prompt by speaking the same ACP
+protocol directly to `openclaw acp`: initialize protocol v1, create a session
+with the repository `cwd`, send the prompt, collect session updates, and wait
+for the final stop reason. The direct NDJSON driver avoids the interactive
+client's unreliable piped-input behavior on Windows. It
 tests a wrong proposal digest and pauses for the operator to type every exact
 approved digest. It never auto-approves a proposal digest. Its redacted JSON
 evidence contains hashes and control results, not prompts, credentials, or raw

@@ -269,7 +269,7 @@ if "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py --command "$duplica
 fi
 
 help_output=$(bash scripts/setup.sh --help)
-grep -Fq -- '--agents claude,codex,cursor,devin,openclaw|auto|none' <<<"$help_output" || fail "setup help does not describe multi-agent selection"
+grep -Fq -- '--agents claude,codex,cursor,devin,hermes,openclaw|auto|none' <<<"$help_output" || fail "setup help does not describe multi-agent selection"
 grep -Fq -- '--agent auto|RUNTIME|none' <<<"$help_output" || fail "setup help omits the singleton compatibility alias"
 grep -Fq 'Setup does not launch OpenClaw' scripts/setup.sh \
   || fail "OpenClaw setup omits the private-workspace launch boundary"

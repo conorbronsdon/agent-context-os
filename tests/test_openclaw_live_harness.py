@@ -95,19 +95,15 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         with self.assertRaisesRegex(live.HarnessError, "refusing to overwrite"):
             live.write_openclaw_config(self.state, self.workspace, 18789, self.claude)
 
-    def test_acp_client_command_binds_repo_cwd_without_reserved_rpc_field(self) -> None:
-        command = live.acp_client_command(("openclaw",), self.repo)
-        self.assertEqual(
-            ["openclaw", "acp", "client", "--cwd", str(self.repo)], command,
-        )
+    def test_acp_server_command_avoids_reserved_gateway_rpc(self) -> None:
+        command = live.acp_server_command(("openclaw",))
+        self.assertEqual(["openclaw", "acp"], command)
         self.assertNotIn("gateway", command)
 
     def test_acp_command_supports_node_entrypoint_prefix(self) -> None:
-        command = live.acp_client_command(
-            ("node", "C:/fixture/openclaw.mjs"), self.repo,
-        )
+        command = live.acp_server_command(("node", "C:/fixture/openclaw.mjs"))
         self.assertEqual(
-            ["node", "C:/fixture/openclaw.mjs", "acp", "client"], command[:4],
+            ["node", "C:/fixture/openclaw.mjs", "acp"], command,
         )
 
     def test_model_route_is_the_authenticated_claude_cli_route(self) -> None:
@@ -156,19 +152,40 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
             harness.execute()
         harness.stop_gateway.assert_called_once_with()
 
-    def test_acp_runner_waits_for_stop_reason_before_sending_exit(self) -> None:
+    def test_acp_runner_drives_json_rpc_and_denies_client_requests(self) -> None:
         script = (
-            "import sys; print('Type a prompt, or \\\"exit\\\" to quit.', flush=True); "
-            "first=sys.stdin.readline().strip(); "
-            "print('CONTEXTOS_LIVE_RESULT={\"status\":\"started\"}', flush=True); "
-            "print('[end_turn]', flush=True); second=sys.stdin.readline().strip(); "
-            "sys.exit(0 if first=='synthetic prompt' and second=='exit' else 23)"
+            "import json, os, sys\n"
+            "def read(): return json.loads(sys.stdin.readline())\n"
+            "def send(value): print(json.dumps(value, separators=(',', ':')), flush=True)\n"
+            "assert os.environ['OPENCLAW_NO_RESPAWN']=='1'\n"
+            "message=read()\n"
+            "assert message['method']=='initialize' and message['params']['protocolVersion']==1\n"
+            "assert message['params']['clientCapabilities']['terminal'] is False\n"
+            "send({'jsonrpc':'2.0','id':message['id'],'result':{'protocolVersion':1}})\n"
+            "message=read()\n"
+            "assert message['method']=='session/new'\n"
+            "assert message['params']['cwd']==sys.argv[1] and message['params']['mcpServers']==[]\n"
+            "send({'jsonrpc':'2.0','id':message['id'],'result':{'sessionId':'fixture-session'}})\n"
+            "message=read()\n"
+            "assert message['method']=='session/prompt' and message['params']['sessionId']=='fixture-session'\n"
+            "assert message['params']['prompt']==[{'type':'text','text':'synthetic\\nprompt'}]\n"
+            "send({'jsonrpc':'2.0','method':'session/update','params':{'sessionId':'fixture-session','update':{'sessionUpdate':'agent_message_chunk','content':{'type':'text','text':'CONTEXTOS_LIVE_RESULT={\\\"status\\\":\\\"started\\\"}'}}}})\n"
+            "send({'jsonrpc':'2.0','method':'session/update','params':{'sessionId':'fixture-session','update':{'sessionUpdate':'tool_call','title':'Bash','status':'pending'}}})\n"
+            "send({'jsonrpc':'2.0','id':98,'method':'fs/read_text_file','params':{'path':'secret'}})\n"
+            "response=read(); assert response['id']==98 and response['error']['code']==-32601\n"
+            "send({'jsonrpc':'2.0','id':99,'method':'session/request_permission','params':{'options':[]}})\n"
+            "response=read(); assert response=={'jsonrpc':'2.0','id':99,'result':{'outcome':{'outcome':'cancelled'}}}\n"
+            "send({'jsonrpc':'2.0','method':'session/update','params':{'sessionId':'fixture-session','update':{'sessionUpdate':'tool_call_update','toolCallId':'tool-1','status':'failed'}}})\n"
+            "send({'jsonrpc':'2.0','id':message['id'],'result':{'stopReason':'end_turn'}})\n"
         )
         result = live.default_acp_runner(
-            [sys.executable, "-c", script], self.repo, os.environ,
+            [sys.executable, "-c", script, str(self.repo)], self.repo, os.environ,
             "synthetic\nprompt", 10,
         )
         self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("[tool] Bash (pending)", result.stdout)
+        self.assertIn("[tool update] tool-1: failed", result.stdout)
+        self.assertIn("[end_turn]", result.stdout)
         self.assertEqual(
             {"status": "started"}, live.parse_lifecycle_result(result.stdout),
         )
