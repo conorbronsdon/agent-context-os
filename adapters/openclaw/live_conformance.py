@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib
+import importlib.util
 import json
 import os
 import re
@@ -138,10 +138,15 @@ def verify_port_is_free(port: int) -> None:
 
 
 def load_sync_helper() -> Callable[[Path], Any]:
+    module_path = Path(__file__).with_name("sync_skills.py")
     try:
-        module = importlib.import_module("adapters.openclaw.sync_skills")
+        spec = importlib.util.spec_from_file_location("contextos_openclaw_sync", module_path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"could not load {module_path}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
         helper = getattr(module, "sync")
-    except (ImportError, AttributeError) as exc:
+    except (ImportError, AttributeError, OSError) as exc:
         raise HarnessError(
             "OpenClaw promotion requires adapters.openclaw.sync_skills."
             "sync(workspace) before this harness can run"

@@ -128,9 +128,12 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         self.assertTrue(cleaned["nested"]["ok"])
 
     def test_missing_sync_helper_fails_clearly(self) -> None:
-        with mock.patch.object(live.importlib, "import_module", side_effect=ImportError):
+        with mock.patch.object(live.importlib.util, "spec_from_file_location", return_value=None):
             with self.assertRaisesRegex(live.HarnessError, r"sync\(workspace\)"):
                 live.load_sync_helper()
+
+    def test_sync_helper_loads_for_direct_script_execution(self) -> None:
+        self.assertTrue(callable(live.load_sync_helper()))
 
     def test_native_memory_snapshot_covers_host_files_and_directory(self) -> None:
         (self.repo / "MEMORY.md").write_text("must stay private", encoding="utf-8")
