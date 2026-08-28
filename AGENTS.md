@@ -67,10 +67,10 @@ this is guidance, not a host-enforced gate. The `$context-setup`, `$context-star
 ## OpenClaw
 
 - Keep OpenClaw's private workspace and native memory outside this repository.
-- Copy all four short lifecycle aliases and all four `context-*` cores into the
-  private workspace's `.agents/skills/`; refresh copied skills after changes.
-- Run OpenClaw from the repository directory so root `AGENTS.md` is included,
-  then invoke `/skill setup`, `/skill start`, `/skill update`, or `/skill end`.
+- Synchronize all eight skills with `python adapters/openclaw/sync_skills.py`;
+  refresh only after reviewing the new source commit.
+- Bind the Gateway `agent` RPC `cwd` here, then invoke `/skill setup`,
+  `/skill start`, `/skill update`, or `/skill end`.
 - This adapter installs no hook or plugin; skill allowlists do not replace
   execution authorization. See `adapters/openclaw/README.md`.
 

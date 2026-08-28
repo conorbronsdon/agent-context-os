@@ -101,7 +101,8 @@ agent
 ```
 
 Run `/setup` in Claude Code or Hermes, `/context-setup` in Cursor, `$setup` in
-Codex, or `/skill setup` in OpenClaw. OpenClaw first requires the separate private-workspace and copied-skill
+Codex, or `/skill setup` in OpenClaw. OpenClaw first requires the separate
+private-workspace and verified skill-synchronization
 steps in its [experimental adapter guide](../adapters/openclaw/README.md). The guided
 interview asks one question at a time, builds a deterministic proposal, and
 waits before applying the exact reviewed diff.

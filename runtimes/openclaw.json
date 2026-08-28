@@ -9,8 +9,8 @@
     "mode": "skill-copy-to-private-workspace",
     "next_steps": [
       "Create or choose a private OpenClaw workspace outside this repository.",
-      "Copy all eight lifecycle skill directories from this repository's .agents/skills directory into the private workspace's .agents/skills directory.",
-      "Run OpenClaw from the repository directory and invoke lifecycle skills explicitly with /skill setup, /skill start, /skill update, or /skill end."
+      "Run python adapters/openclaw/sync_skills.py sync --workspace <private-workspace> from the exact repository commit you intend to use, then verify it with the check command.",
+      "Use the Gateway agent RPC with cwd bound to this repository and invoke lifecycle skills explicitly with /skill setup, /skill start, /skill update, or /skill end."
     ]
   },
   "onboarding_doc": "adapters/openclaw/README.md",

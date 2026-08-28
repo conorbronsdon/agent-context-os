@@ -816,11 +816,27 @@
                     "policy": "managed"
                 },
                 {
+                    "path": "adapters/openclaw/live_conformance.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "adapters/openclaw/sync_skills.py",
+                    "policy": "managed"
+                },
+                {
                     "path": "runtimes/openclaw.json",
                     "policy": "managed"
                 },
                 {
                     "path": "tests/test_openclaw_conformance.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_openclaw_live_harness.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_openclaw_skill_sync.py",
                     "policy": "development"
                 }
             ]

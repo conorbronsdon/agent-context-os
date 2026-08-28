@@ -50,7 +50,8 @@ class OpenClawDescriptorTest(unittest.TestCase):
     def test_guide_preserves_security_and_memory_boundaries(self) -> None:
         guide = (ROOT / "adapters/openclaw/README.md").read_text(encoding="utf-8")
         for required in (
-            "private workspace", "Copy all eight together", "skills.load.extraDirs",
+            "private workspace", "Synchronize all eight together", "skills.load.extraDirs",
+            "preserves unrelated skills", "Gateway `agent` RPC", "never auto-approves",
             "shell-execution authorization", "installs no hook or plugin",
             "include all eight lifecycle skill names", "not synchronized",
             "doctor --lint --json", "Do not use `--fix`",

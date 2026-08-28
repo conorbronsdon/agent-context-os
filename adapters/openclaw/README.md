@@ -15,18 +15,29 @@ When OpenClaw executes from the repository, it appends the repository-root
 `AGENTS.md` to its instructions. It does not load execution-directory
 `SOUL.md`, `USER.md`, or `MEMORY.md` as workspace memory.
 
-## Install the lifecycle skills
+## Synchronize the lifecycle skills
 
-Copy these eight directories from the repository's `.agents/skills/` directory
-to `<private-workspace>/.agents/skills/`:
+Use the adapter-owned synchronizer from the exact repository commit you intend
+to run:
+
+```bash
+python adapters/openclaw/sync_skills.py sync --workspace <private-workspace>
+python adapters/openclaw/sync_skills.py check --workspace <private-workspace>
+```
+
+It installs these eight directories from the repository's `.agents/skills/`
+directory to `<private-workspace>/.agents/skills/`:
 
 - `setup` and `context-setup`
 - `start` and `context-start`
 - `update` and `context-update`
 - `end` and `context-end`
 
-Copy all eight together. The short names are aliases for the `context-*` cores,
-and copied skills must be refreshed after their repository sources change.
+Synchronize all eight together. The short names are aliases for the
+`context-*` cores. The synchronizer records the source Git SHA and per-file
+SHA-256 inventory in the private workspace, preserves unrelated skills, and
+reports stale or locally changed managed copies without modifying them in
+`check` mode. Run `sync` again only after reviewing the new source commit.
 The stable version tested here did not discover the same skills reliably via
 `skills.load.extraDirs`, so this adapter does not recommend that shortcut.
 
@@ -45,9 +56,11 @@ repository. All eight lifecycle skills should report source
 
 ## Run the lifecycle
 
-Start OpenClaw with the repository as its execution directory, while the
-OpenClaw configuration still points at the separate private workspace. Invoke
-the lifecycle explicitly:
+Keep the OpenClaw configuration pointed at the separate private workspace and
+bind each agent turn to the repository execution directory. The stable CLI's
+`openclaw agent` command has no `--cwd` option, so unattended conformance uses
+the Gateway `agent` RPC with an explicit `cwd`; launching from a shell directory
+alone is not evidence of this boundary. Invoke the lifecycle explicitly:
 
 ```text
 /skill setup
@@ -67,6 +80,8 @@ proposal and approve that digest before applying it.
   or the omitted commands will not be visible to that agent.
 - Workspace hooks are disabled until explicitly enabled. This experimental
   adapter installs no hook or plugin and makes no blocking-hook claim.
+- The must-not-fire hook control is an empty Context OS hook/plugin inventory;
+  proposal/apply remains the write boundary instead of a claimed OpenClaw hook.
 - Native OpenClaw memory is private host state and is not synchronized with
   repository state automatically.
 - Use `openclaw doctor --lint --json` for a read-only native diagnostic. Exit 1
@@ -78,3 +93,38 @@ proposal and approve that digest before applying it.
 The executable conformance fixture is opt-in because it requires the exact
 tested OpenClaw binary. Set `CONTEXTOS_OPENCLAW_BIN` to that executable and run
 `python -m unittest tests.test_openclaw_conformance`.
+
+## Run the authenticated promotion gate
+
+The operator-driven live harness requires a sanitized disposable repository,
+separate unused state and private-workspace paths, an authenticated Claude CLI,
+and the exact tested OpenClaw version. OpenClaw onboarding calls the existing
+Claude subscription route `anthropic-cli`; the model runtime remains
+`claude-cli`. The harness sends only its synthetic fixture to that external
+model route and refuses to run without both egress and disposable-repository
+acknowledgements.
+
+Create `.context-os-live-disposable` containing exactly `disposable` in the
+disposable repository, then run:
+
+```bash
+python adapters/openclaw/live_conformance.py \
+  --binary <exact-openclaw-binary> \
+  --claude-binary <exact-claude-binary> \
+  --expected-version 'OpenClaw 2026.7.1-2 (0790d9f)' \
+  --repo <sanitized-disposable-repository> \
+  --state-dir <unused-openclaw-state-directory> \
+  --private-workspace <unused-private-workspace> \
+  --evidence <outside-those-directories>/openclaw-live.json \
+  --port <unused-loopback-port> \
+  --acknowledge-external-model-egress \
+  --acknowledge-disposable-repo
+```
+
+The disposable repository must be at the same Git SHA as the harness source.
+The harness validates config before egress, verifies skill visibility and shell
+denial separately, drives `setup`/`start`/`update`/`end` through Gateway RPC with
+the repository `cwd`, tests a wrong proposal digest, and pauses for the operator
+to type every exact approved digest. It never auto-approves. Its redacted JSON
+evidence contains hashes and control results, not prompts, credentials, or raw
+private paths.
