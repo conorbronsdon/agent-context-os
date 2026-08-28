@@ -225,8 +225,8 @@ def default_acp_runner(
     stdout: list[str] = []
     stderr: list[str] = []
     deadline = time.monotonic() + timeout
-    process.stdin.write(prompt.replace("\r", " ").replace("\n", " ") + "\n")
-    process.stdin.flush()
+    prompt_line = prompt.replace("\r", " ").replace("\n", " ") + "\n"
+    prompt_sent = False
     stopped = False
     try:
         while time.monotonic() < deadline:
@@ -239,11 +239,17 @@ def default_acp_runner(
             if chunk is not None:
                 (stdout if source == "stdout" else stderr).append(chunk)
             rendered = "".join(stdout)
-            if re.search(r"\r?\n\[[A-Za-z0-9_-]+\]\r?\n", rendered):
+            if not prompt_sent and 'Type a prompt, or "exit" to quit.' in rendered:
+                process.stdin.write(prompt_line)
+                process.stdin.flush()
+                prompt_sent = True
+            if prompt_sent and re.search(r"\r?\n\[[A-Za-z0-9_-]+\]\r?\n", rendered):
                 stopped = True
                 process.stdin.write("exit\n")
                 process.stdin.flush()
                 break
+        if not prompt_sent:
+            raise HarnessError("ACP client ended or timed out before its readiness banner")
         if not stopped:
             raise HarnessError("ACP client ended or timed out before an end-turn stop reason")
         try:

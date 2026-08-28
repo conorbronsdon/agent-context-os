@@ -158,7 +158,8 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
 
     def test_acp_runner_waits_for_stop_reason_before_sending_exit(self) -> None:
         script = (
-            "import sys; first=sys.stdin.readline().strip(); "
+            "import sys; print('Type a prompt, or \\\"exit\\\" to quit.', flush=True); "
+            "first=sys.stdin.readline().strip(); "
             "print('CONTEXTOS_LIVE_RESULT={\"status\":\"started\"}', flush=True); "
             "print('[end_turn]', flush=True); second=sys.stdin.readline().strip(); "
             "sys.exit(0 if first=='synthetic prompt' and second=='exit' else 23)"
