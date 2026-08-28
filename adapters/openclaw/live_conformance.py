@@ -349,6 +349,14 @@ def output_summary(result: CommandResult) -> dict[str, Any]:
     }
 
 
+def is_wrong_digest_rejection(result: CommandResult) -> bool:
+    diagnostic = f"{result.stdout}\n{result.stderr}"
+    return (
+        result.returncode != 0
+        and "--confirm must exactly match the proposal_digest" in diagnostic
+    )
+
+
 def parse_diagnostic(result: CommandResult, private_paths: Sequence[Path]) -> dict[str, Any]:
     summary = output_summary(result)
     try:
@@ -584,7 +592,10 @@ class LiveHarness:
              "--runtime", "openclaw"],
             timeout=120,
         )
-        if rejected.returncode == 0 or repository_snapshot(self.repo) != before_control:
+        if (
+            not is_wrong_digest_rejection(rejected)
+            or repository_snapshot(self.repo) != before_control
+        ):
             raise HarnessError("wrong-digest must-not-fire control did not prove rejection")
         require_operator_digest(digest, phase, self.input_fn)
         receipts = self.repo / ".context-os/receipts"

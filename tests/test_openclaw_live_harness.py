@@ -177,6 +177,18 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         with self.assertRaisesRegex(live.HarnessError, "exactly one"):
             live.parse_lifecycle_result("ordinary agent prose")
 
+    def test_wrong_digest_control_requires_the_kernel_diagnostic(self) -> None:
+        expected = live.CommandResult(
+            ["bash"], 1, "", "--confirm must exactly match the proposal_digest\n",
+        )
+        unrelated = live.CommandResult(["bash"], 127, "", "bash: not found\n")
+        false_success = live.CommandResult(
+            ["bash"], 0, "--confirm must exactly match the proposal_digest\n", "",
+        )
+        self.assertTrue(live.is_wrong_digest_rejection(expected))
+        self.assertFalse(live.is_wrong_digest_rejection(unrelated))
+        self.assertFalse(live.is_wrong_digest_rejection(false_success))
+
     def test_proposal_rejects_escape_and_invalid_digest(self) -> None:
         with self.assertRaisesRegex(live.HarnessError, "lowercase SHA-256"):
             live.require_proposal({"proposal": "p.json", "digest": "ABC"})
