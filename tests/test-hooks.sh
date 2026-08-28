@@ -78,6 +78,17 @@ fi
 printf '%s' "$SESSION_READY_OUTPUT" | grep -q 'Tip: Run /start' \
   || fail "Claude session-start omitted the initialized-state /start tip"
 
+# Missing Git is advisory for the legacy Claude adapter: root discovery falls
+# back to the current directory and the shared hook still runs.
+mkdir -p "$TEMP_ROOT/bin"
+printf '%s\n' '#!/usr/bin/env bash' 'exit 127' > "$TEMP_ROOT/bin/git"
+chmod +x "$TEMP_ROOT/bin/git"
+SESSION_NO_GIT_OUTPUT=$(cd "$SESSION_REPO" && PATH="$TEMP_ROOT/bin:$PATH" \
+  bash .claude/hooks/session-start.sh)
+rm "$TEMP_ROOT/bin/git"
+printf '%s' "$SESSION_NO_GIT_OUTPUT" | grep -q 'Tip: Run /start' \
+  || fail "Claude session-start made Git a prerequisite instead of an advisory"
+
 printf '\377' > "$SESSION_REPO/workspace.yaml"
 SESSION_ENCODING_OUTPUT=$(cd "$SESSION_REPO" && bash .claude/hooks/session-start.sh)
 printf '%s' "$SESSION_ENCODING_OUTPUT" | grep -q 'advisory hook could not run' \
