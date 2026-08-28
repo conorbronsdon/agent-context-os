@@ -71,6 +71,7 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         )
         self.assertIs(fake, harness.acp_runner)
         self.assertEqual("1", harness.env["OPENCLAW_NO_RESPAWN"])
+        self.assertEqual("1", harness.env["PYTHONDONTWRITEBYTECODE"])
 
     def test_rpc_prepends_the_execution_root_boundary(self) -> None:
         fake = mock.Mock(return_value=live.CommandResult(
@@ -286,6 +287,13 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         before = live.repository_snapshot(self.repo)
         fixture.write_text("after", encoding="utf-8")
         self.assertNotEqual(before, live.repository_snapshot(self.repo))
+
+    def test_repository_snapshot_ignores_python_bytecode_cache(self) -> None:
+        before = live.repository_snapshot(self.repo)
+        cache = self.repo / "contextos/__pycache__"
+        cache.mkdir(parents=True)
+        (cache / "kernel.cpython-313.pyc").write_bytes(b"interpreter cache")
+        self.assertEqual(before, live.repository_snapshot(self.repo))
 
 
 if __name__ == "__main__":
