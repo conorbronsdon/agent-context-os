@@ -72,6 +72,22 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         self.assertIs(fake, harness.acp_runner)
         self.assertEqual("1", harness.env["OPENCLAW_NO_RESPAWN"])
 
+    def test_rpc_prepends_the_execution_root_boundary(self) -> None:
+        fake = mock.Mock(return_value=live.CommandResult(
+            ["openclaw", "acp"], 0,
+            'CONTEXTOS_LIVE_RESULT={"status":"started"}', "",
+        ))
+        harness = live.LiveHarness(
+            binary="openclaw", expected_version="OpenClaw fixture",
+            repo=self.repo, state=self.state, workspace=self.workspace,
+            evidence_path=self.evidence, port=18789,
+            claude_binary=self.claude, acp_runner=fake,
+        )
+        self.assertEqual({"status": "started"}, harness.rpc("fixture", "start"))
+        sent_prompt = fake.call_args.args[3]
+        self.assertTrue(sent_prompt.startswith(live.EXECUTION_ROOT_BOUNDARY))
+        self.assertTrue(sent_prompt.endswith("\n\nfixture"))
+
     def test_linked_path_is_rejected_when_supported(self) -> None:
         target = self.scratch / "actual"
         target.mkdir()

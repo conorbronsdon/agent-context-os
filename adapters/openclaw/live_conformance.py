@@ -35,6 +35,15 @@ NATIVE_MEMORY_NAMES = ("SOUL.md", "USER.md", "MEMORY.md", "memory")
 DISPOSABLE_MARKER = ".context-os-live-disposable"
 RESULT_PREFIX = "CONTEXTOS_LIVE_RESULT="
 MODEL_ROUTE = "claude-cli/claude-sonnet-5"
+EXECUTION_ROOT_BOUNDARY = (
+    "Treat the repository working directory supplied in ACP session metadata as "
+    "the exact lifecycle execution root. Before any repository read, write, or "
+    "kernel command, explicitly set the tool working directory to that root and "
+    "verify it contains AGENTS.md and scripts/contextos.sh. Never substitute the "
+    "process/tool cwd, OpenClaw private workspace, skill install location, or an "
+    "ancestor found by searching upward. Stop without creating a payload or "
+    "running the kernel if the exact root cannot be established."
+)
 SENSITIVE_KEY = re.compile(r"(?i)(auth|credential|password|secret|token|api.?key|prompt|message)")
 ABSOLUTE_PATH = re.compile(r"(?:[A-Za-z]:[\\/]|/)[^\s\"']+")
 
@@ -541,8 +550,9 @@ class LiveHarness:
 
     def rpc(self, prompt: str, phase: str, *, show_output: bool = False) -> dict[str, str]:
         command = acp_server_command(self.command_prefix)
+        bounded_prompt = f"{EXECUTION_ROOT_BOUNDARY}\n\n{prompt}"
         result = self.acp_runner(
-            command, self.repo, self.env, prompt, 700,
+            command, self.repo, self.env, bounded_prompt, 700,
         )
         self.evidence.commands.append({
             "command": [Path(item).name if Path(item).is_absolute() else item for item in command[:4]],

@@ -5,6 +5,22 @@ description: Save a brief mid-session checkpoint to this workspace and update cu
 
 # Checkpoint a workspace session
 
+## Execution root (required)
+
+Before reading or writing repository content or running a lifecycle command,
+establish the exact repository working directory supplied by the host for this
+invocation. Accept that directory as the lifecycle execution root only when it
+contains both `AGENTS.md` and `scripts/contextos.sh`. Do not substitute the
+process or tool working directory, an agent/private workspace, the skill install
+location, or any parent or ancestor discovered by searching upward. If the
+host-supplied directory is unavailable or either marker is absent, stop and
+report the problem without creating a payload or running the kernel.
+
+Anchor every repository read and write under that exact root. Run
+`scripts/contextos.sh` and repository validation with their working directory
+explicitly set to that root (or use absolute paths beneath it); this includes
+all `.context-os/inputs/`, proposal, receipt, state, session, and routing paths.
+
 Save continuity with minimal churn through the deterministic lifecycle kernel.
 
 ## Procedure

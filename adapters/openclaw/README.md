@@ -69,6 +69,15 @@ not a substitute: its `cwd` field is reserved for plugin-owned subagent runs and
 is rejected for this workflow. Invoke the lifecycle explicitly in the ACP
 session:
 
+Treat the repository directory supplied in ACP session metadata as the exact
+lifecycle execution root. A Bash or other tool may still start in the private
+workspace. Each lifecycle skill must explicitly anchor repository reads,
+writes, payloads, and `scripts/contextos.sh` commands to the supplied directory;
+it must never substitute the private workspace or search an ancestor for a
+repository. If the supplied directory is unavailable or does not contain both
+`AGENTS.md` and `scripts/contextos.sh`, stop the lifecycle instead of falling
+back.
+
 ```text
 /skill setup
 /skill start

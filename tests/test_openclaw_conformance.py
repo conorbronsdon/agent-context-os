@@ -59,6 +59,41 @@ class OpenClawDescriptorTest(unittest.TestCase):
             with self.subTest(required=required):
                 self.assertIn(required, guide)
 
+    def test_canonical_lifecycle_skills_enforce_the_host_execution_root(self) -> None:
+        required = (
+            "exact repository working directory supplied by the host",
+            "Do not substitute the\nprocess or tool working directory, an agent/private workspace",
+            "any parent or ancestor discovered by searching upward",
+            "stop and\nreport the problem without creating a payload or running the kernel",
+            "working directory\nexplicitly set to that root",
+        )
+        for name in ("context-setup", "context-start", "context-update", "context-end"):
+            skill = (ROOT / ".agents/skills" / name / "SKILL.md").read_text(
+                encoding="utf-8"
+            )
+            for phrase in required:
+                with self.subTest(skill=name, phrase=phrase):
+                    self.assertIn(phrase, skill)
+
+    def test_lifecycle_aliases_delegate_to_guarded_canonical_skills(self) -> None:
+        for name in ("setup", "start", "update", "end"):
+            skill = (ROOT / ".agents/skills" / name / "SKILL.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn(f"../context-{name}/SKILL.md", skill)
+            self.assertIn("do not duplicate or modify the workflow", skill)
+
+    def test_openclaw_guide_warns_that_tool_cwd_can_differ_from_acp_root(self) -> None:
+        guide = (ROOT / "adapters/openclaw/README.md").read_text(encoding="utf-8")
+        for required in (
+            "repository directory supplied in ACP session metadata",
+            "tool may still start in the private\nworkspace",
+            "never substitute the private workspace or search an ancestor",
+            "stop the lifecycle instead of falling\nback",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, guide)
+
 
 @unittest.skipUnless(
     os.environ.get("CONTEXTOS_OPENCLAW_BIN"),
