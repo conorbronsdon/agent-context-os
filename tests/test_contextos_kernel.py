@@ -1116,6 +1116,51 @@ with mock.patch("contextos.kernel._capture_transaction_before", side_effect=cras
             with self.assertRaisesRegex(ContextOSError, "symlink or reparse point"):
                 hook_report(self.root, "session-start", {}, today=NOW.date())
 
+    def test_readiness_snapshot_rejects_link_swap_after_guard(self) -> None:
+        with tempfile.TemporaryDirectory() as external:
+            outside = Path(external) / "outside-current.md"
+            outside.write_text(
+                "# External\n\n**Last Updated:** 2026-08-23\n", encoding="utf-8"
+            )
+            current = self.root / "state/current.md"
+            original_guard = __import__(
+                "contextos.kernel", fromlist=["_guard_local_state_path"]
+            )._guard_local_state_path
+            swapped = False
+
+            def swap_after_guard(root: Path, path: Path) -> None:
+                nonlocal swapped
+                original_guard(root, path)
+                if path == current and not swapped:
+                    current.unlink()
+                    current.symlink_to(outside)
+                    swapped = True
+
+            try:
+                with mock.patch(
+                    "contextos.kernel._guard_local_state_path",
+                    side_effect=swap_after_guard,
+                ):
+                    with self.assertRaisesRegex(ContextOSError, "link-like"):
+                        start_report(self.root, NOW)
+            except OSError:
+                self.skipTest("symlink creation is unavailable")
+
+    def test_doctor_degrades_snapshot_race_to_unknown(self) -> None:
+        with mock.patch(
+            "contextos.kernel._state_freshness",
+            side_effect=ContextOSError("state changed during snapshot"),
+        ):
+            report = doctor(self.root)
+        initialization = next(
+            item for item in report["checks"] if item["name"] == "initialization-state"
+        )
+        freshness = next(
+            item for item in report["checks"] if item["name"] == "state-freshness"
+        )
+        self.assertEqual("warn", initialization["status"])
+        self.assertEqual("warn", freshness["status"])
+
     def test_shipped_state_templates_retain_date_placeholders(self) -> None:
         for filename in ("current.md", "weekly-priorities.md", "blockers.md"):
             content = (ROOT / "state" / filename).read_text(encoding="utf-8")
