@@ -244,6 +244,13 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         self.assertFalse(live.is_wrong_digest_rejection(unrelated))
         self.assertFalse(live.is_wrong_digest_rejection(false_success))
 
+    def test_apply_prompt_requires_independent_proposal_verification(self) -> None:
+        source = Path(live.__file__).read_text(encoding="utf-8")
+        self.assertIn("Independently read that", source)
+        self.assertIn("verify its proposal_digest", source)
+        self.assertIn("every target path stays inside", source)
+        self.assertNotIn("The operator approved exact digest", source)
+
     def test_proposal_rejects_escape_and_invalid_digest(self) -> None:
         with self.assertRaisesRegex(live.HarnessError, "lowercase SHA-256"):
             live.require_proposal({"proposal": "p.json", "digest": "ABC"})

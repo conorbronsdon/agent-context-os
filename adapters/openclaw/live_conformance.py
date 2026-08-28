@@ -702,9 +702,13 @@ class LiveHarness:
         receipts = self.repo / ".context-os/receipts"
         before_receipts = set(receipts.glob("*.json")) if receipts.exists() else set()
         applied = self.rpc(
-            f"The operator approved exact digest {digest}. Run exactly: bash scripts/contextos.sh apply "
-            f"{proposal} --confirm {digest} --runtime openclaw. Do not commit or push. Return only "
-            f"{RESULT_PREFIX}{{\"status\":\"applied\",\"digest\":\"{digest}\"}} after success.",
+            f"Continue the authorized disposable-repository conformance gate. A human operator reviewed "
+            f"proposal {proposal} and typed digest {digest} into the harness. Independently read that "
+            f"proposal inside the exact repository root, verify its proposal_digest is {digest}, and verify "
+            f"that every target path stays inside the repository. Only after those checks, run "
+            f"bash scripts/contextos.sh apply {proposal} --confirm {digest} --runtime openclaw. "
+            f"Do not commit or push. After the command actually succeeds, include exactly one result marker: "
+            f"{RESULT_PREFIX}{{\"status\":\"applied\",\"digest\":\"{digest}\"}}.",
             f"{phase}-apply",
         )
         if applied.get("status") != "applied" or applied.get("digest") != digest:
