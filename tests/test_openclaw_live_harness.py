@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -59,6 +61,16 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
                 evidence_path=self.evidence, port=18789, claude_binary=self.claude,
             )
 
+    def test_harness_accepts_an_injected_acp_runner(self) -> None:
+        fake = mock.Mock()
+        harness = live.LiveHarness(
+            binary="openclaw", expected_version="OpenClaw fixture",
+            repo=self.repo, state=self.state, workspace=self.workspace,
+            evidence_path=self.evidence, port=18789, claude_binary=self.claude,
+            acp_runner=fake,
+        )
+        self.assertIs(fake, harness.acp_runner)
+
     def test_linked_path_is_rejected_when_supported(self) -> None:
         target = self.scratch / "actual"
         target.mkdir()
@@ -82,35 +94,81 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         with self.assertRaisesRegex(live.HarnessError, "refusing to overwrite"):
             live.write_openclaw_config(self.state, self.workspace, 18789, self.claude)
 
-    def test_gateway_agent_command_has_repo_cwd_and_unique_idempotency(self) -> None:
-        first = live.gateway_agent_command(("openclaw",), self.repo, "synthetic", "start")
-        second = live.gateway_agent_command(("openclaw",), self.repo, "synthetic", "start")
-        self.assertEqual(["openclaw", "gateway", "call", "agent"], first[:4])
-        self.assertIn("--expect-final", first)
-        self.assertIn("--json", first)
-        self.assertNotIn("--url", first)
-        self.assertEqual("650000", first[first.index("--timeout") + 1])
-        params = json.loads(first[first.index("--params") + 1])
-        other = json.loads(second[second.index("--params") + 1])
-        self.assertEqual(str(self.repo), params["cwd"])
-        self.assertEqual("main", params["agentId"])
-        self.assertEqual(live.MODEL_ROUTE, params["model"])
-        self.assertTrue(params["sessionKey"].startswith("agent:main:contextos-live-start-"))
-        self.assertNotEqual(params["idempotencyKey"], other["idempotencyKey"])
-
-    def test_gateway_command_supports_node_entrypoint_prefix(self) -> None:
-        command = live.gateway_agent_command(
-            ("node", "C:/fixture/openclaw.mjs"), self.repo, "synthetic", "start",
+    def test_acp_client_command_binds_repo_cwd_without_reserved_rpc_field(self) -> None:
+        command = live.acp_client_command(("openclaw",), self.repo)
+        self.assertEqual(
+            ["openclaw", "acp", "client", "--cwd", str(self.repo)], command,
         )
-        self.assertEqual(["node", "C:/fixture/openclaw.mjs", "gateway", "call", "agent"], command[:5])
+        self.assertNotIn("gateway", command)
+
+    def test_acp_command_supports_node_entrypoint_prefix(self) -> None:
+        command = live.acp_client_command(
+            ("node", "C:/fixture/openclaw.mjs"), self.repo,
+        )
+        self.assertEqual(
+            ["node", "C:/fixture/openclaw.mjs", "acp", "client"], command[:4],
+        )
 
     def test_model_route_is_the_authenticated_claude_cli_route(self) -> None:
         config = live.openclaw_config(self.workspace, 18789, self.claude)
-        self.assertEqual("anthropic/claude-sonnet-5", live.MODEL_ROUTE)
+        self.assertEqual("claude-cli/claude-sonnet-5", live.MODEL_ROUTE)
         self.assertTrue(config["plugins"]["entries"]["anthropic"]["enabled"])
         self.assertEqual(
             str(self.claude),
             config["agents"]["defaults"]["cliBackends"]["claude-cli"]["command"],
+        )
+
+    def test_execution_policy_transitions_from_deny_to_explicit_must_fire(self) -> None:
+        target = live.write_openclaw_config(
+            self.state, self.workspace, 18789, self.claude,
+        )
+        live.set_execution_policy(target, "deny")
+        denied = json.loads(target.read_text(encoding="utf-8"))["tools"]["exec"]
+        self.assertEqual({"host": "gateway", "security": "deny"}, denied)
+        live.set_execution_policy(target, "full", "off")
+        allowed = json.loads(target.read_text(encoding="utf-8"))["tools"]["exec"]
+        self.assertEqual(
+            {"host": "gateway", "security": "full", "ask": "off"}, allowed,
+        )
+
+    def test_exec_policy_preset_commands_are_exact_and_closed(self) -> None:
+        self.assertEqual(
+            ["node", "openclaw.mjs", "exec-policy", "preset", "deny-all", "--json"],
+            live.exec_policy_preset_command(("node", "openclaw.mjs"), "deny-all"),
+        )
+        self.assertEqual(
+            ["openclaw", "exec-policy", "preset", "yolo", "--json"],
+            live.exec_policy_preset_command(("openclaw",), "yolo"),
+        )
+        with self.assertRaisesRegex(live.HarnessError, "unsupported"):
+            live.exec_policy_preset_command(("openclaw",), "custom")
+
+    def test_execute_always_stops_gateway_for_direct_callers(self) -> None:
+        harness = live.LiveHarness(
+            binary="openclaw", expected_version="OpenClaw fixture",
+            repo=self.repo, state=self.state, workspace=self.workspace,
+            evidence_path=self.evidence, port=18789, claude_binary=self.claude,
+        )
+        harness._execute_unprotected = mock.Mock(side_effect=live.HarnessError("fixture"))
+        harness.stop_gateway = mock.Mock()
+        with self.assertRaisesRegex(live.HarnessError, "fixture"):
+            harness.execute()
+        harness.stop_gateway.assert_called_once_with()
+
+    def test_acp_runner_waits_for_stop_reason_before_sending_exit(self) -> None:
+        script = (
+            "import sys; first=sys.stdin.readline().strip(); "
+            "print('CONTEXTOS_LIVE_RESULT={\"status\":\"started\"}', flush=True); "
+            "print('[end_turn]', flush=True); second=sys.stdin.readline().strip(); "
+            "sys.exit(0 if first=='synthetic prompt' and second=='exit' else 23)"
+        )
+        result = live.default_acp_runner(
+            [sys.executable, "-c", script], self.repo, os.environ,
+            "synthetic\nprompt", 10,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(
+            {"status": "started"}, live.parse_lifecycle_result(result.stdout),
         )
 
     def test_parse_result_requires_one_explicit_marker(self) -> None:

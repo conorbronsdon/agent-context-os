@@ -57,10 +57,17 @@ repository. All eight lifecycle skills should report source
 ## Run the lifecycle
 
 Keep the OpenClaw configuration pointed at the separate private workspace and
-bind each agent turn to the repository execution directory. The stable CLI's
-`openclaw agent` command has no `--cwd` option, so unattended conformance uses
-the Gateway `agent` RPC with an explicit `cwd`; launching from a shell directory
-alone is not evidence of this boundary. Invoke the lifecycle explicitly:
+bind each agent turn to the repository execution directory with:
+
+```bash
+openclaw acp client --cwd <repository>
+```
+
+The ACP session records that directory while skill discovery continues to use
+the separate `agents.defaults.workspace`. The ordinary Gateway `agent` RPC is
+not a substitute: its `cwd` field is reserved for plugin-owned subagent runs and
+is rejected for this workflow. Invoke the lifecycle explicitly in the ACP
+session:
 
 ```text
 /skill setup
@@ -121,17 +128,25 @@ python adapters/openclaw/live_conformance.py \
   --acknowledge-disposable-repo
 ```
 
-On Windows, avoid the npm `.cmd` wrapper for Gateway JSON parameters. Invoke
-the same installed release through Node instead:
+On Windows, avoid the npm `.cmd` wrapper when driving ACP stdio. Invoke the
+same installed release through Node instead:
 
 ```text
 --binary <node.exe> --binary-arg <openclaw-package>/openclaw.mjs
 ```
 
 The disposable repository must be at the same Git SHA as the harness source.
-The harness validates config before egress, verifies skill visibility and shell
-denial separately, drives `setup`/`start`/`update`/`end` through Gateway RPC with
-the repository `cwd`, tests a wrong proposal digest, and pauses for the operator
-to type every exact approved digest. It never auto-approves. Its redacted JSON
+The harness validates config before egress, starts an isolated loopback
+Gateway that inherits the authenticated Claude environment, selects the
+`claude-cli/claude-sonnet-5` route, and verifies skill visibility and shell
+denial with both `host: gateway`/`security: deny` and the isolated `deny-all`
+execution-policy preset. It then selects `host: gateway`, `security: full`,
+`ask: off`, and the `yolo` preset only for the explicitly acknowledged
+disposable fixture. It drives one ACP client turn per
+lifecycle prompt with `--cwd` bound to the repository. Its stdio driver waits
+for the ACP end-turn marker
+before sending `exit`, so an eagerly queued exit cannot truncate a turn. It
+tests a wrong proposal digest and pauses for the operator to type every exact
+approved digest. It never auto-approves a proposal digest. Its redacted JSON
 evidence contains hashes and control results, not prompts, credentials, or raw
 private paths.

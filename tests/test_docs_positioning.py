@@ -273,6 +273,18 @@ class DocumentationPositioningTests(unittest.TestCase):
         )
         self.assertEqual(1, setup.count("does not erase sensitive data from git history"))
 
+    def test_setup_help_advertises_every_registered_runtime(self) -> None:
+        setup = self.text("scripts/setup.sh")
+        usage = re.search(r'^SETUP_USAGE="([^"]+)"$', setup, re.MULTILINE)
+        self.assertIsNotNone(usage)
+        assert usage is not None
+        registered = {
+            path.stem for path in (ROOT / "runtimes").glob("*.json")
+            if path.name != "schema.json"
+        }
+        for runtime in registered:
+            self.assertIn(runtime, usage.group(1))
+
     def test_copied_adapter_template_is_narrow_and_user_invoked(self) -> None:
         template = self.text("docs/agent-template.md")
         self.assertIn('allowed-tools: "Read"', template)

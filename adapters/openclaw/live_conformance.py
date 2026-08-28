@@ -13,13 +13,14 @@ import hashlib
 import importlib.util
 import json
 import os
+import queue
 import re
 import socket
 import stat
 import subprocess
 import sys
+import threading
 import time
-import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
@@ -33,7 +34,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 NATIVE_MEMORY_NAMES = ("SOUL.md", "USER.md", "MEMORY.md", "memory")
 DISPOSABLE_MARKER = ".context-os-live-disposable"
 RESULT_PREFIX = "CONTEXTOS_LIVE_RESULT="
-MODEL_ROUTE = "anthropic/claude-sonnet-5"
+MODEL_ROUTE = "claude-cli/claude-sonnet-5"
 SENSITIVE_KEY = re.compile(r"(?i)(auth|credential|password|secret|token|api.?key|prompt|message)")
 ABSOLUTE_PATH = re.compile(r"(?:[A-Za-z]:[\\/]|/)[^\s\"']+")
 
@@ -130,13 +131,6 @@ def validate_paths(repo: Path, state: Path, workspace: Path, evidence: Path) -> 
     return repo_r, state_r, workspace_r, evidence_r
 
 
-def verify_port_is_free(port: int) -> None:
-    if not 1024 <= port <= 65535:
-        raise HarnessError("--port must be between 1024 and 65535")
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
-        probe.bind(("127.0.0.1", port))
-
-
 def load_sync_helper() -> Callable[[Path], Any]:
     module_path = Path(__file__).with_name("sync_skills.py")
     try:
@@ -152,6 +146,13 @@ def load_sync_helper() -> Callable[[Path], Any]:
             "sync(workspace) before this harness can run"
         ) from exc
     return helper
+
+
+def verify_port_is_free(port: int) -> None:
+    if not 1024 <= port <= 65535:
+        raise HarnessError("--port must be between 1024 and 65535")
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", port))
 
 
 def openclaw_config(workspace: Path, port: int, claude_binary: Path) -> dict[str, Any]:
@@ -187,22 +188,88 @@ def write_openclaw_config(
     return target
 
 
-def gateway_agent_command(
-    command_prefix: Sequence[str], repo: Path, prompt: str, phase: str,
-) -> list[str]:
-    params = {
-        "agentId": "main",
-        "cwd": str(repo),
-        "message": prompt,
-        "model": MODEL_ROUTE,
-        "sessionKey": f"agent:main:contextos-live-{phase}-{uuid.uuid4()}",
-        "idempotencyKey": f"contextos-live-{phase}-{uuid.uuid4()}",
-    }
-    return [
-        *command_prefix, "gateway", "call", "agent", "--params",
-        json.dumps(params, separators=(",", ":")), "--expect-final", "--json",
-        "--timeout", "650000",
-    ]
+def acp_client_command(command_prefix: Sequence[str], repo: Path) -> list[str]:
+    return [*command_prefix, "acp", "client", "--cwd", str(repo)]
+
+
+AcpRunner = Callable[[Sequence[str], Path, Mapping[str, str], str, float], CommandResult]
+
+
+def default_acp_runner(
+    argv: Sequence[str], cwd: Path, env: Mapping[str, str], prompt: str, timeout: float,
+) -> CommandResult:
+    """Drive one ACP prompt, waiting for its stop reason before queuing exit."""
+    process = subprocess.Popen(
+        list(argv), cwd=cwd, env=dict(env), stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        encoding="utf-8", errors="replace", bufsize=0,
+    )
+    if process.stdin is None or process.stdout is None or process.stderr is None:
+        process.kill()
+        raise HarnessError("could not open ACP client stdio")
+    events: queue.Queue[tuple[str, str | None]] = queue.Queue()
+
+    def pump(name: str, stream: Any) -> None:
+        while True:
+            chunk = stream.read(1)
+            if chunk == "":
+                events.put((name, None))
+                return
+            events.put((name, chunk))
+
+    pumps: list[threading.Thread] = []
+    for name, stream in (("stdout", process.stdout), ("stderr", process.stderr)):
+        thread = threading.Thread(target=pump, args=(name, stream), daemon=True)
+        thread.start()
+        pumps.append(thread)
+    stdout: list[str] = []
+    stderr: list[str] = []
+    deadline = time.monotonic() + timeout
+    process.stdin.write(prompt.replace("\r", " ").replace("\n", " ") + "\n")
+    process.stdin.flush()
+    stopped = False
+    try:
+        while time.monotonic() < deadline:
+            try:
+                source, chunk = events.get(timeout=0.1)
+            except queue.Empty:
+                if process.poll() is not None:
+                    break
+                continue
+            if chunk is not None:
+                (stdout if source == "stdout" else stderr).append(chunk)
+            rendered = "".join(stdout)
+            if re.search(r"\r?\n\[[A-Za-z0-9_-]+\]\r?\n", rendered):
+                stopped = True
+                process.stdin.write("exit\n")
+                process.stdin.flush()
+                break
+        if not stopped:
+            raise HarnessError("ACP client ended or timed out before an end-turn stop reason")
+        try:
+            process.wait(timeout=30)
+        except subprocess.TimeoutExpired as exc:
+            raise HarnessError("ACP client did not exit after the completed turn") from exc
+        for thread in pumps:
+            thread.join(timeout=1)
+        while not events.empty():
+            source, chunk = events.get_nowait()
+            if chunk is not None:
+                (stdout if source == "stdout" else stderr).append(chunk)
+        return CommandResult(list(argv), process.returncode or 0, "".join(stdout), "".join(stderr))
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+        for thread in pumps:
+            thread.join(timeout=1)
+        process.stdin.close()
+        process.stdout.close()
+        process.stderr.close()
 
 
 def _string_values(value: Any) -> list[str]:
@@ -322,11 +389,32 @@ def skill_inventory(stdout: str) -> dict[str, dict[str, Any]]:
     }
 
 
+def set_execution_policy(
+    config_path: Path, security: str, ask: str | None = None,
+    host: str = "gateway",
+) -> None:
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    policy: dict[str, str] = {"host": host, "security": security}
+    if ask is not None:
+        policy["ask"] = ask
+    config.setdefault("tools", {})["exec"] = policy
+    config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+
+
+def exec_policy_preset_command(
+    command_prefix: Sequence[str], preset: str,
+) -> list[str]:
+    if preset not in {"deny-all", "yolo"}:
+        raise HarnessError(f"unsupported execution-policy preset: {preset}")
+    return [*command_prefix, "exec-policy", "preset", preset, "--json"]
+
+
 class LiveHarness:
     def __init__(
         self, *, binary: str, expected_version: str, repo: Path, state: Path,
         workspace: Path, evidence_path: Path, port: int, runner: Runner = default_runner,
         claude_binary: Path, binary_args: Sequence[str] = (),
+        acp_runner: AcpRunner = default_acp_runner,
         input_fn: Callable[[str], str] = input,
     ) -> None:
         self.command_prefix = (binary, *binary_args)
@@ -340,11 +428,12 @@ class LiveHarness:
         ):
             if path.exists():
                 raise HarnessError(f"{label} must not exist before the live run: {path}")
-        self.port = port
         self.claude_binary = reject_linked_path(claude_binary, "Claude binary")
         if not self.claude_binary.is_file():
             raise HarnessError(f"Claude binary does not exist: {self.claude_binary}")
         self.runner = runner
+        self.acp_runner = acp_runner
+        self.port = port
         self.input_fn = input_fn
         self.env = os.environ.copy()
         self.env["OPENCLAW_STATE_DIR"] = str(self.state)
@@ -362,17 +451,21 @@ class LiveHarness:
         return result
 
     def rpc(self, prompt: str, phase: str, *, show_output: bool = False) -> dict[str, str]:
-        result = self.run_command(
-            gateway_agent_command(self.command_prefix, self.repo, prompt, phase),
-            timeout=700,
+        command = acp_client_command(self.command_prefix, self.repo)
+        result = self.acp_runner(
+            command, self.repo, self.env, prompt, 700,
         )
+        self.evidence.commands.append({
+            "command": [Path(item).name if Path(item).is_absolute() else item for item in command[:4]],
+            **output_summary(result),
+        })
         if result.returncode:
             detail = redact(
                 (result.stderr or result.stdout).strip()[:1000],
                 (self.repo, self.workspace, self.state),
             )
             raise HarnessError(
-                f"OpenClaw agent RPC failed during {phase}: {detail or 'no diagnostic output'}"
+                f"OpenClaw ACP turn failed during {phase}: {detail or 'no diagnostic output'}"
             )
         if show_output:
             print(f"\n--- OpenClaw {phase} output (not retained in evidence) ---\n{result.stdout}\n--- end output ---")
@@ -394,9 +487,8 @@ class LiveHarness:
         self.gateway = subprocess.Popen(
             [*self.command_prefix, "gateway", "run", "--port", str(self.port),
              "--bind", "loopback", "--auth", "none"],
-            cwd=self.repo, env=self.env,
-            text=True, encoding="utf-8", errors="replace",
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            cwd=self.repo, env=self.env, text=True, encoding="utf-8",
+            errors="replace", stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         self.wait_for_gateway()
 
@@ -441,14 +533,21 @@ class LiveHarness:
         self.evidence.controls["empty_skill_allowlist_blocks_lifecycle"] = True
 
         config["agents"]["defaults"]["skills"] = list(LIFECYCLE_SKILLS)
-        config.setdefault("tools", {}).setdefault("exec", {})["security"] = "deny"
         config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+        set_execution_policy(config_path, "deny", "off")
         self.validate_config()
+        deny_policy = self.run_command(
+            exec_policy_preset_command(self.command_prefix, "deny-all"),
+            cwd=self.workspace, timeout=60,
+        )
+        if deny_policy.returncode:
+            raise HarnessError("could not install isolated deny-all execution policy")
+        self.evidence.controls["exec_policy_deny_all_configured"] = True
         sentinel = self.repo / ".context-os-exec-denial-sentinel"
         try:
             self.start_gateway()
             denied = self.rpc(
-                f"Attempt exactly one shell execution that creates {sentinel.name} in the current repository. "
+                f"Attempt exactly one Bash tool execution that creates {sentinel.name} in the current repository. "
                 f"Do not use another tool or retry. After execution authorization refuses it, return only "
                 f"{RESULT_PREFIX}{{\"status\":\"rejected\"}}.",
                 "execution-deny-control",
@@ -459,9 +558,16 @@ class LiveHarness:
             raise HarnessError("execution-authorization must-not-fire control failed")
         self.evidence.controls["execution_security_deny_blocks_shell"] = True
 
-        del config["tools"]
-        config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+        set_execution_policy(config_path, "full", "off")
         self.validate_config()
+        yolo_policy = self.run_command(
+            exec_policy_preset_command(self.command_prefix, "yolo"),
+            cwd=self.workspace, timeout=60,
+        )
+        if yolo_policy.returncode:
+            raise HarnessError("could not install disposable-repository must-fire execution policy")
+        self.evidence.controls["exec_policy_yolo_configured"] = True
+        self.evidence.controls["execution_full_must_fire_configured"] = True
 
     def proposal_phase(self, phase: str, prompt: str) -> None:
         proposed = self.rpc(prompt, f"{phase}-propose", show_output=True)
@@ -501,6 +607,12 @@ class LiveHarness:
         self.evidence.lifecycle.append({"phase": phase, "digest": digest, "wrong_digest_rejected": True})
 
     def execute(self) -> Evidence:
+        try:
+            return self._execute_unprotected()
+        finally:
+            self.stop_gateway()
+
+    def _execute_unprotected(self) -> Evidence:
         verify_port_is_free(self.port)
         version = self.run_command([*self.command_prefix, "--version"], timeout=30)
         if version.returncode:
@@ -543,72 +655,70 @@ class LiveHarness:
         if any(memory_before.values()):
             raise HarnessError("disposable repository already contains OpenClaw native-memory paths")
 
-        try:
-            self.start_gateway()
-            self.proposal_phase(
+        self.start_gateway()
+        self.proposal_phase(
                 "setup",
                 f"Invoke /skill setup using only this pre-reviewed synthetic public-safe fixture: project name "
                 f"'Lifecycle Fixture', purpose 'verify Context OS', current focus 'complete live conformance', "
                 f"no personal facts, no links, no credentials. The repository audience is explicitly confirmed "
                 f"as sanitized and disposable. Create a setup proposal, print its complete diff, do not apply it, "
                 f"then return only {RESULT_PREFIX}{{\"proposal\":\"<repo-relative path>\",\"digest\":\"<sha256>\"}}.",
-            )
-            before_start = repository_snapshot(self.repo)
-            started = self.rpc(
+        )
+        before_start = repository_snapshot(self.repo)
+        started = self.rpc(
                 f"Invoke /skill start. It must remain read-only. Return only "
                 f"{RESULT_PREFIX}{{\"status\":\"started\"}} after reporting the continuity inventory.",
                 "start",
-            )
-            if started.get("status") != "started" or repository_snapshot(self.repo) != before_start:
-                raise HarnessError("start lifecycle did not complete read-only")
-            self.evidence.lifecycle.append({"phase": "start", "read_only": True})
-            self.proposal_phase(
+        )
+        if started.get("status") != "started" or repository_snapshot(self.repo) != before_start:
+            raise HarnessError("start lifecycle did not complete read-only")
+        self.evidence.lifecycle.append({"phase": "start", "read_only": True})
+        self.proposal_phase(
                 "update",
                 f"Invoke /skill update with the synthetic fact 'Live OpenClaw checkpoint completed.' Create and "
                 f"show the complete proposal diff, do not apply it, then return only {RESULT_PREFIX}"
                 f"{{\"proposal\":\"<repo-relative path>\",\"digest\":\"<sha256>\"}}.",
-            )
-            draft = self.rpc(
+        )
+        draft = self.rpc(
                 f"Invoke /skill end only through its draft-review step using synthetic outcome 'OpenClaw live "
                 f"lifecycle exercised' and next action 'Review promotion evidence'; no personal facts and no "
                 f"durable decision. Do not create a proposal yet. Show the complete draft, then return only "
                 f"{RESULT_PREFIX}{{\"status\":\"draft-ready\"}}.",
                 "end-draft",
                 show_output=True,
-            )
-            if draft.get("status") != "draft-ready":
-                raise HarnessError("end lifecycle did not present a draft for review")
-            end_confirmation = self.input_fn(
-                "Review the end draft above. To authorize proposal creation, type 'approve end draft': "
-            ).strip()
-            if end_confirmation != "approve end draft":
-                raise HarnessError("end draft was not explicitly confirmed")
-            self.proposal_phase(
+        )
+        if draft.get("status") != "draft-ready":
+            raise HarnessError("end lifecycle did not present a draft for review")
+        end_confirmation = self.input_fn(
+            "Review the end draft above. To authorize proposal creation, type 'approve end draft': "
+        ).strip()
+        if end_confirmation != "approve end draft":
+            raise HarnessError("end draft was not explicitly confirmed")
+        self.proposal_phase(
                 "end",
                 f"Continue /skill end using the operator-confirmed synthetic draft: outcome 'OpenClaw live "
                 f"lifecycle exercised' and next action 'Review promotion evidence'; no durable decision. Create and show "
                 f"the complete proposal diff, do not apply it, then return only {RESULT_PREFIX}"
                 f"{{\"proposal\":\"<repo-relative path>\",\"digest\":\"<sha256>\"}}.",
-            )
+        )
 
-            paths = (self.repo, self.workspace, self.state)
-            for name, args, codes in (
-                ("doctor", [*self.command_prefix, "doctor", "--lint", "--json"], (0, 1)),
-                ("hooks", [*self.command_prefix, "hooks", "list", "--json"], (0,)),
-                ("plugins", [*self.command_prefix, "plugins", "list", "--json"], (0,)),
-            ):
-                result = self.run_command(args, cwd=self.workspace, timeout=120)
-                self.evidence.diagnostics[name] = parse_diagnostic(result, paths)
-                if result.returncode not in codes:
-                    raise HarnessError(f"OpenClaw {name} diagnostic failed")
-        finally:
-            self.stop_gateway()
+        paths = (self.repo, self.workspace, self.state)
+        for name, args, codes in (
+            ("doctor", [*self.command_prefix, "doctor", "--lint", "--json"], (0, 1)),
+            ("hooks", [*self.command_prefix, "hooks", "list", "--json"], (0,)),
+            ("plugins", [*self.command_prefix, "plugins", "list", "--json"], (0,)),
+        ):
+            result = self.run_command(args, cwd=self.workspace, timeout=120)
+            self.evidence.diagnostics[name] = parse_diagnostic(result, paths)
+            if result.returncode not in codes:
+                raise HarnessError(f"OpenClaw {name} diagnostic failed")
 
         memory_after = native_memory_snapshot(self.repo)
         self.evidence.controls["repo_native_memory_absent"] = not any(memory_after.values())
         self.evidence.controls["hooks_configured_disabled"] = True
         if memory_after != memory_before:
             raise HarnessError("OpenClaw created native-memory files inside the repository")
+        self.stop_gateway()
         return self.evidence
 
 
@@ -669,6 +779,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 pass
         print(f"openclaw live conformance failed safely: {exc}", file=sys.stderr)
         return 1
+    finally:
+        if harness is not None:
+            harness.stop_gateway()
     print(f"OpenClaw live conformance passed; redacted evidence: {harness.evidence_path}")
     return 0
 

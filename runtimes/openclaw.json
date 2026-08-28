@@ -10,7 +10,7 @@
     "next_steps": [
       "Create or choose a private OpenClaw workspace outside this repository.",
       "Run python adapters/openclaw/sync_skills.py sync --workspace <private-workspace> from the exact repository commit you intend to use, then verify it with the check command.",
-      "Use the Gateway agent RPC with cwd bound to this repository and invoke lifecycle skills explicitly with /skill setup, /skill start, /skill update, or /skill end."
+      "Start openclaw acp client --cwd <repository> while agents.defaults.workspace points at the separate private workspace, then invoke lifecycle skills explicitly with /skill setup, /skill start, /skill update, or /skill end."
     ]
   },
   "onboarding_doc": "adapters/openclaw/README.md",
@@ -53,6 +53,7 @@
       ],
       "conformance_tests": [
         "tests/test_openclaw_conformance.py",
+        "tests/test_openclaw_live_harness.py",
         "tests/test_contextos_kernel.py"
       ],
       "evidence": [

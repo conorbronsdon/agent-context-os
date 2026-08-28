@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "$REPO_ROOT"
 
-SETUP_USAGE="Usage: bash scripts/setup.sh [--agents claude,codex,cursor,devin,openclaw|auto|none] [--agent auto|RUNTIME|none]"
+SETUP_USAGE="Usage: bash scripts/setup.sh [--agents claude,codex,cursor,devin,hermes,openclaw|auto|none] [--agent auto|RUNTIME|none]"
 AGENT_SELECTION_KIND=""
 AGENT_SELECTION_RAW=""
 while [ "$#" -gt 0 ]; do
