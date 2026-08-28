@@ -105,6 +105,10 @@ SETUP_NEXT_ACTION = (
     "Run the explicit setup workflow (bash scripts/setup.sh, then the $context-setup "
     "skill) before starting a session."
 )
+FUTURE_DATE_NEXT_ACTION = (
+    "Check the system clock, then run the explicit setup workflow to replace the "
+    "future-dated **Last Updated:** value in state/current.md before starting a session."
+)
 class ContextOSError(RuntimeError):
     pass
 
@@ -3724,6 +3728,17 @@ def _initialization_state(
     return _is_initialized(workspace, today), state
 
 
+def _initialization_next_action(
+    workspace: Workspace, state: dict[str, dict[str, Any]]
+) -> str:
+    gate = relative_path(
+        workspace.root, workspace.state_dir / INITIALIZATION_FILE
+    )
+    if state[gate]["freshness_status"] == "future":
+        return FUTURE_DATE_NEXT_ACTION
+    return SETUP_NEXT_ACTION
+
+
 def start_report(root: Path, now: datetime) -> dict[str, Any]:
     workspace = load_workspace(root)
     initialized, files = _initialization_state(workspace, now.date())
@@ -3732,7 +3747,9 @@ def start_report(root: Path, now: datetime) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "generated_at": now.isoformat(),
         "initialized": initialized,
-        "next_action": None if initialized else SETUP_NEXT_ACTION,
+        "next_action": (
+            None if initialized else _initialization_next_action(workspace, files)
+        ),
         "state": files,
         "latest_session": relative_path(root, sessions[0]) if sessions else None,
         "task_file": relative_path(root, workspace.task_file),
@@ -4089,19 +4106,39 @@ def doctor(
             "pass" if initialized else "warn",
             "ready"
             if initialized
-            else f"guided setup required; {gate} carries no real **Last Updated:** date",
+            else (
+                f"recovery required; {gate} carries a future **Last Updated:** date; "
+                + _initialization_next_action(workspace, initialization_files)
+                if initialization_files[gate]["freshness_status"] == "future"
+                else f"guided setup required; {gate} carries no real **Last Updated:** date"
+            ),
         )
-        unresolved = [
+        future = [
             path
             for path, item in initialization_files.items()
-            if item["freshness_status"] in {"missing", "unknown", "future"}
+            if item["freshness_status"] == "future"
         ]
+        unusable = [
+            path
+            for path, item in initialization_files.items()
+            if item["freshness_status"] in {"missing", "unknown"}
+        ]
+        unresolved = future + unusable
+        freshness_details = []
+        if future:
+            freshness_details.append(
+                "future **Last Updated:** date in: " + ", ".join(future)
+            )
+        if unusable:
+            freshness_details.append(
+                "no usable **Last Updated:** date in: " + ", ".join(unusable)
+            )
         add(
             "state-freshness",
             "pass" if not unresolved else "warn",
             "all tracked state files carry a real date"
             if not unresolved
-            else f"no usable **Last Updated:** date in: {', '.join(unresolved)}",
+            else "; ".join(freshness_details),
         )
 
     local_hosts = {"schema_version": HOST_STATE_SCHEMA_VERSION, "hosts": {}}
@@ -4782,8 +4819,17 @@ def hook_report(root: Path, event: str, payload: dict[str, Any]) -> dict[str, An
     findings: list[dict[str, str]] = []
     workspace = load_workspace(root)
     if event == "session-start":
-        if not _is_initialized(workspace):
-            findings.append({"severity": "advisory", "message": f"Context OS is not initialized. {SETUP_NEXT_ACTION}"})
+        initialized, initialization_files = _initialization_state(
+            workspace, utc_now().date()
+        )
+        if not initialized:
+            findings.append({
+                "severity": "advisory",
+                "message": (
+                    "Context OS is not initialized. "
+                    + _initialization_next_action(workspace, initialization_files)
+                ),
+            })
         lock = root / ".context-os" / "apply.lock"
         if lock.exists():
             findings.append({"severity": "warning", "message": f"A lifecycle apply lock exists at {lock}. Run context-os doctor before writing."})

@@ -139,6 +139,25 @@ class CrossRuntimeHookTest(unittest.TestCase):
                 json.loads(accepted_stderr_override.stdout)["systemMessage"],
             )
 
+            failing_python = Path(temporary_directory) / "failing-python.cmd"
+            failing_python.write_text(
+                '@echo off\nif "%~1"=="-c" exit /b 0\n'
+                'echo hook-child-failed 1>&2\nexit /b 23\n',
+                encoding="utf-8",
+            )
+            environment["CONTEXTOS_PYTHON"] = str(failing_python)
+            propagated_failure = subprocess.run(
+                command,
+                cwd=ROOT,
+                env=environment,
+                input="{}",
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(23, propagated_failure.returncode)
+            self.assertIn("hook-child-failed", propagated_failure.stderr)
+
         environment["CONTEXTOS_PYTHON"] = sys.executable
         must_not_fire = subprocess.run(
             command,

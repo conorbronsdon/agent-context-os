@@ -84,6 +84,9 @@
 - First-class Codex onboarding with a root `AGENTS.md`, four explicit-invocation lifecycle skills under `.agents/skills/`, generated skill UI metadata, `--agent codex` setup support, portability tests, and a host-boundary guide.
 
 ### Fixed
+- Lifecycle readiness now gives recovery-specific guidance for future-dated
+  `state/current.md`, protects shipped `[DATE]` placeholders, and controls
+  missing-Git advisory behavior plus exact PowerShell child-exit propagation.
 - Git-index materialization now stages the exact index blobs verified against
   the bundle lock, so CRLF checkout transforms, clean/smudge filters, and
   unrelated unstaged source edits cannot replace or invalidate approved bytes.

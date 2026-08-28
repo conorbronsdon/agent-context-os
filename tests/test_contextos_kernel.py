@@ -1044,7 +1044,7 @@ with mock.patch("contextos.kernel._capture_transaction_before", side_effect=cras
         self.assertTrue(report["initialized"])
         self.assertIsNone(report["next_action"])
 
-    def test_fresh_clone_reports_setup_required_from_real_templates(self) -> None:
+    def test_fresh_clone_reports_setup_required_from_synthetic_templates(self) -> None:
         self._write_undated_state("current.md", "weekly-priorities.md", "blockers.md")
 
         report = start_report(self.root, NOW)
@@ -1084,6 +1084,25 @@ with mock.patch("contextos.kernel._capture_transaction_before", side_effect=cras
         )
         self.assertEqual("warn", initialization["status"])
         self.assertIn("state/current.md", initialization["detail"])
+        self.assertIn("future", initialization["detail"])
+        self.assertIn("Check the system clock", report["next_action"])
+        self.assertTrue(
+            any("Check the system clock" in message for message in messages),
+            messages,
+        )
+        freshness = next(
+            item for item in diagnosis["checks"] if item["name"] == "state-freshness"
+        )
+        self.assertIn("future", freshness["detail"])
+
+    def test_shipped_state_templates_retain_date_placeholders(self) -> None:
+        for filename in ("current.md", "weekly-priorities.md", "blockers.md"):
+            content = (ROOT / "state" / filename).read_text(encoding="utf-8")
+            self.assertEqual(
+                1,
+                content.count("**Last Updated:** [DATE]"),
+                f"state/{filename} must retain exactly one shipped [DATE] placeholder",
+            )
 
     def test_invalid_or_unreadable_dates_are_unknown_in_every_readiness_consumer(self) -> None:
         current = self.root / "state/current.md"
