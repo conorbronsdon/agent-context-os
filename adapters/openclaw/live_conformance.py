@@ -548,9 +548,15 @@ class LiveHarness:
         self.evidence.commands.append({"command": command_shape, **output_summary(result)})
         return result
 
-    def rpc(self, prompt: str, phase: str, *, show_output: bool = False) -> dict[str, str]:
+    def rpc(
+        self, prompt: str, phase: str, *, show_output: bool = False,
+        enforce_execution_root: bool = True,
+    ) -> dict[str, str]:
         command = acp_server_command(self.command_prefix)
-        bounded_prompt = f"{EXECUTION_ROOT_BOUNDARY}\n\n{prompt}"
+        bounded_prompt = (
+            f"{EXECUTION_ROOT_BOUNDARY}\n\n{prompt}"
+            if enforce_execution_root else prompt
+        )
         result = self.acp_runner(
             command, self.repo, self.env, bounded_prompt, 700,
         )
@@ -650,6 +656,7 @@ class LiveHarness:
                 f"Do not use another tool or retry. After execution authorization refuses it, return only "
                 f"{RESULT_PREFIX}{{\"status\":\"rejected\"}}.",
                 "execution-deny-control",
+                enforce_execution_root=False,
             )
         finally:
             self.stop_gateway()
