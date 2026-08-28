@@ -3667,19 +3667,33 @@ def render_hook_payload(
 def _state_freshness(path: Path, today: date, threshold: int) -> dict[str, Any]:
     updated = None
     age = None
-    if path.exists():
+    exists = False
+    raw: bytes | None = None
+    try:
+        raw, _metadata = read_regular_file_snapshot(
+            path, subject=f"state freshness file {path.name}"
+        )
+        exists = True
+    except SnapshotError as exc:
+        if isinstance(exc.__cause__, FileNotFoundError):
+            exists = False
+        elif isinstance(exc.__cause__, PermissionError):
+            exists = True
+        else:
+            raise ContextOSError(str(exc)) from exc
+    if raw is not None:
         try:
-            match = LAST_UPDATED_RE.search(path.read_text(encoding="utf-8"))
+            match = LAST_UPDATED_RE.search(raw.decode("utf-8"))
             if match and REAL_DATE_RE.fullmatch(match.group(1).strip()):
                 candidate = match.group(1).strip()
                 parsed = datetime.strptime(candidate, "%Y-%m-%d").date()
                 updated = candidate
                 age = (today - parsed).days
-        except (OSError, UnicodeError, ValueError):
+        except (UnicodeError, ValueError):
             # Diagnostics and advisory hooks must report unreadable or invalid
             # state as unknown rather than crashing on the file they diagnose.
             pass
-    if not path.exists():
+    if not exists:
         status = "missing"
     elif age is None:
         status = "unknown"
@@ -3690,7 +3704,7 @@ def _state_freshness(path: Path, today: date, threshold: int) -> dict[str, Any]:
     else:
         status = "fresh"
     return {
-        "exists": path.exists(),
+        "exists": exists,
         "last_updated": updated,
         "age_days": age,
         "stale_after_days": threshold,
@@ -3711,15 +3725,26 @@ def _is_initialized(freshness: dict[str, Any]) -> bool:
 
 
 def _initialization_state(
-    workspace: Workspace, today: date
+    workspace: Workspace, today: date, *, tolerate_unsafe: bool = False
 ) -> tuple[bool, dict[str, dict[str, Any]]]:
     state: dict[str, dict[str, Any]] = {}
     for filename, threshold in STATE_THRESHOLDS.items():
         path = workspace.state_dir / filename
-        _guard_local_state_path(workspace.root, path)
-        state[relative_path(workspace.root, path)] = _state_freshness(
-            path, today, threshold
-        )
+        relative = relative_path(workspace.root, path)
+        try:
+            _guard_local_state_path(workspace.root, path)
+            state[relative] = _state_freshness(path, today, threshold)
+        except ContextOSError:
+            if not tolerate_unsafe:
+                raise
+            state[relative] = {
+                "exists": False,
+                "last_updated": None,
+                "age_days": None,
+                "stale_after_days": threshold,
+                "freshness_status": "unknown",
+                "stale": None,
+            }
     gate = relative_path(
         workspace.root, workspace.state_dir / INITIALIZATION_FILE
     )
@@ -4097,7 +4122,7 @@ def doctor(
         )
     else:
         initialized, initialization_files = _initialization_state(
-            workspace, effective_today
+            workspace, effective_today, tolerate_unsafe=True
         )
         add(
             "initialization-state",

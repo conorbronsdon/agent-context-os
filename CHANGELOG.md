@@ -88,7 +88,8 @@
   `state/current.md`, protects shipped `[DATE]` placeholders, and controls
   missing-Git advisory behavior plus exact PowerShell child-exit propagation.
   Start and automatic session hooks also reject linked or reparse-point state
-  paths before reading them.
+  paths through stable no-follow snapshots, while doctor degrades concurrent
+  path changes to an unknown diagnostic instead of crashing.
 - Git-index materialization now stages the exact index blobs verified against
   the bundle lock, so CRLF checkout transforms, clean/smudge filters, and
   unrelated unstaged source edits cannot replace or invalidate approved bytes.
