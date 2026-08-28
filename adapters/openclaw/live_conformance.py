@@ -188,7 +188,7 @@ def write_openclaw_config(
 
 
 def gateway_agent_command(
-    binary: str, repo: Path, prompt: str, phase: str, port: int,
+    command_prefix: Sequence[str], repo: Path, prompt: str, phase: str, port: int,
 ) -> list[str]:
     params = {
         "agentId": "main",
@@ -199,7 +199,7 @@ def gateway_agent_command(
         "idempotencyKey": f"contextos-live-{phase}-{uuid.uuid4()}",
     }
     return [
-        binary, "gateway", "call", "agent", "--params",
+        *command_prefix, "gateway", "call", "agent", "--params",
         json.dumps(params, separators=(",", ":")), "--expect-final", "--json",
         "--url", f"ws://127.0.0.1:{port}", "--timeout", "650000",
     ]
@@ -326,9 +326,10 @@ class LiveHarness:
     def __init__(
         self, *, binary: str, expected_version: str, repo: Path, state: Path,
         workspace: Path, evidence_path: Path, port: int, runner: Runner = default_runner,
-        claude_binary: Path, input_fn: Callable[[str], str] = input,
+        claude_binary: Path, binary_args: Sequence[str] = (),
+        input_fn: Callable[[str], str] = input,
     ) -> None:
-        self.binary = binary
+        self.command_prefix = (binary, *binary_args)
         self.expected_version = expected_version
         self.repo, self.state, self.workspace, self.evidence_path = validate_paths(
             repo, state, workspace, evidence_path,
@@ -353,12 +354,16 @@ class LiveHarness:
 
     def run_command(self, argv: Sequence[str], *, cwd: Path | None = None, timeout: float = 120) -> CommandResult:
         result = self.runner(argv, cwd or self.repo, self.env, timeout)
-        self.evidence.commands.append({"command": list(argv[:3]), **output_summary(result)})
+        command_shape = [
+            Path(item).name if Path(item).is_absolute() else item
+            for item in argv[:3]
+        ]
+        self.evidence.commands.append({"command": command_shape, **output_summary(result)})
         return result
 
     def rpc(self, prompt: str, phase: str, *, show_output: bool = False) -> dict[str, str]:
         result = self.run_command(
-            gateway_agent_command(self.binary, self.repo, prompt, phase, self.port),
+            gateway_agent_command(self.command_prefix, self.repo, prompt, phase, self.port),
             timeout=700,
         )
         if result.returncode:
@@ -381,7 +386,7 @@ class LiveHarness:
 
     def start_gateway(self) -> None:
         self.gateway = subprocess.Popen(
-            [self.binary, "gateway", "run", "--port", str(self.port),
+            [*self.command_prefix, "gateway", "run", "--port", str(self.port),
              "--bind", "loopback", "--auth", "none"],
             cwd=self.repo, env=self.env,
             text=True, encoding="utf-8", errors="replace",
@@ -400,14 +405,14 @@ class LiveHarness:
             self.gateway.wait(timeout=5)
 
     def validate_config(self) -> None:
-        result = self.run_command([self.binary, "config", "validate"], cwd=self.workspace, timeout=60)
+        result = self.run_command([*self.command_prefix, "config", "validate"], cwd=self.workspace, timeout=60)
         if result.returncode:
             raise HarnessError("OpenClaw rejected the generated live-conformance config")
 
     def verify_preflight_controls(self, config_path: Path) -> None:
         config = json.loads(config_path.read_text(encoding="utf-8"))
         visible_result = self.run_command(
-            [self.binary, "skills", "list", "--json"], cwd=self.workspace, timeout=120,
+            [*self.command_prefix, "skills", "list", "--json"], cwd=self.workspace, timeout=120,
         )
         if visible_result.returncode:
             raise HarnessError("could not inspect the effective OpenClaw skill allowlist")
@@ -419,7 +424,7 @@ class LiveHarness:
         config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
         self.validate_config()
         blocked_result = self.run_command(
-            [self.binary, "skills", "list", "--json"], cwd=self.workspace, timeout=120,
+            [*self.command_prefix, "skills", "list", "--json"], cwd=self.workspace, timeout=120,
         )
         blocked = skill_inventory(blocked_result.stdout) if blocked_result.returncode == 0 else {}
         if not all(
@@ -491,7 +496,7 @@ class LiveHarness:
 
     def execute(self) -> Evidence:
         verify_port_is_free(self.port)
-        version = self.run_command([self.binary, "--version"], timeout=30)
+        version = self.run_command([*self.command_prefix, "--version"], timeout=30)
         if version.returncode:
             raise HarnessError("could not execute the requested OpenClaw binary")
         self.evidence.binary_version = version.stdout.strip()
@@ -582,9 +587,9 @@ class LiveHarness:
 
             paths = (self.repo, self.workspace, self.state)
             for name, args, codes in (
-                ("doctor", [self.binary, "doctor", "--lint", "--json"], (0, 1)),
-                ("hooks", [self.binary, "hooks", "list", "--json"], (0,)),
-                ("plugins", [self.binary, "plugins", "list", "--json"], (0,)),
+                ("doctor", [*self.command_prefix, "doctor", "--lint", "--json"], (0, 1)),
+                ("hooks", [*self.command_prefix, "hooks", "list", "--json"], (0,)),
+                ("plugins", [*self.command_prefix, "plugins", "list", "--json"], (0,)),
             ):
                 result = self.run_command(args, cwd=self.workspace, timeout=120)
                 self.evidence.diagnostics[name] = parse_diagnostic(result, paths)
@@ -619,6 +624,10 @@ def write_evidence(path: Path, evidence: Evidence) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", default="openclaw")
+    parser.add_argument(
+        "--binary-arg", action="append", default=[],
+        help="Argument inserted after --binary and before every OpenClaw command; repeat as needed",
+    )
     parser.add_argument("--claude-binary", type=Path, required=True)
     parser.add_argument("--expected-version", required=True)
     parser.add_argument("--repo", type=Path, required=True)
@@ -633,15 +642,25 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    harness = LiveHarness(
-        binary=args.binary, expected_version=args.expected_version, repo=args.repo,
-        state=args.state_dir, workspace=args.private_workspace,
-        evidence_path=args.evidence, port=args.port, claude_binary=args.claude_binary,
-    )
+    harness: LiveHarness | None = None
     try:
+        harness = LiveHarness(
+            binary=args.binary, binary_args=args.binary_arg,
+            expected_version=args.expected_version, repo=args.repo,
+            state=args.state_dir, workspace=args.private_workspace,
+            evidence_path=args.evidence, port=args.port, claude_binary=args.claude_binary,
+        )
         evidence = harness.execute()
         write_evidence(harness.evidence_path, evidence)
     except (HarnessError, OSError, subprocess.SubprocessError, TypeError, ValueError) as exc:
+        if harness is not None:
+            harness.evidence.controls["failure"] = redact(
+                str(exc), (harness.repo, harness.workspace, harness.state),
+            )
+            try:
+                write_evidence(harness.evidence_path, harness.evidence)
+            except OSError:
+                pass
         print(f"openclaw live conformance failed safely: {exc}", file=sys.stderr)
         return 1
     print(f"OpenClaw live conformance passed; redacted evidence: {harness.evidence_path}")

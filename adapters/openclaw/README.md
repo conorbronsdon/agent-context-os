@@ -121,6 +121,13 @@ python adapters/openclaw/live_conformance.py \
   --acknowledge-disposable-repo
 ```
 
+On Windows, avoid the npm `.cmd` wrapper for Gateway JSON parameters. Invoke
+the same installed release through Node instead:
+
+```text
+--binary <node.exe> --binary-arg <openclaw-package>/openclaw.mjs
+```
+
 The disposable repository must be at the same Git SHA as the harness source.
 The harness validates config before egress, verifies skill visibility and shell
 denial separately, drives `setup`/`start`/`update`/`end` through Gateway RPC with

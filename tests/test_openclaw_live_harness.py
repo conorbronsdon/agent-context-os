@@ -83,8 +83,8 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
             live.write_openclaw_config(self.state, self.workspace, 18789, self.claude)
 
     def test_gateway_agent_command_has_repo_cwd_and_unique_idempotency(self) -> None:
-        first = live.gateway_agent_command("openclaw", self.repo, "synthetic", "start", 18789)
-        second = live.gateway_agent_command("openclaw", self.repo, "synthetic", "start", 18789)
+        first = live.gateway_agent_command(("openclaw",), self.repo, "synthetic", "start", 18789)
+        second = live.gateway_agent_command(("openclaw",), self.repo, "synthetic", "start", 18789)
         self.assertEqual(["openclaw", "gateway", "call", "agent"], first[:4])
         self.assertIn("--expect-final", first)
         self.assertIn("--json", first)
@@ -97,6 +97,12 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         self.assertEqual(live.MODEL_ROUTE, params["model"])
         self.assertIn("sessionKey", params)
         self.assertNotEqual(params["idempotencyKey"], other["idempotencyKey"])
+
+    def test_gateway_command_supports_node_entrypoint_prefix(self) -> None:
+        command = live.gateway_agent_command(
+            ("node", "C:/fixture/openclaw.mjs"), self.repo, "synthetic", "start", 18789,
+        )
+        self.assertEqual(["node", "C:/fixture/openclaw.mjs", "gateway", "call", "agent"], command[:5])
 
     def test_model_route_is_the_authenticated_claude_cli_route(self) -> None:
         config = live.openclaw_config(self.workspace, 18789, self.claude)
