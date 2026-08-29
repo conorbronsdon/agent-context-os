@@ -18,6 +18,10 @@ if (( $# )); then
   exit 2
 fi
 
+if [[ $VALIDATION_PROFILE == workspace ]]; then
+  "$BASH" scripts/contextos.sh workspace show >/dev/null
+fi
+
 bash scripts/validate-skills.sh
 bash scripts/check-links.sh
 bash scripts/check-doc-reachability.sh

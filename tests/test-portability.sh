@@ -124,13 +124,29 @@ grep -Fq '/memory' .claude/commands/setup.md \
 grep -Fq 'autoMemoryEnabled: false' .claude/commands/setup.md \
   || fail "Claude setup adapter omits the auto-memory opt-out"
 
-portability_tmp=$(mktemp -d)
-# Native git on Windows cannot cd to MSYS-style /tmp paths; resolve to a
-# native path when cygpath is available. No-op on Linux.
+portability_tmp_parent=""
 if command -v cygpath >/dev/null 2>&1; then
-  portability_tmp=$(cygpath -m "$portability_tmp")
+  # Managed Windows workspaces may deny writes to the user's native temp tree.
+  # Keep Git-Bash fixtures in ignored repository-local state and retain the
+  # shell-native path spelling for mkdir/tar/rm.
+  portability_tmp_parent="$ROOT/.context-os/portability-tests"
+  mkdir -p "$portability_tmp_parent"
+  portability_tmp=$(mktemp -d "$portability_tmp_parent/run.XXXXXX")
+  case "$portability_tmp" in
+    "$portability_tmp_parent"/run.*) ;;
+    *) fail "Windows portability temp escaped its repository-local parent" ;;
+  esac
+else
+  portability_tmp=$(mktemp -d)
 fi
-trap 'rm -rf "$portability_tmp"' EXIT
+cleanup_portability_tmp() {
+  rm -rf -- "$portability_tmp"
+  if [ -n "$portability_tmp_parent" ]; then
+    rmdir "$portability_tmp_parent" 2>/dev/null || true
+    rmdir "$ROOT/.context-os" 2>/dev/null || true
+  fi
+}
+trap cleanup_portability_tmp EXIT
 
 # Windows commonly exposes Python 3 as `python` without a usable `python3`.
 # Exercise that fallback with an isolated PATH so a host python3 cannot mask it.
@@ -140,12 +156,14 @@ python_fallback_path="$python_fallback_bin"
 if command -v cygpath >/dev/null 2>&1; then
   python_fallback_path=$(cygpath -u "$python_fallback_bin")
 fi
-resolved_bash=$(command -v bash)
+resolved_bash=${BASH:?}
 resolved_python=$(command -v "$CONTEXTOS_PYTHON_CMD")
+resolver_tool_path=$PATH
+printf '#!%s\nexit 1\n' "$resolved_bash" > "$python_fallback_bin/python3"
 printf '#!%s\nexec %q "$@"\n' "$resolved_bash" "$resolved_python" > "$python_fallback_bin/python"
-chmod +x "$python_fallback_bin/python"
+chmod +x "$python_fallback_bin/python3" "$python_fallback_bin/python"
 fallback_python=$(
-  PATH="$python_fallback_path" CONTEXTOS_PYTHON= "$resolved_bash" -c \
+  PATH="$python_fallback_path:$resolver_tool_path" CONTEXTOS_PYTHON= "$resolved_bash" -c \
     'source "$1"; printf "%s" "$CONTEXTOS_PYTHON_CMD"' _ "$ROOT/scripts/python-env.sh"
 )
 [ "$fallback_python" = "python" ] || fail "Python resolver did not fall back from python3 to python"
@@ -154,6 +172,10 @@ bytecode_policy=$(
   "$resolved_bash" -c 'source "$1"; printf "%s" "$PYTHONDONTWRITEBYTECODE"' _ "$ROOT/scripts/python-env.sh"
 )
 [ "$bytecode_policy" = "1" ] || fail "Python resolver does not disable repository bytecode writes"
+encoding_policy=$(
+  "$resolved_bash" -c 'source "$1"; printf "%s" "$PYTHONIOENCODING"' _ "$ROOT/scripts/python-env.sh"
+)
+[ "$encoding_policy" = "utf-8" ] || fail "Python resolver does not force UTF-8 subprocess output"
 
 # An explicit CONTEXTOS_PYTHON is an instruction, not a hint. A working override
 # must win, and a broken one must fail loudly instead of silently resolving to a
@@ -178,14 +200,40 @@ grep -Fq 'sys.version_info >= (3, 10)' scripts/context-os-hook.ps1 \
 old_python_bin="$portability_tmp/old-python-bin"
 mkdir -p "$old_python_bin"
 printf '#!%s\nif [ "$1" = "-c" ]; then exit 1; fi\nexit 1\n' "$resolved_bash" > "$old_python_bin/python3"
-chmod +x "$old_python_bin/python3"
+printf '#!%s\nexit 1\n' "$resolved_bash" > "$old_python_bin/python"
+chmod +x "$old_python_bin/python3" "$old_python_bin/python"
 old_python_path="$old_python_bin"
 if command -v cygpath >/dev/null 2>&1; then
   old_python_path=$(cygpath -u "$old_python_bin")
 fi
-if PATH="$old_python_path" CONTEXTOS_PYTHON= "$resolved_bash" -c \
+if PATH="$old_python_path:$resolver_tool_path" CONTEXTOS_PYTHON= "$resolved_bash" -c \
   'source "$1"' _ "$ROOT/scripts/python-env.sh" >/dev/null 2>&1; then
   fail "Python resolver accepted an interpreter that failed the version probe"
+fi
+
+# A Windows shim can return success for a version probe yet write UTF-16/NUL
+# output that corrupts command substitution. Reject it and continue to python.
+nul_python_bin="$portability_tmp/nul-python-bin"
+mkdir -p "$nul_python_bin"
+cat > "$nul_python_bin/python3" <<EOF
+#!$resolved_bash
+printf '\\342\\0\\234\\0\\223\\0'
+EOF
+chmod +x "$nul_python_bin/python3"
+printf '#!%s\nexec %q "$@"\n' "$resolved_bash" "$resolved_python" > "$nul_python_bin/python"
+chmod +x "$nul_python_bin/python"
+nul_python_path="$nul_python_bin"
+if command -v cygpath >/dev/null 2>&1; then
+  nul_python_path=$(cygpath -u "$nul_python_bin")
+fi
+nul_fallback=$(
+  PATH="$nul_python_path:$resolver_tool_path" CONTEXTOS_PYTHON= "$resolved_bash" -c \
+    'source "$1"; printf "%s" "$CONTEXTOS_PYTHON_CMD"' _ "$ROOT/scripts/python-env.sh"
+)
+[ "$nul_fallback" = "python" ] || fail "Python resolver accepted NUL-delimited probe output"
+if PATH="$nul_python_path:$resolver_tool_path" CONTEXTOS_PYTHON="$nul_python_path/python3" \
+  "$resolved_bash" -c 'source "$1"' _ "$ROOT/scripts/python-env.sh" >/dev/null 2>&1; then
+  fail "explicit NUL-delimited CONTEXTOS_PYTHON silently fell back to another interpreter"
 fi
 
 # The lifecycle wrapper must run the kernel through the resolver.
@@ -334,9 +382,49 @@ fi
 
 make_setup_fixture() {
   local destination="$1"
+  local source="${2:-.}"
+  local fixture_path
+  local product_files=()
   mkdir -p "$destination"
-  tar --exclude='.git' --exclude='.context-os' --exclude='node_modules' \
-    -cf - . | tar -xf - -C "$destination"
+  while IFS= read -r -d '' fixture_path; do
+    if [ -e "$source/$fixture_path" ] || [ -L "$source/$fixture_path" ]; then
+      product_files+=("$fixture_path")
+    fi
+  done < <("$CONTEXTOS_PYTHON_CMD" - "$ROOT/components/manifest.json" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+for component in manifest["components"]:
+    for entry in component["paths"]:
+        if entry["policy"] in {"managed", "development"}:
+            sys.stdout.buffer.write(entry["path"].encode() + b"\0")
+PY
+  )
+  (cd "$source" && tar -cf - -- "${product_files[@]}") | tar -xf - -C "$destination"
+  # Seed files are user-owned. Create deterministic fixture seeds instead of
+  # importing personalized content from the invoking workspace.
+  while IFS= read -r -d '' fixture_path; do
+    mkdir -p "$destination/$(dirname "$fixture_path")"
+    : > "$destination/$fixture_path"
+  done < <("$CONTEXTOS_PYTHON_CMD" - "$ROOT/components/manifest.json" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+for component in manifest["components"]:
+    for entry in component["paths"]:
+        if entry["policy"] == "seed":
+            sys.stdout.buffer.write(entry["path"].encode() + b"\0")
+PY
+  )
+  printf '# [Your Name] — Context\n' > "$destination/CLAUDE.md"
+  printf '# Routing\n' > "$destination/ROUTING.md"
+  printf '{}\n' > "$destination/.claude/settings.json"
+  # Tracked workspace configuration is caller-owned and extensible; it is not
+  # part of a clean setup fixture regardless of JSON or legacy YAML format.
   # Setup's prompt sequence must remain stable after a user removes the optional
   # seed project from their own workspace. An empty fixture directory is enough
   # to exercise the removal prompt without fabricating tracked source content.
@@ -349,6 +437,52 @@ make_setup_fixture() {
   git -C "$destination" commit -qm baseline
   git -C "$destination" remote add origin https://example.invalid/context.git
 }
+
+contaminated_source="$portability_tmp/setup-source-with-user-config"
+contamination_fixture="$portability_tmp/setup-fixture-without-user-config"
+mkdir -p "$contaminated_source"
+printf '{"agents":["openclaw"]}\n' > "$contaminated_source/contextos.workspace.json"
+printf 'agents:\n  - openclaw\n' > "$contaminated_source/workspace.yaml"
+mkdir -p "$contaminated_source/scripts"
+printf 'tracked fixture\n' > "$contaminated_source/scripts/setup.sh"
+mkdir -p "$contaminated_source/.claude"
+printf '{"private":true}\n' > "$contaminated_source/.claude/settings.local.json"
+printf 'secret\n' > "$contaminated_source/.env.local"
+git -C "$contaminated_source" init -q
+git -C "$contaminated_source" config user.name "Portability Test"
+git -C "$contaminated_source" config user.email "portability@example.invalid"
+git -C "$contaminated_source" add contextos.workspace.json workspace.yaml scripts/setup.sh
+git -C "$contaminated_source" commit -qm baseline
+make_setup_fixture "$contamination_fixture" "$contaminated_source"
+test ! -e "$contamination_fixture/contextos.workspace.json" \
+  || fail "setup fixture copied caller-owned contextos.workspace.json"
+test ! -e "$contamination_fixture/workspace.yaml" \
+  || fail "setup fixture copied caller-owned workspace.yaml"
+test ! -e "$contamination_fixture/.claude/settings.local.json" \
+  || fail "setup fixture copied ignored Claude settings"
+test ! -e "$contamination_fixture/.env.local" \
+  || fail "setup fixture copied ignored environment data"
+test -f "$contamination_fixture/scripts/setup.sh" \
+  || fail "setup fixture inventory dropped a declared product file"
+
+invalid_workspace_fixture="$portability_tmp/invalid-workspace-validation"
+make_setup_fixture "$invalid_workspace_fixture"
+"$CONTEXTOS_PYTHON_CMD" - "$invalid_workspace_fixture/contextos.workspace.json" \
+  "$ROOT/workspace/example.json" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+config = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+config["agents"] = ["not-a-runtime"]
+Path(sys.argv[1]).write_text(json.dumps(config) + "\n", encoding="utf-8", newline="\n")
+PY
+if (cd "$invalid_workspace_fixture" && \
+  "$resolved_bash" scripts/contextos.sh workspace show) >/dev/null 2>&1; then
+  fail "workspace show accepted an otherwise-valid config with an unknown runtime"
+fi
+grep -Fq '"$BASH" scripts/contextos.sh workspace show' scripts/validate-all.sh \
+  || fail "workspace validation does not gate on the caller configuration"
 
 for invalid_setup_args in \
   '--agents claude,claude' \
@@ -365,12 +499,25 @@ done
 
 setup_test_path="$(dirname "$(command -v "$CONTEXTOS_PYTHON_CMD")"):$(dirname "$(command -v git)"):/usr/bin:/bin"
 
+hostile_bash_bin="$portability_tmp/hostile-bash-bin"
+hostile_bash_marker="$portability_tmp/hostile-bash-launched"
+mkdir -p "$hostile_bash_bin"
+printf '#!%s\nprintf launched > %q\nexit 97\n' \
+  "$resolved_bash" "$hostile_bash_marker" > "$hostile_bash_bin/bash"
+chmod +x "$hostile_bash_bin/bash"
+hostile_bash_path="$hostile_bash_bin"
+if command -v cygpath >/dev/null 2>&1; then
+  hostile_bash_path=$(cygpath -u "$hostile_bash_bin")
+fi
+
 multi_agent_fixture="$portability_tmp/multi-agent-selection"
 make_setup_fixture "$multi_agent_fixture"
-multi_agent_output=$(printf 'y\n\nn\nn\nn\ny\nn\n' | (
+multi_agent_output=$(printf 'y\n\nn\nn\ny\ny\nn\n' | (
   cd "$multi_agent_fixture" &&
-  PATH="$setup_test_path" bash scripts/setup.sh --agents codex,claude
+  PATH="$hostile_bash_path:$setup_test_path" "$resolved_bash" scripts/setup.sh --agents codex,claude
 ) 2>&1)
+test ! -e "$hostile_bash_marker" \
+  || fail "setup re-resolved a hostile nested bash instead of reusing its current shell"
 "$CONTEXTOS_PYTHON_CMD" - "$multi_agent_fixture/contextos.workspace.json" <<'PY'
 from pathlib import Path
 import json

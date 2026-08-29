@@ -11,8 +11,14 @@
 CONTEXTOS_PYTHON_CMD=""
 
 _contextos_python_works() {
-  command -v "$1" >/dev/null 2>&1 &&
-    "$1" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' >/dev/null 2>&1
+  local probe_hex
+  command -v "$1" >/dev/null 2>&1 || return 1
+  probe_hex=$(set -o pipefail
+    PYTHONIOENCODING=utf-8 "$1" -c \
+      'import sys; sys.version_info >= (3, 10) or sys.exit(1); sys.stdout.write(chr(0x2713))' \
+      2>/dev/null | od -An -v -tx1 | tr -d '[:space:]'
+  ) || return 1
+  [ "$probe_hex" = 'e29c93' ]
 }
 
 if [ -n "${CONTEXTOS_PYTHON:-}" ]; then
@@ -42,6 +48,7 @@ if [ -z "$CONTEXTOS_PYTHON_CMD" ]; then
 fi
 
 export CONTEXTOS_PYTHON_CMD
+export PYTHONIOENCODING=utf-8
 
 # Repository lifecycle commands must not create executable bytecode as a side
 # effect. Besides keeping working trees clean, this lets integrity checks treat

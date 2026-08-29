@@ -6,6 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+readonly CONTEXTOS_SETUP_BASH="$BASH"
 cd "$REPO_ROOT"
 
 SETUP_USAGE="Usage: bash scripts/setup.sh [--agents claude,codex,cursor,devin,hermes,openclaw|auto|none] [--agent auto|RUNTIME|none]"
@@ -297,7 +298,7 @@ fi
 
 if [ -f "scripts/generate-repo-map.sh" ]; then
   if prompt_yn "  Regenerate the local, gitignored REPO_MAP.md from the current tree?" "n"; then
-    bash scripts/generate-repo-map.sh
+    "$CONTEXTOS_SETUP_BASH" scripts/generate-repo-map.sh
     echo "  → Generated REPO_MAP.md"
   else
     echo "  → Kept the existing REPO_MAP.md"
@@ -383,7 +384,7 @@ SETUP_SELECTION_ACTIVATED=false
 if [ -n "$TRACKED_AGENT_SELECTION" ]; then
   echo ""
   echo "  Preparing additive tracked agent selection: $TRACKED_AGENT_SELECTION"
-  SETUP_PROPOSAL_JSON=$(bash "$SCRIPT_DIR/contextos.sh" workspace propose-setup \
+  SETUP_PROPOSAL_JSON=$("$CONTEXTOS_SETUP_BASH" "$SCRIPT_DIR/contextos.sh" workspace propose-setup \
     --agents "$TRACKED_AGENT_SELECTION")
   SETUP_PROPOSAL_ACTION=$(printf '%s' "$SETUP_PROPOSAL_JSON" | \
     "$CONTEXTOS_PYTHON_CMD" -c 'import json,sys; print(json.load(sys.stdin)["action"])')
@@ -415,7 +416,7 @@ print("{}\t{}".format(report["proposal"], report["proposal_digest"]))
     SETUP_PROPOSAL_PATH="${SETUP_PROPOSAL_PATH%$'\r'}"
     SETUP_PROPOSAL_DIGEST="${SETUP_PROPOSAL_DIGEST%$'\r'}"
     if prompt_yn "  Apply this exact tracked-agent proposal?" "n"; then
-      bash "$SCRIPT_DIR/contextos.sh" apply "$SETUP_PROPOSAL_PATH" \
+      "$CONTEXTOS_SETUP_BASH" "$SCRIPT_DIR/contextos.sh" apply "$SETUP_PROPOSAL_PATH" \
         --confirm "$SETUP_PROPOSAL_DIGEST" --runtime generic
       track_setup_path "contextos.workspace.json"
       track_setup_path "workspace.yaml"
