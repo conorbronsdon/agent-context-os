@@ -17,6 +17,7 @@ from contextos.kernel import (
     migrate_legacy_runtime_state,
     plan_workspace_migration,
     resolve_workspace,
+    runtime_ids,
     workspace_resolution_report,
 )
 from contextos.cli import main as cli_main
@@ -35,7 +36,7 @@ from contextos.workspace_schema import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-KNOWN = {"claude", "codex", "hermes"}
+KNOWN = set(runtime_ids(ROOT))
 
 
 def make_directory_link(link: Path, target: Path) -> None:
