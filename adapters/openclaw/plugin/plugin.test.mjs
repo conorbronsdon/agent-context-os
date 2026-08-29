@@ -55,6 +55,8 @@ test("lifecycle prompt is proposal-only", () => {
   assert.match(prompt, /do not apply/);
   assert.throws(() => lifecyclePrompt("apply"), /invalid lifecycle/);
   assert.match(conformancePrompt("setup"), /synthetic public-safe fixture/);
+  assert.match(conformancePrompt("start"), /Only if the required kernel inventory succeeds/);
+  assert.match(conformancePrompt("start"), /"status":"blocked"/);
   assert.match(conformancePrompt("end"), /pre-reviewed and confirmed synthetic draft/);
 });
 

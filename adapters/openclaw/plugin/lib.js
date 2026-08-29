@@ -193,8 +193,10 @@ export function conformancePrompt(action) {
       '{"proposal":"<repo-relative path>","digest":"<sha256>"}.'
     ],
     start: [
-      "Invoke /skill start and keep the repository read-only. Report the continuity inventory, then end with",
-      `${result}{"status":"started"}.`
+      "Invoke /skill start and keep the repository read-only. Report the continuity inventory.",
+      `Only if the required kernel inventory succeeds, end with ${result}{"status":"started"}.`,
+      `If a required kernel or tool call is denied or unavailable, end with ${result}`,
+      '{"status":"blocked","reason":"<short-machine-readable-reason>"} instead.'
     ],
     update: [
       "Invoke /skill update with the reviewed synthetic fact 'Live OpenClaw checkpoint completed.'.",
