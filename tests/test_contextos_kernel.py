@@ -1089,6 +1089,12 @@ with mock.patch("contextos.kernel._capture_transaction_before", side_effect=cras
             {"state/blockers.md", "state/current.md", "state/weekly-priorities.md"},
             set(report["state"]),
         )
+        initialization = next(
+            item
+            for item in doctor(short_root)["checks"]
+            if item["name"] == "initialization-state"
+        )
+        self.assertEqual("pass", initialization["status"])
 
     def test_future_dated_state_is_not_treated_as_initialized(self) -> None:
         (self.root / "state/current.md").write_text(

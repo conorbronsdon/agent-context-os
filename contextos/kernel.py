@@ -4121,13 +4121,18 @@ def doctor(
         workspace.state_dir / filename for filename in STATE_THRESHOLDS
     ]
     state_path_errors: dict[Path, str] = {}
+    state_path_labels: dict[Path, str] = {}
     for path in dict.fromkeys([*required_paths, *freshness_paths]):
         try:
-            _guard_local_state_path(root, path)
+            state_path_labels[path] = _guard_local_state_path(root, path).as_posix()
         except ContextOSError as exc:
             state_path_errors[path] = str(exc)
+            try:
+                state_path_labels[path] = path.relative_to(root).as_posix()
+            except ValueError:
+                state_path_labels[path] = path.name
     for path in required_paths:
-        rel = path.relative_to(root).as_posix()
+        rel = state_path_labels[path]
         error = state_path_errors.get(path)
         add(
             f"file:{rel}",
@@ -4135,11 +4140,11 @@ def doctor(
             error or rel,
         )
     unsafe_freshness = [
-        path.relative_to(root).as_posix()
+        state_path_labels[path]
         for path in freshness_paths
         if path in state_path_errors
     ]
-    gate = (workspace.state_dir / INITIALIZATION_FILE).relative_to(root).as_posix()
+    gate = state_path_labels[workspace.state_dir / INITIALIZATION_FILE]
     if unsafe_freshness:
         add(
             "initialization-state",
