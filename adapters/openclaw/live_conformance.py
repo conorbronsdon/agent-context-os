@@ -244,15 +244,13 @@ def plugin_install_command(command_prefix: Sequence[str], plugin_package: Path) 
 
 
 def gateway_call_command(
-    command_prefix: Sequence[str], port: int, method: str, params: Mapping[str, Any],
-    timeout_ms: int, gateway_token: str,
+    command_prefix: Sequence[str], method: str, params: Mapping[str, Any], timeout_ms: int,
 ) -> list[str]:
     if not method.startswith("contextos."):
         raise HarnessError("live harness may call only contextos.* Gateway methods")
     return [
         *command_prefix, "gateway", "call", method,
         "--params", json.dumps(dict(params), separators=(",", ":"), sort_keys=True),
-        "--url", f"ws://127.0.0.1:{port}", "--token", gateway_token,
         "--timeout", str(timeout_ms), "--json",
     ]
 
@@ -428,9 +426,9 @@ def repository_snapshot(repo: Path) -> dict[str, str]:
     for path in sorted(repo.rglob("*")):
         relative = path.relative_to(repo)
         if relative.parts and relative.parts[0] == ".git":
-            continue
-        if "__pycache__" in relative.parts or path.suffix == ".pyc":
-            continue
+            git_parts = relative.parts[1:]
+            if git_parts and (git_parts[0] in {"index", "index.lock", "logs"}):
+                continue
         if path.is_symlink() or (path.exists() and _is_link_or_reparse(path)):
             raise HarnessError(f"disposable repository contains linked content: {relative}")
         if path.is_file():
@@ -506,6 +504,7 @@ class LiveHarness:
         self.env.update({
             "OPENCLAW_STATE_DIR": str(self.state),
             "OPENCLAW_CONFIG_PATH": str(self.state / "openclaw.json"),
+            "OPENCLAW_GATEWAY_TOKEN": self.gateway_token,
             "PYTHONDONTWRITEBYTECODE": "1", "OPENCLAW_NO_RESPAWN": "1",
         })
         self.evidence = Evidence(expected_version=expected_version)
@@ -528,7 +527,7 @@ class LiveHarness:
 
     def gateway_call(self, method: str, params: Mapping[str, Any], timeout_ms: int = 10_000) -> dict[str, Any]:
         command = gateway_call_command(
-            self.command_prefix, self.port, method, params, timeout_ms, self.gateway_token,
+            self.command_prefix, method, params, timeout_ms,
         )
         return parse_gateway_result(self.run_command(command, cwd=self.workspace, timeout=timeout_ms / 1000 + 30), method)
 
@@ -543,7 +542,7 @@ class LiveHarness:
             ):
                 raise HarnessError("OpenClaw setup returned no bounded continuity challenge")
             self.setup_continuity_challenge = challenge
-        text, session_key = self.completed_lifecycle_text(action, started)
+        text, session_key, ownership_token = self.completed_lifecycle_text(action, started)
         self.require_no_private_canary(text, f"{action} lifecycle output")
         if action == "setup":
             first = parse_lifecycle_result(text)
@@ -553,28 +552,43 @@ class LiveHarness:
                 "alias": PROJECT_ALIAS,
                 "sessionKey": session_key,
                 "scenario": CONFORMANCE_SCENARIO,
+                "ownershipToken": ownership_token,
             })
-            text, continued_session = self.completed_lifecycle_text(action, continued)
+            text, continued_session, continued_owner = self.completed_lifecycle_text(action, continued)
             self.require_no_private_canary(text, f"{action} continuation output")
-            if continued_session != session_key:
-                raise HarnessError("OpenClaw continuation changed the owned lifecycle session")
+            if continued_session != session_key or continued_owner != ownership_token:
+                raise HarnessError("OpenClaw continuation changed the owned lifecycle authority")
             self.evidence.controls["owned_continuation_round_trip"] = True
         if show_output:
             print(f"\n--- OpenClaw {action} output (not retained in evidence) ---\n{text}\n--- end output ---")
         return parse_lifecycle_result(text)
 
-    def completed_lifecycle_text(self, action: str, started: Mapping[str, Any]) -> tuple[str, str]:
-        run_id, session_key = started.get("runId"), started.get("sessionKey")
-        if not isinstance(run_id, str) or not isinstance(session_key, str):
+    def completed_lifecycle_text(self, action: str, started: Mapping[str, Any]) -> tuple[str, str, str]:
+        run_id = started.get("runId")
+        session_key = started.get("sessionKey")
+        ownership_token = started.get("ownershipToken")
+        if (
+            not isinstance(run_id, str)
+            or not isinstance(session_key, str)
+            or not isinstance(ownership_token, str)
+            or not ownership_token.startswith("contextos-owner-")
+        ):
             raise HarnessError(f"Context OS returned no owned identifiers for {action}")
-        completed = self.gateway_call("contextos.wait", {"runId": run_id, "timeoutMs": 700_000}, 710_000)
+        completed = self.gateway_call("contextos.wait", {
+            "runId": run_id,
+            "timeoutMs": 700_000,
+            "ownershipToken": ownership_token,
+        }, 710_000)
         if completed.get("status") != "ok":
             raise HarnessError(f"OpenClaw lifecycle {action} ended with status {completed.get('status')!r}")
-        result = self.gateway_call("contextos.result", {"sessionKey": session_key})
+        result = self.gateway_call("contextos.result", {
+            "sessionKey": session_key,
+            "ownershipToken": ownership_token,
+        })
         text = result.get("text")
         if not isinstance(text, str) or not text.strip():
             raise HarnessError(f"OpenClaw lifecycle {action} returned no assistant text")
-        return text, session_key
+        return text, session_key, ownership_token
 
     def wait_for_gateway(self, timeout: float = 30) -> None:
         deadline = time.monotonic() + timeout
@@ -635,7 +649,7 @@ class LiveHarness:
         blocked = skill_inventory(blocked_result.stdout) if blocked_result.returncode == 0 else {}
         if not all(name in blocked and not blocked[name].get("modelVisible", True) for name in LIFECYCLE_SKILLS):
             raise HarnessError("empty skill allowlist must-not-fire control failed")
-        self.evidence.controls["empty_skill_allowlist_blocks_lifecycle"] = True
+        self.evidence.controls["empty_skill_allowlist_hides_lifecycle"] = True
         config["agents"]["defaults"]["skills"] = list(LIFECYCLE_SKILLS)
         config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
@@ -666,8 +680,8 @@ class LiveHarness:
         before_control = repository_snapshot(self.repo)
         removed_apply = self.run_command(
             gateway_call_command(
-                self.command_prefix, self.port, "contextos.apply",
-                {"alias": PROJECT_ALIAS, "digest": digest}, 10_000, self.gateway_token,
+                self.command_prefix, "contextos.apply",
+                {"alias": PROJECT_ALIAS, "digest": digest}, 10_000,
             ),
             cwd=self.workspace,
         )

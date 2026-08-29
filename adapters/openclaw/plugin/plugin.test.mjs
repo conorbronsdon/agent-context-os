@@ -34,7 +34,8 @@ test("parses lifecycle aliases without accepting a path", () => {
 
 test("settings apply bounded timeout defaults", () => {
   assert.equal(readPluginSettings({ projects: { demo: {} } }).runTimeoutSeconds, 600);
-  assert.throws(() => readPluginSettings({ projects: {}, runTimeoutSeconds: 30 }), /60 through 1800/);
+  assert.throws(() => readPluginSettings({ projects: {} }), /at least one project/);
+  assert.throws(() => readPluginSettings({ projects: { demo: {} }, runTimeoutSeconds: 30 }), /60 through 1800/);
 });
 
 test("extracts the last assistant text", () => {
@@ -94,6 +95,9 @@ test("registers operator-scoped lifecycle continuation with owned sessions", asy
     const methods = new Map();
     const commands = [];
     const calls = { run: [], wait: [], messages: [] };
+    let runSequence = 0;
+    let gatewaySequence = 0;
+    let capabilitySequence = 0;
     const api = {
       pluginConfig: {
         projects: { demo: { root } },
@@ -103,7 +107,8 @@ test("registers operator-scoped lifecycle continuation with owned sessions", asy
         subagent: {
           async run(params) {
             calls.run.push(params);
-            return { runId: "run-owned" };
+            runSequence += 1;
+            return { runId: `run-owned-${runSequence}` };
           },
           async waitForRun(params) {
             calls.wait.push(params);
@@ -127,7 +132,11 @@ test("registers operator-scoped lifecycle continuation with owned sessions", asy
       "scenario-session", "continuity-id", "scenario-idempotency", "scenario-continue-idempotency",
       "native-session", "native-idempotency"
     ];
-    const surfaces = registerContextOsSurfaces(api, { randomId: () => ids.shift() });
+    const surfaces = registerContextOsSurfaces(api, {
+      randomId: () => ids.shift(),
+      randomCapability: () => `capability-${++capabilitySequence}`,
+      maxOwnedSessions: 3
+    });
 
     assert.deepEqual([...methods.keys()], [
       "contextos.run",
@@ -141,10 +150,12 @@ test("registers operator-scoped lifecycle continuation with owned sessions", asy
     assert.deepEqual(methods.get("contextos.wait").options, { scope: "operator.read" });
     assert.deepEqual(methods.get("contextos.result").options, { scope: "operator.read" });
 
-    async function invoke(name, params) {
+    async function invoke(name, params, token = "gateway-a") {
       let response;
+      gatewaySequence += 1;
       await methods.get(name).handler({
         params,
+        client: { connect: { auth: { token, deviceToken: `rotating-device-${gatewaySequence}` } } },
         respond(ok, payload, error) {
           response = { ok, payload, error };
         }
@@ -156,8 +167,9 @@ test("registers operator-scoped lifecycle continuation with owned sessions", asy
     assert.deepEqual(started, {
       ok: true,
       payload: {
-        runId: "run-owned",
-        sessionKey: "agent:main:subagent:contextos-session-id"
+        runId: "run-owned-1",
+        sessionKey: "agent:main:subagent:contextos-session-id",
+        ownershipToken: "contextos-owner-capability-1"
       },
       error: undefined
     });
@@ -169,12 +181,27 @@ test("registers operator-scoped lifecycle continuation with owned sessions", asy
     const continued = await invoke("contextos.continue", {
       alias: "demo",
       sessionKey: "agent:main:subagent:contextos-session-id",
-      message: "The audience is public."
+      message: "The audience is public.",
+      ownershipToken: "contextos-owner-capability-1"
     });
     assert.equal(continued.ok, true);
     assert.equal(calls.run[1].sessionKey, "agent:main:subagent:contextos-session-id");
     assert.match(calls.run[1].message, /audience is public/);
     assert.equal(calls.run[1].lightContext, true);
+    const continuedWait = await invoke("contextos.wait", {
+      runId: "run-owned-2",
+      timeoutMs: 1_000,
+      ownershipToken: "contextos-owner-capability-1"
+    });
+    assert.equal(continuedWait.ok, true, continuedWait.error?.message);
+    const crossGatewayContinue = await invoke("contextos.continue", {
+      alias: "demo",
+      sessionKey: "agent:main:subagent:contextos-session-id",
+      message: "injected",
+      ownershipToken: "contextos-owner-wrong"
+    });
+    assert.equal(crossGatewayContinue.ok, false);
+    assert.match(crossGatewayContinue.error.message, /not owned by this operator/);
     await assert.rejects(
       () => surfaces.continueLifecycle(
         "demo", "agent:main:subagent:contextos-session-id", "response", undefined, "different-operator"
@@ -184,7 +211,8 @@ test("registers operator-scoped lifecycle continuation with owned sessions", asy
     const wrongAlias = await invoke("contextos.continue", {
       alias: "missing",
       sessionKey: "agent:main:subagent:contextos-session-id",
-      message: "response"
+      message: "response",
+      ownershipToken: "contextos-owner-capability-1"
     });
     assert.equal(wrongAlias.ok, false);
     assert.match(wrongAlias.error.message, /not owned by that project alias/);
@@ -203,13 +231,15 @@ test("registers operator-scoped lifecycle continuation with owned sessions", asy
       scenario: CONFORMANCE_SCENARIO
     });
     assert.equal(scenario.ok, true);
+    assert.equal(scenario.payload.ownershipToken, "contextos-owner-capability-3");
     assert.equal(scenario.payload.continuityChallenge, "contextos-continuity-continuity-id");
     assert.match(calls.run[2].message, /contextos-continuity-continuity-id/);
     assert.match(calls.run[2].message, /awaiting_input/);
     const scenarioContinued = await invoke("contextos.continue", {
       alias: "demo",
       sessionKey: "agent:main:subagent:contextos-scenario-session",
-      scenario: CONFORMANCE_SCENARIO
+      scenario: CONFORMANCE_SCENARIO,
+      ownershipToken: "contextos-owner-capability-3"
     });
     assert.equal(scenarioContinued.ok, true);
     assert.match(calls.run[3].message, /Lifecycle Fixture/);
@@ -219,7 +249,8 @@ test("registers operator-scoped lifecycle continuation with owned sessions", asy
       alias: "demo",
       sessionKey: "agent:main:subagent:contextos-scenario-session",
       scenario: CONFORMANCE_SCENARIO,
-      message: "arbitrary"
+      message: "arbitrary",
+      ownershipToken: "contextos-owner-capability-3"
     });
     assert.equal(scenarioInjection.ok, false);
     assert.match(scenarioInjection.error.message, /no message/);
@@ -231,16 +262,34 @@ test("registers operator-scoped lifecycle continuation with owned sessions", asy
     assert.equal(unknownScenario.ok, false);
     assert.match(unknownScenario.error.message, /scenario must be/);
 
-    const waited = await invoke("contextos.wait", { runId: "run-owned", timeoutMs: 1_000 });
-    assert.equal(waited.ok, true);
-    assert.deepEqual(calls.wait[0], { runId: "run-owned", timeoutMs: 1_000 });
+    const crossGatewayWait = await invoke(
+      "contextos.wait", {
+        runId: "run-owned-1", timeoutMs: 1_000, ownershipToken: "contextos-owner-wrong"
+      }
+    );
+    assert.equal(crossGatewayWait.ok, false);
+    assert.match(crossGatewayWait.error.message, /not owned by this operator/);
+    const waited = await invoke("contextos.wait", {
+      runId: "run-owned-1",
+      timeoutMs: 1_000,
+      ownershipToken: "contextos-owner-capability-1"
+    });
+    assert.equal(waited.ok, true, waited.error?.message);
+    assert.deepEqual(calls.wait[1], { runId: "run-owned-1", timeoutMs: 1_000 });
     const result = await invoke("contextos.result", {
-      sessionKey: "agent:main:subagent:contextos-session-id"
+      sessionKey: "agent:main:subagent:contextos-session-id",
+      ownershipToken: "contextos-owner-capability-1"
     });
     assert.deepEqual(result.payload, {
       sessionKey: "agent:main:subagent:contextos-session-id",
       text: "done"
     });
+    const crossGatewayResult = await invoke("contextos.result", {
+      sessionKey: "agent:main:subagent:contextos-session-id",
+      ownershipToken: "contextos-owner-wrong"
+    });
+    assert.equal(crossGatewayResult.ok, false);
+    assert.match(crossGatewayResult.error.message, /not owned by this operator/);
 
     const unknown = await invoke("contextos.run", { alias: "missing", action: "start" });
     assert.equal(unknown.ok, false);
@@ -249,14 +298,20 @@ test("registers operator-scoped lifecycle continuation with owned sessions", asy
       alias: "demo",
       sessionKey: "agent:main:subagent:contextos-session-id",
       message: "response",
+      ownershipToken: "contextos-owner-capability-1",
       proposalPath: "elsewhere.json"
     });
     assert.equal(injectedPath.ok, false);
     assert.match(injectedPath.error.message, /unexpected parameter/);
-    const foreignWait = await invoke("contextos.wait", { runId: "run-foreign" });
+    const foreignWait = await invoke("contextos.wait", {
+      runId: "run-foreign", ownershipToken: "contextos-owner-capability-1"
+    });
     assert.equal(foreignWait.ok, false);
     assert.match(foreignWait.error.message, /not owned/);
-    const foreignResult = await invoke("contextos.result", { sessionKey: "agent:main:subagent:other" });
+    const foreignResult = await invoke("contextos.result", {
+      sessionKey: "agent:main:subagent:other",
+      ownershipToken: "contextos-owner-capability-1"
+    });
     assert.equal(foreignResult.ok, false);
     assert.match(foreignResult.error.message, /not owned/);
 
@@ -278,6 +333,10 @@ test("registers operator-scoped lifecycle continuation with owned sessions", asy
       senderId: "operator-b"
     });
     assert.match(crossPrincipal.text, /not owned by this operator and conversation/);
+    await assert.rejects(
+      () => surfaces.startLifecycle("demo", "end"),
+      /owned lifecycle session limit reached/
+    );
   } finally {
     await rm(temp, { recursive: true, force: true });
   }

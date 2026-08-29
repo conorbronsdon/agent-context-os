@@ -1,5 +1,5 @@
 import { lstat, readFile, realpath, stat } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 
 export const PROJECT_ALIAS_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
@@ -7,6 +7,7 @@ export const LIFECYCLE_ACTIONS = new Set(["setup", "start", "update", "end"]);
 export const CONFORMANCE_SCENARIO = "synthetic-conformance-v1";
 
 const MAX_OPERATOR_MESSAGE_CHARS = 16 * 1024;
+const MAX_OWNED_SESSIONS = 128;
 
 export function parseCommandArgs(raw) {
   const parts = String(raw ?? "").trim().split(/\s+/u).filter(Boolean);
@@ -39,6 +40,9 @@ export function readPluginSettings(pluginConfig) {
   const projects = pluginConfig.projects;
   if (!projects || typeof projects !== "object" || Array.isArray(projects)) {
     throw new Error("context-os plugin config must define projects");
+  }
+  if (Object.keys(projects).length === 0) {
+    throw new Error("context-os plugin config must define at least one project");
   }
   const runTimeoutSeconds = pluginConfig.runTimeoutSeconds ?? 600;
   if (!Number.isInteger(runTimeoutSeconds) || runTimeoutSeconds < 60 || runTimeoutSeconds > 1800) {
@@ -240,9 +244,18 @@ function commandPrincipal(ctx) {
   });
 }
 
+function requireAuthenticatedGateway(client) {
+  const auth = client?.connect?.auth;
+  const credential = auth?.token ?? auth?.password ?? auth?.deviceToken;
+  if (typeof credential !== "string" || !credential) {
+    throw new Error("Gateway lifecycle methods require an authenticated client credential");
+  }
+}
+
 function gatewayHandler(run) {
-  return async ({ params, respond }) => {
+  return async ({ params, client, respond }) => {
     try {
+      requireAuthenticatedGateway(client);
       respond(true, await run(params));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -258,10 +271,19 @@ function gatewayHandler(run) {
  */
 export function registerContextOsSurfaces(api, options = {}) {
   const nextId = options.randomId ?? randomUUID;
+  const nextCapability = options.randomCapability ?? randomUUID;
+  const maxOwnedSessions = options.maxOwnedSessions ?? MAX_OWNED_SESSIONS;
+  if (!Number.isInteger(maxOwnedSessions) || maxOwnedSessions < 1 || maxOwnedSessions > MAX_OWNED_SESSIONS) {
+    throw new Error(`maxOwnedSessions must be an integer from 1 through ${MAX_OWNED_SESSIONS}`);
+  }
   const runs = new Map();
   const sessions = new Map();
 
   const settings = () => readPluginSettings(api.pluginConfig);
+  const capabilityOwner = (value) => {
+    const token = requireOwnedString(value, "ownershipToken");
+    return `gateway-capability:${createHash("sha256").update(token).digest("hex")}`;
+  };
 
   async function startLifecycle(alias, action, agentId = "main", scenario, ownerKey = "gateway-operator") {
     const parsedAlias = requireAlias(alias);
@@ -272,6 +294,9 @@ export function registerContextOsSurfaces(api, options = {}) {
     }
     if (scenario === CONFORMANCE_SCENARIO) {
       await requireDisposableConformanceMarker(project.root);
+    }
+    if (sessions.size >= maxOwnedSessions) {
+      throw new Error("owned lifecycle session limit reached; restart the Gateway before starting another workflow");
     }
     const sessionKey = `agent:${agentId}:subagent:contextos-${nextId()}`;
     const continuityChallenge = scenario === CONFORMANCE_SCENARIO && parsedAction === "setup"
@@ -289,7 +314,7 @@ export function registerContextOsSurfaces(api, options = {}) {
       idempotencyKey: nextId()
     });
     requireOwnedString(runId, "runId");
-    runs.set(runId, sessionKey);
+    runs.set(runId, { sessionKey, ownerKey });
     sessions.set(sessionKey, { alias: parsedAlias, action: parsedAction, agentId, scenario, ownerKey });
     return { runId, sessionKey, ...(continuityChallenge ? { continuityChallenge } : {}) };
   }
@@ -322,26 +347,32 @@ export function registerContextOsSurfaces(api, options = {}) {
       idempotencyKey: nextId()
     });
     requireOwnedString(runId, "runId");
-    runs.set(runId, parsedSessionKey);
+    runs.set(runId, { sessionKey: parsedSessionKey, ownerKey });
     return { runId, sessionKey: parsedSessionKey };
   }
 
-  async function waitForLifecycle(runId, requestedTimeoutMs) {
+  async function waitForLifecycle(runId, requestedTimeoutMs, ownerKey = "gateway-operator") {
     const parsedRunId = requireOwnedString(runId, "runId");
-    if (!runs.has(parsedRunId)) throw new Error("runId is not owned by this Context OS plugin process");
+    const ownedRun = runs.get(parsedRunId);
+    if (!ownedRun) throw new Error("runId is not owned by this Context OS plugin process");
+    if (ownedRun.ownerKey !== ownerKey) throw new Error("runId is not owned by this operator");
     const maximum = settings().runTimeoutSeconds * 1000;
     const timeoutMs = requestedTimeoutMs ?? maximum;
     if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > maximum) {
       throw new Error(`timeoutMs must be an integer from 1 through ${maximum}`);
     }
-    return await api.runtime.subagent.waitForRun({ runId: parsedRunId, timeoutMs });
+    const result = await api.runtime.subagent.waitForRun({ runId: parsedRunId, timeoutMs });
+    if (result?.status !== "running") runs.delete(parsedRunId);
+    return result;
   }
 
-  async function lifecycleResult(sessionKey) {
+  async function lifecycleResult(sessionKey, ownerKey = "gateway-operator") {
     const parsedSessionKey = requireOwnedString(sessionKey, "sessionKey");
-    if (!sessions.has(parsedSessionKey)) {
+    const owned = sessions.get(parsedSessionKey);
+    if (!owned) {
       throw new Error("sessionKey is not owned by this Context OS plugin process");
     }
+    if (owned.ownerKey !== ownerKey) throw new Error("sessionKey is not owned by this operator");
     const { messages } = await api.runtime.subagent.getSessionMessages({
       sessionKey: parsedSessionKey,
       limit: 20
@@ -353,31 +384,45 @@ export function registerContextOsSurfaces(api, options = {}) {
     "contextos.run",
     gatewayHandler(async (rawParams) => {
       const params = requireParams(rawParams, ["alias", "action", "scenario"]);
-      return await startLifecycle(params.alias, params.action, "main", params.scenario);
+      const ownershipToken = `contextos-owner-${nextCapability()}`;
+      const result = await startLifecycle(
+        params.alias, params.action, "main", params.scenario, capabilityOwner(ownershipToken)
+      );
+      return { ...result, ownershipToken };
     }),
     { scope: "operator.write" }
   );
   api.registerGatewayMethod(
     "contextos.continue",
     gatewayHandler(async (rawParams) => {
-      const params = requireParams(rawParams, ["alias", "sessionKey", "message", "scenario"]);
-      return await continueLifecycle(params.alias, params.sessionKey, params.message, params.scenario);
+      const params = requireParams(
+        rawParams, ["alias", "sessionKey", "message", "scenario", "ownershipToken"]
+      );
+      const result = await continueLifecycle(
+        params.alias, params.sessionKey, params.message, params.scenario,
+        capabilityOwner(params.ownershipToken)
+      );
+      return { ...result, ownershipToken: params.ownershipToken };
     }),
     { scope: "operator.write" }
   );
   api.registerGatewayMethod(
     "contextos.wait",
     gatewayHandler(async (rawParams) => {
-      const params = requireParams(rawParams, ["runId", "timeoutMs"]);
-      return await waitForLifecycle(params.runId, params.timeoutMs);
+      const params = requireParams(rawParams, ["runId", "timeoutMs", "ownershipToken"]);
+      return await waitForLifecycle(
+        params.runId, params.timeoutMs, capabilityOwner(params.ownershipToken)
+      );
     }),
     { scope: "operator.read" }
   );
   api.registerGatewayMethod(
     "contextos.result",
     gatewayHandler(async (rawParams) => {
-      const params = requireParams(rawParams, ["sessionKey"]);
-      return await lifecycleResult(params.sessionKey);
+      const params = requireParams(rawParams, ["sessionKey", "ownershipToken"]);
+      return await lifecycleResult(
+        params.sessionKey, capabilityOwner(params.ownershipToken)
+      );
     }),
     { scope: "operator.read" }
   );
@@ -391,14 +436,15 @@ export function registerContextOsSurfaces(api, options = {}) {
       try {
         if (!ctx.isAuthorizedSender) throw new Error("authorized sender required");
         const command = parseCommandArgs(ctx.args);
+        const principal = commandPrincipal(ctx);
         const started = command.kind === "continue"
-          ? await continueLifecycle(command.project, command.sessionKey, command.message, undefined, commandPrincipal(ctx))
-          : await startLifecycle(command.project, command.action, ctx.agentId || "main", undefined, commandPrincipal(ctx));
-        const completed = await waitForLifecycle(started.runId);
+          ? await continueLifecycle(command.project, command.sessionKey, command.message, undefined, principal)
+          : await startLifecycle(command.project, command.action, ctx.agentId || "main", undefined, principal);
+        const completed = await waitForLifecycle(started.runId, undefined, principal);
         if (completed.status !== "ok") {
           throw new Error(completed.error || `subagent run ${started.runId} ended with status ${completed.status}`);
         }
-        const result = await lifecycleResult(started.sessionKey);
+        const result = await lifecycleResult(started.sessionKey, principal);
         const owned = sessions.get(started.sessionKey);
         const text = result.text || `Context OS ${owned?.action ?? "lifecycle"} completed in run ${started.runId}.`;
         if (owned?.action === "start") return { text };

@@ -71,7 +71,7 @@ class OpenClawDescriptorTest(unittest.TestCase):
             "preserves unrelated skills", "Gateway `agent` RPC", "plugin-owned subagent",
             "configured project alias", "operator-scoped Gateway methods",
             "`contextos.continue`", "`lightContext: true`", "trusted shell",
-            "if the Gateway\nrestarts, rerun the lifecycle command",
+            "if the Gateway\nrestarts or reaches that bound",
             "shell-execution authorization", "installs no project hook",
             "include all eight lifecycle skill names", "not synchronized",
             "doctor --lint --json", "Do not use `--fix`",

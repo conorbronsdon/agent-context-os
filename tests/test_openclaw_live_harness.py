@@ -131,20 +131,20 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
 
     def test_gateway_call_command_is_exact_and_closed(self) -> None:
         command = live.gateway_call_command(
-            ("node", "openclaw.mjs"), 18789, "contextos.run",
+            ("node", "openclaw.mjs"), "contextos.run",
             {"scenario": live.CONFORMANCE_SCENARIO, "action": "setup", "alias": "fixture"},
-            10000, "fixture-token",
+            10000,
         )
         self.assertEqual(["node", "openclaw.mjs", "gateway", "call", "contextos.run"], command[:5])
         self.assertEqual(
             '{"action":"setup","alias":"fixture","scenario":"synthetic-conformance-v1"}',
             command[command.index("--params") + 1],
         )
-        self.assertEqual("ws://127.0.0.1:18789", command[command.index("--url") + 1])
-        self.assertEqual("fixture-token", command[command.index("--token") + 1])
+        self.assertNotIn("--url", command)
+        self.assertNotIn("--token", command)
         self.assertEqual("--json", command[-1])
         with self.assertRaisesRegex(live.HarnessError, r"only contextos\.\*"):
-            live.gateway_call_command(("openclaw",), 18789, "agent", {}, 1000, "fixture-token")
+            live.gateway_call_command(("openclaw",), "agent", {}, 1000)
 
     def test_gateway_result_requires_successful_json_object(self) -> None:
         result = live.CommandResult(["openclaw"], 0, '{"runId":"r1"}', "")
@@ -162,6 +162,7 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
                 "runId": "run-1",
                 "sessionKey": "session-1",
                 "continuityChallenge": "contextos-continuity-fixture",
+                "ownershipToken": "contextos-owner-fixture",
             },
             {"status": "ok"},
             {"text": 'CONTEXTOS_LIVE_RESULT={"status":"started"}'},
@@ -180,8 +181,15 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
             }, 10000),
             calls[0],
         )
-        self.assertEqual(("contextos.wait", {"runId": "run-1", "timeoutMs": 700000}, 710000), calls[1])
-        self.assertEqual(("contextos.result", {"sessionKey": "session-1"}, 10000), calls[2])
+        self.assertEqual(("contextos.wait", {
+            "runId": "run-1",
+            "timeoutMs": 700000,
+            "ownershipToken": "contextos-owner-fixture",
+        }, 710000), calls[1])
+        self.assertEqual(("contextos.result", {
+            "sessionKey": "session-1",
+            "ownershipToken": "contextos-owner-fixture",
+        }, 10000), calls[2])
 
     def test_lifecycle_rejects_failed_wait(self) -> None:
         harness = self.harness()
@@ -190,6 +198,7 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
                 "runId": "run-1",
                 "sessionKey": "session-1",
                 "continuityChallenge": "contextos-continuity-fixture",
+                "ownershipToken": "contextos-owner-fixture",
             },
             {"status": "error"},
         ])
@@ -204,10 +213,15 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
                 "runId": "run-1",
                 "sessionKey": "session-1",
                 "continuityChallenge": "contextos-continuity-fixture",
+                "ownershipToken": "contextos-owner-fixture",
             },
             {"status": "ok"},
             {"text": 'CONTEXTOS_LIVE_RESULT={"status":"awaiting_input"}'},
-            {"runId": "run-2", "sessionKey": "session-1"},
+            {
+                "runId": "run-2",
+                "sessionKey": "session-1",
+                "ownershipToken": "contextos-owner-fixture",
+            },
             {"status": "ok"},
             {"text": 'CONTEXTOS_LIVE_RESULT={"proposal":".context-os/proposals/p.json","digest":"' + "a" * 64 + '"}'},
         ])
@@ -222,6 +236,7 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         self.assertEqual("contextos.continue", calls[3][0])
         self.assertEqual("session-1", calls[3][1]["sessionKey"])
         self.assertEqual(live.CONFORMANCE_SCENARIO, calls[3][1]["scenario"])
+        self.assertEqual("contextos-owner-fixture", calls[3][1]["ownershipToken"])
         self.assertTrue(harness.evidence.controls["owned_continuation_round_trip"])
 
     def test_setup_rejects_private_canary_in_first_turn_before_continuation(self) -> None:
@@ -231,6 +246,7 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
                 "runId": "run-1",
                 "sessionKey": "session-1",
                 "continuityChallenge": "contextos-continuity-fixture",
+                "ownershipToken": "contextos-owner-fixture",
             },
             {"status": "ok"},
             {
@@ -343,12 +359,18 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
             with self.assertRaisesRegex(live.HarnessError, r"sync\(workspace\)"):
                 live.load_sync_helper()
 
-    def test_repository_snapshot_ignores_bytecode(self) -> None:
+    def test_repository_snapshot_tracks_executable_bytecode_and_git_hooks(self) -> None:
         before = live.repository_snapshot(self.repo)
         cache = self.repo / "contextos/__pycache__"
         cache.mkdir(parents=True)
         (cache / "kernel.pyc").write_bytes(b"cache")
-        self.assertEqual(before, live.repository_snapshot(self.repo))
+        hook = self.repo / ".git" / "hooks" / "post-checkout"
+        hook.parent.mkdir(parents=True)
+        hook.write_text("payload", encoding="utf-8")
+        after = live.repository_snapshot(self.repo)
+        self.assertNotEqual(before, after)
+        self.assertIn("contextos/__pycache__/kernel.pyc", after)
+        self.assertIn(".git/hooks/post-checkout", after)
 
     def test_proposal_turn_rejects_model_write_outside_local_staging(self) -> None:
         before = {"AGENTS.md": "before", ".context-os/inputs/payload.json": "old"}

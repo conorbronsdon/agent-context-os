@@ -113,27 +113,30 @@ The same plugin exposes operator-scoped Gateway methods for automation:
 openclaw gateway call contextos.run \
   --params '{"alias":"my-context","action":"setup"}' --json
 openclaw gateway call contextos.wait \
-  --params '{"runId":"<returned-run-id>","timeoutMs":600000}' --json
+  --params '{"runId":"<returned-run-id>","ownershipToken":"<returned-ownership-token>","timeoutMs":600000}' --json
 openclaw gateway call contextos.result \
-  --params '{"sessionKey":"<returned-session-key>"}' --json
+  --params '{"sessionKey":"<returned-session-key>","ownershipToken":"<returned-ownership-token>"}' --json
 openclaw gateway call contextos.continue \
-  --params '{"alias":"my-context","sessionKey":"<returned-session-key>","message":"<response>"}' --json
+  --params '{"alias":"my-context","sessionKey":"<returned-session-key>","ownershipToken":"<returned-ownership-token>","message":"<response>"}' --json
 ```
 
 `contextos.run` accepts only `setup`, `start`, `update`, or `end`, starts a
 plugin-owned subagent with the configured root as `cwd` and lightweight context,
 and instructs the model to stop after reporting any proposal path, digest, and
 diff. `wait` and `result` accept only run and session identifiers created by the
-same plugin process. For the questions and confirmations required by setup,
-update, and end, `contextos.continue` resumes that owned session with an
-operator response; it has `operator.write` scope and requires the same project
-alias. The native command returns the exact continuation syntax after each
-non-start turn and binds continuation to the initiating sender and conversation.
-Gateway automation is a trusted control-plane surface: keep its credential and
-returned session keys private. Continue until the agent reports the complete
-proposal. Session ownership is intentionally process-local; if the Gateway
-restarts, rerun the lifecycle command instead of attempting to resume the old
-session key.
+same plugin process and the random ownership token returned by `contextos.run`.
+For the questions and confirmations required by setup, update, and end,
+`contextos.continue` resumes that owned session with an operator response; it
+has `operator.write` scope and requires the same project alias and ownership
+token. The native command returns the
+exact continuation syntax after each non-start turn and binds continuation to
+the initiating sender and conversation. Gateway automation is a trusted
+control-plane surface: keep its credential, ownership tokens, and returned
+session keys private. Continue
+until the agent reports the complete proposal. Session ownership is
+intentionally process-local and bounded to 128 workflows; if the Gateway
+restarts or reaches that bound, restart it and rerun the lifecycle command
+instead of attempting to resume the old session key.
 
 Do not use `openclaw acp client --cwd <repository>` as the lifecycle binding.
 In the tested release ACP represents that value as session context rather than
