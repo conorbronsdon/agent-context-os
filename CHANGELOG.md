@@ -33,11 +33,10 @@
   native root-instruction and project-skill discovery, explicit lifecycle
   invocation, separate authorization guidance, no hook or memory claim, and
   an opt-in exact-version/flag CLI smoke without unsafe generic-binary detection.
-- Experimental OpenClaw onboarding with a machine-readable runtime descriptor,
-  separate private-workspace boundary, copied lifecycle skills, explicit
-  `/skill` invocations, honest no-hook claims, and opt-in installed-version
-  conformance for discovery, precedence, allowlists, diagnostics, and memory
-  isolation against `OpenClaw 2026.7.1-2 (0790d9f)`.
+- First-class OpenClaw onboarding with a machine-readable runtime descriptor,
+  separate private-workspace boundary, copied lifecycle skills, an external
+  alias-bound plugin with explicit `/contextos` invocation, trusted-shell apply,
+  and installed-version conformance against `OpenClaw 2026.7.1-2 (0790d9f)`.
 - Transactional `agent list`, `agent add`/`enable`, and configuration-only
   `agent disable` commands with idempotent exact-set proposals and no adapter,
   host-state, credential, integration, binary, or context-file mutation.

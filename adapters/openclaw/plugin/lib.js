@@ -125,6 +125,16 @@ export function lastAssistantText(messages) {
   return "";
 }
 
+export function operatorSafeText(value) {
+  return [...String(value ?? "")].map((character) => {
+    const codePoint = character.codePointAt(0);
+    if (character === "\n" || character === "\t" || (codePoint >= 0x20 && codePoint <= 0x7e)) {
+      return character;
+    }
+    return `\\u{${codePoint.toString(16)}}`;
+  }).join("");
+}
+
 export function lifecyclePrompt(action) {
   if (!LIFECYCLE_ACTIONS.has(action)) throw new Error("invalid lifecycle action");
   return [
@@ -446,13 +456,15 @@ export function registerContextOsSurfaces(api, options = {}) {
         }
         const result = await lifecycleResult(started.sessionKey, principal);
         const owned = sessions.get(started.sessionKey);
-        const text = result.text || `Context OS ${owned?.action ?? "lifecycle"} completed in run ${started.runId}.`;
+        const text = operatorSafeText(
+          result.text || `Context OS ${owned?.action ?? "lifecycle"} completed in run ${started.runId}.`
+        );
         if (owned?.action === "start") return { text };
         return {
           text: `${text}\n\nContinue this owned workflow with: /contextos ${owned.alias} continue ${started.sessionKey} <response>`
         };
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = operatorSafeText(error instanceof Error ? error.message : String(error));
         return { text: `Context OS: ${message}` };
       }
     }

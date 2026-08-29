@@ -10,6 +10,7 @@ import {
   lastAssistantText,
   lifecyclePrompt,
   parseCommandArgs,
+  operatorSafeText,
   readPluginSettings,
   registerContextOsSurfaces,
   resolveProject
@@ -44,6 +45,14 @@ test("extracts the last assistant text", () => {
     { role: "user", content: "next" },
     { role: "assistant", content: [{ type: "text", text: "final" }] }
   ]), "final");
+});
+
+test("escapes terminal-unsafe native command output", () => {
+  assert.equal(operatorSafeText("safe\n\ttext"), "safe\n\ttext");
+  assert.equal(
+    operatorSafeText("erase\r\u001b[2J bidi \u202e unicode café"),
+    "erase\\u{d}\\u{1b}[2J bidi \\u{202e} unicode caf\\u{e9}"
+  );
 });
 
 test("lifecycle prompt is proposal-only", () => {

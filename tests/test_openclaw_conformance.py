@@ -143,12 +143,20 @@ class OpenClawDescriptorTest(unittest.TestCase):
             "docs/commands-and-skills.md",
             "docs/getting-started.md",
             "AGENTS.md",
+            "scripts/setup.sh",
         ):
             text = (ROOT / relative).read_text(encoding="utf-8")
             with self.subTest(path=relative):
                 self.assertIn("/contextos <alias> setup", text)
                 self.assertNotIn("`/skill setup`", text)
                 self.assertNotIn("installs no hook or plugin", text)
+
+    def test_canonical_docs_do_not_describe_obsolete_experimental_openclaw(self) -> None:
+        for relative in ("AGENTS.md", "CHANGELOG.md"):
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            with self.subTest(path=relative):
+                self.assertNotIn("Experimental OpenClaw", text)
+                self.assertNotIn("experimental skills-first OpenClaw", text)
 
 
 @unittest.skipUnless(

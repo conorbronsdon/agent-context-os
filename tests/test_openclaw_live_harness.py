@@ -169,6 +169,13 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         with self.assertRaisesRegex(live.HarnessError, r"only contextos\.\*"):
             live.gateway_call_command(("openclaw",), "agent", {}, 1000)
 
+    def test_gateway_server_does_not_inherit_client_credential(self) -> None:
+        server = live.gateway_server_env({
+            "OPENCLAW_GATEWAY_TOKEN": "secret", "OPENCLAW_STATE_DIR": "state",
+        })
+        self.assertNotIn("OPENCLAW_GATEWAY_TOKEN", server)
+        self.assertEqual("state", server["OPENCLAW_STATE_DIR"])
+
     def test_gateway_result_requires_successful_json_object(self) -> None:
         result = live.CommandResult(["openclaw"], 0, '{"runId":"r1"}', "")
         self.assertEqual({"runId": "r1"}, live.parse_gateway_result(result, "contextos.run"))

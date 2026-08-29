@@ -295,6 +295,13 @@ def gateway_call_command(
     ]
 
 
+def gateway_server_env(client_env: Mapping[str, str]) -> dict[str, str]:
+    """Keep the client credential out of the Gateway and its model subprocesses."""
+    server_env = dict(client_env)
+    server_env.pop("OPENCLAW_GATEWAY_TOKEN", None)
+    return server_env
+
+
 def parse_gateway_result(result: CommandResult, method: str) -> dict[str, Any]:
     if result.returncode:
         detail = (result.stderr or result.stdout).strip()[:1000]
@@ -687,7 +694,7 @@ class LiveHarness:
     def start_gateway(self) -> None:
         self.gateway = subprocess.Popen(
             [*self.command_prefix, "gateway", "run", "--port", str(self.port), "--bind", "loopback", "--auth", "token"],
-            cwd=self.repo, env=self.env, text=True, encoding="utf-8", errors="replace",
+            cwd=self.repo, env=gateway_server_env(self.env), text=True, encoding="utf-8", errors="replace",
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         self.wait_for_gateway()

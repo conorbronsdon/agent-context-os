@@ -284,6 +284,11 @@ test -n "$openclaw_setup_case" \
 if grep -Eq '(^|[[:space:]])exec[[:space:]]+openclaw([[:space:]]|$)' <<<"$openclaw_setup_case"; then
   fail "setup can launch OpenClaw before private-workspace configuration is verified"
 fi
+grep -Fq '/contextos <alias> setup' <<<"$openclaw_setup_case" \
+  || fail "OpenClaw setup omits the plugin command surface"
+if grep -Fq 'Gateway agent RPC cwd' <<<"$openclaw_setup_case" || grep -Fq '/skill setup' <<<"$openclaw_setup_case"; then
+  fail "OpenClaw setup still prints the rejected pre-plugin invocation path"
+fi
 grep -Fq 'Setup does not launch Cursor' scripts/setup.sh \
   || fail "Cursor setup omits the separate-surface launch boundary"
 cursor_setup_case=$(sed -n '/^  cursor)/,/^    ;;/p' scripts/setup.sh)
