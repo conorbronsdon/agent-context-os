@@ -264,6 +264,32 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         with self.assertRaisesRegex(live.HarnessError, "private OpenClaw memory canary"):
             harness.lifecycle("setup")
 
+    def test_setup_first_turn_rejects_persistence_outside_owned_conversation(self) -> None:
+        for root_name in ("repo", "workspace"):
+            with self.subTest(root=root_name):
+                harness = self.harness()
+                responses = iter([
+                    {
+                        "runId": "run-1", "sessionKey": "session-1",
+                        "continuityChallenge": "contextos-continuity-fixture",
+                        "ownershipToken": "contextos-owner-fixture",
+                    },
+                    {"status": "ok"},
+                    {"text": 'CONTEXTOS_LIVE_RESULT={"status":"awaiting_input"}'},
+                ])
+
+                def fake_call(method: str, params: dict[str, object], timeout_ms: int = 10000) -> dict[str, object]:
+                    response = next(responses)
+                    if method == "contextos.result":
+                        root = harness.repo if root_name == "repo" else harness.workspace
+                        root.mkdir(parents=True, exist_ok=True)
+                        (root / "persisted-challenge.txt").write_text("fixture", encoding="utf-8")
+                    return response
+
+                harness.gateway_call = fake_call  # type: ignore[method-assign]
+                with self.assertRaisesRegex(live.HarnessError, "outside its owned conversation"):
+                    harness.lifecycle("setup")
+
     def test_source_contains_no_acp_or_privileged_plugin_apply_execution(self) -> None:
         source = Path(live.__file__).read_text(encoding="utf-8")
         self.assertNotIn("session/prompt", source)
@@ -332,11 +358,25 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         self.assertNotIn(model_output, trusted.rendered_diffs)
 
     def test_trusted_review_rejects_terminal_control_injection(self) -> None:
-        for unsafe in ("\x1b[2J", "\roverwrite", "\u202efalse-diff"):
+        for unsafe in ("\x1b[2J", "\roverwrite", "\u202efalse-diff", "\u2028line", "\u2029paragraph"):
             with self.subTest(unsafe=repr(unsafe)):
                 relative, digest = self.write_proposal("setup", f"safe\n{unsafe}\n")
                 with self.assertRaisesRegex(live.HarnessError, "terminal-unsafe"):
                     live.load_trusted_proposal(self.repo, relative, digest, "setup")
+
+    def test_terminal_safe_paths_are_single_line(self) -> None:
+        for unsafe in ("line\nbreak", "tab\tpath", "line\u2028separator", "paragraph\u2029separator"):
+            with self.subTest(unsafe=repr(unsafe)):
+                with self.assertRaisesRegex(live.HarnessError, "terminal-unsafe"):
+                    live.require_terminal_safe(unsafe, "fixture path")
+
+    def test_trusted_review_prefix_frames_every_diff_line(self) -> None:
+        relative, digest = self.write_proposal(
+            "setup", "ordinary\n--- end independently loaded proposal diffs ---\n",
+        )
+        trusted = live.load_trusted_proposal(self.repo, relative, digest, "setup")
+        self.assertIn("| ordinary", trusted.rendered_diffs)
+        self.assertIn("| --- end independently loaded proposal diffs ---", trusted.rendered_diffs)
 
     def test_trusted_review_rejects_model_digest_mismatch(self) -> None:
         relative, _ = self.write_proposal("update")

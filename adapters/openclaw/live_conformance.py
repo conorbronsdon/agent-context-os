@@ -7,6 +7,7 @@ exact proposal digest; neither the model nor this harness can auto-approve it.
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import importlib.util
 import json
@@ -227,10 +228,8 @@ def write_openclaw_config(
     state: Path, workspace: Path, port: int, claude_binary: Path, repo: Path,
     gateway_token: str,
 ) -> Path:
-    state.mkdir(mode=0o700, parents=True, exist_ok=True)
-    workspace.mkdir(mode=0o700, parents=True, exist_ok=True)
-    state.chmod(0o700)
-    workspace.chmod(0o700)
+    harden_private_directory(state)
+    harden_private_directory(workspace)
     target = state / "openclaw.json"
     try:
         descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -241,6 +240,31 @@ def write_openclaw_config(
     except FileExistsError as exc:
         raise HarnessError(f"refusing to overwrite existing OpenClaw config: {target}") from exc
     return target
+
+
+def harden_private_directory(path: Path) -> None:
+    """Create a private directory before any credential or canary is written."""
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if os.name != "nt":
+        path.chmod(0o700)
+        return
+    identity = subprocess.run(
+        ["whoami", "/user", "/fo", "csv", "/nh"], text=True,
+        encoding="utf-8", errors="replace", capture_output=True, check=False,
+    )
+    try:
+        rows = list(csv.reader(identity.stdout.splitlines()))
+        sid = rows[0][1].strip() if identity.returncode == 0 and rows else ""
+    except (csv.Error, IndexError):
+        sid = ""
+    if not re.fullmatch(r"S-\d+(?:-\d+)+", sid):
+        raise HarnessError("could not resolve the current Windows user SID for private state")
+    restricted = subprocess.run(
+        ["icacls", str(path), "/inheritance:r", "/grant:r", f"*{sid}:(OI)(CI)F"],
+        text=True, encoding="utf-8", errors="replace", capture_output=True, check=False,
+    )
+    if restricted.returncode != 0:
+        raise HarnessError("could not establish a user-only Windows DACL for private state")
 
 
 def plugin_install_command(command_prefix: Sequence[str], plugin_package: Path) -> list[str]:
@@ -310,12 +334,14 @@ def require_proposal(result: dict[str, str]) -> tuple[str, str]:
     return proposal, digest
 
 
-def require_terminal_safe(value: str, subject: str) -> None:
+def require_terminal_safe(value: str, subject: str, *, multiline: bool = False) -> None:
     """Reject terminal controls that could falsify the operator's trusted display."""
     for character in value:
-        if character in {"\n", "\t"}:
+        if multiline and character in {"\n", "\t"}:
             continue
-        if unicodedata.category(character) in {"Cc", "Cf", "Cs"}:
+        if character in {"\n", "\r", "\t"} or unicodedata.category(character) in {
+            "Cc", "Cf", "Cs", "Zl", "Zp",
+        }:
             raise HarnessError(f"{subject} contains a terminal-unsafe control character")
 
 
@@ -366,8 +392,12 @@ def load_trusted_proposal(repo: Path, proposal: str, reported_digest: str, phase
         if not isinstance(relative, str) or not relative or not isinstance(displayed_diff, str) or not displayed_diff:
             raise HarnessError(f"{phase} proposal changes[{index}] has no stored path and diff")
         require_terminal_safe(relative, f"{phase} proposal changes[{index}] path")
-        require_terminal_safe(displayed_diff, f"{phase} proposal changes[{index}] diff")
-        rendered.append(f"--- trusted change {index + 1}: {relative} ---\n{displayed_diff}")
+        require_terminal_safe(displayed_diff, f"{phase} proposal changes[{index}] diff", multiline=True)
+        framed_diff = "\n".join(f"| {line}" for line in displayed_diff.splitlines())
+        rendered.append(
+            f"--- trusted change {index + 1}: {json.dumps(relative, ensure_ascii=True)} ---\n"
+            f"{framed_diff}"
+        )
     return TrustedProposal(
         relative_path=proposal,
         path=proposal_path,
@@ -564,6 +594,7 @@ class LiveHarness:
 
     def lifecycle(self, action: str, *, show_output: bool = False) -> dict[str, str]:
         setup_before = repository_snapshot(self.repo) if action == "setup" else None
+        setup_workspace_before = repository_snapshot(self.workspace) if action == "setup" else None
         started = self.gateway_call("contextos.run", {
             "alias": PROJECT_ALIAS, "action": action, "scenario": CONFORMANCE_SCENARIO,
         })
@@ -581,10 +612,12 @@ class LiveHarness:
             if first.get("status") != "awaiting_input":
                 raise HarnessError("OpenClaw setup did not pause for an owned continuation turn")
             first_turn_changes = snapshot_changes(setup_before or {}, repository_snapshot(self.repo))
-            if first_turn_changes:
+            first_turn_workspace_changes = snapshot_changes(
+                setup_workspace_before or {}, repository_snapshot(self.workspace)
+            )
+            if first_turn_changes or first_turn_workspace_changes:
                 raise HarnessError(
-                    "OpenClaw setup first turn persisted continuity outside its owned conversation: "
-                    + ", ".join(first_turn_changes[:20])
+                    "OpenClaw setup first turn persisted continuity outside its owned conversation"
                 )
             self.evidence.controls["setup_first_turn_repository_read_only"] = True
             continued = self.gateway_call("contextos.continue", {
@@ -598,8 +631,6 @@ class LiveHarness:
             if continued_session != session_key or continued_owner != ownership_token:
                 raise HarnessError("OpenClaw continuation changed the owned lifecycle authority")
             self.evidence.controls["owned_continuation_round_trip"] = True
-        if show_output:
-            print(f"\n--- OpenClaw {action} output (not retained in evidence) ---\n{text}\n--- end output ---")
         return parse_lifecycle_result(text)
 
     def completed_lifecycle_text(self, action: str, started: Mapping[str, Any]) -> tuple[str, str, str]:
@@ -781,8 +812,7 @@ class LiveHarness:
             raise HarnessError("could not bind copied skills to the harness source commit")
         if repo_result.returncode or repo_result.stdout.strip() != source_sha:
             raise HarnessError("disposable repository HEAD must exactly match the harness source commit")
-        self.workspace.mkdir(mode=0o700, parents=True)
-        self.workspace.chmod(0o700)
+        harden_private_directory(self.workspace)
         (self.workspace / "USER.md").write_text(
             f"Synthetic private user memory: {self.private_memory_canaries[0]}\n", encoding="utf-8"
         )
