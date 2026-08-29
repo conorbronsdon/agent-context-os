@@ -53,6 +53,20 @@ def make_directory_link(link: Path, target: Path) -> None:
         link.symlink_to(target, target_is_directory=True)
 
 
+def windows_short_path(path: Path) -> Path:
+    if os.name != "nt":
+        raise OSError("Windows short paths are unavailable")
+    import ctypes
+
+    buffer = ctypes.create_unicode_buffer(32768)
+    length = ctypes.windll.kernel32.GetShortPathNameW(
+        str(path), buffer, len(buffer)
+    )
+    if length == 0 or length >= len(buffer):
+        raise OSError("GetShortPathNameW could not produce a short path")
+    return Path(buffer.value)
+
+
 def root_config(*, canonical: bool = True, agents: list[str] | None = None) -> str:
     value = {
         "schema_version": 1,
@@ -1061,6 +1075,21 @@ with mock.patch("contextos.kernel._capture_transaction_before", side_effect=cras
         self.assertEqual("warn", initialization["status"])
         self.assertIn("guided setup required", initialization["detail"])
 
+    @unittest.skipUnless(os.name == "nt", "Windows 8.3 path regression")
+    def test_readiness_accepts_equivalent_short_root_and_long_state_paths(self) -> None:
+        long_root = self.root.resolve()
+        short_root = windows_short_path(long_root)
+        if str(short_root).casefold() == str(long_root).casefold():
+            self.skipTest("8.3 short names are unavailable for the temporary root")
+
+        report = start_report(short_root, NOW)
+
+        self.assertTrue(report["initialized"])
+        self.assertEqual(
+            {"state/blockers.md", "state/current.md", "state/weekly-priorities.md"},
+            set(report["state"]),
+        )
+
     def test_future_dated_state_is_not_treated_as_initialized(self) -> None:
         (self.root / "state/current.md").write_text(
             "# Current State\n\n**Last Updated:** 2099-01-01\n",
@@ -1128,13 +1157,14 @@ with mock.patch("contextos.kernel._capture_transaction_before", side_effect=cras
             )._guard_local_state_path
             swapped = False
 
-            def swap_after_guard(root: Path, path: Path) -> None:
+            def swap_after_guard(root: Path, path: Path) -> Path:
                 nonlocal swapped
-                original_guard(root, path)
+                relative = original_guard(root, path)
                 if path == current and not swapped:
                     current.unlink()
                     current.symlink_to(outside)
                     swapped = True
+                return relative
 
             try:
                 with mock.patch(

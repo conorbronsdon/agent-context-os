@@ -3728,9 +3728,12 @@ def _initialization_state(
     workspace: Workspace, today: date, *, tolerate_unsafe: bool = False
 ) -> tuple[bool, dict[str, dict[str, Any]]]:
     state: dict[str, dict[str, Any]] = {}
+    state_dir_relative = _guard_local_state_path(
+        workspace.root, workspace.state_dir
+    )
     for filename, threshold in STATE_THRESHOLDS.items():
         path = workspace.state_dir / filename
-        relative = relative_path(workspace.root, path)
+        relative = (state_dir_relative / filename).as_posix()
         try:
             _guard_local_state_path(workspace.root, path)
             state[relative] = _state_freshness(path, today, threshold)
@@ -3745,18 +3748,17 @@ def _initialization_state(
                 "freshness_status": "unknown",
                 "stale": None,
             }
-    gate = relative_path(
-        workspace.root, workspace.state_dir / INITIALIZATION_FILE
-    )
+    gate = (state_dir_relative / INITIALIZATION_FILE).as_posix()
     return _is_initialized(state[gate]), state
 
 
 def _initialization_next_action(
     workspace: Workspace, state: dict[str, dict[str, Any]]
 ) -> str:
-    gate = relative_path(
-        workspace.root, workspace.state_dir / INITIALIZATION_FILE
+    state_dir_relative = _guard_local_state_path(
+        workspace.root, workspace.state_dir
     )
+    gate = (state_dir_relative / INITIALIZATION_FILE).as_posix()
     if state[gate]["freshness_status"] == "future":
         return FUTURE_DATE_NEXT_ACTION
     return SETUP_NEXT_ACTION
@@ -3780,12 +3782,41 @@ def start_report(root: Path, now: datetime) -> dict[str, Any]:
     }
 
 
-def _guard_local_state_path(root: Path, path: Path) -> None:
-    current = root
+def _guard_local_state_path(root: Path, path: Path) -> Path:
+    anchor = root
     try:
         relative = path.relative_to(root)
     except ValueError as exc:
-        raise ContextOSError(f"local state path escapes workspace: {path}") from exc
+        if os.name != "nt":
+            raise ContextOSError(f"local state path escapes workspace: {path}") from exc
+
+        # Windows may expose the same directory through an 8.3 spelling and a
+        # canonical long spelling. Identify an equivalent existing ancestor
+        # without resolving the candidate path, then perform the normal
+        # no-follow walk from that spelling.
+        for candidate_anchor in path.parents:
+            if _is_link_like(candidate_anchor):
+                raise ContextOSError(
+                    "local state path must not traverse a symlink or reparse point: "
+                    f"{path}"
+                )
+            try:
+                same_root = os.path.samefile(root, candidate_anchor)
+            except FileNotFoundError:
+                continue
+            except OSError as identity_error:
+                raise ContextOSError(
+                    "cannot establish local state path containment for "
+                    f"{path}: {identity_error}"
+                ) from identity_error
+            if same_root:
+                anchor = candidate_anchor
+                relative = path.relative_to(candidate_anchor)
+                break
+        else:
+            raise ContextOSError(f"local state path escapes workspace: {path}") from exc
+
+    current = anchor
     for part in relative.parts:
         current /= part
         if _is_link_like(current):
@@ -3793,6 +3824,7 @@ def _guard_local_state_path(root: Path, path: Path) -> None:
                 "local state path must not traverse a symlink or reparse point: "
                 f"{relative.as_posix()}"
             )
+    return relative
 
 
 def _local_json(path: Path, *, root: Path) -> dict[str, Any]:
