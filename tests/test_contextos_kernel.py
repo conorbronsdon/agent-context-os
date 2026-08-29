@@ -1166,7 +1166,7 @@ with mock.patch("contextos.kernel._capture_transaction_before", side_effect=cras
             def swap_after_guard(root: Path, path: Path) -> Path:
                 nonlocal swapped
                 relative = original_guard(root, path)
-                if path == current and not swapped:
+                if path.name == current.name and not swapped:
                     current.unlink()
                     current.symlink_to(outside)
                     swapped = True
