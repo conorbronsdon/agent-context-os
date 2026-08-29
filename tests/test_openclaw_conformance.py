@@ -142,11 +142,13 @@ class OpenClawDescriptorTest(unittest.TestCase):
             "README.md",
             "docs/commands-and-skills.md",
             "docs/getting-started.md",
+            "AGENTS.md",
         ):
             text = (ROOT / relative).read_text(encoding="utf-8")
             with self.subTest(path=relative):
                 self.assertIn("/contextos <alias> setup", text)
                 self.assertNotIn("`/skill setup`", text)
+                self.assertNotIn("installs no hook or plugin", text)
 
 
 @unittest.skipUnless(

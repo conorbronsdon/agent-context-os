@@ -331,6 +331,13 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         self.assertIn("MALICIOUS OR DIFFERENT STORED DIFF", trusted.rendered_diffs)
         self.assertNotIn(model_output, trusted.rendered_diffs)
 
+    def test_trusted_review_rejects_terminal_control_injection(self) -> None:
+        for unsafe in ("\x1b[2J", "\roverwrite", "\u202efalse-diff"):
+            with self.subTest(unsafe=repr(unsafe)):
+                relative, digest = self.write_proposal("setup", f"safe\n{unsafe}\n")
+                with self.assertRaisesRegex(live.HarnessError, "terminal-unsafe"):
+                    live.load_trusted_proposal(self.repo, relative, digest, "setup")
+
     def test_trusted_review_rejects_model_digest_mismatch(self) -> None:
         relative, _ = self.write_proposal("update")
         with self.assertRaisesRegex(live.HarnessError, "model-reported digest"):
