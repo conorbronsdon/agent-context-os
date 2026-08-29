@@ -86,7 +86,10 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         self.assertEqual(list(live.LIFECYCLE_SKILLS), defaults["skills"])
         self.assertEqual(live.MODEL_ROUTE, defaults["model"]["primary"])
         self.assertEqual(str(self.claude), defaults["cliBackends"]["claude-cli"]["command"])
-        self.assertEqual(["--safe-mode"], defaults["cliBackends"]["claude-cli"]["args"])
+        self.assertEqual(
+            ["--safe-mode", "--verbose"],
+            defaults["cliBackends"]["claude-cli"]["args"],
+        )
         self.assertEqual(
             {"root": str(self.repo), "bashPath": str(self.bash)},
             plugin["config"]["projects"][live.PROJECT_ALIAS],
