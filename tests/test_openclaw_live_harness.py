@@ -230,6 +230,16 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         with self.assertRaisesRegex(live.HarnessError, "could not verify"):
             live.require_clean_source(live.CommandResult([], 1, "", "fatal"))
 
+    def test_deny_control_accepts_only_an_explicit_non_success_result(self) -> None:
+        self.assertTrue(live.is_explicit_lifecycle_denial(
+            'exec policy denied tool use\nCONTEXTOS_LIVE_RESULT={"status":"blocked"}'
+        ))
+        self.assertTrue(live.is_explicit_lifecycle_denial("permission denied"))
+        self.assertFalse(live.is_explicit_lifecycle_denial(
+            'blocked was mentioned\nCONTEXTOS_LIVE_RESULT={"status":"started"}'
+        ))
+        self.assertFalse(live.is_explicit_lifecycle_denial("ordinary response"))
+
     def test_proposal_rejects_escape_and_invalid_digest(self) -> None:
         with self.assertRaisesRegex(live.HarnessError, "lowercase SHA-256"):
             live.require_proposal({"proposal": "p.json", "digest": "ABC"})

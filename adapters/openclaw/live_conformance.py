@@ -291,6 +291,18 @@ def require_clean_source(result: CommandResult) -> None:
         raise HarnessError("harness source worktree must be clean so the live gate binds to one exact commit")
 
 
+def is_explicit_lifecycle_denial(detail: str) -> bool:
+    if not re.search(r"(?i)denied|not allowed|permission|disabled|blocked", detail):
+        return False
+    if RESULT_PREFIX not in detail:
+        return True
+    try:
+        marker = parse_lifecycle_result(detail)
+    except HarnessError:
+        return False
+    return marker.get("status") != "started"
+
+
 def parse_diagnostic(result: CommandResult, private_paths: Sequence[Path]) -> dict[str, Any]:
     summary = output_summary(result)
     try:
@@ -487,7 +499,7 @@ class LiveHarness:
             self.stop_gateway()
         if repository_snapshot(self.repo) != before_denied:
             raise HarnessError("deny-all execution control allowed a repository change")
-        if RESULT_PREFIX in denial_detail or not re.search(r"(?i)denied|not allowed|permission|disabled|blocked", denial_detail):
+        if not is_explicit_lifecycle_denial(denial_detail):
             raise HarnessError("deny-all execution control did not produce an explicit blocked-tool result")
         self.evidence.controls["deny_all_blocks_lifecycle_tools"] = True
         set_execution_policy(config_path, "full", "off")
