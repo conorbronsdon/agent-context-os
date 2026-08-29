@@ -609,10 +609,21 @@ class LiveHarness:
             self.evidence.diagnostics[name] = parse_diagnostic(result, paths)
             if result.returncode not in codes:
                 raise HarnessError(f"OpenClaw {name} diagnostic failed")
+        plugin_report = self.evidence.diagnostics["plugins"].get("report", {})
+        context_os = next(
+            (
+                plugin for plugin in plugin_report.get("plugins", [])
+                if isinstance(plugin, dict) and plugin.get("id") == "context-os"
+            ),
+            None,
+        )
+        if not context_os or context_os.get("status") != "loaded" or context_os.get("hookCount") != 0:
+            raise HarnessError("Context OS plugin was not loaded with the expected zero-hook boundary")
         memory_after = native_memory_snapshot(self.repo)
         self.evidence.controls.update({
             "repo_native_memory_absent": not any(memory_after.values()),
-            "hooks_configured_disabled": True,
+            "context_os_plugin_loaded": True,
+            "context_os_hook_count_zero": True,
             "gateway_plugin_is_execution_surface": True,
         })
         if memory_after != memory_before:

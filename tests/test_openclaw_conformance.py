@@ -18,10 +18,10 @@ LIFECYCLE_SKILLS = {
 
 
 class OpenClawDescriptorTest(unittest.TestCase):
-    def test_support_claims_stay_experimental_and_hook_free(self) -> None:
+    def test_support_claims_are_first_class_and_hook_free(self) -> None:
         surface = DESCRIPTOR["surfaces"]["cli"]
-        self.assertEqual("experimental", DESCRIPTOR["support_tier"])
-        self.assertEqual("experimental", surface["support_tier"])
+        self.assertEqual("first-class", DESCRIPTOR["support_tier"])
+        self.assertEqual("first-class", surface["support_tier"])
         self.assertEqual("unsupported", surface["capabilities"]["project_hooks"])
         self.assertEqual("unsupported", surface["capabilities"]["blocking_pre_tool_hook"])
         self.assertIsNone(surface["hook_output"])

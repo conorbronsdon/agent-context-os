@@ -2,7 +2,7 @@
   "schema_version": 2,
   "runtime": "openclaw",
   "display_name": "OpenClaw",
-  "support_tier": "experimental",
+  "support_tier": "first-class",
   "support_summary": "External-plugin lifecycle support with alias-bound subagent cwd, copied portable skills, separate private memory, and deterministic digest apply",
   "components": ["core", "portable-skills", "agents-instructions", "openclaw-adapter"],
   "install": {
@@ -18,7 +18,7 @@
   "surfaces": {
     "cli": {
       "kind": "cli",
-      "support_tier": "experimental",
+      "support_tier": "first-class",
       "instruction_sources": [
         {"scope": "repository", "role": "canonical", "path": "AGENTS.md", "precedence": 100},
         {"scope": "workspace", "role": "persona", "path": "SOUL.md", "precedence": 90},

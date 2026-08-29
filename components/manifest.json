@@ -804,7 +804,7 @@
         },
         {
             "id": "openclaw-adapter",
-            "description": "Experimental OpenClaw plugin, onboarding, runtime descriptor, and installed-version conformance controls.",
+            "description": "First-class OpenClaw plugin, onboarding, runtime descriptor, and installed-version conformance controls.",
             "depends_on": [
                 "core",
                 "portable-skills",

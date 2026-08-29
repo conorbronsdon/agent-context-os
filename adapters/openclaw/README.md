@@ -1,9 +1,9 @@
-# OpenClaw experimental adapter
+# OpenClaw adapter
 
 This adapter has been tested against `OpenClaw 2026.7.1-2 (0790d9f)`. It
 combines copied portable skills with an external OpenClaw plugin that binds a
 configured project alias to a plugin-owned subagent working directory. Support
-remains experimental until the authenticated live promotion gate passes. The
+is first-class for the explicit, proposal-gated lifecycle documented here. The
 adapter does not claim OpenClaw project hooks or automatic memory synchronization.
 
 ## Keep the two workspaces separate
@@ -158,8 +158,7 @@ Neither surface accepts a caller-provided proposal path.
   shell-execution authorization. If an agent skill allowlist is present,
   include all eight lifecycle skill names or omitted commands will not be
   visible to that agent.
-- Workspace hooks are disabled until explicitly enabled. This experimental
-  adapter installs no project hook and makes no blocking-hook claim.
+- This adapter installs no project hook and makes no blocking-hook claim.
 - The must-not-fire hook control is an empty Context OS hook inventory;
   proposal/apply remains the write boundary instead of a claimed OpenClaw hook.
 - Native OpenClaw memory is private host state and is not synchronized with

@@ -2,7 +2,7 @@
 
 Context OS can begin with a blank interview or selected context from another
 assistant. The result is a small, reviewable repository that Claude Code,
-Codex, Hermes, and the experimental OpenClaw and Cursor adapters can use as
+Codex, Hermes, and OpenClaw, plus the experimental Cursor adapter, can use as
 shared state.
 
 ## Before you clone
@@ -106,7 +106,7 @@ Run `/setup` in Claude Code or Hermes, `/context-setup` in Cursor, `$setup` in
 Codex, or `/contextos <alias> setup` through an authorized OpenClaw messaging
 surface. OpenClaw first requires the separate private-workspace, verified skill
 synchronization, plugin installation, and configured project-alias binding
-steps in its [experimental adapter guide](../adapters/openclaw/README.md). The guided
+steps in its [adapter guide](../adapters/openclaw/README.md). The guided
 interview asks one question at a time, builds a deterministic proposal, and
 waits before applying the exact reviewed diff.
 
@@ -158,7 +158,7 @@ Commit and push only after the diff matches what you intend to preserve.
 
 ## Run the daily loop
 
-| Moment | Claude Code | Codex | Hermes | OpenClaw (experimental) | Cursor IDE/CLI (experimental) | Devin session (experimental) |
+| Moment | Claude Code | Codex | Hermes | OpenClaw | Cursor IDE/CLI (experimental) | Devin session (experimental) |
 |---|---|---|---|---|---|---|
 | Start work | `/start` | `$start` | `/start` | `/contextos <alias> start` | `/context-start` | `@skills:context-start` |
 | Save progress without closing | `/update` | `$update` | `/update` | `/contextos <alias> update` | `/context-update` | `@skills:context-update` |
