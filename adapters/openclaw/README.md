@@ -186,6 +186,8 @@ current arguments:
 python adapters/openclaw/live_conformance.py --help
 ```
 
-The harness must prove the plugin-owned subagent `cwd`, private workspace
-separation, denial controls, wrong-digest rejection, human-approved
-deterministic apply, and redacted evidence before this adapter is promoted.
+The harness runs the authenticated Claude CLI in `--safe-mode` so user hooks,
+plugins, auto-memory, and other customizations cannot add private host context
+to the synthetic fixture. It must prove the plugin-owned subagent `cwd`, private
+workspace separation, denial controls, wrong-digest rejection, human-approved
+deterministic apply, and redacted evidence for the exact candidate commit.

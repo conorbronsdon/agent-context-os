@@ -152,7 +152,10 @@ def openclaw_config(
         "agents": {"defaults": {
             "workspace": str(workspace), "skipBootstrap": True,
             "skills": list(LIFECYCLE_SKILLS), "model": {"primary": MODEL_ROUTE},
-            "cliBackends": {"claude-cli": {"command": str(claude_binary)}},
+            "cliBackends": {"claude-cli": {
+                "command": str(claude_binary),
+                "args": ["--safe-mode"],
+            }},
         }},
         "plugins": {"allow": ["context-os"], "entries": {
             "anthropic": {"enabled": True},
@@ -460,6 +463,10 @@ class LiveHarness:
 
     def verify_preflight_controls(self, config_path: Path) -> None:
         config = json.loads(config_path.read_text(encoding="utf-8"))
+        claude_backend = config["agents"]["defaults"]["cliBackends"]["claude-cli"]
+        if claude_backend.get("args") != ["--safe-mode"]:
+            raise HarnessError("Claude CLI live conformance must disable user hooks and customizations")
+        self.evidence.controls["claude_safe_mode_configured"] = True
         visible_result = self.run_command([*self.command_prefix, "skills", "list", "--json"], cwd=self.workspace)
         visible = skill_inventory(visible_result.stdout) if visible_result.returncode == 0 else {}
         if not all(name in visible and visible[name].get("modelVisible") for name in LIFECYCLE_SKILLS):
