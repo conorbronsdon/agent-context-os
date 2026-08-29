@@ -1,20 +1,19 @@
-import { lstat, readFile, readdir, realpath, stat } from "node:fs/promises";
+import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 export const PROJECT_ALIAS_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
-export const PROPOSAL_DIGEST_RE = /^[a-f0-9]{64}$/;
 export const LIFECYCLE_ACTIONS = new Set(["setup", "start", "update", "end"]);
 export const CONFORMANCE_SCENARIO = "synthetic-conformance-v1";
 
-const MAX_PROPOSAL_BYTES = 2 * 1024 * 1024;
+const MAX_OPERATOR_MESSAGE_CHARS = 16 * 1024;
 
 export function parseCommandArgs(raw) {
   const parts = String(raw ?? "").trim().split(/\s+/u).filter(Boolean);
   if (parts.length < 2) {
-    throw new Error("usage: /contextos <project-alias> <setup|start|update|end|apply> [proposal-digest]");
+    throw new Error("usage: /contextos <project-alias> <setup|start|update|end> | /contextos <project-alias> continue <session-key> <response>");
   }
-  const [project, action, digest] = parts;
+  const [project, action, sessionKey, ...responseParts] = parts;
   if (!PROJECT_ALIAS_RE.test(project)) {
     throw new Error("project must be a configured alias using lowercase letters, digits, '-' or '_'");
   }
@@ -24,11 +23,11 @@ export function parseCommandArgs(raw) {
     }
     return { project, action, kind: "lifecycle" };
   }
-  if (action === "apply") {
-    if (parts.length !== 3 || !PROPOSAL_DIGEST_RE.test(digest ?? "")) {
-      throw new Error("apply requires exactly one lowercase 64-character proposal digest");
+  if (action === "continue") {
+    if (!sessionKey || responseParts.length === 0) {
+      throw new Error("continue requires an owned session key and operator response");
     }
-    return { project, action, digest, kind: "apply" };
+    return { project, sessionKey, message: responseParts.join(" "), kind: "continue" };
   }
   throw new Error(`unsupported lifecycle action: ${action}`);
 }
@@ -95,59 +94,10 @@ export async function resolveProject(settings, alias) {
   if (typeof configured.root !== "string" || !path.isAbsolute(configured.root)) {
     throw new Error(`project ${alias} root must be absolute`);
   }
-  if (typeof configured.bashPath !== "string" || !path.isAbsolute(configured.bashPath)) {
-    throw new Error(`project ${alias} bashPath must be absolute`);
-  }
-
   const root = await requireCanonicalPath(configured.root, `project ${alias} root`, "isDirectory");
   await requireRegularFileInside(root, "AGENTS.md");
   await requireRegularFileInside(root, path.join("scripts", "contextos.sh"));
-
-  const bashPath = await requireCanonicalPath(configured.bashPath, `project ${alias} bashPath`, "isFile");
-  if (isWithin(root, bashPath)) {
-    throw new Error(`project ${alias} bashPath must be outside the repository`);
-  }
-  return { root, bashPath };
-}
-
-export async function findProposalByDigest(root, digest) {
-  if (!PROPOSAL_DIGEST_RE.test(digest)) {
-    throw new Error("invalid proposal digest");
-  }
-  const proposalDir = path.join(root, ".context-os", "proposals");
-  const proposalDirInfo = await lstat(proposalDir);
-  if (!proposalDirInfo.isDirectory() || proposalDirInfo.isSymbolicLink()) {
-    throw new Error("proposal directory must be a regular, non-symlink directory");
-  }
-  const canonicalDir = await realpath(proposalDir);
-  if (!isWithin(root, canonicalDir)) {
-    throw new Error("proposal directory resolves outside the configured project");
-  }
-  const matches = [];
-  for (const entry of await readdir(canonicalDir, { withFileTypes: true })) {
-    if (!entry.isFile() || entry.isSymbolicLink() || !entry.name.endsWith(".json")) continue;
-    const candidate = path.join(canonicalDir, entry.name);
-    const info = await lstat(candidate);
-    if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_PROPOSAL_BYTES) continue;
-    const canonicalCandidate = await realpath(candidate);
-    if (!isWithin(root, canonicalCandidate) || canonicalPathKey(candidate) !== canonicalPathKey(canonicalCandidate)) {
-      continue;
-    }
-    let parsed;
-    try {
-      parsed = JSON.parse(await readFile(candidate, "utf8"));
-    } catch {
-      continue;
-    }
-    if (parsed?.proposal_digest === digest) matches.push(candidate);
-  }
-  if (matches.length === 0) throw new Error(`no proposal matches digest ${digest}`);
-  if (matches.length !== 1) throw new Error(`multiple proposals match digest ${digest}`);
-  const relative = path.relative(root, matches[0]);
-  if (!isWithin(root, matches[0]) || relative === "" || path.isAbsolute(relative)) {
-    throw new Error("matched proposal is outside the configured project");
-  }
-  return relative.split(path.sep).join("/");
+  return { root };
 }
 
 function textFromContent(content) {
@@ -177,20 +127,23 @@ export function lifecyclePrompt(action) {
     `Invoke the Context OS ${action} lifecycle skill for this repository.`,
     "Treat the runtime working directory as the exact repository root.",
     "Create and report any proposal, including its exact path, digest, and diff, but do not apply it.",
+    "Use only lightweight repository context; do not read or quote the separate OpenClaw workspace, USER.md, MEMORY.md, or private host memory.",
+    "If setup, update, or end needs operator facts or confirmation, ask for them and wait for a continuation turn instead of inventing them.",
     "Never substitute the private OpenClaw workspace and never search an ancestor for another repository."
   ].join(" ");
 }
 
-export function conformancePrompt(action) {
+export function conformancePrompt(action, continuityChallenge) {
   if (!LIFECYCLE_ACTIONS.has(action)) throw new Error("invalid lifecycle action");
+  if (action === "setup" && (typeof continuityChallenge !== "string" || !continuityChallenge)) {
+    throw new Error("synthetic setup requires a continuity challenge");
+  }
   const result = "CONTEXTOS_LIVE_RESULT=";
   const prompts = {
     setup: [
-      "Invoke /skill setup using only this pre-reviewed synthetic public-safe fixture:",
-      "project name 'Lifecycle Fixture', purpose 'verify Context OS', current focus 'complete live conformance',",
-      "no personal facts, links, credentials, or imported material. The repository audience is explicitly confirmed",
-      `as sanitized and disposable. Create and show the complete proposal diff, do not apply it, then end with ${result}`,
-      '{"proposal":"<repo-relative path>","digest":"<sha256>"}.'
+      "Invoke /skill setup, remember the supplied continuity value, ask one setup question, and do not create a proposal in this turn.",
+      `Use ${continuityChallenge} as the current-focus value when this workflow is continued, but do not print it in this turn.`,
+      `End with ${result}{"status":"awaiting_input"}.`
     ],
     start: [
       "Invoke /skill start and keep the repository read-only. Report the continuity inventory.",
@@ -213,17 +166,24 @@ export function conformancePrompt(action) {
   return prompts[action].join(" ");
 }
 
+export function conformanceContinuationPrompt(action) {
+  if (action !== "setup") throw new Error("synthetic continuation is supported only for setup");
+  const result = "CONTEXTOS_LIVE_RESULT=";
+  return [
+      "Continue the existing /skill setup workflow using only this pre-reviewed synthetic public-safe fixture:",
+      "project name 'Lifecycle Fixture' and purpose 'verify Context OS'. Use the continuity value supplied in the",
+      "earlier turn as current focus; it is deliberately not repeated here.",
+      "no personal facts, links, credentials, or imported material. The repository audience is explicitly confirmed",
+      `as sanitized and disposable. Create and show the complete proposal diff, do not apply it, then end with ${result}`,
+      '{"proposal":"<repo-relative path>","digest":"<sha256>"}.'
+  ].join(" ");
+}
+
 async function requireDisposableConformanceMarker(root) {
   const marker = await requireRegularFileInside(root, ".context-os-live-disposable");
   if ((await readFile(marker, "utf8")).trim() !== "disposable") {
     throw new Error("synthetic conformance requires a disposable repository marker containing exactly 'disposable'");
   }
-}
-
-export function renderProcessFailure(result) {
-  const output = [result?.stdout, result?.stderr].filter((value) => typeof value === "string" && value.trim()).join("\n").trim();
-  const suffix = output ? `\n${output}` : "";
-  return `Context OS apply failed (exit=${String(result?.code)}, termination=${String(result?.termination)}).${suffix}`;
 }
 
 function requireParams(value, allowedKeys) {
@@ -256,6 +216,30 @@ function requireOwnedString(value, name) {
   return value;
 }
 
+function requireOperatorMessage(value) {
+  if (typeof value !== "string" || value.trim().length === 0 || value.length > MAX_OPERATOR_MESSAGE_CHARS) {
+    throw new Error(`message must contain 1 through ${MAX_OPERATOR_MESSAGE_CHARS} characters`);
+  }
+  return value.trim();
+}
+
+function commandPrincipal(ctx) {
+  const sender = ctx.senderId ?? ctx.from;
+  const conversation = ctx.sessionKey ?? ctx.sessionId;
+  if (typeof sender !== "string" || !sender || typeof conversation !== "string" || !conversation) {
+    throw new Error("native lifecycle commands require stable sender and conversation identifiers");
+  }
+  return JSON.stringify({
+    sender,
+    conversation,
+    channel: ctx.channel,
+    channelId: ctx.channelId ?? null,
+    accountId: ctx.accountId ?? null,
+    messageThreadId: ctx.messageThreadId ?? null,
+    threadParentId: ctx.threadParentId ?? null
+  });
+}
+
 function gatewayHandler(run) {
   return async ({ params, respond }) => {
     try {
@@ -275,11 +259,11 @@ function gatewayHandler(run) {
 export function registerContextOsSurfaces(api, options = {}) {
   const nextId = options.randomId ?? randomUUID;
   const runs = new Map();
-  const sessions = new Set();
+  const sessions = new Map();
 
   const settings = () => readPluginSettings(api.pluginConfig);
 
-  async function startLifecycle(alias, action, agentId = "main", scenario) {
+  async function startLifecycle(alias, action, agentId = "main", scenario, ownerKey = "gateway-operator") {
     const parsedAlias = requireAlias(alias);
     const parsedAction = requireLifecycleAction(action);
     const project = await resolveProject(settings(), parsedAlias);
@@ -290,19 +274,56 @@ export function registerContextOsSurfaces(api, options = {}) {
       await requireDisposableConformanceMarker(project.root);
     }
     const sessionKey = `agent:${agentId}:subagent:contextos-${nextId()}`;
+    const continuityChallenge = scenario === CONFORMANCE_SCENARIO && parsedAction === "setup"
+      ? `contextos-continuity-${nextId()}`
+      : undefined;
     const { runId } = await api.runtime.subagent.run({
       sessionKey,
-      message: scenario === CONFORMANCE_SCENARIO ? conformancePrompt(parsedAction) : `/skill ${parsedAction}`,
+      message: scenario === CONFORMANCE_SCENARIO
+        ? conformancePrompt(parsedAction, continuityChallenge)
+        : `/skill ${parsedAction}`,
       extraSystemPrompt: lifecyclePrompt(parsedAction),
       cwd: project.root,
       deliver: false,
-      lightContext: false,
+      lightContext: true,
       idempotencyKey: nextId()
     });
     requireOwnedString(runId, "runId");
     runs.set(runId, sessionKey);
-    sessions.add(sessionKey);
-    return { runId, sessionKey };
+    sessions.set(sessionKey, { alias: parsedAlias, action: parsedAction, agentId, scenario, ownerKey });
+    return { runId, sessionKey, ...(continuityChallenge ? { continuityChallenge } : {}) };
+  }
+
+  async function continueLifecycle(alias, sessionKey, message, scenario, ownerKey = "gateway-operator") {
+    const parsedAlias = requireAlias(alias);
+    const parsedSessionKey = requireOwnedString(sessionKey, "sessionKey");
+    const owned = sessions.get(parsedSessionKey);
+    if (!owned) throw new Error("sessionKey is not owned by this Context OS plugin process");
+    if (owned.alias !== parsedAlias) throw new Error("sessionKey is not owned by that project alias");
+    if (owned.ownerKey !== ownerKey) throw new Error("sessionKey is not owned by this operator and conversation");
+    const project = await resolveProject(settings(), parsedAlias);
+    if (owned.scenario === CONFORMANCE_SCENARIO) {
+      if (scenario !== CONFORMANCE_SCENARIO || message !== undefined) {
+        throw new Error(`synthetic continuation requires scenario ${CONFORMANCE_SCENARIO} and no message`);
+      }
+      await requireDisposableConformanceMarker(project.root);
+    } else if (scenario !== undefined) {
+      throw new Error("scenario is not owned by this lifecycle session");
+    }
+    const { runId } = await api.runtime.subagent.run({
+      sessionKey: parsedSessionKey,
+      message: owned.scenario === CONFORMANCE_SCENARIO
+        ? conformanceContinuationPrompt(owned.action)
+        : `Operator response for the Context OS ${owned.action} workflow:\n${requireOperatorMessage(message)}`,
+      extraSystemPrompt: lifecyclePrompt(owned.action),
+      cwd: project.root,
+      deliver: false,
+      lightContext: true,
+      idempotencyKey: nextId()
+    });
+    requireOwnedString(runId, "runId");
+    runs.set(runId, parsedSessionKey);
+    return { runId, sessionKey: parsedSessionKey };
   }
 
   async function waitForLifecycle(runId, requestedTimeoutMs) {
@@ -328,48 +349,19 @@ export function registerContextOsSurfaces(api, options = {}) {
     return { sessionKey: parsedSessionKey, text: lastAssistantText(messages) };
   }
 
-  async function applyProposal(alias, digest) {
-    const parsedAlias = requireAlias(alias);
-    if (typeof digest !== "string" || !PROPOSAL_DIGEST_RE.test(digest)) {
-      throw new Error("digest must be a lowercase 64-character proposal digest");
-    }
-    const currentSettings = settings();
-    const project = await resolveProject(currentSettings, parsedAlias);
-    const proposal = await findProposalByDigest(project.root, digest);
-    const result = await api.runtime.system.runCommandWithTimeout(
-      [
-        project.bashPath,
-        "scripts/contextos.sh",
-        "apply",
-        proposal,
-        "--confirm",
-        digest,
-        "--runtime",
-        "openclaw"
-      ],
-      {
-        cwd: project.root,
-        timeoutMs: currentSettings.runTimeoutSeconds * 1000,
-        maxOutputBytes: 1024 * 1024,
-        maxPreservedOutputLines: 200,
-        killProcessTree: true
-      }
-    );
-    if (result.code !== 0 || result.termination !== "exit") {
-      throw new Error(renderProcessFailure(result));
-    }
-    const output = [result.stdout, result.stderr]
-      .filter((value) => value?.trim())
-      .join("\n")
-      .trim();
-    return { digest, output: output || `Applied proposal ${digest}.` };
-  }
-
   api.registerGatewayMethod(
     "contextos.run",
     gatewayHandler(async (rawParams) => {
       const params = requireParams(rawParams, ["alias", "action", "scenario"]);
       return await startLifecycle(params.alias, params.action, "main", params.scenario);
+    }),
+    { scope: "operator.write" }
+  );
+  api.registerGatewayMethod(
+    "contextos.continue",
+    gatewayHandler(async (rawParams) => {
+      const params = requireParams(rawParams, ["alias", "sessionKey", "message", "scenario"]);
+      return await continueLifecycle(params.alias, params.sessionKey, params.message, params.scenario);
     }),
     { scope: "operator.write" }
   );
@@ -389,18 +381,9 @@ export function registerContextOsSurfaces(api, options = {}) {
     }),
     { scope: "operator.read" }
   );
-  api.registerGatewayMethod(
-    "contextos.apply",
-    gatewayHandler(async (rawParams) => {
-      const params = requireParams(rawParams, ["alias", "digest"]);
-      return await applyProposal(params.alias, params.digest);
-    }),
-    { scope: "operator.write" }
-  );
-
   api.registerCommand({
     name: "contextos",
-    description: "Run or apply a proposal-gated Context OS lifecycle action",
+    description: "Run or continue a proposal-gated Context OS lifecycle action",
     acceptsArgs: true,
     requireAuth: true,
     requiredScopes: ["operator.write"],
@@ -408,17 +391,20 @@ export function registerContextOsSurfaces(api, options = {}) {
       try {
         if (!ctx.isAuthorizedSender) throw new Error("authorized sender required");
         const command = parseCommandArgs(ctx.args);
-        if (command.kind === "apply") {
-          const applied = await applyProposal(command.project, command.digest);
-          return { text: applied.output };
-        }
-        const started = await startLifecycle(command.project, command.action, ctx.agentId || "main");
+        const started = command.kind === "continue"
+          ? await continueLifecycle(command.project, command.sessionKey, command.message, undefined, commandPrincipal(ctx))
+          : await startLifecycle(command.project, command.action, ctx.agentId || "main", undefined, commandPrincipal(ctx));
         const completed = await waitForLifecycle(started.runId);
         if (completed.status !== "ok") {
           throw new Error(completed.error || `subagent run ${started.runId} ended with status ${completed.status}`);
         }
         const result = await lifecycleResult(started.sessionKey);
-        return { text: result.text || `Context OS ${command.action} completed in run ${started.runId}.` };
+        const owned = sessions.get(started.sessionKey);
+        const text = result.text || `Context OS ${owned?.action ?? "lifecycle"} completed in run ${started.runId}.`;
+        if (owned?.action === "start") return { text };
+        return {
+          text: `${text}\n\nContinue this owned workflow with: /contextos ${owned.alias} continue ${started.sessionKey} <response>`
+        };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return { text: `Context OS: ${message}` };
@@ -426,5 +412,5 @@ export function registerContextOsSurfaces(api, options = {}) {
     }
   });
 
-  return { startLifecycle, waitForLifecycle, lifecycleResult, applyProposal };
+  return { startLifecycle, continueLifecycle, waitForLifecycle, lifecycleResult };
 }

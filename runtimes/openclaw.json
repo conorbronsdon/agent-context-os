@@ -3,15 +3,16 @@
   "runtime": "openclaw",
   "display_name": "OpenClaw",
   "support_tier": "first-class",
-  "support_summary": "External-plugin lifecycle support with alias-bound subagent cwd, copied portable skills, separate private memory, and deterministic digest apply",
+  "support_summary": "External-plugin multi-turn lifecycle with alias-bound lightweight subagents, copied portable skills, separate private memory, and trusted-shell kernel apply",
   "components": ["core", "portable-skills", "agents-instructions", "openclaw-adapter"],
   "install": {
     "mode": "skill-copy-to-private-workspace",
     "next_steps": [
       "Create or choose a private OpenClaw workspace outside this repository.",
       "Run python adapters/openclaw/sync_skills.py sync --workspace <private-workspace> from the exact repository commit you intend to use, then verify it with the check command.",
-      "Package and install adapters/openclaw/plugin from the exact reviewed commit, then bind a project alias to absolute root and bashPath values in plugins.entries.context-os.config.",
-      "Invoke /contextos <alias> setup, start, update, or end as an authorized operator, or use the operator-scoped contextos.run, contextos.wait, and contextos.result Gateway methods. Apply only an exact reviewed digest through /contextos <alias> apply <digest> or contextos.apply."
+      "Package and install adapters/openclaw/plugin from the exact reviewed commit, then bind a project alias to an absolute canonical root in plugins.entries.context-os.config.",
+      "Invoke /contextos <alias> setup, start, update, or end as an authorized operator, and resume questions with /contextos <alias> continue <session-key> <response>; automation uses contextos.run, contextos.continue, contextos.wait, and contextos.result.",
+      "After independently reviewing the exact proposal path, digest, and stored diffs, apply it from a trusted shell with bash scripts/contextos.sh apply <proposal> --confirm <digest> --runtime openclaw; the plugin exposes no apply method."
     ]
   },
   "onboarding_doc": "adapters/openclaw/README.md",
@@ -117,7 +118,7 @@
         "id": "openclaw-plugin-conformance",
         "type": "conformance",
         "location": "adapters/openclaw/plugin/plugin.test.mjs",
-        "claims": ["explicit_invocation", "invocation", "proposal_apply", "support"]
+        "claims": ["explicit_invocation", "invocation", "support"]
       },
       {
         "id": "openclaw-kernel",

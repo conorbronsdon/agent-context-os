@@ -5,8 +5,8 @@ import path from "node:path";
 import test from "node:test";
 import {
   CONFORMANCE_SCENARIO,
+  conformanceContinuationPrompt,
   conformancePrompt,
-  findProposalByDigest,
   lastAssistantText,
   lifecyclePrompt,
   parseCommandArgs,
@@ -23,17 +23,13 @@ test("parses lifecycle aliases without accepting a path", () => {
   });
   assert.throws(() => parseCommandArgs("C:\\repo setup"), /configured alias/);
   assert.throws(() => parseCommandArgs("demo setup extra"), /does not accept/);
-});
-
-test("apply accepts only an exact lowercase digest", () => {
-  const digest = "a".repeat(64);
-  assert.deepEqual(parseCommandArgs(`demo apply ${digest}`), {
+  assert.deepEqual(parseCommandArgs("demo continue agent:main:subagent:owned confirmed public audience"), {
     project: "demo",
-    action: "apply",
-    digest,
-    kind: "apply"
+    sessionKey: "agent:main:subagent:owned",
+    message: "confirmed public audience",
+    kind: "continue"
   });
-  assert.throws(() => parseCommandArgs(`demo apply ${"A".repeat(64)}`), /64-character/);
+  assert.throws(() => parseCommandArgs("demo continue agent:main:subagent:owned"), /operator response/);
 });
 
 test("settings apply bounded timeout defaults", () => {
@@ -54,40 +50,32 @@ test("lifecycle prompt is proposal-only", () => {
   assert.match(prompt, /exact repository root/);
   assert.match(prompt, /do not apply/);
   assert.throws(() => lifecyclePrompt("apply"), /invalid lifecycle/);
-  assert.match(conformancePrompt("setup"), /synthetic public-safe fixture/);
+  assert.match(conformancePrompt("setup", "contextos-continuity-test"), /ask one setup question/);
+  assert.match(conformancePrompt("setup", "contextos-continuity-test"), /contextos-continuity-test/);
+  assert.match(conformancePrompt("setup", "contextos-continuity-test"), /"status":"awaiting_input"/);
+  assert.match(conformanceContinuationPrompt("setup"), /synthetic public-safe fixture/);
+  assert.throws(() => conformanceContinuationPrompt("update"), /only for setup/);
   assert.match(conformancePrompt("start"), /Only if the required kernel inventory succeeds/);
   assert.match(conformancePrompt("start"), /"status":"blocked"/);
   assert.match(conformancePrompt("end"), /pre-reviewed and confirmed synthetic draft/);
 });
 
-test("resolves configured roots and finds proposals only by digest", async () => {
+test("resolves configured roots without accepting aliases", async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), "context-os-openclaw-plugin-"));
   try {
     const root = path.join(temp, "repo");
-    const bin = path.join(temp, "bin");
     await mkdir(path.join(root, "scripts"), { recursive: true });
-    await mkdir(path.join(root, ".context-os", "proposals"), { recursive: true });
-    await mkdir(bin, { recursive: true });
     await writeFile(path.join(root, "AGENTS.md"), "test\n");
     await writeFile(path.join(root, "scripts", "contextos.sh"), "#!/usr/bin/env bash\n");
-    const bashPath = path.join(bin, process.platform === "win32" ? "bash.exe" : "bash");
-    await writeFile(bashPath, "stub\n");
-    const digest = "b".repeat(64);
-    await writeFile(
-      path.join(root, ".context-os", "proposals", "one.json"),
-      `${JSON.stringify({ proposal_digest: digest })}\n`
-    );
 
-    const settings = readPluginSettings({ projects: { demo: { root, bashPath } } });
+    const settings = readPluginSettings({ projects: { demo: { root } } });
     const project = await resolveProject(settings, "demo");
     assert.equal(project.root, await import("node:fs/promises").then(({ realpath }) => realpath(root)));
-    assert.equal(await findProposalByDigest(project.root, digest), ".context-os/proposals/one.json");
-    await assert.rejects(() => findProposalByDigest(project.root, "c".repeat(64)), /no proposal/);
 
     const rootAlias = path.join(temp, "repo-alias");
     await symlink(root, rootAlias, process.platform === "win32" ? "junction" : "dir");
     const aliasedSettings = readPluginSettings({
-      projects: { demo: { root: rootAlias, bashPath } }
+      projects: { demo: { root: rootAlias } }
     });
     await assert.rejects(() => resolveProject(aliasedSettings, "demo"), /symlink|junction|canonical/);
   } finally {
@@ -95,30 +83,20 @@ test("resolves configured roots and finds proposals only by digest", async () =>
   }
 });
 
-test("registers operator-scoped gateway lifecycle and apply methods with alias-only inputs", async () => {
+test("registers operator-scoped lifecycle continuation with owned sessions", async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), "context-os-openclaw-gateway-"));
   try {
     const root = path.join(temp, "repo");
-    const bin = path.join(temp, "bin");
     await mkdir(path.join(root, "scripts"), { recursive: true });
-    await mkdir(path.join(root, ".context-os", "proposals"), { recursive: true });
-    await mkdir(bin, { recursive: true });
     await writeFile(path.join(root, "AGENTS.md"), "test\n");
     await writeFile(path.join(root, "scripts", "contextos.sh"), "#!/usr/bin/env bash\n");
-    const bashPath = path.join(bin, process.platform === "win32" ? "bash.exe" : "bash");
-    await writeFile(bashPath, "stub\n");
-    const digest = "d".repeat(64);
-    await writeFile(
-      path.join(root, ".context-os", "proposals", "approved.json"),
-      `${JSON.stringify({ proposal_digest: digest })}\n`
-    );
 
     const methods = new Map();
     const commands = [];
-    const calls = { run: [], wait: [], messages: [], apply: [] };
+    const calls = { run: [], wait: [], messages: [] };
     const api = {
       pluginConfig: {
-        projects: { demo: { root, bashPath } },
+        projects: { demo: { root } },
         runTimeoutSeconds: 60
       },
       runtime: {
@@ -135,12 +113,6 @@ test("registers operator-scoped gateway lifecycle and apply methods with alias-o
             calls.messages.push(params);
             return { messages: [{ role: "assistant", content: "done" }] };
           }
-        },
-        system: {
-          async runCommandWithTimeout(argv, options) {
-            calls.apply.push({ argv, options });
-            return { code: 0, termination: "exit", stdout: "applied", stderr: "" };
-          }
         }
       },
       registerGatewayMethod(name, handler, options) {
@@ -150,20 +122,24 @@ test("registers operator-scoped gateway lifecycle and apply methods with alias-o
         commands.push(command);
       }
     };
-    const ids = ["session-id", "idempotency-id", "scenario-session", "scenario-idempotency"];
-    registerContextOsSurfaces(api, { randomId: () => ids.shift() });
+    const ids = [
+      "session-id", "idempotency-id", "continue-idempotency",
+      "scenario-session", "continuity-id", "scenario-idempotency", "scenario-continue-idempotency",
+      "native-session", "native-idempotency"
+    ];
+    const surfaces = registerContextOsSurfaces(api, { randomId: () => ids.shift() });
 
     assert.deepEqual([...methods.keys()], [
       "contextos.run",
+      "contextos.continue",
       "contextos.wait",
-      "contextos.result",
-      "contextos.apply"
+      "contextos.result"
     ]);
     assert.equal(commands.length, 1);
     assert.deepEqual(methods.get("contextos.run").options, { scope: "operator.write" });
+    assert.deepEqual(methods.get("contextos.continue").options, { scope: "operator.write" });
     assert.deepEqual(methods.get("contextos.wait").options, { scope: "operator.read" });
     assert.deepEqual(methods.get("contextos.result").options, { scope: "operator.read" });
-    assert.deepEqual(methods.get("contextos.apply").options, { scope: "operator.write" });
 
     async function invoke(name, params) {
       let response;
@@ -187,11 +163,35 @@ test("registers operator-scoped gateway lifecycle and apply methods with alias-o
     });
     assert.equal(calls.run[0].cwd, await import("node:fs/promises").then(({ realpath }) => realpath(root)));
     assert.equal(calls.run[0].message, "/skill start");
+    assert.equal(calls.run[0].lightContext, true);
     assert.equal("root" in calls.run[0], false);
+
+    const continued = await invoke("contextos.continue", {
+      alias: "demo",
+      sessionKey: "agent:main:subagent:contextos-session-id",
+      message: "The audience is public."
+    });
+    assert.equal(continued.ok, true);
+    assert.equal(calls.run[1].sessionKey, "agent:main:subagent:contextos-session-id");
+    assert.match(calls.run[1].message, /audience is public/);
+    assert.equal(calls.run[1].lightContext, true);
+    await assert.rejects(
+      () => surfaces.continueLifecycle(
+        "demo", "agent:main:subagent:contextos-session-id", "response", undefined, "different-operator"
+      ),
+      /not owned by this operator and conversation/
+    );
+    const wrongAlias = await invoke("contextos.continue", {
+      alias: "missing",
+      sessionKey: "agent:main:subagent:contextos-session-id",
+      message: "response"
+    });
+    assert.equal(wrongAlias.ok, false);
+    assert.match(wrongAlias.error.message, /not owned by that project alias/);
 
     const unmarkedScenario = await invoke("contextos.run", {
       alias: "demo",
-      action: "update",
+      action: "setup",
       scenario: CONFORMANCE_SCENARIO
     });
     assert.equal(unmarkedScenario.ok, false);
@@ -199,11 +199,30 @@ test("registers operator-scoped gateway lifecycle and apply methods with alias-o
     await writeFile(path.join(root, ".context-os-live-disposable"), "disposable\n");
     const scenario = await invoke("contextos.run", {
       alias: "demo",
-      action: "update",
+      action: "setup",
       scenario: CONFORMANCE_SCENARIO
     });
     assert.equal(scenario.ok, true);
-    assert.match(calls.run[1].message, /Live OpenClaw checkpoint completed/);
+    assert.equal(scenario.payload.continuityChallenge, "contextos-continuity-continuity-id");
+    assert.match(calls.run[2].message, /contextos-continuity-continuity-id/);
+    assert.match(calls.run[2].message, /awaiting_input/);
+    const scenarioContinued = await invoke("contextos.continue", {
+      alias: "demo",
+      sessionKey: "agent:main:subagent:contextos-scenario-session",
+      scenario: CONFORMANCE_SCENARIO
+    });
+    assert.equal(scenarioContinued.ok, true);
+    assert.match(calls.run[3].message, /Lifecycle Fixture/);
+    assert.doesNotMatch(calls.run[3].message, /contextos-continuity-continuity-id/);
+    assert.equal(calls.run[3].sessionKey, "agent:main:subagent:contextos-scenario-session");
+    const scenarioInjection = await invoke("contextos.continue", {
+      alias: "demo",
+      sessionKey: "agent:main:subagent:contextos-scenario-session",
+      scenario: CONFORMANCE_SCENARIO,
+      message: "arbitrary"
+    });
+    assert.equal(scenarioInjection.ok, false);
+    assert.match(scenarioInjection.error.message, /no message/);
     const unknownScenario = await invoke("contextos.run", {
       alias: "demo",
       action: "start",
@@ -223,24 +242,15 @@ test("registers operator-scoped gateway lifecycle and apply methods with alias-o
       text: "done"
     });
 
-    const applied = await invoke("contextos.apply", { alias: "demo", digest });
-    assert.equal(applied.ok, true);
-    assert.deepEqual(calls.apply[0].argv, [
-      await import("node:fs/promises").then(({ realpath }) => realpath(bashPath)),
-      "scripts/contextos.sh",
-      "apply",
-      ".context-os/proposals/approved.json",
-      "--confirm",
-      digest,
-      "--runtime",
-      "openclaw"
-    ]);
-    assert.equal(calls.apply[0].options.cwd, await import("node:fs/promises").then(({ realpath }) => realpath(root)));
-
     const unknown = await invoke("contextos.run", { alias: "missing", action: "start" });
     assert.equal(unknown.ok, false);
     assert.match(unknown.error.message, /unknown project alias/);
-    const injectedPath = await invoke("contextos.apply", { alias: "demo", digest, proposalPath: "elsewhere.json" });
+    const injectedPath = await invoke("contextos.continue", {
+      alias: "demo",
+      sessionKey: "agent:main:subagent:contextos-session-id",
+      message: "response",
+      proposalPath: "elsewhere.json"
+    });
     assert.equal(injectedPath.ok, false);
     assert.match(injectedPath.error.message, /unexpected parameter/);
     const foreignWait = await invoke("contextos.wait", { runId: "run-foreign" });
@@ -249,6 +259,25 @@ test("registers operator-scoped gateway lifecycle and apply methods with alias-o
     const foreignResult = await invoke("contextos.result", { sessionKey: "agent:main:subagent:other" });
     assert.equal(foreignResult.ok, false);
     assert.match(foreignResult.error.message, /not owned/);
+
+    const nativeContext = {
+      args: "demo update",
+      commandBody: "/contextos demo update",
+      channel: "test",
+      senderId: "operator-a",
+      sessionKey: "conversation-a",
+      isAuthorizedSender: true,
+      agentId: "main"
+    };
+    const nativeStarted = await commands[0].handler(nativeContext);
+    assert.match(nativeStarted.text, /contextos-native-session/);
+    const crossPrincipal = await commands[0].handler({
+      ...nativeContext,
+      args: "demo continue agent:main:subagent:contextos-native-session injected response",
+      commandBody: "/contextos demo continue agent:main:subagent:contextos-native-session injected response",
+      senderId: "operator-b"
+    });
+    assert.match(crossPrincipal.text, /not owned by this operator and conversation/);
   } finally {
     await rm(temp, { recursive: true, force: true });
   }

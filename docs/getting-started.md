@@ -109,6 +109,10 @@ synchronization, plugin installation, and configured project-alias binding
 steps in its [adapter guide](../adapters/openclaw/README.md). The guided
 interview asks one question at a time, builds a deterministic proposal, and
 waits before applying the exact reviewed diff.
+For OpenClaw, continue each owned interview with
+`/contextos <alias> continue <session-key> <response>`. Independently review the
+proposal file and apply it with the documented trusted-shell kernel command;
+the plugin does not expose proposal application.
 
 Cursor has separate IDE and Agent CLI permission surfaces. Follow its
 [experimental adapter guide](../adapters/cursor/README.md); setup registers the

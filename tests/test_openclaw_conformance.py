@@ -39,6 +39,16 @@ class OpenClawDescriptorTest(unittest.TestCase):
             "adapter",
             DESCRIPTOR["surfaces"]["cli"]["capabilities"]["explicit_invocation"],
         )
+        next_steps = "\n".join(DESCRIPTOR["install"]["next_steps"])
+        self.assertIn("/contextos <alias> continue <session-key> <response>", next_steps)
+        self.assertIn("contextos.continue", next_steps)
+        self.assertIn("trusted shell", next_steps)
+        self.assertIn("plugin exposes no apply method", next_steps)
+        plugin_evidence = next(
+            source for source in DESCRIPTOR["evidence"]["sources"]
+            if source["id"] == "openclaw-plugin-conformance"
+        )
+        self.assertNotIn("proposal_apply", plugin_evidence["claims"])
 
     def test_repository_and_private_workspace_roles_are_distinct(self) -> None:
         sources = DESCRIPTOR["surfaces"]["cli"]["instruction_sources"]
@@ -60,6 +70,8 @@ class OpenClawDescriptorTest(unittest.TestCase):
             "private workspace", "Synchronize all eight together", "skills.load.extraDirs",
             "preserves unrelated skills", "Gateway `agent` RPC", "plugin-owned subagent",
             "configured project alias", "operator-scoped Gateway methods",
+            "`contextos.continue`", "`lightContext: true`", "trusted shell",
+            "if the Gateway\nrestarts, rerun the lifecycle command",
             "shell-execution authorization", "installs no project hook",
             "include all eight lifecycle skill names", "not synchronized",
             "doctor --lint --json", "Do not use `--fix`",
@@ -97,11 +109,14 @@ class OpenClawDescriptorTest(unittest.TestCase):
             "plugin-owned subagent with the configured root as `cwd`",
             "Do not use `openclaw acp client --cwd <repository>`",
             "not OS-level\n  containment",
-            "Neither surface accepts a caller-provided proposal path",
-            "exactly one proposal containing the approved digest",
+            "There is no\n`contextos.apply` Gateway method",
+            "does not execute repository-writable scripts",
+            "bash scripts/contextos.sh apply <proposal>",
         ):
             with self.subTest(required=required):
                 self.assertIn(required, guide)
+        self.assertNotIn("bashPath", guide)
+        self.assertNotIn("openclaw gateway call contextos.apply", guide)
 
     def test_plugin_runtime_files_are_component_owned(self) -> None:
         manifest = json.loads(

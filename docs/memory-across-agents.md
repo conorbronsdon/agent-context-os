@@ -42,11 +42,13 @@ this repository. Configure the adapter plugin's project alias to the repository
 root so plugin-owned lifecycle subagents receive its `AGENTS.md`, but do not
 make the repository itself the OpenClaw workspace.
 
-The experimental adapter copies lifecycle skills into that private workspace
-and uses the external plugin only to bind lifecycle execution to the configured
-repository. It does not synchronize native memory into Context OS. Promote a
-durable fact across runtimes only through the same reviewed repository proposal
-used by the other hosts.
+The first-class adapter copies lifecycle skills into that private workspace and
+uses lightweight plugin-owned subagent sessions to bind multi-turn lifecycle
+execution to the configured repository. Its lifecycle prompt forbids importing
+private workspace memory into those sessions. It does not synchronize native
+memory into Context OS. Promote a durable fact across runtimes only through the
+same independently reviewed repository proposal used by the other hosts, then
+apply it from a trusted shell outside the plugin.
 
 ## Cursor
 

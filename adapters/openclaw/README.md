@@ -3,8 +3,10 @@
 This adapter has been tested against `OpenClaw 2026.7.1-2 (0790d9f)`. It
 combines copied portable skills with an external OpenClaw plugin that binds a
 configured project alias to a plugin-owned subagent working directory. Support
-is first-class for the explicit, proposal-gated lifecycle documented here. The
-adapter does not claim OpenClaw project hooks or automatic memory synchronization.
+is first-class for the explicit, multi-turn, proposal-producing lifecycle
+documented here. Proposal application stays outside the privileged plugin
+runtime and inside an operator-controlled trusted shell. The adapter does not
+claim OpenClaw project hooks or automatic memory synchronization.
 
 ## Keep the two workspaces separate
 
@@ -15,9 +17,11 @@ and `memory/` belong there; do not add them to the repository merely to make
 OpenClaw work.
 
 The plugin starts each lifecycle subagent with the configured repository root
-as its actual process working directory. OpenClaw can therefore append the
-repository-root `AGENTS.md` to that run while skill discovery and native memory
-remain in the separate private workspace. It does not load repository
+as its actual process working directory and `lightContext: true`. OpenClaw can
+therefore append the repository-root `AGENTS.md` to that run while skill
+discovery remains in the separate private workspace. The lifecycle system
+prompt explicitly forbids reading or quoting the separate OpenClaw workspace,
+`USER.md`, `MEMORY.md`, or private host memory. It does not load repository
 `SOUL.md`, `USER.md`, or `MEMORY.md` as private workspace memory.
 
 ## Synchronize the lifecycle skills
@@ -71,24 +75,25 @@ openclaw plugins install ./context-os-openclaw-adapter-0.1.0.tgz
 ```
 
 Configure `plugins.entries.context-os.config` in OpenClaw's private state. Each
-project key is an operator-chosen alias; `root` and `bashPath` must be absolute:
+project key is an operator-chosen alias whose `root` must be absolute and
+canonical:
 
 ```json
 {
   "projects": {
     "my-context": {
-      "root": "/absolute/path/to/my-context",
-      "bashPath": "/absolute/path/to/bash"
+      "root": "/absolute/path/to/my-context"
     }
   },
   "runTimeoutSeconds": 600
 }
 ```
 
-The plugin resolves the configured paths, requires regular non-symlink
-`AGENTS.md` and `scripts/contextos.sh` files beneath the root, and requires the
-Bash executable to be outside the repository. Calls accept only the alias;
-they cannot replace it with a per-call repository or proposal path.
+The plugin resolves the configured root and requires regular non-symlink
+`AGENTS.md` and `scripts/contextos.sh` files beneath it. Calls accept only the
+alias; they cannot replace it with a per-call repository or proposal path. The
+plugin config has no shell or executable path because the privileged plugin
+runtime deliberately does not execute repository-writable scripts.
 
 ## Run the lifecycle
 
@@ -99,6 +104,7 @@ An authorized messaging operator can use the native command:
 /contextos my-context start
 /contextos my-context update
 /contextos my-context end
+/contextos my-context continue <session-key> <response>
 ```
 
 The same plugin exposes operator-scoped Gateway methods for automation:
@@ -110,13 +116,24 @@ openclaw gateway call contextos.wait \
   --params '{"runId":"<returned-run-id>","timeoutMs":600000}' --json
 openclaw gateway call contextos.result \
   --params '{"sessionKey":"<returned-session-key>"}' --json
+openclaw gateway call contextos.continue \
+  --params '{"alias":"my-context","sessionKey":"<returned-session-key>","message":"<response>"}' --json
 ```
 
 `contextos.run` accepts only `setup`, `start`, `update`, or `end`, starts a
-plugin-owned subagent with the configured root as `cwd`, and instructs the
-model to stop after reporting any proposal path, digest, and diff. `wait` and
-`result` accept only run and session identifiers created by the same plugin
-process. The native command waits and returns the same bounded result.
+plugin-owned subagent with the configured root as `cwd` and lightweight context,
+and instructs the model to stop after reporting any proposal path, digest, and
+diff. `wait` and `result` accept only run and session identifiers created by the
+same plugin process. For the questions and confirmations required by setup,
+update, and end, `contextos.continue` resumes that owned session with an
+operator response; it has `operator.write` scope and requires the same project
+alias. The native command returns the exact continuation syntax after each
+non-start turn and binds continuation to the initiating sender and conversation.
+Gateway automation is a trusted control-plane surface: keep its credential and
+returned session keys private. Continue until the agent reports the complete
+proposal. Session ownership is intentionally process-local; if the Gateway
+restarts, rerun the lifecycle command instead of attempting to resume the old
+session key.
 
 Do not use `openclaw acp client --cwd <repository>` as the lifecycle binding.
 In the tested release ACP represents that value as session context rather than
@@ -126,41 +143,42 @@ operator-supplied `cwd`, which is reserved for plugin-owned subagent runs.
 
 ## Review and apply
 
-Context OS proposal/apply remains the write-safety boundary. Review the exact
-proposal and approve its lowercase SHA-256 digest before applying it. The
-operator-scoped native command is:
+Context OS proposal/apply remains the write-safety boundary. Independently read
+the exact repository proposal path, verify its stored workflow and lowercase
+SHA-256 digest, and review every stored diff. Do not approve from model prose
+alone. Application is intentionally unavailable through `/contextos` and the
+Gateway plugin.
 
-```text
-/contextos my-context apply <proposal-digest>
-```
-
-Automation can use the deterministic Gateway method:
+From an operator-controlled trusted shell at the configured repository root,
+apply the exact reviewed proposal:
 
 ```bash
-openclaw gateway call contextos.apply \
-  --params '{"alias":"my-context","digest":"<proposal-digest>"}' --json
+bash scripts/contextos.sh apply <proposal> \
+  --confirm <proposal-digest> --runtime openclaw
 ```
 
-Apply does not ask the model to mutate the repository. The plugin locates
-exactly one proposal containing the approved digest beneath the configured
-root, then invokes the configured external Bash command
-`scripts/contextos.sh apply` with that digest. The kernel revalidates the
-proposal before writing.
-Neither surface accepts a caller-provided proposal path.
+The trusted shell, not OpenClaw's privileged plugin runtime, selects the reviewed
+proposal path. The kernel revalidates its digest, shape, target hashes, paths,
+and lock before writing and records the OpenClaw-attributed receipt. There is no
+`contextos.apply` Gateway method and no native `/contextos ... apply` command.
 
 ## Boundaries and diagnostics
 
 - A plugin-owned `cwd` is a reliable default working directory, not OS-level
   containment. A model or executable could explicitly access another path.
-  Configure OpenClaw execution policy and approvals separately, use least
-  privilege, and keep the proposal/apply boundary enabled.
+  The selected provider or CLI backend's permissions govern tools it runs
+  internally. OpenClaw's exec policy governs OpenClaw's own exec surface and
+  does not constrain tools internal to an external CLI backend. Configure every
+  active tool surface with least privilege. The trusted-shell apply step is a
+  separate operator boundary, not an OpenClaw tool permission.
 - OpenClaw skill allowlists control model and command visibility. They are not
   shell-execution authorization. If an agent skill allowlist is present,
   include all eight lifecycle skill names or omitted commands will not be
   visible to that agent.
 - This adapter installs no project hook and makes no blocking-hook claim.
-- The must-not-fire hook control is an empty Context OS hook inventory;
-  proposal/apply remains the write boundary instead of a claimed OpenClaw hook.
+- The must-not-fire hook control is an empty Context OS hook inventory. The
+  plugin can create and continue lifecycle conversations but cannot apply a
+  proposal or execute the repository kernel through its privileged runtime.
 - Native OpenClaw memory is private host state and is not synchronized with
   repository state automatically.
 - Use `openclaw doctor --lint --json` for a read-only native diagnostic. Exit 1
@@ -189,5 +207,7 @@ python adapters/openclaw/live_conformance.py --help
 The harness runs the authenticated Claude CLI in `--safe-mode` so user hooks,
 plugins, auto-memory, and other customizations cannot add private host context
 to the synthetic fixture. It must prove the plugin-owned subagent `cwd`, private
-workspace separation, denial controls, wrong-digest rejection, human-approved
-deterministic apply, and redacted evidence for the exact candidate commit.
+workspace separation with private-memory canaries, allowlist and removed-apply
+must-not-fire controls, retained multi-turn conversation state, wrong-digest
+rejection, independently verified proposal review, trusted-shell deterministic
+apply, and redacted evidence for the exact candidate commit.

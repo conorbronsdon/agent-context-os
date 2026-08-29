@@ -83,7 +83,7 @@ The setup interview fills the identity, first project, workflows, and weekly sta
 ![A start session in Claude Code: state files load and a session briefing comes back, using sample data from the included example musician project](docs/assets/start-demo.gif)
 
 `/start` in Claude Code or Hermes, `/context-start` in Cursor, `$start` in Codex,
-`/skill start` in OpenClaw, and `@skills:context-start` in a Devin session read your state,
+`/contextos <alias> start` in OpenClaw, and `@skills:context-start` in a Devin session read your state,
 priorities, decisions, blockers, and recent handoff. The result is grounded in
 files rather than reconstructed from chat.
 
@@ -101,6 +101,11 @@ Start small. Use the core loop for a week, add one active project, then turn a r
 | Start work | `/start` | `$start` | `/start` | `/contextos <alias> start` | `/context-start` | `@skills:context-start` | Read-only continuity inventory and briefing |
 | Save a checkpoint | `/update` | `$update` | `/update` | `/contextos <alias> update` | `/context-update` | `@skills:context-update` | Hash-checked update and receipt |
 | Finish work | `/end` | `$end` | `/end` | `/contextos <alias> end` | `/context-end` | `@skills:context-end` | Hash-checked handoff, decisions, and receipt |
+
+OpenClaw setup, update, and end can require multiple operator turns. Resume the
+owned workflow with `/contextos <alias> continue <session-key> <response>`, then
+apply the independently reviewed proposal from a trusted shell; the OpenClaw
+plugin itself exposes no apply command.
 
 The namespaced `$context-setup`, `$context-start`, `$context-update`, and
 `$context-end` invocations remain available for compatibility.
@@ -129,7 +134,7 @@ The guide covers ChatGPT, Claude, Gemini Apps, Gemini CLI, and a generic path fo
 | Cursor | experimental | Separate IDE and CLI onboarding through root AGENTS.md and project Agent Skills, without hook, memory, or rule-conflict claims |
 | Devin | experimental | Experimental cloud-session lifecycle through repository AGENTS.md and Agent Skills, with Devin Review and all account-managed state kept separate |
 | Hermes Agent | first-class | Shared lifecycle through portable skills, advisory hooks, MCP, and separate Hermes-native memory |
-| OpenClaw | first-class | External-plugin lifecycle support with alias-bound subagent cwd, copied portable skills, separate private memory, and deterministic digest apply |
+| OpenClaw | first-class | External-plugin multi-turn lifecycle with alias-bound lightweight subagents, copied portable skills, separate private memory, and trusted-shell kernel apply |
 <!-- runtime-support:end -->
 
 Compatibility paths that are not registered runtime adapters:
