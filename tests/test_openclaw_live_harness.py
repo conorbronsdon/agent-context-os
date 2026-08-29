@@ -79,6 +79,15 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         with self.assertRaisesRegex(live.HarnessError, "separate, non-nested"):
             live.validate_paths(self.repo, self.repo / "state", self.workspace, self.evidence)
 
+    def test_contains_accepts_windows_short_and_long_spellings_by_file_identity(self) -> None:
+        short = Path("C:/Users/RUNNER~1/repo")
+        long_child = Path("C:/Users/runneradmin/repo/.context-os/proposals/p.json")
+        with mock.patch.object(
+            live.os.path, "samefile",
+            side_effect=lambda left, right: left == short and right == Path("C:/Users/runneradmin/repo"),
+        ):
+            self.assertTrue(live._contains(short, long_child))
+
     def test_harness_requires_unused_state_and_private_workspace(self) -> None:
         self.state.mkdir()
         with self.assertRaisesRegex(live.HarnessError, "state directory must not exist"):

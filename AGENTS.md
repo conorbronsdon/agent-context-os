@@ -66,16 +66,12 @@ this is guidance, not a host-enforced gate. The `$context-setup`, `$context-star
 
 ## OpenClaw
 
-- Keep OpenClaw's private workspace and native memory outside this repository.
-- Synchronize all eight skills with `python adapters/openclaw/sync_skills.py`;
-  refresh only after reviewing the new source commit.
-- Install the external plugin, bind a configured project alias to this canonical
-  repository root, then invoke `/contextos <alias> setup`, `start`, `update`,
-  or `end`; use its owned continuation command for follow-up answers.
-- The plugin deliberately exposes no apply method. Review the stored proposal,
-  then apply its exact digest from a trusted shell as documented in
-  `adapters/openclaw/README.md`. Skill allowlists do not replace execution
-  authorization.
+- Keep OpenClaw's private workspace and native memory outside this repository;
+  synchronize all eight skills with `python adapters/openclaw/sync_skills.py`.
+- Install the plugin, bind an alias to this canonical root, then invoke
+  `/contextos <alias> setup`, `start`, `update`, or `end` and its owned continuation.
+- The plugin exposes no apply method. Review and apply the exact digest from a
+  trusted shell per `adapters/openclaw/README.md`; allowlists are not authorization.
 
 ## Cursor
 

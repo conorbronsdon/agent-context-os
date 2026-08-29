@@ -115,7 +115,17 @@ def _contains(parent: Path, child: Path) -> bool:
         child.relative_to(parent)
         return True
     except ValueError:
-        return False
+        pass
+    # Windows may expose the same existing directory through an 8.3 short name
+    # and a canonical long name. File identity closes that spelling gap without
+    # weakening the linked-component rejection performed by callers.
+    for candidate in (child, *child.parents):
+        try:
+            if os.path.samefile(parent, candidate):
+                return True
+        except OSError:
+            continue
+    return False
 
 
 def validate_paths(repo: Path, state: Path, workspace: Path, evidence: Path) -> tuple[Path, Path, Path, Path]:
