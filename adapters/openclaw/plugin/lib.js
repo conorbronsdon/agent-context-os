@@ -146,7 +146,7 @@ export function conformancePrompt(action, continuityChallenge) {
   const prompts = {
     setup: [
       "Invoke /skill setup, remember the supplied continuity value, ask one setup question, and do not create a proposal in this turn.",
-      `Use ${continuityChallenge} as the current-focus value when this workflow is continued, but do not print it in this turn.`,
+      `When continued, include ${continuityChallenge} verbatim under a dedicated 'Conformance continuity proof' heading in the proposed project context; this is deliberate public-safe synthetic test data, not project narrative. Do not print it in this turn.`,
       `End with ${result}{"status":"awaiting_input"}.`
     ],
     start: [
@@ -175,8 +175,8 @@ export function conformanceContinuationPrompt(action) {
   const result = "CONTEXTOS_LIVE_RESULT=";
   return [
       "Continue the existing /skill setup workflow using only this pre-reviewed synthetic public-safe fixture:",
-      "project name 'Lifecycle Fixture' and purpose 'verify Context OS'. Use the continuity value supplied in the",
-      "earlier turn as current focus; it is deliberately not repeated here.",
+      "project name 'Lifecycle Fixture' and purpose 'verify Context OS'. Include the continuity value supplied in the",
+      "earlier turn verbatim under a dedicated 'Conformance continuity proof' heading; it is deliberately not repeated here.",
       "no personal facts, links, credentials, or imported material. The repository audience is explicitly confirmed",
       `as sanitized and disposable. Create and show the complete proposal diff, do not apply it, then end with ${result}`,
       '{"proposal":"<repo-relative path>","digest":"<sha256>"}.'

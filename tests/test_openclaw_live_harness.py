@@ -372,6 +372,31 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         self.assertIn("contextos/__pycache__/kernel.pyc", after)
         self.assertIn(".git/hooks/post-checkout", after)
 
+    def test_repository_snapshot_tracks_git_state_modes_and_empty_directories(self) -> None:
+        tracked = self.repo / "tracked.txt"
+        tracked.write_text("fixture", encoding="utf-8")
+        before = live.repository_snapshot(self.repo)
+        index = self.repo / ".git" / "index"
+        log = self.repo / ".git" / "logs" / "HEAD"
+        index.parent.mkdir(parents=True)
+        log.parent.mkdir(parents=True)
+        index.write_bytes(b"staged")
+        log.write_text("history", encoding="utf-8")
+        (self.repo / "empty-directory").mkdir()
+        original_mode = tracked.stat().st_mode
+        try:
+            tracked.chmod(0o444)
+            changed = live.snapshot_changes(before, live.repository_snapshot(self.repo))
+        finally:
+            tracked.chmod(original_mode)
+        self.assertIn(".git/index", changed)
+        self.assertIn(".git/logs/HEAD", changed)
+        self.assertIn("empty-directory/", changed)
+        self.assertIn("tracked.txt", changed)
+
+    def test_harness_disables_git_optional_locks(self) -> None:
+        self.assertEqual("0", self.harness().env["GIT_OPTIONAL_LOCKS"])
+
     def test_snapshot_changes_reports_added_removed_and_modified_paths(self) -> None:
         before = {"modified": "old", "removed": "old", "same": "value"}
         after = {"added": "new", "modified": "new", "same": "value"}

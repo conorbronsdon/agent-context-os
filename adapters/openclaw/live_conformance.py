@@ -425,14 +425,15 @@ def repository_snapshot(repo: Path) -> dict[str, str]:
     snapshot: dict[str, str] = {}
     for path in sorted(repo.rglob("*")):
         relative = path.relative_to(repo)
-        if relative.parts and relative.parts[0] == ".git":
-            git_parts = relative.parts[1:]
-            if git_parts and (git_parts[0] in {"index", "index.lock", "logs"}):
-                continue
         if path.is_symlink() or (path.exists() and _is_link_or_reparse(path)):
             raise HarnessError(f"disposable repository contains linked content: {relative}")
+        mode = stat.S_IMODE(path.stat().st_mode)
+        key = relative.as_posix()
+        if path.is_dir():
+            snapshot[f"{key}/"] = f"directory:{mode:o}"
         if path.is_file():
-            snapshot[relative.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            snapshot[key] = f"file:{mode:o}:{digest}"
     return snapshot
 
 
@@ -508,6 +509,7 @@ class LiveHarness:
             "OPENCLAW_CONFIG_PATH": str(self.state / "openclaw.json"),
             "OPENCLAW_GATEWAY_TOKEN": self.gateway_token,
             "PYTHONDONTWRITEBYTECODE": "1", "OPENCLAW_NO_RESPAWN": "1",
+            "GIT_OPTIONAL_LOCKS": "0",
         })
         self.evidence = Evidence(expected_version=expected_version)
         self.gateway: subprocess.Popen[str] | None = None

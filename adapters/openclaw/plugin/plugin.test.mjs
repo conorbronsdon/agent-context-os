@@ -53,8 +53,10 @@ test("lifecycle prompt is proposal-only", () => {
   assert.throws(() => lifecyclePrompt("apply"), /invalid lifecycle/);
   assert.match(conformancePrompt("setup", "contextos-continuity-test"), /ask one setup question/);
   assert.match(conformancePrompt("setup", "contextos-continuity-test"), /contextos-continuity-test/);
+  assert.match(conformancePrompt("setup", "contextos-continuity-test"), /Conformance continuity proof/);
   assert.match(conformancePrompt("setup", "contextos-continuity-test"), /"status":"awaiting_input"/);
   assert.match(conformanceContinuationPrompt("setup"), /synthetic public-safe fixture/);
+  assert.match(conformanceContinuationPrompt("setup"), /Conformance continuity proof/);
   assert.throws(() => conformanceContinuationPrompt("update"), /only for setup/);
   assert.match(conformancePrompt("start"), /Only if the required kernel inventory succeeds/);
   assert.match(conformancePrompt("start"), /"status":"blocked"/);
