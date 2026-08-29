@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -116,6 +117,10 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         self.assertEqual({"mode": "token", "token": "fixture-token"}, config["gateway"]["auth"])
         self.assertEqual(["context-os"], config["plugins"]["allow"])
         self.assertFalse(config["hooks"]["internal"]["enabled"])
+        if os.name != "nt":
+            self.assertEqual(0o700, self.state.stat().st_mode & 0o777)
+            self.assertEqual(0o700, self.workspace.stat().st_mode & 0o777)
+            self.assertEqual(0o600, target.stat().st_mode & 0o777)
         with self.assertRaisesRegex(live.HarnessError, "refusing to overwrite"):
             live.write_openclaw_config(
                 self.state, self.workspace, 18789, self.claude, self.repo, "fixture-token",
@@ -394,6 +399,16 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         self.assertIn("empty-directory/", changed)
         self.assertIn("tracked.txt", changed)
 
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "FIFO creation is not available")
+    def test_repository_snapshot_rejects_special_files(self) -> None:
+        fifo = self.repo / "model-created-fifo"
+        try:
+            os.mkfifo(fifo)
+        except OSError:
+            self.skipTest("FIFO creation is unavailable in this environment")
+        with self.assertRaisesRegex(live.HarnessError, "unsupported filesystem entry"):
+            live.repository_snapshot(self.repo)
+
     def test_harness_disables_git_optional_locks(self) -> None:
         self.assertEqual("0", self.harness().env["GIT_OPTIONAL_LOCKS"])
 
@@ -406,8 +421,15 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         )
 
     def test_proposal_turn_rejects_model_write_outside_local_staging(self) -> None:
-        before = {"AGENTS.md": "before", ".context-os/inputs/payload.json": "old"}
-        allowed = {"AGENTS.md": "before", ".context-os/inputs/payload.json": "new"}
+        before = {"AGENTS.md": "before"}
+        allowed = {
+            "AGENTS.md": "before",
+            ".context-os/": "directory:755",
+            ".context-os/inputs/": "directory:755",
+            ".context-os/inputs/payload.json": "new",
+            ".context-os/proposals/": "directory:755",
+            ".context-os/proposals/proposal.json": "new",
+        }
         live.require_proposal_only_mutation(before, allowed, "setup")
         changed_kernel = {**allowed, "scripts/contextos.sh": "payload"}
         with self.assertRaisesRegex(live.HarnessError, "outside proposal staging"):

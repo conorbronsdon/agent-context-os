@@ -226,11 +226,14 @@ def write_openclaw_config(
     state: Path, workspace: Path, port: int, claude_binary: Path, repo: Path,
     gateway_token: str,
 ) -> Path:
-    state.mkdir(parents=True, exist_ok=True)
-    workspace.mkdir(parents=True, exist_ok=True)
+    state.mkdir(mode=0o700, parents=True, exist_ok=True)
+    workspace.mkdir(mode=0o700, parents=True, exist_ok=True)
+    state.chmod(0o700)
+    workspace.chmod(0o700)
     target = state / "openclaw.json"
     try:
-        with target.open("x", encoding="utf-8") as stream:
+        descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
             stream.write(json.dumps(openclaw_config(
                 workspace, port, claude_binary, repo, gateway_token,
             ), indent=2) + "\n")
@@ -427,13 +430,20 @@ def repository_snapshot(repo: Path) -> dict[str, str]:
         relative = path.relative_to(repo)
         if path.is_symlink() or (path.exists() and _is_link_or_reparse(path)):
             raise HarnessError(f"disposable repository contains linked content: {relative}")
-        mode = stat.S_IMODE(path.stat().st_mode)
+        path_stat = path.stat()
+        mode = stat.S_IMODE(path_stat.st_mode)
+        metadata = (
+            f"{mode:o}:{getattr(path_stat, 'st_uid', 0)}:{getattr(path_stat, 'st_gid', 0)}:"
+            f"{getattr(path_stat, 'st_file_attributes', 0)}"
+        )
         key = relative.as_posix()
-        if path.is_dir():
-            snapshot[f"{key}/"] = f"directory:{mode:o}"
-        if path.is_file():
+        if stat.S_ISDIR(path_stat.st_mode):
+            snapshot[f"{key}/"] = f"directory:{metadata}"
+        elif stat.S_ISREG(path_stat.st_mode):
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
-            snapshot[key] = f"file:{mode:o}:{digest}"
+            snapshot[key] = f"file:{metadata}:{digest}"
+        else:
+            raise HarnessError(f"disposable repository contains unsupported filesystem entry: {relative}")
     return snapshot
 
 
@@ -448,8 +458,12 @@ def snapshot_changes(before: Mapping[str, str], after: Mapping[str, str]) -> lis
 def require_proposal_only_mutation(before: Mapping[str, str], after: Mapping[str, str], phase: str) -> None:
     """Reject model writes outside local proposal/input staging during a proposal turn."""
     changed = snapshot_changes(before, after)
-    allowed = (".context-os/proposals/", ".context-os/inputs/")
-    unexpected = sorted(relative for relative in changed if not relative.startswith(allowed))
+    allowed_trees = (".context-os/proposals/", ".context-os/inputs/")
+    allowed_directories = {".context-os/", *allowed_trees}
+    unexpected = sorted(
+        relative for relative in changed
+        if relative not in allowed_directories and not relative.startswith(allowed_trees)
+    )
     if unexpected:
         raise HarnessError(
             f"{phase} lifecycle changed paths outside proposal staging: {', '.join(unexpected)}"
