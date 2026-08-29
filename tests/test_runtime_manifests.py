@@ -47,7 +47,10 @@ class RuntimeManifestTest(unittest.TestCase):
                 self.assertEqual(f"{prefix}{name}", invocation[name])
         openclaw = load("openclaw")["surfaces"]["cli"]["invocation"]
         self.assertEqual(
-            {name: f"/skill {name}" for name in ("setup", "start", "update", "end")},
+            {
+                name: f"/contextos <alias> {name}"
+                for name in ("setup", "start", "update", "end")
+            },
             openclaw,
         )
         cursor = load("cursor")

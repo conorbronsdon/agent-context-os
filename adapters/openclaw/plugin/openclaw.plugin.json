@@ -1,0 +1,51 @@
+{
+  "id": "context-os",
+  "name": "Agent Context OS",
+  "description": "Runs proposal-gated Context OS lifecycle work in an operator-configured repository cwd.",
+  "activation": {
+    "onStartup": true,
+    "onCommands": [
+      "contextos"
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "projects"
+    ],
+    "properties": {
+      "projects": {
+        "type": "object",
+        "minProperties": 1,
+        "propertyNames": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+        },
+        "additionalProperties": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "root",
+            "bashPath"
+          ],
+          "properties": {
+            "root": {
+              "type": "string",
+              "minLength": 1
+            },
+            "bashPath": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "runTimeoutSeconds": {
+        "type": "integer",
+        "minimum": 60,
+        "maximum": 1800,
+        "default": 600
+      }
+    }
+  }
+}

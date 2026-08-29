@@ -38,13 +38,15 @@ declared canonical home.
 
 OpenClaw's workspace is private memory, not a sandbox. Keep its `SOUL.md`,
 `USER.md`, `MEMORY.md`, and `memory/` directory in a private workspace outside
-this repository. Run OpenClaw from the repository directory so it receives the
-root `AGENTS.md`, but do not make the repository itself the OpenClaw workspace.
+this repository. Configure the adapter plugin's project alias to the repository
+root so plugin-owned lifecycle subagents receive its `AGENTS.md`, but do not
+make the repository itself the OpenClaw workspace.
 
-The experimental adapter copies lifecycle skills into that private workspace.
-It does not synchronize native memory into Context OS. Promote a durable fact
-across runtimes only through the same reviewed repository proposal used by the
-other hosts.
+The experimental adapter copies lifecycle skills into that private workspace
+and uses the external plugin only to bind lifecycle execution to the configured
+repository. It does not synchronize native memory into Context OS. Promote a
+durable fact across runtimes only through the same reviewed repository proposal
+used by the other hosts.
 
 ## Cursor
 

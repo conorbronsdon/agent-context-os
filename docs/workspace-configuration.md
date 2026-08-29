@@ -244,8 +244,9 @@ intent with these rules:
 - no adapter or component is deleted merely because it was not selected; and
 - Cursor and OpenClaw are registered experimental runtimes and may be stored in
   `agents`. Cursor registration does not conflate or launch its IDE and Agent
-  CLI surfaces; OpenClaw registration does not configure its private workspace
-  or copied skills. Both retain separate host-local onboarding steps.
+  CLI surfaces; OpenClaw registration does not configure its private workspace,
+  copied skills, external plugin, or project aliases. Both retain separate
+  host-local onboarding steps.
 
 ## Root discovery
 

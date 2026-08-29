@@ -1,9 +1,7 @@
-"""Operator-driven live conformance harness for the OpenClaw adapter.
+"""Operator-driven OpenClaw conformance through the Context OS Gateway plugin.
 
-This is intentionally not part of the ordinary test suite.  It sends a small,
-synthetic lifecycle scenario to an external model and pauses before every
-proposal apply.  The operator, not the model or this program, authenticates the
-exact proposal digest.
+The run is isolated, synthetic, and disposable. The operator must type every
+exact proposal digest; neither the model nor this harness can auto-approve it.
 """
 
 from __future__ import annotations
@@ -13,37 +11,29 @@ import hashlib
 import importlib.util
 import json
 import os
-import queue
 import re
+import secrets
 import socket
 import stat
 import subprocess
 import sys
-import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
-
 
 LIFECYCLE_SKILLS = (
     "setup", "context-setup", "start", "context-start",
     "update", "context-update", "end", "context-end",
 )
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+PLUGIN_PACKAGE = Path(__file__).resolve().with_name("plugin")
 NATIVE_MEMORY_NAMES = ("SOUL.md", "USER.md", "MEMORY.md", "memory")
 DISPOSABLE_MARKER = ".context-os-live-disposable"
 RESULT_PREFIX = "CONTEXTOS_LIVE_RESULT="
 MODEL_ROUTE = "claude-cli/claude-sonnet-5"
-EXECUTION_ROOT_BOUNDARY = (
-    "Treat the repository working directory supplied in ACP session metadata as "
-    "the exact lifecycle execution root. Before any repository read, write, or "
-    "kernel command, explicitly set the tool working directory to that root and "
-    "verify it contains AGENTS.md and scripts/contextos.sh. Never substitute the "
-    "process/tool cwd, OpenClaw private workspace, skill install location, or an "
-    "ancestor found by searching upward. Stop without creating a payload or "
-    "running the kernel if the exact root cannot be established."
-)
+PROJECT_ALIAS = "fixture"
+CONFORMANCE_SCENARIO = "synthetic-conformance-v1"
 SENSITIVE_KEY = re.compile(r"(?i)(auth|credential|password|secret|token|api.?key|prompt|message)")
 ABSOLUTE_PATH = re.compile(r"(?:[A-Za-z]:[\\/]|/)[^\s\"']+")
 
@@ -74,9 +64,7 @@ class Evidence:
 Runner = Callable[[Sequence[str], Path, Mapping[str, str], float], CommandResult]
 
 
-def default_runner(
-    argv: Sequence[str], cwd: Path, env: Mapping[str, str], timeout: float,
-) -> CommandResult:
+def default_runner(argv: Sequence[str], cwd: Path, env: Mapping[str, str], timeout: float) -> CommandResult:
     completed = subprocess.run(
         list(argv), cwd=cwd, env=dict(env), text=True, encoding="utf-8",
         errors="replace", capture_output=True, check=False, timeout=timeout,
@@ -85,16 +73,14 @@ def default_runner(
 
 
 def _existing_components(path: Path) -> list[Path]:
-    absolute = path.absolute()
-    components: list[Path] = []
-    cursor = absolute
+    result: list[Path] = []
+    cursor = path.absolute()
     while True:
         if cursor.exists() or cursor.is_symlink():
-            components.append(cursor)
+            result.append(cursor)
         if cursor == cursor.parent:
-            break
+            return result
         cursor = cursor.parent
-    return components
 
 
 def _is_link_or_reparse(path: Path) -> bool:
@@ -119,14 +105,12 @@ def _contains(parent: Path, child: Path) -> bool:
 
 
 def validate_paths(repo: Path, state: Path, workspace: Path, evidence: Path) -> tuple[Path, Path, Path, Path]:
-    resolved = tuple(
-        reject_linked_path(path, label)
-        for path, label in (
+    repo_r, state_r, workspace_r, evidence_r = (
+        reject_linked_path(path, label) for path, label in (
             (repo, "repository"), (state, "state directory"),
             (workspace, "private workspace"), (evidence, "evidence path"),
         )
     )
-    repo_r, state_r, workspace_r, evidence_r = resolved
     if not repo_r.is_dir():
         raise HarnessError(f"repository does not exist: {repo_r}")
     marker = repo_r / DISPOSABLE_MARKER
@@ -135,7 +119,7 @@ def validate_paths(repo: Path, state: Path, workspace: Path, evidence: Path) -> 
     for left, right in ((repo_r, state_r), (repo_r, workspace_r), (state_r, workspace_r)):
         if _contains(left, right) or _contains(right, left):
             raise HarnessError(f"live paths must be separate, non-nested directories: {left} and {right}")
-    if _contains(repo_r, evidence_r) or _contains(state_r, evidence_r) or _contains(workspace_r, evidence_r):
+    if any(_contains(root, evidence_r) for root in (repo_r, state_r, workspace_r)):
         raise HarnessError("evidence must be outside the repository, state, and private workspace")
     return repo_r, state_r, workspace_r, evidence_r
 
@@ -145,16 +129,12 @@ def load_sync_helper() -> Callable[[Path], Any]:
     try:
         spec = importlib.util.spec_from_file_location("contextos_openclaw_sync", module_path)
         if spec is None or spec.loader is None:
-            raise ImportError(f"could not load {module_path}")
+            raise ImportError(str(module_path))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        helper = getattr(module, "sync")
+        return getattr(module, "sync")
     except (ImportError, AttributeError, OSError) as exc:
-        raise HarnessError(
-            "OpenClaw promotion requires adapters.openclaw.sync_skills."
-            "sync(workspace) before this harness can run"
-        ) from exc
-    return helper
+        raise HarnessError("OpenClaw promotion requires adapters.openclaw.sync_skills.sync(workspace)") from exc
 
 
 def verify_port_is_free(port: int) -> None:
@@ -164,198 +144,77 @@ def verify_port_is_free(port: int) -> None:
         probe.bind(("127.0.0.1", port))
 
 
-def openclaw_config(workspace: Path, port: int, claude_binary: Path) -> dict[str, Any]:
+def openclaw_config(
+    workspace: Path, port: int, claude_binary: Path, repo: Path,
+    bash_path: Path, gateway_token: str,
+) -> dict[str, Any]:
     return {
         "agents": {"defaults": {
-            "workspace": str(workspace),
-            "skipBootstrap": True,
-            "skills": list(LIFECYCLE_SKILLS),
-            "model": {"primary": MODEL_ROUTE},
+            "workspace": str(workspace), "skipBootstrap": True,
+            "skills": list(LIFECYCLE_SKILLS), "model": {"primary": MODEL_ROUTE},
             "cliBackends": {"claude-cli": {"command": str(claude_binary)}},
         }},
-        "plugins": {"entries": {"anthropic": {"enabled": True}}},
+        "plugins": {"allow": ["context-os"], "entries": {
+            "anthropic": {"enabled": True},
+            "context-os": {"enabled": True, "config": {
+                "projects": {PROJECT_ALIAS: {"root": str(repo), "bashPath": str(bash_path)}},
+                "runTimeoutSeconds": 700,
+            }},
+        }},
         "gateway": {
             "mode": "local", "bind": "loopback", "port": port,
-            "auth": {"mode": "none"},
+            "auth": {"mode": "token", "token": gateway_token},
         },
         "hooks": {"internal": {"enabled": False}},
     }
 
 
 def write_openclaw_config(
-    state: Path, workspace: Path, port: int, claude_binary: Path,
+    state: Path, workspace: Path, port: int, claude_binary: Path, repo: Path,
+    bash_path: Path, gateway_token: str,
 ) -> Path:
     state.mkdir(parents=True, exist_ok=True)
     workspace.mkdir(parents=True, exist_ok=True)
-    config = openclaw_config(workspace, port, claude_binary)
     target = state / "openclaw.json"
     try:
         with target.open("x", encoding="utf-8") as stream:
-            stream.write(json.dumps(config, indent=2) + "\n")
+            stream.write(json.dumps(openclaw_config(
+                workspace, port, claude_binary, repo, bash_path, gateway_token,
+            ), indent=2) + "\n")
     except FileExistsError as exc:
         raise HarnessError(f"refusing to overwrite existing OpenClaw config: {target}") from exc
     return target
 
 
-def acp_server_command(command_prefix: Sequence[str]) -> list[str]:
-    return [*command_prefix, "acp"]
+def plugin_install_command(command_prefix: Sequence[str], plugin_package: Path) -> list[str]:
+    return [*command_prefix, "plugins", "install", str(plugin_package)]
 
 
-AcpRunner = Callable[[Sequence[str], Path, Mapping[str, str], str, float], CommandResult]
-
-
-def default_acp_runner(
-    argv: Sequence[str], cwd: Path, env: Mapping[str, str], prompt: str, timeout: float,
-) -> CommandResult:
-    """Drive one ACP turn over the server's newline-delimited JSON-RPC stdio."""
-    spawn_env = dict(env)
-    spawn_env["OPENCLAW_NO_RESPAWN"] = "1"
-    process = subprocess.Popen(
-        list(argv), cwd=cwd, env=spawn_env, stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        encoding="utf-8", errors="replace", bufsize=1,
-    )
-    if process.stdin is None or process.stdout is None or process.stderr is None:
-        process.kill()
-        raise HarnessError("could not open ACP server stdio")
-    stdout_lines: queue.Queue[str | None] = queue.Queue()
-    stderr_parts: list[str] = []
-
-    def pump_stdout() -> None:
-        for line in process.stdout:
-            stdout_lines.put(line)
-        stdout_lines.put(None)
-
-    def pump_stderr() -> None:
-        for chunk in iter(lambda: process.stderr.read(1024), ""):
-            stderr_parts.append(chunk)
-
-    pumps = [
-        threading.Thread(target=pump_stdout, daemon=True),
-        threading.Thread(target=pump_stderr, daemon=True),
+def gateway_call_command(
+    command_prefix: Sequence[str], port: int, method: str, params: Mapping[str, Any],
+    timeout_ms: int, gateway_token: str,
+) -> list[str]:
+    if not method.startswith("contextos."):
+        raise HarnessError("live harness may call only contextos.* Gateway methods")
+    return [
+        *command_prefix, "gateway", "call", method,
+        "--params", json.dumps(dict(params), separators=(",", ":"), sort_keys=True),
+        "--url", f"ws://127.0.0.1:{port}", "--token", gateway_token,
+        "--timeout", str(timeout_ms), "--json",
     ]
-    for thread in pumps:
-        thread.start()
-    rendered: list[str] = []
-    deadline = time.monotonic() + timeout
 
-    def send(message: Mapping[str, Any]) -> None:
-        process.stdin.write(json.dumps(dict(message), separators=(",", ":")) + "\n")
-        process.stdin.flush()
 
-    def request(identifier: int, method: str, params: Mapping[str, Any]) -> None:
-        send({"jsonrpc": "2.0", "id": identifier, "method": method, "params": dict(params)})
-
-    def next_message() -> dict[str, Any]:
-        while True:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise HarnessError("ACP JSON-RPC turn timed out")
-            try:
-                line = stdout_lines.get(timeout=min(remaining, 0.5))
-            except queue.Empty:
-                if process.poll() is not None:
-                    raise HarnessError("ACP server exited before completing the turn")
-                continue
-            if line is None:
-                raise HarnessError("ACP server closed stdout before completing the turn")
-            try:
-                message = json.loads(line)
-            except json.JSONDecodeError as exc:
-                raise HarnessError("ACP server emitted non-JSON stdout") from exc
-            if not isinstance(message, dict) or message.get("jsonrpc") != "2.0":
-                raise HarnessError("ACP server emitted an invalid JSON-RPC message")
-            return message
-
-    def handle_incoming(message: dict[str, Any]) -> None:
-        method = message.get("method")
-        params = message.get("params") if isinstance(message.get("params"), dict) else {}
-        if method == "session/update":
-            update = params.get("update") if isinstance(params.get("update"), dict) else {}
-            kind = update.get("sessionUpdate")
-            if kind == "agent_message_chunk":
-                content = update.get("content") if isinstance(update.get("content"), dict) else {}
-                if content.get("type") == "text" and isinstance(content.get("text"), str):
-                    rendered.append(content["text"])
-            elif kind == "tool_call":
-                rendered.append(
-                    f"\n[tool] {update.get('title', 'tool')} "
-                    f"({update.get('status', 'unknown')})\n"
-                )
-            elif kind == "tool_call_update":
-                rendered.append(
-                    f"\n[tool update] {update.get('toolCallId', 'unknown')}: "
-                    f"{update.get('status', 'unknown')}\n"
-                )
-            return
-        if "id" not in message:
-            return
-        if method == "session/request_permission":
-            send({
-                "jsonrpc": "2.0", "id": message["id"],
-                "result": {"outcome": {"outcome": "cancelled"}},
-            })
-            return
-        send({
-            "jsonrpc": "2.0", "id": message["id"],
-            "error": {"code": -32601, "message": "Method not supported by conformance client"},
-        })
-
-    def await_response(identifier: int) -> dict[str, Any]:
-        while True:
-            message = next_message()
-            if message.get("id") == identifier and "method" not in message:
-                if "error" in message:
-                    raise HarnessError(f"ACP request {identifier} failed")
-                result = message.get("result")
-                if not isinstance(result, dict):
-                    raise HarnessError("ACP response result was not an object")
-                return result
-            handle_incoming(message)
-
+def parse_gateway_result(result: CommandResult, method: str) -> dict[str, Any]:
+    if result.returncode:
+        detail = (result.stderr or result.stdout).strip()[:1000]
+        raise HarnessError(f"OpenClaw Gateway {method} failed: {detail or 'no diagnostic output'}")
     try:
-        request(1, "initialize", {
-            "protocolVersion": 1,
-            "clientCapabilities": {
-                "fs": {"readTextFile": False, "writeTextFile": False},
-                "terminal": False,
-            },
-            "clientInfo": {"name": "contextos-live-harness", "version": "1"},
-        })
-        initialized = await_response(1)
-        if initialized.get("protocolVersion") != 1:
-            raise HarnessError("ACP protocol version mismatch")
-        request(2, "session/new", {"cwd": str(cwd), "mcpServers": []})
-        session = await_response(2)
-        session_id = session.get("sessionId")
-        if not isinstance(session_id, str) or not session_id:
-            raise HarnessError("ACP session/new returned no session id")
-        request(3, "session/prompt", {
-            "sessionId": session_id,
-            "prompt": [{"type": "text", "text": prompt}],
-        })
-        response = await_response(3)
-        stop_reason = response.get("stopReason")
-        if not isinstance(stop_reason, str) or not stop_reason:
-            raise HarnessError("ACP prompt returned no stop reason")
-        rendered.append(f"\n[{stop_reason}]\n")
-        return CommandResult(list(argv), 0, "".join(rendered), "".join(stderr_parts))
-    finally:
-        try:
-            process.stdin.close()
-        except OSError:
-            pass
-        if process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=5)
-        for thread in pumps:
-            thread.join(timeout=1)
-        process.stdout.close()
-        process.stderr.close()
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise HarnessError(f"OpenClaw Gateway {method} did not return JSON") from exc
+    if not isinstance(payload, dict):
+        raise HarnessError(f"OpenClaw Gateway {method} result was not an object")
+    return payload
 
 
 def _string_values(value: Any) -> list[str]:
@@ -368,29 +227,21 @@ def _string_values(value: Any) -> list[str]:
     return []
 
 
-def parse_lifecycle_result(stdout: str) -> dict[str, str]:
-    try:
-        payload = json.loads(stdout)
-        candidates = _string_values(payload)
-    except json.JSONDecodeError:
-        candidates = [stdout]
+def parse_lifecycle_result(value: Any) -> dict[str, str]:
     markers: list[dict[str, Any]] = []
-    for candidate in candidates:
+    for candidate in _string_values(value):
         for line in candidate.splitlines():
             if RESULT_PREFIX not in line:
                 continue
-            raw = line.split(RESULT_PREFIX, 1)[1].strip()
             try:
-                marker = json.loads(raw)
+                marker = json.loads(line.split(RESULT_PREFIX, 1)[1].strip())
             except json.JSONDecodeError:
                 continue
             if isinstance(marker, dict):
                 markers.append(marker)
     if len(markers) != 1:
         raise HarnessError(f"expected exactly one {RESULT_PREFIX} marker, found {len(markers)}")
-    marker = markers[0]
-    result = {str(key): str(value) for key, value in marker.items()}
-    return result
+    return {str(key): str(value) for key, value in markers[0].items()}
 
 
 def require_proposal(result: dict[str, str]) -> tuple[str, str]:
@@ -404,26 +255,20 @@ def require_proposal(result: dict[str, str]) -> tuple[str, str]:
 
 
 def require_operator_digest(digest: str, phase: str, input_fn: Callable[[str], str] = input) -> None:
-    entered = input_fn(
-        f"Review the complete {phase} proposal diff above. To approve exactly {digest}, type that digest: "
-    ).strip()
+    entered = input_fn(f"Review the complete {phase} proposal diff above. To approve exactly {digest}, type that digest: ").strip()
     if entered != digest:
         raise HarnessError(f"{phase} proposal was not approved with its exact digest")
 
 
 def redact(value: Any, private_paths: Sequence[Path] = ()) -> Any:
     if isinstance(value, dict):
-        return {
-            str(key): ("[REDACTED]" if SENSITIVE_KEY.search(str(key)) else redact(child, private_paths))
-            for key, child in value.items()
-        }
+        return {str(key): ("[REDACTED]" if SENSITIVE_KEY.search(str(key)) else redact(child, private_paths)) for key, child in value.items()}
     if isinstance(value, list):
         return [redact(child, private_paths) for child in value]
     if isinstance(value, str):
-        sanitized = value
-        for path in private_paths:
-            sanitized = sanitized.replace(str(path), f"[{path.name.upper()}]")
-        return ABSOLUTE_PATH.sub("[PATH]", sanitized)
+        for private_path in private_paths:
+            value = value.replace(str(private_path), f"[{private_path.name.upper()}]")
+        return ABSOLUTE_PATH.sub("[PATH]", value)
     return value
 
 
@@ -436,11 +281,14 @@ def output_summary(result: CommandResult) -> dict[str, Any]:
 
 
 def is_wrong_digest_rejection(result: CommandResult) -> bool:
-    diagnostic = f"{result.stdout}\n{result.stderr}"
-    return (
-        result.returncode != 0
-        and "--confirm must exactly match the proposal_digest" in diagnostic
-    )
+    return result.returncode != 0 and "--confirm must exactly match the proposal_digest" in f"{result.stdout}\n{result.stderr}"
+
+
+def require_clean_source(result: CommandResult) -> None:
+    if result.returncode != 0:
+        raise HarnessError("could not verify that the harness source worktree is clean")
+    if result.stdout.strip():
+        raise HarnessError("harness source worktree must be clean so the live gate binds to one exact commit")
 
 
 def parse_diagnostic(result: CommandResult, private_paths: Sequence[Path]) -> dict[str, Any]:
@@ -473,22 +321,15 @@ def repository_snapshot(repo: Path) -> dict[str, str]:
 
 def skill_inventory(stdout: str) -> dict[str, dict[str, Any]]:
     try:
-        report = json.loads(stdout)
-        skills = report["skills"]
+        skills = json.loads(stdout)["skills"]
     except (json.JSONDecodeError, KeyError, TypeError) as exc:
         raise HarnessError("OpenClaw skill inventory was not valid JSON") from exc
     if not isinstance(skills, list):
         raise HarnessError("OpenClaw skill inventory has no skills list")
-    return {
-        str(skill["name"]): skill for skill in skills
-        if isinstance(skill, dict) and "name" in skill
-    }
+    return {str(skill["name"]): skill for skill in skills if isinstance(skill, dict) and "name" in skill}
 
 
-def set_execution_policy(
-    config_path: Path, security: str, ask: str | None = None,
-    host: str = "gateway",
-) -> None:
+def set_execution_policy(config_path: Path, security: str, ask: str | None = None, host: str = "gateway") -> None:
     config = json.loads(config_path.read_text(encoding="utf-8"))
     policy: dict[str, str] = {"host": host, "security": security}
     if ask is not None:
@@ -497,9 +338,7 @@ def set_execution_policy(
     config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
 
-def exec_policy_preset_command(
-    command_prefix: Sequence[str], preset: str,
-) -> list[str]:
+def exec_policy_preset_command(command_prefix: Sequence[str], preset: str) -> list[str]:
     if preset not in {"deny-all", "yolo"}:
         raise HarnessError(f"unsupported execution-policy preset: {preset}")
     return [*command_prefix, "exec-policy", "preset", preset, "--json"]
@@ -508,76 +347,62 @@ def exec_policy_preset_command(
 class LiveHarness:
     def __init__(
         self, *, binary: str, expected_version: str, repo: Path, state: Path,
-        workspace: Path, evidence_path: Path, port: int, runner: Runner = default_runner,
-        claude_binary: Path, binary_args: Sequence[str] = (),
-        acp_runner: AcpRunner = default_acp_runner,
-        input_fn: Callable[[str], str] = input,
+        workspace: Path, evidence_path: Path, port: int, claude_binary: Path,
+        bash_path: Path = Path("bash"), runner: Runner = default_runner,
+        binary_args: Sequence[str] = (), input_fn: Callable[[str], str] = input,
     ) -> None:
         self.command_prefix = (binary, *binary_args)
         self.expected_version = expected_version
-        self.repo, self.state, self.workspace, self.evidence_path = validate_paths(
-            repo, state, workspace, evidence_path,
-        )
-        for path, label in (
-            (self.state, "state directory"),
-            (self.workspace, "private workspace"),
-        ):
+        self.repo, self.state, self.workspace, self.evidence_path = validate_paths(repo, state, workspace, evidence_path)
+        for path, label in ((self.state, "state directory"), (self.workspace, "private workspace")):
             if path.exists():
                 raise HarnessError(f"{label} must not exist before the live run: {path}")
         self.claude_binary = reject_linked_path(claude_binary, "Claude binary")
+        self.bash_path = reject_linked_path(bash_path, "Bash binary")
         if not self.claude_binary.is_file():
             raise HarnessError(f"Claude binary does not exist: {self.claude_binary}")
-        self.runner = runner
-        self.acp_runner = acp_runner
-        self.port = port
-        self.input_fn = input_fn
+        if not self.bash_path.is_file():
+            raise HarnessError(f"Bash binary does not exist: {self.bash_path}")
+        self.runner, self.port, self.input_fn = runner, port, input_fn
+        self.gateway_token = secrets.token_urlsafe(32)
         self.env = os.environ.copy()
-        self.env["OPENCLAW_STATE_DIR"] = str(self.state)
-        self.env["OPENCLAW_CONFIG_PATH"] = str(self.state / "openclaw.json")
-        self.env["PYTHONDONTWRITEBYTECODE"] = "1"
-        # The Windows launcher otherwise respawns the piped ACP client to add a
-        # Node stack-size flag. The wrapper can consume the queued prompt before
-        # the final child's readline loop starts, leaving the turn idle.
-        self.env["OPENCLAW_NO_RESPAWN"] = "1"
+        self.env.update({
+            "OPENCLAW_STATE_DIR": str(self.state),
+            "OPENCLAW_CONFIG_PATH": str(self.state / "openclaw.json"),
+            "PYTHONDONTWRITEBYTECODE": "1", "OPENCLAW_NO_RESPAWN": "1",
+        })
         self.evidence = Evidence(expected_version=expected_version)
         self.gateway: subprocess.Popen[str] | None = None
 
     def run_command(self, argv: Sequence[str], *, cwd: Path | None = None, timeout: float = 120) -> CommandResult:
         result = self.runner(argv, cwd or self.repo, self.env, timeout)
-        command_shape = [
-            Path(item).name if Path(item).is_absolute() else item
-            for item in argv[:3]
-        ]
-        self.evidence.commands.append({"command": command_shape, **output_summary(result)})
+        shape = [Path(item).name if Path(item).is_absolute() else item for item in argv[:4]]
+        self.evidence.commands.append({"command": shape, **output_summary(result)})
         return result
 
-    def rpc(
-        self, prompt: str, phase: str, *, show_output: bool = False,
-        enforce_execution_root: bool = True,
-    ) -> dict[str, str]:
-        command = acp_server_command(self.command_prefix)
-        bounded_prompt = (
-            f"{EXECUTION_ROOT_BOUNDARY}\n\n{prompt}"
-            if enforce_execution_root else prompt
+    def gateway_call(self, method: str, params: Mapping[str, Any], timeout_ms: int = 10_000) -> dict[str, Any]:
+        command = gateway_call_command(
+            self.command_prefix, self.port, method, params, timeout_ms, self.gateway_token,
         )
-        result = self.acp_runner(
-            command, self.repo, self.env, bounded_prompt, 700,
-        )
-        self.evidence.commands.append({
-            "command": [Path(item).name if Path(item).is_absolute() else item for item in command[:4]],
-            **output_summary(result),
+        return parse_gateway_result(self.run_command(command, cwd=self.workspace, timeout=timeout_ms / 1000 + 30), method)
+
+    def lifecycle(self, action: str, *, show_output: bool = False) -> dict[str, str]:
+        started = self.gateway_call("contextos.run", {
+            "alias": PROJECT_ALIAS, "action": action, "scenario": CONFORMANCE_SCENARIO,
         })
-        if result.returncode:
-            detail = redact(
-                (result.stderr or result.stdout).strip()[:1000],
-                (self.repo, self.workspace, self.state),
-            )
-            raise HarnessError(
-                f"OpenClaw ACP turn failed during {phase}: {detail or 'no diagnostic output'}"
-            )
+        run_id, session_key = started.get("runId"), started.get("sessionKey")
+        if not isinstance(run_id, str) or not isinstance(session_key, str):
+            raise HarnessError(f"contextos.run returned no owned identifiers for {action}")
+        completed = self.gateway_call("contextos.wait", {"runId": run_id, "timeoutMs": 700_000}, 710_000)
+        if completed.get("status") != "ok":
+            raise HarnessError(f"OpenClaw lifecycle {action} ended with status {completed.get('status')!r}")
+        result = self.gateway_call("contextos.result", {"sessionKey": session_key})
+        text = result.get("text")
+        if not isinstance(text, str) or not text.strip():
+            raise HarnessError(f"OpenClaw lifecycle {action} returned no assistant text")
         if show_output:
-            print(f"\n--- OpenClaw {phase} output (not retained in evidence) ---\n{result.stdout}\n--- end output ---")
-        return parse_lifecycle_result(result.stdout)
+            print(f"\n--- OpenClaw {action} output (not retained in evidence) ---\n{text}\n--- end output ---")
+        return parse_lifecycle_result(text)
 
     def wait_for_gateway(self, timeout: float = 30) -> None:
         deadline = time.monotonic() + timeout
@@ -593,10 +418,9 @@ class LiveHarness:
 
     def start_gateway(self) -> None:
         self.gateway = subprocess.Popen(
-            [*self.command_prefix, "gateway", "run", "--port", str(self.port),
-             "--bind", "loopback", "--auth", "none"],
-            cwd=self.repo, env=self.env, text=True, encoding="utf-8",
-            errors="replace", stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            [*self.command_prefix, "gateway", "run", "--port", str(self.port), "--bind", "loopback", "--auth", "token"],
+            cwd=self.repo, env=self.env, text=True, encoding="utf-8", errors="replace",
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         self.wait_for_gateway()
 
@@ -611,107 +435,95 @@ class LiveHarness:
             self.gateway.wait(timeout=5)
 
     def validate_config(self) -> None:
-        result = self.run_command([*self.command_prefix, "config", "validate"], cwd=self.workspace, timeout=60)
-        if result.returncode:
+        if self.run_command([*self.command_prefix, "config", "validate"], cwd=self.workspace, timeout=60).returncode:
             raise HarnessError("OpenClaw rejected the generated live-conformance config")
+
+    def install_plugin(self) -> None:
+        package = reject_linked_path(PLUGIN_PACKAGE, "OpenClaw plugin package")
+        if any(not (package / name).is_file() for name in ("package.json", "openclaw.plugin.json", "index.js", "lib.js")):
+            raise HarnessError("OpenClaw plugin package is incomplete")
+        if self.run_command(plugin_install_command(self.command_prefix, package), cwd=self.workspace, timeout=120).returncode:
+            raise HarnessError("could not install the local Context OS OpenClaw plugin")
+        self.evidence.controls["local_plugin_installed"] = True
 
     def verify_preflight_controls(self, config_path: Path) -> None:
         config = json.loads(config_path.read_text(encoding="utf-8"))
-        visible_result = self.run_command(
-            [*self.command_prefix, "skills", "list", "--json"], cwd=self.workspace, timeout=120,
-        )
-        if visible_result.returncode:
-            raise HarnessError("could not inspect the effective OpenClaw skill allowlist")
-        visible = skill_inventory(visible_result.stdout)
+        visible_result = self.run_command([*self.command_prefix, "skills", "list", "--json"], cwd=self.workspace)
+        visible = skill_inventory(visible_result.stdout) if visible_result.returncode == 0 else {}
         if not all(name in visible and visible[name].get("modelVisible") for name in LIFECYCLE_SKILLS):
             raise HarnessError("the eight-skill allowlist is not effective")
-
         config["agents"]["defaults"]["skills"] = []
         config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
         self.validate_config()
-        blocked_result = self.run_command(
-            [*self.command_prefix, "skills", "list", "--json"], cwd=self.workspace, timeout=120,
-        )
+        blocked_result = self.run_command([*self.command_prefix, "skills", "list", "--json"], cwd=self.workspace)
         blocked = skill_inventory(blocked_result.stdout) if blocked_result.returncode == 0 else {}
-        if not all(
-            name in blocked and not blocked[name].get("modelVisible", True)
-            for name in LIFECYCLE_SKILLS
-        ):
+        if not all(name in blocked and not blocked[name].get("modelVisible", True) for name in LIFECYCLE_SKILLS):
             raise HarnessError("empty skill allowlist must-not-fire control failed")
         self.evidence.controls["empty_skill_allowlist_blocks_lifecycle"] = True
-
         config["agents"]["defaults"]["skills"] = list(LIFECYCLE_SKILLS)
         config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
-        set_execution_policy(config_path, "deny", "off")
+        set_execution_policy(config_path, "deny")
         self.validate_config()
-        deny_policy = self.run_command(
-            exec_policy_preset_command(self.command_prefix, "deny-all"),
-            cwd=self.workspace, timeout=60,
-        )
-        if deny_policy.returncode:
-            raise HarnessError("could not install isolated deny-all execution policy")
-        self.evidence.controls["exec_policy_deny_all_configured"] = True
-        sentinel = self.repo / ".context-os-exec-denial-sentinel"
+        if self.run_command(exec_policy_preset_command(self.command_prefix, "deny-all"), cwd=self.workspace, timeout=60).returncode:
+            raise HarnessError("could not install the deny-all execution-policy control")
+        before_denied = repository_snapshot(self.repo)
+        self.start_gateway()
+        denial_detail = ""
         try:
-            self.start_gateway()
-            denied = self.rpc(
-                f"Attempt exactly one Bash tool execution that creates {sentinel.name} in the current repository. "
-                f"Do not use another tool or retry. After execution authorization refuses it, return only "
-                f"{RESULT_PREFIX}{{\"status\":\"rejected\"}}.",
-                "execution-deny-control",
-                enforce_execution_root=False,
-            )
+            started = self.gateway_call("contextos.run", {
+                "alias": PROJECT_ALIAS, "action": "start", "scenario": CONFORMANCE_SCENARIO,
+            })
+            run_id, session_key = started.get("runId"), started.get("sessionKey")
+            if not isinstance(run_id, str) or not isinstance(session_key, str):
+                raise HarnessError("deny control did not return owned lifecycle identifiers")
+            completed = self.gateway_call("contextos.wait", {"runId": run_id, "timeoutMs": 700_000}, 710_000)
+            denial_detail = str(completed.get("error", ""))
+            try:
+                denied_result = self.gateway_call("contextos.result", {"sessionKey": session_key})
+                denial_detail += "\n" + str(denied_result.get("text", ""))
+            except HarnessError as exc:
+                denial_detail += "\n" + str(exc)
         finally:
             self.stop_gateway()
-        if sentinel.exists() or denied.get("status") != "rejected":
-            raise HarnessError("execution-authorization must-not-fire control failed")
-        self.evidence.controls["execution_security_deny_blocks_shell"] = True
-
+        if repository_snapshot(self.repo) != before_denied:
+            raise HarnessError("deny-all execution control allowed a repository change")
+        if RESULT_PREFIX in denial_detail or not re.search(r"(?i)denied|not allowed|permission|disabled|blocked", denial_detail):
+            raise HarnessError("deny-all execution control did not produce an explicit blocked-tool result")
+        self.evidence.controls["deny_all_blocks_lifecycle_tools"] = True
         set_execution_policy(config_path, "full", "off")
         self.validate_config()
-        yolo_policy = self.run_command(
-            exec_policy_preset_command(self.command_prefix, "yolo"),
-            cwd=self.workspace, timeout=60,
-        )
-        if yolo_policy.returncode:
-            raise HarnessError("could not install disposable-repository must-fire execution policy")
+        if self.run_command(exec_policy_preset_command(self.command_prefix, "yolo"), cwd=self.workspace, timeout=60).returncode:
+            raise HarnessError("could not install disposable-repository execution policy")
         self.evidence.controls["exec_policy_yolo_configured"] = True
-        self.evidence.controls["execution_full_must_fire_configured"] = True
 
-    def proposal_phase(self, phase: str, prompt: str) -> None:
-        proposed = self.rpc(prompt, f"{phase}-propose", show_output=True)
-        proposal, digest = require_proposal(proposed)
+    def proposal_phase(self, phase: str) -> None:
+        proposal, digest = require_proposal(self.lifecycle(phase, show_output=True))
         proposal_file = reject_linked_path(self.repo / proposal, f"{phase} proposal")
         if not _contains(self.repo, proposal_file) or not proposal_file.is_file():
             raise HarnessError(f"{phase} proposal is not a plain file inside the repository")
         print(f"\n{phase} proposal: {proposal}\ndigest: {digest}\n")
-
         wrong = "0" * 64 if digest != "0" * 64 else "f" * 64
         before_control = repository_snapshot(self.repo)
-        rejected = self.run_command(
-            ["bash", "scripts/contextos.sh", "apply", proposal, "--confirm", wrong,
-             "--runtime", "openclaw"],
-            timeout=120,
+        plugin_wrong = self.run_command(
+            gateway_call_command(
+                self.command_prefix, self.port, "contextos.apply",
+                {"alias": PROJECT_ALIAS, "digest": wrong}, 10_000, self.gateway_token,
+            ),
+            cwd=self.workspace,
         )
-        if (
-            not is_wrong_digest_rejection(rejected)
-            or repository_snapshot(self.repo) != before_control
-        ):
+        if plugin_wrong.returncode == 0 or "no proposal matches digest" not in f"{plugin_wrong.stdout}\n{plugin_wrong.stderr}":
+            raise HarnessError("plugin wrong-digest control did not reject an unmatched digest")
+        rejected = self.run_command([
+            str(self.bash_path), "scripts/contextos.sh", "apply", proposal,
+            "--confirm", wrong, "--runtime", "openclaw",
+        ])
+        if not is_wrong_digest_rejection(rejected) or repository_snapshot(self.repo) != before_control:
             raise HarnessError("wrong-digest must-not-fire control did not prove rejection")
         require_operator_digest(digest, phase, self.input_fn)
         receipts = self.repo / ".context-os/receipts"
         before_receipts = set(receipts.glob("*.json")) if receipts.exists() else set()
-        applied = self.rpc(
-            f"Continue the authorized disposable-repository conformance gate. A human operator reviewed "
-            f"proposal {proposal} and typed digest {digest} into the harness. Independently read that "
-            f"proposal inside the exact repository root, verify its proposal_digest is {digest}, and verify "
-            f"that every target path stays inside the repository. Only after those checks, run "
-            f"bash scripts/contextos.sh apply {proposal} --confirm {digest} --runtime openclaw. "
-            f"Do not commit or push. After the command actually succeeds, include exactly one result marker: "
-            f"{RESULT_PREFIX}{{\"status\":\"applied\",\"digest\":\"{digest}\"}}.",
-            f"{phase}-apply",
-        )
-        if applied.get("status") != "applied" or applied.get("digest") != digest:
+        applied = self.gateway_call("contextos.apply", {"alias": PROJECT_ALIAS, "digest": digest}, 710_000)
+        if applied.get("digest") != digest:
             raise HarnessError(f"{phase} apply did not return the approved digest")
         after_receipts = set(receipts.glob("*.json")) if receipts.exists() else set()
         new_receipts = after_receipts - before_receipts
@@ -720,7 +532,10 @@ class LiveHarness:
         receipt = json.loads(next(iter(new_receipts)).read_text(encoding="utf-8"))
         if receipt.get("runtime") != "openclaw":
             raise HarnessError(f"{phase} receipt was not attributed to OpenClaw")
-        self.evidence.lifecycle.append({"phase": phase, "digest": digest, "wrong_digest_rejected": True})
+        self.evidence.lifecycle.append({
+            "phase": phase, "digest": digest,
+            "plugin_wrong_digest_rejected": True, "kernel_wrong_digest_rejected": True,
+        })
 
     def execute(self) -> Evidence:
         try:
@@ -731,136 +546,84 @@ class LiveHarness:
     def _execute_unprotected(self) -> Evidence:
         verify_port_is_free(self.port)
         version = self.run_command([*self.command_prefix, "--version"], timeout=30)
-        if version.returncode:
-            raise HarnessError("could not execute the requested OpenClaw binary")
         self.evidence.binary_version = version.stdout.strip()
-        if self.evidence.binary_version != self.expected_version:
-            raise HarnessError(
-                f"exact version gate failed: expected {self.expected_version!r}, got {self.evidence.binary_version!r}"
-            )
-
-        source_sha_result = self.run_command(
-            ["git", "rev-parse", "HEAD"], cwd=REPOSITORY_ROOT, timeout=30,
-        )
-        source_sha = source_sha_result.stdout.strip()
-        if source_sha_result.returncode or not re.fullmatch(r"[0-9a-f]{40}", source_sha):
+        if version.returncode or self.evidence.binary_version != self.expected_version:
+            raise HarnessError(f"exact version gate failed: expected {self.expected_version!r}, got {self.evidence.binary_version!r}")
+        source_result = self.run_command(["git", "rev-parse", "HEAD"], cwd=REPOSITORY_ROOT, timeout=30)
+        source_sha = source_result.stdout.strip()
+        require_clean_source(self.run_command(
+            ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+            cwd=REPOSITORY_ROOT, timeout=30,
+        ))
+        repo_result = self.run_command(["git", "rev-parse", "HEAD"], cwd=self.repo, timeout=30)
+        if source_result.returncode or not re.fullmatch(r"[0-9a-f]{40}", source_sha):
             raise HarnessError("could not bind copied skills to the harness source commit")
-        repo_sha_result = self.run_command(
-            ["git", "rev-parse", "HEAD"], cwd=self.repo, timeout=30,
-        )
-        repo_sha = repo_sha_result.stdout.strip()
-        if repo_sha_result.returncode or repo_sha != source_sha:
-            raise HarnessError(
-                "disposable repository HEAD must exactly match the harness source commit"
-            )
+        if repo_result.returncode or repo_result.stdout.strip() != source_sha:
+            raise HarnessError("disposable repository HEAD must exactly match the harness source commit")
         self.workspace.mkdir(parents=True)
         try:
             sync_report = load_sync_helper()(self.workspace)
         except (OSError, RuntimeError) as exc:
             raise HarnessError(f"lifecycle skill synchronization failed safely: {exc}") from exc
-        json.dumps(sync_report)
         if not isinstance(sync_report, dict) or sync_report.get("source_git_sha") != source_sha:
             raise HarnessError("skill synchronization provenance does not match the harness source commit")
         self.evidence.sync_report = redact(sync_report, (self.repo, self.workspace, self.state))
         config_path = write_openclaw_config(
-            self.state, self.workspace, self.port, self.claude_binary,
+            self.state, self.workspace, self.port, self.claude_binary, self.repo,
+            self.bash_path, self.gateway_token,
         )
+        self.install_plugin()
         self.validate_config()
         self.verify_preflight_controls(config_path)
         memory_before = native_memory_snapshot(self.repo)
         if any(memory_before.values()):
             raise HarnessError("disposable repository already contains OpenClaw native-memory paths")
-
         self.start_gateway()
-        self.proposal_phase(
-                "setup",
-                f"Invoke /skill setup using only this pre-reviewed synthetic public-safe fixture: project name "
-                f"'Lifecycle Fixture', purpose 'verify Context OS', current focus 'complete live conformance', "
-                f"no personal facts, no links, no credentials. The repository audience is explicitly confirmed "
-                f"as sanitized and disposable. Create a setup proposal, print its complete diff, do not apply it, "
-                f"then return only {RESULT_PREFIX}{{\"proposal\":\"<repo-relative path>\",\"digest\":\"<sha256>\"}}.",
-        )
+        self.proposal_phase("setup")
         before_start = repository_snapshot(self.repo)
-        started = self.rpc(
-                f"Invoke /skill start. It must remain read-only. Return only "
-                f"{RESULT_PREFIX}{{\"status\":\"started\"}} after reporting the continuity inventory.",
-                "start",
-        )
+        started = self.lifecycle("start")
         if started.get("status") != "started" or repository_snapshot(self.repo) != before_start:
             raise HarnessError("start lifecycle did not complete read-only")
         self.evidence.lifecycle.append({"phase": "start", "read_only": True})
-        self.proposal_phase(
-                "update",
-                f"Invoke /skill update with the synthetic fact 'Live OpenClaw checkpoint completed.' Create and "
-                f"show the complete proposal diff, do not apply it, then return only {RESULT_PREFIX}"
-                f"{{\"proposal\":\"<repo-relative path>\",\"digest\":\"<sha256>\"}}.",
-        )
-        draft = self.rpc(
-                f"Invoke /skill end only through its draft-review step using synthetic outcome 'OpenClaw live "
-                f"lifecycle exercised' and next action 'Review promotion evidence'; no personal facts and no "
-                f"durable decision. Do not create a proposal yet. Show the complete draft, then return only "
-                f"{RESULT_PREFIX}{{\"status\":\"draft-ready\"}}.",
-                "end-draft",
-                show_output=True,
-        )
-        if draft.get("status") != "draft-ready":
-            raise HarnessError("end lifecycle did not present a draft for review")
-        end_confirmation = self.input_fn(
-            "Review the end draft above. To authorize proposal creation, type 'approve end draft': "
-        ).strip()
-        if end_confirmation != "approve end draft":
-            raise HarnessError("end draft was not explicitly confirmed")
-        self.proposal_phase(
-                "end",
-                f"Continue /skill end using the operator-confirmed synthetic draft: outcome 'OpenClaw live "
-                f"lifecycle exercised' and next action 'Review promotion evidence'; no durable decision. Create and show "
-                f"the complete proposal diff, do not apply it, then return only {RESULT_PREFIX}"
-                f"{{\"proposal\":\"<repo-relative path>\",\"digest\":\"<sha256>\"}}.",
-        )
-
+        self.proposal_phase("update")
+        self.proposal_phase("end")
         paths = (self.repo, self.workspace, self.state)
         for name, args, codes in (
             ("doctor", [*self.command_prefix, "doctor", "--lint", "--json"], (0, 1)),
             ("hooks", [*self.command_prefix, "hooks", "list", "--json"], (0,)),
             ("plugins", [*self.command_prefix, "plugins", "list", "--json"], (0,)),
         ):
-            result = self.run_command(args, cwd=self.workspace, timeout=120)
+            result = self.run_command(args, cwd=self.workspace)
             self.evidence.diagnostics[name] = parse_diagnostic(result, paths)
             if result.returncode not in codes:
                 raise HarnessError(f"OpenClaw {name} diagnostic failed")
-
         memory_after = native_memory_snapshot(self.repo)
-        self.evidence.controls["repo_native_memory_absent"] = not any(memory_after.values())
-        self.evidence.controls["hooks_configured_disabled"] = True
+        self.evidence.controls.update({
+            "repo_native_memory_absent": not any(memory_after.values()),
+            "hooks_configured_disabled": True,
+            "gateway_plugin_is_execution_surface": True,
+        })
         if memory_after != memory_before:
             raise HarnessError("OpenClaw created native-memory files inside the repository")
-        self.stop_gateway()
         return self.evidence
 
 
 def write_evidence(path: Path, evidence: Evidence) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    data = {
-        "schema_version": 1,
-        "expected_version": evidence.expected_version,
-        "binary_version": evidence.binary_version,
-        "sync_report": evidence.sync_report,
-        "commands": evidence.commands,
-        "lifecycle": evidence.lifecycle,
-        "diagnostics": evidence.diagnostics,
-        "controls": evidence.controls,
-    }
-    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    path.write_text(json.dumps({
+        "schema_version": 1, "expected_version": evidence.expected_version,
+        "binary_version": evidence.binary_version, "sync_report": evidence.sync_report,
+        "commands": evidence.commands, "lifecycle": evidence.lifecycle,
+        "diagnostics": evidence.diagnostics, "controls": evidence.controls,
+    }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", default="openclaw")
-    parser.add_argument(
-        "--binary-arg", action="append", default=[],
-        help="Argument inserted after --binary and before every OpenClaw command; repeat as needed",
-    )
+    parser.add_argument("--binary-arg", action="append", default=[])
     parser.add_argument("--claude-binary", type=Path, required=True)
+    parser.add_argument("--bash-path", type=Path, required=True)
     parser.add_argument("--expected-version", required=True)
     parser.add_argument("--repo", type=Path, required=True)
     parser.add_argument("--state-dir", type=Path, required=True)
@@ -877,18 +640,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     harness: LiveHarness | None = None
     try:
         harness = LiveHarness(
-            binary=args.binary, binary_args=args.binary_arg,
-            expected_version=args.expected_version, repo=args.repo,
-            state=args.state_dir, workspace=args.private_workspace,
+            binary=args.binary, binary_args=args.binary_arg, expected_version=args.expected_version,
+            repo=args.repo, state=args.state_dir, workspace=args.private_workspace,
             evidence_path=args.evidence, port=args.port, claude_binary=args.claude_binary,
+            bash_path=args.bash_path,
         )
-        evidence = harness.execute()
-        write_evidence(harness.evidence_path, evidence)
+        write_evidence(harness.evidence_path, harness.execute())
     except (HarnessError, OSError, subprocess.SubprocessError, TypeError, ValueError) as exc:
         if harness is not None:
-            harness.evidence.controls["failure"] = redact(
-                str(exc), (harness.repo, harness.workspace, harness.state),
-            )
+            harness.evidence.controls["failure"] = redact(str(exc), (harness.repo, harness.workspace, harness.state))
             try:
                 write_evidence(harness.evidence_path, harness.evidence)
             except OSError:

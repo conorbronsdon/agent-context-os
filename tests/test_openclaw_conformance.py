@@ -26,11 +26,18 @@ class OpenClawDescriptorTest(unittest.TestCase):
         self.assertEqual("unsupported", surface["capabilities"]["blocking_pre_tool_hook"])
         self.assertIsNone(surface["hook_output"])
 
-    def test_lifecycle_uses_stable_explicit_skill_invocation(self) -> None:
+    def test_lifecycle_uses_alias_bound_plugin_invocation(self) -> None:
         invocation = DESCRIPTOR["surfaces"]["cli"]["invocation"]
         self.assertEqual(
-            {name: f"/skill {name}" for name in ("setup", "start", "update", "end")},
+            {
+                name: f"/contextos <alias> {name}"
+                for name in ("setup", "start", "update", "end")
+            },
             invocation,
+        )
+        self.assertEqual(
+            "adapter",
+            DESCRIPTOR["surfaces"]["cli"]["capabilities"]["explicit_invocation"],
         )
 
     def test_repository_and_private_workspace_roles_are_distinct(self) -> None:
@@ -51,8 +58,9 @@ class OpenClawDescriptorTest(unittest.TestCase):
         guide = (ROOT / "adapters/openclaw/README.md").read_text(encoding="utf-8")
         for required in (
             "private workspace", "Synchronize all eight together", "skills.load.extraDirs",
-            "preserves unrelated skills", "Gateway `agent` RPC", "never auto-approves",
-            "shell-execution authorization", "installs no hook or plugin",
+            "preserves unrelated skills", "Gateway `agent` RPC", "plugin-owned subagent",
+            "configured project alias", "operator-scoped Gateway methods",
+            "shell-execution authorization", "installs no project hook",
             "include all eight lifecycle skill names", "not synchronized",
             "doctor --lint --json", "Do not use `--fix`",
         ):
@@ -83,16 +91,47 @@ class OpenClawDescriptorTest(unittest.TestCase):
             self.assertIn(f"../context-{name}/SKILL.md", skill)
             self.assertIn("do not duplicate or modify the workflow", skill)
 
-    def test_openclaw_guide_warns_that_tool_cwd_can_differ_from_acp_root(self) -> None:
+    def test_openclaw_guide_documents_trusted_cwd_and_containment_limit(self) -> None:
         guide = (ROOT / "adapters/openclaw/README.md").read_text(encoding="utf-8")
         for required in (
-            "repository directory supplied in ACP session metadata",
-            "tool may still start in the private\nworkspace",
-            "never substitute the private workspace or search an ancestor",
-            "stop the lifecycle instead of falling\nback",
+            "plugin-owned subagent with the configured root as `cwd`",
+            "Do not use `openclaw acp client --cwd <repository>`",
+            "not OS-level\n  containment",
+            "Neither surface accepts a caller-provided proposal path",
+            "exactly one proposal containing the approved digest",
         ):
             with self.subTest(required=required):
                 self.assertIn(required, guide)
+
+    def test_plugin_runtime_files_are_component_owned(self) -> None:
+        manifest = json.loads(
+            (ROOT / "components/manifest.json").read_text(encoding="utf-8")
+        )
+        component = next(
+            item for item in manifest["components"] if item["id"] == "openclaw-adapter"
+        )
+        owned = {item["path"]: item["policy"] for item in component["paths"]}
+        expected = {
+            "adapters/openclaw/plugin/index.js": "managed",
+            "adapters/openclaw/plugin/lib.js": "managed",
+            "adapters/openclaw/plugin/openclaw.plugin.json": "managed",
+            "adapters/openclaw/plugin/package.json": "managed",
+            "adapters/openclaw/plugin/plugin.test.mjs": "development",
+        }
+        for path, policy in expected.items():
+            with self.subTest(path=path):
+                self.assertEqual(policy, owned.get(path))
+
+    def test_shared_guides_use_the_plugin_command_surface(self) -> None:
+        for relative in (
+            "README.md",
+            "docs/commands-and-skills.md",
+            "docs/getting-started.md",
+        ):
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            with self.subTest(path=relative):
+                self.assertIn("/contextos <alias> setup", text)
+                self.assertNotIn("`/skill setup`", text)
 
 
 @unittest.skipUnless(

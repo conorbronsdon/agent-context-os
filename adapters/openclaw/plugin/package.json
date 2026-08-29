@@ -1,0 +1,34 @@
+{
+  "name": "@context-os/openclaw-adapter",
+  "version": "0.1.0",
+  "description": "Trusted cwd bridge between OpenClaw and Agent Context OS lifecycle commands.",
+  "type": "module",
+  "files": [
+    "index.js",
+    "lib.js",
+    "openclaw.plugin.json"
+  ],
+  "scripts": {
+    "test": "node --test plugin.test.mjs"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.7.1-2 <2026.8.0"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.js"
+    ],
+    "compat": {
+      "pluginApi": ">=2026.7.1-2",
+      "minGatewayVersion": "2026.7.1-2"
+    },
+    "build": {
+      "openclawVersion": "2026.7.1-2",
+      "pluginSdkVersion": "2026.7.1-2"
+    }
+  },
+  "engines": {
+    "node": ">=22.22.3"
+  },
+  "license": "MIT"
+}

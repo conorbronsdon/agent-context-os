@@ -70,7 +70,7 @@ Then start your agent from the repository root:
 | New workspace in Claude Code | Run `/setup` |
 | New workspace in Codex | Run `$setup` |
 | New workspace in Hermes | Run `/setup` after exposing the repository skills |
-| New workspace in OpenClaw | Follow the [experimental adapter](adapters/openclaw/README.md), then run `/skill setup` |
+| New workspace in OpenClaw | Follow the [experimental adapter](adapters/openclaw/README.md), then run `/contextos <alias> setup` through an authorized operator surface |
 | New workspace in Cursor | Follow the separate [experimental IDE and CLI paths](adapters/cursor/README.md), then run `/context-setup` |
 | New cloud session in Devin | Complete the [managed-account checks](adapters/devin/README.md), then run `@skills:context-setup` |
 | Existing context in another assistant | Follow the [migration guide](docs/migration-guide.md), then use the selected material during setup |
@@ -97,10 +97,10 @@ Start small. Use the core loop for a week, add one active project, then turn a r
 
 | Moment | Claude Code | Codex | Hermes | OpenClaw (experimental) | Cursor IDE/CLI (experimental) | Devin session (experimental) | Shared result |
 |---|---|---|---|---|---|---|---|
-| First run or major refresh | `/setup` | `$setup` | `/setup` | `/skill setup` | `/context-setup` | `@skills:context-setup` | Reviewed context proposal |
-| Start work | `/start` | `$start` | `/start` | `/skill start` | `/context-start` | `@skills:context-start` | Read-only continuity inventory and briefing |
-| Save a checkpoint | `/update` | `$update` | `/update` | `/skill update` | `/context-update` | `@skills:context-update` | Hash-checked update and receipt |
-| Finish work | `/end` | `$end` | `/end` | `/skill end` | `/context-end` | `@skills:context-end` | Hash-checked handoff, decisions, and receipt |
+| First run or major refresh | `/setup` | `$setup` | `/setup` | `/contextos <alias> setup` | `/context-setup` | `@skills:context-setup` | Reviewed context proposal |
+| Start work | `/start` | `$start` | `/start` | `/contextos <alias> start` | `/context-start` | `@skills:context-start` | Read-only continuity inventory and briefing |
+| Save a checkpoint | `/update` | `$update` | `/update` | `/contextos <alias> update` | `/context-update` | `@skills:context-update` | Hash-checked update and receipt |
+| Finish work | `/end` | `$end` | `/end` | `/contextos <alias> end` | `/context-end` | `@skills:context-end` | Hash-checked handoff, decisions, and receipt |
 
 The namespaced `$context-setup`, `$context-start`, `$context-update`, and
 `$context-end` invocations remain available for compatibility.
@@ -129,7 +129,7 @@ The guide covers ChatGPT, Claude, Gemini Apps, Gemini CLI, and a generic path fo
 | Cursor | experimental | Separate IDE and CLI onboarding through root AGENTS.md and project Agent Skills, without hook, memory, or rule-conflict claims |
 | Devin | experimental | Experimental cloud-session lifecycle through repository AGENTS.md and Agent Skills, with Devin Review and all account-managed state kept separate |
 | Hermes Agent | first-class | Shared lifecycle through portable skills, advisory hooks, MCP, and separate Hermes-native memory |
-| OpenClaw | experimental | Skills-first lifecycle support with copied portable skills, separate private memory, and no project-hook claim |
+| OpenClaw | experimental | External-plugin lifecycle support with alias-bound subagent cwd, copied portable skills, separate private memory, and deterministic digest apply |
 <!-- runtime-support:end -->
 
 Compatibility paths that are not registered runtime adapters:
@@ -146,7 +146,7 @@ Compatibility paths that are not registered runtime adapters:
 |---|---:|---:|---:|---:|---:|---:|---:|
 | Identity, project, state, and session files | Yes | Reads | Reads | Reads | Reads | Reads | Reads |
 | Deterministic proposal/apply and receipts | Yes | Adapter | Native skill calls | Installed skill calls | Copied skill calls | Native skill calls | Native skill calls |
-| Lifecycle vocabulary | Semantics | `/setup` etc. | `$setup` etc. | `/setup` etc. | `/skill setup` etc. | `/context-setup` etc. | `@skills:context-setup` etc. |
+| Lifecycle vocabulary | Semantics | `/setup` etc. | `$setup` etc. | `/setup` etc. | `/contextos <alias> setup` etc. | `/context-setup` etc. | `@skills:context-setup` etc. |
 | Project hooks | Event contract only | `.claude/` | `.codex/` | Optional adapter | Not claimed | Not claimed | Not claimed |
 | Native memory | No | Claude auto-memory | Outside contract | `MEMORY.md` / `USER.md` | Private workspace | Outside contract | Account-managed; not synchronized |
 

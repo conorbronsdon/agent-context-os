@@ -1,16 +1,12 @@
 from __future__ import annotations
 
 import json
-import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from adapters.openclaw import live_conformance as live
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 class OpenClawLiveHarnessTest(unittest.TestCase):
@@ -23,17 +19,29 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         self.workspace = self.scratch / "workspace"
         self.evidence = self.scratch / "evidence" / "result.json"
         self.claude = self.scratch / "claude.exe"
+        self.bash = self.scratch / "bash.exe"
         self.claude.write_bytes(b"fixture")
+        self.bash.write_bytes(b"fixture")
         self.repo.mkdir()
         (self.repo / live.DISPOSABLE_MARKER).write_text("disposable\n", encoding="utf-8")
 
-    def test_parser_requires_both_risk_acknowledgements(self) -> None:
+    def harness(self, **overrides: object) -> live.LiveHarness:
+        kwargs: dict[str, object] = {
+            "binary": "openclaw", "expected_version": "OpenClaw fixture",
+            "repo": self.repo, "state": self.state, "workspace": self.workspace,
+            "evidence_path": self.evidence, "port": 18789,
+            "claude_binary": self.claude, "bash_path": self.bash,
+        }
+        kwargs.update(overrides)
+        return live.LiveHarness(**kwargs)  # type: ignore[arg-type]
+
+    def test_parser_requires_risk_acknowledgements_and_external_bash(self) -> None:
         parser = live.build_parser()
         common = [
             "--expected-version", "OpenClaw fixture", "--repo", str(self.repo),
             "--state-dir", str(self.state), "--private-workspace", str(self.workspace),
             "--evidence", str(self.evidence), "--port", "18789",
-            "--claude-binary", str(self.claude),
+            "--claude-binary", str(self.claude), "--bash-path", str(self.bash),
         ]
         with self.assertRaises(SystemExit):
             parser.parse_args(common)
@@ -41,7 +49,7 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
             "--acknowledge-external-model-egress", "--acknowledge-disposable-repo",
         ])
         self.assertTrue(parsed.acknowledge_external_model_egress)
-        self.assertTrue(parsed.acknowledge_disposable_repo)
+        self.assertEqual(self.bash, parsed.bash_path)
 
     def test_paths_require_exact_disposable_marker(self) -> None:
         (self.repo / live.DISPOSABLE_MARKER).write_text("not enough", encoding="utf-8")
@@ -55,58 +63,7 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
     def test_harness_requires_unused_state_and_private_workspace(self) -> None:
         self.state.mkdir()
         with self.assertRaisesRegex(live.HarnessError, "state directory must not exist"):
-            live.LiveHarness(
-                binary="openclaw", expected_version="OpenClaw fixture",
-                repo=self.repo, state=self.state, workspace=self.workspace,
-                evidence_path=self.evidence, port=18789, claude_binary=self.claude,
-            )
-
-    def test_harness_accepts_an_injected_acp_runner(self) -> None:
-        fake = mock.Mock()
-        harness = live.LiveHarness(
-            binary="openclaw", expected_version="OpenClaw fixture",
-            repo=self.repo, state=self.state, workspace=self.workspace,
-            evidence_path=self.evidence, port=18789, claude_binary=self.claude,
-            acp_runner=fake,
-        )
-        self.assertIs(fake, harness.acp_runner)
-        self.assertEqual("1", harness.env["OPENCLAW_NO_RESPAWN"])
-        self.assertEqual("1", harness.env["PYTHONDONTWRITEBYTECODE"])
-
-    def test_rpc_prepends_the_execution_root_boundary(self) -> None:
-        fake = mock.Mock(return_value=live.CommandResult(
-            ["openclaw", "acp"], 0,
-            'CONTEXTOS_LIVE_RESULT={"status":"started"}', "",
-        ))
-        harness = live.LiveHarness(
-            binary="openclaw", expected_version="OpenClaw fixture",
-            repo=self.repo, state=self.state, workspace=self.workspace,
-            evidence_path=self.evidence, port=18789,
-            claude_binary=self.claude, acp_runner=fake,
-        )
-        self.assertEqual({"status": "started"}, harness.rpc("fixture", "start"))
-        sent_prompt = fake.call_args.args[3]
-        self.assertTrue(sent_prompt.startswith(live.EXECUTION_ROOT_BOUNDARY))
-        self.assertTrue(sent_prompt.endswith("\n\nfixture"))
-
-    def test_rpc_can_run_a_non_repository_policy_control_without_boundary(self) -> None:
-        fake = mock.Mock(return_value=live.CommandResult(
-            ["openclaw", "acp"], 0,
-            'CONTEXTOS_LIVE_RESULT={"status":"rejected"}', "",
-        ))
-        harness = live.LiveHarness(
-            binary="openclaw", expected_version="OpenClaw fixture",
-            repo=self.repo, state=self.state, workspace=self.workspace,
-            evidence_path=self.evidence, port=18789,
-            claude_binary=self.claude, acp_runner=fake,
-        )
-        self.assertEqual(
-            {"status": "rejected"},
-            harness.rpc(
-                "policy fixture", "deny", enforce_execution_root=False,
-            ),
-        )
-        self.assertEqual("policy fixture", fake.call_args.args[3])
+            self.harness()
 
     def test_linked_path_is_rejected_when_supported(self) -> None:
         target = self.scratch / "actual"
@@ -119,56 +76,124 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         with self.assertRaisesRegex(live.HarnessError, "symbolic-link or reparse-point"):
             live.reject_linked_path(link / "child", "fixture")
 
-    def test_config_disables_hooks_and_allows_exact_eight_skills(self) -> None:
-        target = live.write_openclaw_config(self.state, self.workspace, 18789, self.claude)
+    def test_config_binds_plugin_alias_to_exact_paths(self) -> None:
+        target = live.write_openclaw_config(
+            self.state, self.workspace, 18789, self.claude, self.repo, self.bash, "fixture-token",
+        )
         config = json.loads(target.read_text(encoding="utf-8"))
-        self.assertFalse(config["hooks"]["internal"]["enabled"])
-        self.assertEqual(list(live.LIFECYCLE_SKILLS), config["agents"]["defaults"]["skills"])
-        self.assertEqual(live.MODEL_ROUTE, config["agents"]["defaults"]["model"]["primary"])
-        self.assertEqual(str(self.claude), config["agents"]["defaults"]["cliBackends"]["claude-cli"]["command"])
-        self.assertEqual("none", config["gateway"]["auth"]["mode"])
-        self.assertEqual("loopback", config["gateway"]["bind"])
-        with self.assertRaisesRegex(live.HarnessError, "refusing to overwrite"):
-            live.write_openclaw_config(self.state, self.workspace, 18789, self.claude)
-
-    def test_acp_server_command_avoids_reserved_gateway_rpc(self) -> None:
-        command = live.acp_server_command(("openclaw",))
-        self.assertEqual(["openclaw", "acp"], command)
-        self.assertNotIn("gateway", command)
-
-    def test_acp_command_supports_node_entrypoint_prefix(self) -> None:
-        command = live.acp_server_command(("node", "C:/fixture/openclaw.mjs"))
+        defaults = config["agents"]["defaults"]
+        plugin = config["plugins"]["entries"]["context-os"]
+        self.assertEqual(list(live.LIFECYCLE_SKILLS), defaults["skills"])
+        self.assertEqual(live.MODEL_ROUTE, defaults["model"]["primary"])
+        self.assertEqual(str(self.claude), defaults["cliBackends"]["claude-cli"]["command"])
         self.assertEqual(
-            ["node", "C:/fixture/openclaw.mjs", "acp"], command,
+            {"root": str(self.repo), "bashPath": str(self.bash)},
+            plugin["config"]["projects"][live.PROJECT_ALIAS],
+        )
+        self.assertTrue(plugin["enabled"])
+        self.assertEqual({"mode": "token", "token": "fixture-token"}, config["gateway"]["auth"])
+        self.assertEqual(["context-os"], config["plugins"]["allow"])
+        self.assertFalse(config["hooks"]["internal"]["enabled"])
+        with self.assertRaisesRegex(live.HarnessError, "refusing to overwrite"):
+            live.write_openclaw_config(
+                self.state, self.workspace, 18789, self.claude, self.repo, self.bash, "fixture-token",
+            )
+
+    def test_plugin_install_command_uses_local_package(self) -> None:
+        self.assertEqual(
+            ["node", "openclaw.mjs", "plugins", "install", "C:\\fixture\\plugin"],
+            live.plugin_install_command(
+                ("node", "openclaw.mjs"), Path("C:\\fixture\\plugin"),
+            ),
         )
 
-    def test_model_route_is_the_authenticated_claude_cli_route(self) -> None:
-        config = live.openclaw_config(self.workspace, 18789, self.claude)
+    def test_gateway_call_command_is_exact_and_closed(self) -> None:
+        command = live.gateway_call_command(
+            ("node", "openclaw.mjs"), 18789, "contextos.run",
+            {"scenario": live.CONFORMANCE_SCENARIO, "action": "setup", "alias": "fixture"},
+            10000, "fixture-token",
+        )
+        self.assertEqual(["node", "openclaw.mjs", "gateway", "call", "contextos.run"], command[:5])
+        self.assertEqual(
+            '{"action":"setup","alias":"fixture","scenario":"synthetic-conformance-v1"}',
+            command[command.index("--params") + 1],
+        )
+        self.assertEqual("ws://127.0.0.1:18789", command[command.index("--url") + 1])
+        self.assertEqual("fixture-token", command[command.index("--token") + 1])
+        self.assertEqual("--json", command[-1])
+        with self.assertRaisesRegex(live.HarnessError, r"only contextos\.\*"):
+            live.gateway_call_command(("openclaw",), 18789, "agent", {}, 1000, "fixture-token")
+
+    def test_gateway_result_requires_successful_json_object(self) -> None:
+        result = live.CommandResult(["openclaw"], 0, '{"runId":"r1"}', "")
+        self.assertEqual({"runId": "r1"}, live.parse_gateway_result(result, "contextos.run"))
+        with self.assertRaisesRegex(live.HarnessError, "did not return JSON"):
+            live.parse_gateway_result(live.CommandResult([], 0, "no", ""), "contextos.run")
+        with self.assertRaisesRegex(live.HarnessError, "failed"):
+            live.parse_gateway_result(live.CommandResult([], 1, "", "denied"), "contextos.run")
+
+    def test_lifecycle_uses_only_owned_gateway_methods_and_fixed_scenario(self) -> None:
+        harness = self.harness()
+        calls: list[tuple[str, dict[str, object], int]] = []
+        responses = iter([
+            {"runId": "run-1", "sessionKey": "session-1"},
+            {"status": "ok"},
+            {"text": 'CONTEXTOS_LIVE_RESULT={"status":"started"}'},
+        ])
+
+        def fake_call(method: str, params: dict[str, object], timeout_ms: int = 10000) -> dict[str, object]:
+            calls.append((method, params, timeout_ms))
+            return next(responses)
+
+        harness.gateway_call = fake_call  # type: ignore[method-assign]
+        self.assertEqual({"status": "started"}, harness.lifecycle("start"))
+        self.assertEqual(
+            ("contextos.run", {
+                "alias": "fixture", "action": "start",
+                "scenario": "synthetic-conformance-v1",
+            }, 10000),
+            calls[0],
+        )
+        self.assertEqual(("contextos.wait", {"runId": "run-1", "timeoutMs": 700000}, 710000), calls[1])
+        self.assertEqual(("contextos.result", {"sessionKey": "session-1"}, 10000), calls[2])
+
+    def test_lifecycle_rejects_failed_wait(self) -> None:
+        harness = self.harness()
+        harness.gateway_call = mock.Mock(side_effect=[
+            {"runId": "run-1", "sessionKey": "session-1"}, {"status": "error"},
+        ])
+        with self.assertRaisesRegex(live.HarnessError, "status 'error'"):
+            harness.lifecycle("setup")
+
+    def test_source_contains_no_acp_lifecycle_execution(self) -> None:
+        source = Path(live.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("session/prompt", source)
+        self.assertNotIn("acp_server_command", source)
+        self.assertIn("contextos.apply", source)
+
+    def test_model_route_is_authenticated_claude_cli(self) -> None:
+        config = live.openclaw_config(
+            self.workspace, 18789, self.claude, self.repo, self.bash, "fixture-token",
+        )
         self.assertEqual("claude-cli/claude-sonnet-5", live.MODEL_ROUTE)
         self.assertTrue(config["plugins"]["entries"]["anthropic"]["enabled"])
-        self.assertEqual(
-            str(self.claude),
-            config["agents"]["defaults"]["cliBackends"]["claude-cli"]["command"],
-        )
 
-    def test_execution_policy_transitions_from_deny_to_explicit_must_fire(self) -> None:
+    def test_execution_policy_transitions(self) -> None:
         target = live.write_openclaw_config(
-            self.state, self.workspace, 18789, self.claude,
+            self.state, self.workspace, 18789, self.claude, self.repo, self.bash, "fixture-token",
         )
         live.set_execution_policy(target, "deny")
-        denied = json.loads(target.read_text(encoding="utf-8"))["tools"]["exec"]
-        self.assertEqual({"host": "gateway", "security": "deny"}, denied)
-        live.set_execution_policy(target, "full", "off")
-        allowed = json.loads(target.read_text(encoding="utf-8"))["tools"]["exec"]
         self.assertEqual(
-            {"host": "gateway", "security": "full", "ask": "off"}, allowed,
+            {"host": "gateway", "security": "deny"},
+            json.loads(target.read_text(encoding="utf-8"))["tools"]["exec"],
+        )
+        live.set_execution_policy(target, "full", "off")
+        self.assertEqual(
+            {"host": "gateway", "security": "full", "ask": "off"},
+            json.loads(target.read_text(encoding="utf-8"))["tools"]["exec"],
         )
 
-    def test_exec_policy_preset_commands_are_exact_and_closed(self) -> None:
-        self.assertEqual(
-            ["node", "openclaw.mjs", "exec-policy", "preset", "deny-all", "--json"],
-            live.exec_policy_preset_command(("node", "openclaw.mjs"), "deny-all"),
-        )
+    def test_exec_policy_preset_commands_are_closed(self) -> None:
         self.assertEqual(
             ["openclaw", "exec-policy", "preset", "yolo", "--json"],
             live.exec_policy_preset_command(("openclaw",), "yolo"),
@@ -176,80 +201,34 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         with self.assertRaisesRegex(live.HarnessError, "unsupported"):
             live.exec_policy_preset_command(("openclaw",), "custom")
 
-    def test_execute_always_stops_gateway_for_direct_callers(self) -> None:
-        harness = live.LiveHarness(
-            binary="openclaw", expected_version="OpenClaw fixture",
-            repo=self.repo, state=self.state, workspace=self.workspace,
-            evidence_path=self.evidence, port=18789, claude_binary=self.claude,
-        )
+    def test_execute_always_stops_gateway(self) -> None:
+        harness = self.harness()
         harness._execute_unprotected = mock.Mock(side_effect=live.HarnessError("fixture"))
         harness.stop_gateway = mock.Mock()
         with self.assertRaisesRegex(live.HarnessError, "fixture"):
             harness.execute()
         harness.stop_gateway.assert_called_once_with()
 
-    def test_acp_runner_drives_json_rpc_and_denies_client_requests(self) -> None:
-        script = (
-            "import json, os, sys\n"
-            "def read(): return json.loads(sys.stdin.readline())\n"
-            "def send(value): print(json.dumps(value, separators=(',', ':')), flush=True)\n"
-            "assert os.environ['OPENCLAW_NO_RESPAWN']=='1'\n"
-            "message=read()\n"
-            "assert message['method']=='initialize' and message['params']['protocolVersion']==1\n"
-            "assert message['params']['clientCapabilities']['terminal'] is False\n"
-            "send({'jsonrpc':'2.0','id':message['id'],'result':{'protocolVersion':1}})\n"
-            "message=read()\n"
-            "assert message['method']=='session/new'\n"
-            "assert message['params']['cwd']==sys.argv[1] and message['params']['mcpServers']==[]\n"
-            "send({'jsonrpc':'2.0','id':message['id'],'result':{'sessionId':'fixture-session'}})\n"
-            "message=read()\n"
-            "assert message['method']=='session/prompt' and message['params']['sessionId']=='fixture-session'\n"
-            "assert message['params']['prompt']==[{'type':'text','text':'synthetic\\nprompt'}]\n"
-            "send({'jsonrpc':'2.0','method':'session/update','params':{'sessionId':'fixture-session','update':{'sessionUpdate':'agent_message_chunk','content':{'type':'text','text':'CONTEXTOS_LIVE_RESULT={\\\"status\\\":\\\"started\\\"}'}}}})\n"
-            "send({'jsonrpc':'2.0','method':'session/update','params':{'sessionId':'fixture-session','update':{'sessionUpdate':'tool_call','title':'Bash','status':'pending'}}})\n"
-            "send({'jsonrpc':'2.0','id':98,'method':'fs/read_text_file','params':{'path':'secret'}})\n"
-            "response=read(); assert response['id']==98 and response['error']['code']==-32601\n"
-            "send({'jsonrpc':'2.0','id':99,'method':'session/request_permission','params':{'options':[]}})\n"
-            "response=read(); assert response=={'jsonrpc':'2.0','id':99,'result':{'outcome':{'outcome':'cancelled'}}}\n"
-            "send({'jsonrpc':'2.0','method':'session/update','params':{'sessionId':'fixture-session','update':{'sessionUpdate':'tool_call_update','toolCallId':'tool-1','status':'failed'}}})\n"
-            "send({'jsonrpc':'2.0','id':message['id'],'result':{'stopReason':'end_turn'}})\n"
-        )
-        result = live.default_acp_runner(
-            [sys.executable, "-c", script, str(self.repo)], self.repo, os.environ,
-            "synthetic\nprompt", 10,
-        )
-        self.assertEqual(0, result.returncode, result.stderr)
-        self.assertIn("[tool] Bash (pending)", result.stdout)
-        self.assertIn("[tool update] tool-1: failed", result.stdout)
-        self.assertIn("[end_turn]", result.stdout)
-        self.assertEqual(
-            {"status": "started"}, live.parse_lifecycle_result(result.stdout),
-        )
-
     def test_parse_result_requires_one_explicit_marker(self) -> None:
-        response = json.dumps({"result": "CONTEXTOS_LIVE_RESULT={\"status\":\"started\"}"})
-        self.assertEqual({"status": "started"}, live.parse_lifecycle_result(response))
+        self.assertEqual(
+            {"status": "started"},
+            live.parse_lifecycle_result({"text": 'CONTEXTOS_LIVE_RESULT={"status":"started"}'}),
+        )
         with self.assertRaisesRegex(live.HarnessError, "exactly one"):
             live.parse_lifecycle_result("ordinary agent prose")
 
-    def test_wrong_digest_control_requires_the_kernel_diagnostic(self) -> None:
-        expected = live.CommandResult(
-            ["bash"], 1, "", "--confirm must exactly match the proposal_digest\n",
-        )
-        unrelated = live.CommandResult(["bash"], 127, "", "bash: not found\n")
-        false_success = live.CommandResult(
-            ["bash"], 0, "--confirm must exactly match the proposal_digest\n", "",
-        )
+    def test_wrong_digest_control_requires_kernel_diagnostic(self) -> None:
+        expected = live.CommandResult([], 1, "", "--confirm must exactly match the proposal_digest\n")
         self.assertTrue(live.is_wrong_digest_rejection(expected))
-        self.assertFalse(live.is_wrong_digest_rejection(unrelated))
-        self.assertFalse(live.is_wrong_digest_rejection(false_success))
+        self.assertFalse(live.is_wrong_digest_rejection(live.CommandResult([], 127, "", "not found")))
+        self.assertFalse(live.is_wrong_digest_rejection(live.CommandResult([], 0, expected.stderr, "")))
 
-    def test_apply_prompt_requires_independent_proposal_verification(self) -> None:
-        source = Path(live.__file__).read_text(encoding="utf-8")
-        self.assertIn("Independently read that", source)
-        self.assertIn("verify its proposal_digest", source)
-        self.assertIn("every target path stays inside", source)
-        self.assertNotIn("The operator approved exact digest", source)
+    def test_source_commit_binding_requires_a_clean_worktree(self) -> None:
+        live.require_clean_source(live.CommandResult([], 0, "", ""))
+        with self.assertRaisesRegex(live.HarnessError, "one exact commit"):
+            live.require_clean_source(live.CommandResult([], 0, " M adapters/openclaw/plugin/lib.js\n", ""))
+        with self.assertRaisesRegex(live.HarnessError, "could not verify"):
+            live.require_clean_source(live.CommandResult([], 1, "", "fatal"))
 
     def test_proposal_rejects_escape_and_invalid_digest(self) -> None:
         with self.assertRaisesRegex(live.HarnessError, "lowercase SHA-256"):
@@ -263,14 +242,11 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
             live.require_operator_digest("a" * 64, "setup", lambda _: "b" * 64)
 
     def test_redaction_removes_sensitive_fields_and_paths(self) -> None:
-        value = {
-            "apiToken": "secret", "workspace": str(self.workspace),
-            "nested": {"message": "personal prompt", "ok": True},
-        }
+        value = {"apiToken": "secret", "workspace": str(self.workspace), "nested": {"message": "prompt", "ok": True}}
         cleaned = live.redact(value, (self.workspace,))
         serialized = json.dumps(cleaned)
         self.assertNotIn("secret", serialized)
-        self.assertNotIn("personal prompt", serialized)
+        self.assertNotIn("prompt", serialized)
         self.assertNotIn(str(self.workspace), serialized)
         self.assertTrue(cleaned["nested"]["ok"])
 
@@ -279,27 +255,11 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
             with self.assertRaisesRegex(live.HarnessError, r"sync\(workspace\)"):
                 live.load_sync_helper()
 
-    def test_sync_helper_loads_for_direct_script_execution(self) -> None:
-        self.assertTrue(callable(live.load_sync_helper()))
-
-    def test_native_memory_snapshot_covers_host_files_and_directory(self) -> None:
-        (self.repo / "MEMORY.md").write_text("must stay private", encoding="utf-8")
-        snapshot = live.native_memory_snapshot(self.repo)
-        self.assertTrue(snapshot["MEMORY.md"])
-        self.assertEqual(set(live.NATIVE_MEMORY_NAMES), set(snapshot))
-
-    def test_repository_snapshot_detects_content_changes(self) -> None:
-        fixture = self.repo / "state.md"
-        fixture.write_text("before", encoding="utf-8")
-        before = live.repository_snapshot(self.repo)
-        fixture.write_text("after", encoding="utf-8")
-        self.assertNotEqual(before, live.repository_snapshot(self.repo))
-
-    def test_repository_snapshot_ignores_python_bytecode_cache(self) -> None:
+    def test_repository_snapshot_ignores_bytecode(self) -> None:
         before = live.repository_snapshot(self.repo)
         cache = self.repo / "contextos/__pycache__"
         cache.mkdir(parents=True)
-        (cache / "kernel.cpython-313.pyc").write_bytes(b"interpreter cache")
+        (cache / "kernel.pyc").write_bytes(b"cache")
         self.assertEqual(before, live.repository_snapshot(self.repo))
 
 

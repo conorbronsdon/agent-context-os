@@ -1,19 +1,24 @@
 # OpenClaw experimental adapter
 
 This adapter has been tested against `OpenClaw 2026.7.1-2 (0790d9f)`. It
-provides skills-first lifecycle support. It does not claim OpenClaw project
-hooks, automatic memory synchronization, or messaging/gateway conformance.
+combines copied portable skills with an external OpenClaw plugin that binds a
+configured project alias to a plugin-owned subagent working directory. Support
+remains experimental until the authenticated live promotion gate passes. The
+adapter does not claim OpenClaw project hooks or automatic memory synchronization.
 
 ## Keep the two workspaces separate
 
-Use this repository as the execution directory and a different, private
-directory as OpenClaw's workspace. OpenClaw treats its workspace as private
-memory, not as a sandbox. `SOUL.md`, `USER.md`, `MEMORY.md`, and `memory/`
-belong there; do not add them to this repository merely to make OpenClaw work.
+Use the Context OS repository as the lifecycle execution directory and a
+different, private directory as OpenClaw's workspace. OpenClaw treats its
+workspace as private memory, not as a sandbox. `SOUL.md`, `USER.md`, `MEMORY.md`,
+and `memory/` belong there; do not add them to the repository merely to make
+OpenClaw work.
 
-When OpenClaw executes from the repository, it appends the repository-root
-`AGENTS.md` to its instructions. It does not load execution-directory
-`SOUL.md`, `USER.md`, or `MEMORY.md` as workspace memory.
+The plugin starts each lifecycle subagent with the configured repository root
+as its actual process working directory. OpenClaw can therefore append the
+repository-root `AGENTS.md` to that run while skill discovery and native memory
+remain in the separate private workspace. It does not load repository
+`SOUL.md`, `USER.md`, or `MEMORY.md` as private workspace memory.
 
 ## Synchronize the lifecycle skills
 
@@ -37,8 +42,8 @@ Synchronize all eight together. The short names are aliases for the
 `context-*` cores. The synchronizer records the source Git SHA and per-file
 SHA-256 inventory in the private workspace, preserves unrelated skills, and
 reports stale or locally changed managed copies without modifying them in
-`check` mode. Run `sync` again only after reviewing the new source commit.
-The stable version tested here did not discover the same skills reliably via
+`check` mode. Run `sync` again only after reviewing the new source commit. The
+stable version tested here did not discover the same skills reliably through
 `skills.load.extraDirs`, so this adapter does not recommend that shortcut.
 
 OpenClaw's skill precedence puts `<workspace>/skills` ahead of
@@ -54,49 +59,108 @@ Run those inventory commands from the private workspace, not from the source
 repository. All eight lifecycle skills should report source
 `agents-skills-project`.
 
-## Run the lifecycle
+## Install and configure the plugin
 
-Keep the OpenClaw configuration pointed at the separate private workspace and
-bind each agent turn to the repository execution directory with:
+Package and install the external plugin from the exact reviewed source commit:
 
 ```bash
-openclaw acp client --cwd <repository>
+cd adapters/openclaw/plugin
+npm test
+npm pack
+openclaw plugins install ./context-os-openclaw-adapter-0.1.0.tgz
 ```
 
-The ACP session records that directory while skill discovery continues to use
-the separate `agents.defaults.workspace`. The ordinary Gateway `agent` RPC is
-not a substitute: its `cwd` field is reserved for plugin-owned subagent runs and
-is rejected for this workflow. Invoke the lifecycle explicitly in the ACP
-session:
+Configure `plugins.entries.context-os.config` in OpenClaw's private state. Each
+project key is an operator-chosen alias; `root` and `bashPath` must be absolute:
 
-Treat the repository directory supplied in ACP session metadata as the exact
-lifecycle execution root. A Bash or other tool may still start in the private
-workspace. Each lifecycle skill must explicitly anchor repository reads,
-writes, payloads, and `scripts/contextos.sh` commands to the supplied directory;
-it must never substitute the private workspace or search an ancestor for a
-repository. If the supplied directory is unavailable or does not contain both
-`AGENTS.md` and `scripts/contextos.sh`, stop the lifecycle instead of falling
-back.
+```json
+{
+  "projects": {
+    "my-context": {
+      "root": "/absolute/path/to/my-context",
+      "bashPath": "/absolute/path/to/bash"
+    }
+  },
+  "runTimeoutSeconds": 600
+}
+```
+
+The plugin resolves the configured paths, requires regular non-symlink
+`AGENTS.md` and `scripts/contextos.sh` files beneath the root, and requires the
+Bash executable to be outside the repository. Calls accept only the alias;
+they cannot replace it with a per-call repository or proposal path.
+
+## Run the lifecycle
+
+An authorized messaging operator can use the native command:
 
 ```text
-/skill setup
-/skill start
-/skill update
-/skill end
+/contextos my-context setup
+/contextos my-context start
+/contextos my-context update
+/contextos my-context end
 ```
 
+The same plugin exposes operator-scoped Gateway methods for automation:
+
+```bash
+openclaw gateway call contextos.run \
+  --params '{"alias":"my-context","action":"setup"}' --json
+openclaw gateway call contextos.wait \
+  --params '{"runId":"<returned-run-id>","timeoutMs":600000}' --json
+openclaw gateway call contextos.result \
+  --params '{"sessionKey":"<returned-session-key>"}' --json
+```
+
+`contextos.run` accepts only `setup`, `start`, `update`, or `end`, starts a
+plugin-owned subagent with the configured root as `cwd`, and instructs the
+model to stop after reporting any proposal path, digest, and diff. `wait` and
+`result` accept only run and session identifiers created by the same plugin
+process. The native command waits and returns the same bounded result.
+
+Do not use `openclaw acp client --cwd <repository>` as the lifecycle binding.
+In the tested release ACP represents that value as session context rather than
+as the child tool process working directory; it is not the trusted root bridge
+implemented by the plugin. The ordinary Gateway `agent` RPC also rejects an
+operator-supplied `cwd`, which is reserved for plugin-owned subagent runs.
+
+## Review and apply
+
 Context OS proposal/apply remains the write-safety boundary. Review the exact
-proposal and approve that digest before applying it.
+proposal and approve its lowercase SHA-256 digest before applying it. The
+operator-scoped native command is:
+
+```text
+/contextos my-context apply <proposal-digest>
+```
+
+Automation can use the deterministic Gateway method:
+
+```bash
+openclaw gateway call contextos.apply \
+  --params '{"alias":"my-context","digest":"<proposal-digest>"}' --json
+```
+
+Apply does not ask the model to mutate the repository. The plugin locates
+exactly one proposal containing the approved digest beneath the configured
+root, then invokes the configured external Bash command
+`scripts/contextos.sh apply` with that digest. The kernel revalidates the
+proposal before writing.
+Neither surface accepts a caller-provided proposal path.
 
 ## Boundaries and diagnostics
 
+- A plugin-owned `cwd` is a reliable default working directory, not OS-level
+  containment. A model or executable could explicitly access another path.
+  Configure OpenClaw execution policy and approvals separately, use least
+  privilege, and keep the proposal/apply boundary enabled.
 - OpenClaw skill allowlists control model and command visibility. They are not
-  shell-execution authorization. Configure execution approvals separately. If
-  an agent skill allowlist is present, include all eight lifecycle skill names
-  or the omitted commands will not be visible to that agent.
+  shell-execution authorization. If an agent skill allowlist is present,
+  include all eight lifecycle skill names or omitted commands will not be
+  visible to that agent.
 - Workspace hooks are disabled until explicitly enabled. This experimental
-  adapter installs no hook or plugin and makes no blocking-hook claim.
-- The must-not-fire hook control is an empty Context OS hook/plugin inventory;
+  adapter installs no project hook and makes no blocking-hook claim.
+- The must-not-fire hook control is an empty Context OS hook inventory;
   proposal/apply remains the write boundary instead of a claimed OpenClaw hook.
 - Native OpenClaw memory is private host state and is not synchronized with
   repository state automatically.
@@ -106,57 +170,23 @@ proposal and approve that digest before applying it.
 - Context OS `doctor` resolves descriptor probe binaries but never executes
   them. Native OpenClaw diagnostics remain an explicit operator action.
 
-The executable conformance fixture is opt-in because it requires the exact
-tested OpenClaw binary. Set `CONTEXTOS_OPENCLAW_BIN` to that executable and run
-`python -m unittest tests.test_openclaw_conformance`.
-
-## Run the authenticated promotion gate
-
-The operator-driven live harness requires a sanitized disposable repository,
-separate unused state and private-workspace paths, an authenticated Claude CLI,
-and the exact tested OpenClaw version. OpenClaw onboarding calls the existing
-Claude subscription route `anthropic-cli`; the model runtime remains
-`claude-cli`. The harness sends only its synthetic fixture to that external
-model route and refuses to run without both egress and disposable-repository
-acknowledgements.
-
-Create `.context-os-live-disposable` containing exactly `disposable` in the
-disposable repository, then run:
+The installed-version conformance fixture is opt-in. Set
+`CONTEXTOS_OPENCLAW_BIN` to the exact tested executable and run:
 
 ```bash
-python adapters/openclaw/live_conformance.py \
-  --binary <exact-openclaw-binary> \
-  --claude-binary <exact-claude-binary> \
-  --expected-version 'OpenClaw 2026.7.1-2 (0790d9f)' \
-  --repo <sanitized-disposable-repository> \
-  --state-dir <unused-openclaw-state-directory> \
-  --private-workspace <unused-private-workspace> \
-  --evidence <outside-those-directories>/openclaw-live.json \
-  --port <unused-loopback-port> \
-  --acknowledge-external-model-egress \
-  --acknowledge-disposable-repo
+python -m unittest tests.test_openclaw_conformance
 ```
 
-On Windows, avoid the npm `.cmd` wrapper when driving ACP stdio. Invoke the
-same installed release through Node instead:
+The authenticated live promotion harness additionally requires a sanitized
+disposable repository, separate unused state and private-workspace paths, an
+authenticated Claude CLI, explicit external-model-egress acknowledgement, and
+manual approval of every exact proposal digest. See the harness help for its
+current arguments:
 
-```text
---binary <node.exe> --binary-arg <openclaw-package>/openclaw.mjs
+```bash
+python adapters/openclaw/live_conformance.py --help
 ```
 
-The disposable repository must be at the same Git SHA as the harness source.
-The harness validates config before egress, starts an isolated loopback
-Gateway that inherits the authenticated Claude environment, selects the
-`claude-cli/claude-sonnet-5` route, and verifies skill visibility and shell
-denial with both `host: gateway`/`security: deny` and the isolated `deny-all`
-execution-policy preset. It then selects `host: gateway`, `security: full`,
-`ask: off`, and the `yolo` preset only for the explicitly acknowledged
-disposable fixture. It drives each lifecycle prompt by speaking the same ACP
-protocol directly to `openclaw acp`: initialize protocol v1, create a session
-with the repository `cwd`, send the prompt, collect session updates, and wait
-for the final stop reason. The direct NDJSON driver avoids the interactive
-client's unreliable piped-input behavior on Windows. It
-tests a wrong proposal digest and pauses for the operator to type every exact
-approved digest. It never auto-approves a proposal digest. Its redacted JSON
-evidence contains hashes and control results, not prompts, credentials, or raw
-private paths.
+The harness must prove the plugin-owned subagent `cwd`, private workspace
+separation, denial controls, wrong-digest rejection, human-approved
+deterministic apply, and redacted evidence before this adapter is promoted.
