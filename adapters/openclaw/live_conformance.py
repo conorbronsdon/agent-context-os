@@ -123,8 +123,10 @@ def _contains(parent: Path, child: Path) -> bool:
         try:
             if os.path.samefile(parent, candidate):
                 return True
-        except OSError:
+        except FileNotFoundError:
             continue
+        except OSError as exc:
+            raise HarnessError(f"could not verify path containment for {parent} and {child}") from exc
     return False
 
 

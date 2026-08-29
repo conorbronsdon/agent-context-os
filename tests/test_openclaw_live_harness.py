@@ -88,6 +88,15 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         ):
             self.assertTrue(live._contains(short, long_child))
 
+    def test_contains_fails_closed_on_identity_access_error(self) -> None:
+        with mock.patch.object(live.os.path, "samefile", side_effect=PermissionError("denied")):
+            with self.assertRaisesRegex(live.HarnessError, "could not verify path containment"):
+                live._contains(Path("C:/short/repo"), Path("C:/long/repo/file"))
+
+    def test_contains_rejects_distinct_sibling_after_identity_checks(self) -> None:
+        with mock.patch.object(live.os.path, "samefile", return_value=False):
+            self.assertFalse(live._contains(Path("C:/repo-a"), Path("C:/repo-b/file")))
+
     def test_harness_requires_unused_state_and_private_workspace(self) -> None:
         self.state.mkdir()
         with self.assertRaisesRegex(live.HarnessError, "state directory must not exist"):
