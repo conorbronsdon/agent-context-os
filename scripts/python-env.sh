@@ -42,3 +42,8 @@ if [ -z "$CONTEXTOS_PYTHON_CMD" ]; then
 fi
 
 export CONTEXTOS_PYTHON_CMD
+
+# Repository lifecycle commands must not create executable bytecode as a side
+# effect. Besides keeping working trees clean, this lets integrity checks treat
+# any new or changed .pyc file as a real mutation instead of normal operation.
+export PYTHONDONTWRITEBYTECODE=1

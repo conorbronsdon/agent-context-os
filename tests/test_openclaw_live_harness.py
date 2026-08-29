@@ -372,6 +372,14 @@ class OpenClawLiveHarnessTest(unittest.TestCase):
         self.assertIn("contextos/__pycache__/kernel.pyc", after)
         self.assertIn(".git/hooks/post-checkout", after)
 
+    def test_snapshot_changes_reports_added_removed_and_modified_paths(self) -> None:
+        before = {"modified": "old", "removed": "old", "same": "value"}
+        after = {"added": "new", "modified": "new", "same": "value"}
+        self.assertEqual(
+            ["added", "modified", "removed"],
+            live.snapshot_changes(before, after),
+        )
+
     def test_proposal_turn_rejects_model_write_outside_local_staging(self) -> None:
         before = {"AGENTS.md": "before", ".context-os/inputs/payload.json": "old"}
         allowed = {"AGENTS.md": "before", ".context-os/inputs/payload.json": "new"}

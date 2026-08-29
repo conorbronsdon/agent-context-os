@@ -436,12 +436,17 @@ def repository_snapshot(repo: Path) -> dict[str, str]:
     return snapshot
 
 
-def require_proposal_only_mutation(before: Mapping[str, str], after: Mapping[str, str], phase: str) -> None:
-    """Reject model writes outside local proposal/input staging during a proposal turn."""
-    changed = {
+def snapshot_changes(before: Mapping[str, str], after: Mapping[str, str]) -> list[str]:
+    """Return stable relative paths added, removed, or changed between snapshots."""
+    return sorted(
         relative for relative in set(before) | set(after)
         if before.get(relative) != after.get(relative)
-    }
+    )
+
+
+def require_proposal_only_mutation(before: Mapping[str, str], after: Mapping[str, str], phase: str) -> None:
+    """Reject model writes outside local proposal/input staging during a proposal turn."""
+    changed = snapshot_changes(before, after)
     allowed = (".context-os/proposals/", ".context-os/inputs/")
     unexpected = sorted(relative for relative in changed if not relative.startswith(allowed))
     if unexpected:
@@ -455,10 +460,7 @@ def require_no_private_canary_in_changed_files(
     canary_values: Sequence[str],
 ) -> None:
     """Reject private-memory canaries in every staging file changed by a model turn."""
-    changed = {
-        relative for relative in set(before) | set(after)
-        if before.get(relative) != after.get(relative)
-    }
+    changed = snapshot_changes(before, after)
     canaries = tuple(value.encode("utf-8") for value in canary_values)
     for relative in sorted(changed):
         target = repo / relative
@@ -770,8 +772,12 @@ class LiveHarness:
         self.proposal_phase("setup")
         before_start = repository_snapshot(self.repo)
         started = self.lifecycle("start")
-        if started.get("status") != "started" or repository_snapshot(self.repo) != before_start:
-            raise HarnessError("start lifecycle did not complete read-only")
+        start_changes = snapshot_changes(before_start, repository_snapshot(self.repo))
+        if started.get("status") != "started" or start_changes:
+            changed_detail = ", ".join(start_changes[:20]) or "none"
+            raise HarnessError(
+                f"start lifecycle did not complete read-only; changed paths: {changed_detail}"
+            )
         self.evidence.lifecycle.append({"phase": "start", "read_only": True})
         self.proposal_phase("update")
         self.proposal_phase("end")

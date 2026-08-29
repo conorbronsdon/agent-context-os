@@ -54,6 +54,8 @@ try {
     # PowerShell 7.4+ can promote a non-zero native exit to a terminating error
     # under Stop. Preserve the hook's exact exit code instead.
     $ErrorActionPreference = "Continue"
+    # Hooks must not mutate the repository by emitting executable bytecode.
+    $env:PYTHONDONTWRITEBYTECODE = "1"
     & $pythonCommand (Join-Path $PSScriptRoot "context-os-hook.py") @HookArguments
     $hookExitCode = $LASTEXITCODE
 } finally {

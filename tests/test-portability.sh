@@ -150,6 +150,11 @@ fallback_python=$(
 )
 [ "$fallback_python" = "python" ] || fail "Python resolver did not fall back from python3 to python"
 
+bytecode_policy=$(
+  "$resolved_bash" -c 'source "$1"; printf "%s" "$PYTHONDONTWRITEBYTECODE"' _ "$ROOT/scripts/python-env.sh"
+)
+[ "$bytecode_policy" = "1" ] || fail "Python resolver does not disable repository bytecode writes"
+
 # An explicit CONTEXTOS_PYTHON is an instruction, not a hint. A working override
 # must win, and a broken one must fail loudly instead of silently resolving to a
 # different interpreter than the one that was asked for.
