@@ -1168,19 +1168,19 @@ with mock.patch("contextos.kernel._capture_transaction_before", side_effect=cras
                 relative = original_guard(root, path)
                 if path.name == current.name and not swapped:
                     current.unlink()
-                    current.symlink_to(outside)
+                    try:
+                        current.symlink_to(outside)
+                    except OSError:
+                        self.skipTest("symlink creation is unavailable")
                     swapped = True
                 return relative
 
-            try:
-                with mock.patch(
-                    "contextos.kernel._guard_local_state_path",
-                    side_effect=swap_after_guard,
-                ):
-                    with self.assertRaisesRegex(ContextOSError, "link-like"):
-                        start_report(self.root, NOW)
-            except OSError:
-                self.skipTest("symlink creation is unavailable")
+            with mock.patch(
+                "contextos.kernel._guard_local_state_path",
+                side_effect=swap_after_guard,
+            ):
+                with self.assertRaisesRegex(ContextOSError, "link-like"):
+                    start_report(self.root, NOW)
 
     def test_doctor_degrades_snapshot_race_to_unknown(self) -> None:
         with mock.patch(
@@ -1818,7 +1818,9 @@ with mock.patch("contextos.kernel._capture_transaction_before", side_effect=cras
         outside.mkdir()
         proposals = self.root / ".context-os/proposals"
         proposals.parent.mkdir(parents=True, exist_ok=True)
-        if not make_directory_link(proposals, outside):
+        try:
+            make_directory_link(proposals, outside)
+        except OSError:
             self.skipTest("directory link creation is unavailable")
         try:
             report = doctor(self.root)
