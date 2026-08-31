@@ -10,6 +10,7 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [AI Tools for Creators](https://github.com/conorbronsdon/ai-tools-for-creators) | `resource_catalog` | listed | No | No | No | No | No | 2026-08-15 |
 | [Beads for Gemini CLI](https://beads.gascity.com/integrations/gemini) | `agent_extension` | verified | Yes | Yes | No | No | Yes | 2026-08-15 |
 | [GitHub MCP](https://github.com/github/github-mcp-server) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-18 |
+| [GitLab MCP](https://docs.gitlab.com/user/model_context_protocol/mcp_server/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-30 |
 | [Google Workspace CLI](https://github.com/googleworkspace/cli) | `connector` | verified | Yes | Yes | No | Yes | Yes | 2026-08-15 |
 | [Granola MCP](https://docs.granola.ai/help-center/sharing/integrations/mcp) | `mcp_server` | verified | No | No | No | Yes | No | 2026-08-15 |
 | [Linear MCP](https://linear.app/docs/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-18 |
@@ -140,6 +141,30 @@ Capabilities and limits:
 - Start with --read-only and only the context, repos, issues, and pull\_requests toolsets; read-only mode takes priority even if a write tool is requested explicitly
 - Toolsets and individual tools are allowlisted independently, so enabling all or the default surface can expose materially more data and actions than a bounded project workflow needs
 - Treat workflow dispatch, branch or file mutation, repository administration, and public comments as separate high-impact remote actions
+
+## GitLab MCP
+
+GitLab's official Beta MCP server exposes repository, issue, merge request, discussion, and pipeline tools via Personal Access Token or OAuth.
+
+- **Supported agents:** `claude_code`, `cursor`, `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** An MCP-compatible client; A GitLab SaaS or self-managed account; A personal access token with api/read\_api scopes or OAuth credentials
+- **Credentials:** Personal Access Token or OAuth 2.0 token kept outside repository files
+- **Reads:** Private or public GitLab repository contents, commits, issues, merge requests, comments, pipelines, and job logs allowed by the authenticated token
+- **Writes / external effects:** Remote GitLab writes including creating and updating issues, merge requests, comments, branches, and triggering or canceling CI/CD pipelines; Publicly visible posts, overwrite-capable branch updates, pipeline cancellation, and pipeline retry or deletion methods
+- **Typed safety signals:** sensitive read, remote write, overwrite, delete, oauth
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `publish`, `overwrite`, `delete`, `oauth`, `destructive`
+- **Confirmation:** Confirm the exact GitLab instance, project scope, and token permissions; show exact target and payload before comments, branch writes, publication, overwrite, deletion, or CI/CD pipeline actions.
+- **Risk tags:** `credentials`, `private-repositories`, `sensitive-read`, `remote-write`, `publish-capable`, `public-publish`, `overwrite-capable`, `delete-capable`, `oauth`, `destructive-capable`, `ci-cd`, `prompt-injection`
+- **Evidence:** [1](https://docs.gitlab.com/user/model_context_protocol/mcp_server/)
+- **Health check:** Connect to the GitLab MCP server, verify authenticated user identity and GitLab instance, then read one explicitly named project and issue without performing a write or pipeline action.
+- **Uninstall:** Remove the MCP client entry and revoke the Personal Access Token or OAuth application connection in GitLab settings; leave repositories and GitLab content unchanged. (removes user data: No)
+
+Capabilities and limits:
+
+- Start with read-only repository, issue, merge request, and pipeline inspection allowlists
+- No enforced server-side read-only mode is provided; restrict toolsets client-side
+- Treat pipeline triggering, retry, cancellation, and deletion as high-impact CI/CD actions requiring separate confirmation
 
 ## Google Workspace CLI
 
