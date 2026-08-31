@@ -25,6 +25,7 @@ Nothing in this guide installs, activates, authenticates, or grants permissions 
 | Convert an explicitly selected document or URI to Markdown | [MarkItDown MCP](../references/integrations.md#markitdown-mcp) | Local-file and network reads through an unauthenticated server process |
 | Export reviewed Markdown to DOCX, PDF, EPUB, or HTML | [Pandoc](../references/integrations.md#pandoc) | Sensitive local or network reads, output overwrite, and PDF-engine execution |
 | Plan or update Shortcut stories, epics, and iterations | [Shortcut MCP](../references/integrations.md#shortcut-mcp) | Workspace-wide sensitive reads and overwrite-capable story or doc updates |
+| Read or update Asana tasks, projects, and portfolios | [Asana MCP](../references/integrations.md#asana-mcp) | Workspace-wide sensitive reads, overwrite-capable task updates, and deletion |
 
 The obsolete checked-in `gws mcp` configuration was removed. The current Google Workspace path uses the reviewed CLI setup in [`references/google-workspace-cli-setup.md`](../references/google-workspace-cli-setup.md); it is still opt-in and is not pre-approved by the command adapters.
 
