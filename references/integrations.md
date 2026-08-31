@@ -8,6 +8,7 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [Agent Skills](https://github.com/conorbronsdon/agent-skills) | `skill_catalog` | verified | Yes | No | No | No | Yes | 2026-08-15 |
 | [Agent Workspace](https://github.com/conorbronsdon/agent-workspace) | `workspace_template` | verified | Yes | No | No | No | Yes | 2026-08-15 |
 | [AI Tools for Creators](https://github.com/conorbronsdon/ai-tools-for-creators) | `resource_catalog` | listed | No | No | No | No | No | 2026-08-15 |
+| [Atlassian Rovo MCP](https://support.atlassian.com/atlassian-rovo-mcp-server/) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-30 |
 | [Beads for Gemini CLI](https://beads.gascity.com/integrations/gemini) | `agent_extension` | verified | Yes | Yes | No | No | Yes | 2026-08-15 |
 | [GitHub MCP](https://github.com/github/github-mcp-server) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-18 |
 | [Google Workspace CLI](https://github.com/googleworkspace/cli) | `connector` | verified | Yes | Yes | No | Yes | Yes | 2026-08-15 |
@@ -91,6 +92,31 @@ A discovery catalog for creator skills, MCP servers, benchmarks, and publishing 
 Capabilities and limits:
 
 - Discovery links only; every linked tool needs separate review
+
+## Atlassian Rovo MCP
+
+Atlassian's official hosted MCP server covering Jira issues, worklogs, and Confluence spaces and pages with OAuth 2.0 authentication.
+
+- **Supported agents:** `claude_code`, `gemini_cli`, `cursor`, `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** An Atlassian Cloud account with Jira and/or Confluence access; An MCP client supporting remote Streamable HTTP and browser OAuth; An authorized Atlassian site
+- **Credentials:** OAuth 2.0 token managed by the MCP client for the authorized Atlassian site
+- **Reads:** Sensitive Jira issues, epics, sprints, comments, worklogs, and Confluence spaces, pages, and search indexes across the authorized Atlassian site
+- **Writes / external effects:** Remote creation and updates of Jira issues, comments, worklogs, and Confluence pages or blog posts in the authorized site; Overwrite-capable updates to existing page bodies, issue descriptions, fields, and statuses
+- **Typed safety signals:** sensitive read, remote write, overwrite, oauth
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `overwrite`, `oauth`, `destructive`
+- **Confirmation:** Confirm the target Atlassian site and project or space before reading sensitive organizational state; show proposed Jira issue or Confluence page changes before execution, and keep Teamwork Graph disabled by default.
+- **Risk tags:** `credentials`, `hosted`, `project-management`, `sensitive-read`, `remote-write`, `overwrite-capable`, `oauth`, `destructive-capable`, `prompt-injection`
+- **Evidence:** [1](https://support.atlassian.com/atlassian-rovo-mcp-server/); [2](https://support.atlassian.com/atlassian-rovo-mcp-server/docs/supported-tools/)
+- **Health check:** Connect to the Rovo MCP endpoint, verify authorized Atlassian site identity, then run a bounded read query for one known issue or page without creating or modifying content.
+- **Uninstall:** Remove the Atlassian Rovo MCP entry from the client and revoke the authorized application connection in Atlassian account settings; preserve all Jira and Confluence data. (removes user data: No)
+
+Capabilities and limits:
+
+- Start with read\_jira, search\_jira, read\_confluence, and search\_confluence only
+- Exclude Teamwork Graph by default as it substantially widens organizational data visibility
+- Creating or updating Jira issues, worklogs, or Confluence pages requires explicit outbound confirmation
+- The server focuses on content creation, discovery, and updates; archiving remains within standard Atlassian workflows
 
 ## Beads for Gemini CLI
 

@@ -798,6 +798,50 @@
         "instructions": "Remove the Shortcut MCP entry from the client and revoke the authorized application connection in Shortcut account settings; preserve all workspace, story, epic, and doc data.",
         "removes_user_data": false
       }
+    },
+    {
+      "id": "atlassian-rovo-mcp",
+      "name": "Atlassian Rovo MCP",
+      "summary": "Atlassian's official hosted MCP server covering Jira issues, worklogs, and Confluence spaces and pages with OAuth 2.0 authentication.",
+      "source_url": "https://support.atlassian.com/atlassian-rovo-mcp-server/",
+      "kind": "mcp_server",
+      "supported_agents": ["claude_code", "gemini_cli", "cursor", "generic"],
+      "installation": {
+        "automatic": false,
+        "scope": "project_or_user",
+        "prerequisites": ["An Atlassian Cloud account with Jira and/or Confluence access", "An MCP client supporting remote Streamable HTTP and browser OAuth", "An authorized Atlassian site"]
+      },
+      "data_boundary": {
+        "credentials": ["OAuth 2.0 token managed by the MCP client for the authorized Atlassian site"],
+        "reads": ["Sensitive Jira issues, epics, sprints, comments, worklogs, and Confluence spaces, pages, and search indexes across the authorized Atlassian site"],
+        "writes": ["Remote creation and updates of Jira issues, comments, worklogs, and Confluence pages or blog posts in the authorized site", "Overwrite-capable updates to existing page bodies, issue descriptions, fields, and statuses"]
+      },
+      "capabilities": {
+        "read": true,
+        "sensitive_read": true,
+        "write": true,
+        "remote_write": true,
+        "publish": false,
+        "overwrite": true,
+        "delete": false,
+        "arbitrary_execution": false,
+        "oauth": true,
+        "destructive": true,
+        "details": ["Start with read_jira, search_jira, read_confluence, and search_confluence only", "Exclude Teamwork Graph by default as it substantially widens organizational data visibility", "Creating or updating Jira issues, worklogs, or Confluence pages requires explicit outbound confirmation", "The server focuses on content creation, discovery, and updates; archiving remains within standard Atlassian workflows"]
+      },
+      "confirmation": {
+        "required_for": ["credential_setup", "external_install", "read_sensitive", "write", "write_remote", "overwrite", "oauth", "destructive"],
+        "notes": "Confirm the target Atlassian site and project or space before reading sensitive organizational state; show proposed Jira issue or Confluence page changes before execution, and keep Teamwork Graph disabled by default."
+      },
+      "risk_tags": ["credentials", "hosted", "project-management", "sensitive-read", "remote-write", "overwrite-capable", "oauth", "destructive-capable", "prompt-injection"],
+      "maturity": "verified",
+      "last_verified": "2026-08-30",
+      "evidence": ["https://support.atlassian.com/atlassian-rovo-mcp-server/", "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/supported-tools/"],
+      "health_check": "Connect to the Rovo MCP endpoint, verify authorized Atlassian site identity, then run a bounded read query for one known issue or page without creating or modifying content.",
+      "uninstall": {
+        "instructions": "Remove the Atlassian Rovo MCP entry from the client and revoke the authorized application connection in Atlassian account settings; preserve all Jira and Confluence data.",
+        "removes_user_data": false
+      }
     }
   ]
 }
