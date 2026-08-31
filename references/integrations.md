@@ -19,6 +19,7 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [Pandoc](https://github.com/jgm/pandoc) | `connector` | verified | Yes | No | No | Yes | Yes | 2026-08-25 |
 | [Readwise MCP](https://docs.readwise.io/tools/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-18 |
 | [Shortcut MCP](https://www.shortcut.com/help/integrations/mcp-server/) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-30 |
+| [Slack MCP](https://docs.slack.dev/ai/slack-mcp-server/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-30 |
 | [Substack MCP](https://github.com/conorbronsdon/substack-mcp) | `mcp_server` | verified | Yes | Yes | Yes | Yes | No | 2026-08-15 |
 | [Tolaria MCP](https://github.com/refactoringhq/tolaria) | `local_workspace` | verified | Yes | No | No | Yes | Yes | 2026-08-15 |
 | [Trello MCP](https://support.atlassian.com/trello/docs/connect-trello-to-ai-assistants-with-trello-mcp/) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-30 |
@@ -369,6 +370,31 @@ Capabilities and limits:
 - The hosted service supports granular write, story-write, and comment-write OAuth scopes for explicit creation and update workflows
 - The open-source repository is archived but the hosted https://mcp.shortcut.com/mcp service remains actively documented
 - The documented surface is overwrite-capable but includes no permanently destructive operations; archiving remains within standard Shortcut workflows
+
+## Slack MCP
+
+Slack's official first-party MCP server for searching conversations, channels, canvases, and posting messages with OAuth 2.0 and workspace admin approval.
+
+- **Supported agents:** `claude_code`, `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** A Slack workspace account; Workspace admin approval or eligible app install permissions; An MCP client supporting remote Streamable HTTP and browser OAuth
+- **Credentials:** OAuth 2.0 token managed by the MCP client for the authorized Slack workspace
+- **Reads:** Sensitive public or private channel conversations, threads, DMs, canvases, files, user profiles, and emails depending on granted scopes
+- **Writes / external effects:** Remote creation and updates of Slack channel messages, thread replies, reactions, canvases, and conversations; Publicly visible message sends in shared channels and overwrite-capable updates to canvas content
+- **Typed safety signals:** sensitive read, remote write, overwrite, oauth
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `publish`, `overwrite`, `oauth`, `destructive`
+- **Confirmation:** Confirm the target Slack workspace, channels, and granted OAuth scopes before reading conversations; show exact message text, target channel, and thread before posting messages, and keep DM and canvas access disabled by default.
+- **Risk tags:** `credentials`, `hosted`, `team-chat`, `sensitive-read`, `remote-write`, `publish-capable`, `public-publish`, `overwrite-capable`, `oauth`, `destructive-capable`, `prompt-injection`
+- **Evidence:** [1](https://docs.slack.dev/ai/slack-mcp-server/); [2](https://docs.slack.dev/ai/slack-mcp-server/connect-to-claude)
+- **Health check:** Connect to the Slack MCP endpoint, verify authorized workspace and user identity, then read history from one explicitly named test channel without posting messages.
+- **Uninstall:** Remove the Slack MCP entry from the client and revoke the authorized application connection in Slack workspace settings; preserve all messages and conversation history. (removes user data: No)
+
+Capabilities and limits:
+
+- Start with read-only search and history tools for explicitly named public channels
+- Exclude DMs, user email addresses, files, canvas mutations, and write scopes by default
+- Posting messages or updating canvases creates immediate visible team communication and requires separate approval
+- The server focuses on messaging, search, and canvas updates; message retraction remains within Slack UI
 
 ## Substack MCP
 
