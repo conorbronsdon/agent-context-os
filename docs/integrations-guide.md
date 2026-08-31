@@ -23,6 +23,7 @@ Nothing in this guide installs, activates, authenticates, or grants permissions 
 | Read or update a mounted Markdown vault | [Tolaria MCP](../references/integrations.md#tolaria-mcp) | Sensitive vault reads and full-note overwrite |
 | Convert an explicitly selected document or URI to Markdown | [MarkItDown MCP](../references/integrations.md#markitdown-mcp) | Local-file and network reads through an unauthenticated server process |
 | Export reviewed Markdown to DOCX, PDF, EPUB, or HTML | [Pandoc](../references/integrations.md#pandoc) | Sensitive local or network reads, output overwrite, and PDF-engine execution |
+| Read or update Trello boards, cards, and checklists | [Trello MCP](../references/integrations.md#trello-mcp) | Workspace-scoped OAuth, sensitive board reads, and overwrite-capable card updates |
 
 The obsolete checked-in `gws mcp` configuration was removed. The current Google Workspace path uses the reviewed CLI setup in [`references/google-workspace-cli-setup.md`](../references/google-workspace-cli-setup.md); it is still opt-in and is not pre-approved by the command adapters.
 

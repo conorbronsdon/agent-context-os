@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+- `trello-mcp` integration catalog entry for Atlassian's official remote MCP
+  server with workspace-scoped OAuth and non-destructive operations (#46).
+
 ---
 
 ## [0.12.0] — 2026-08-29 — Immutable full-template release

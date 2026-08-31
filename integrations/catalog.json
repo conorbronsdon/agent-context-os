@@ -660,6 +660,50 @@
         "instructions": "Uninstall Pandoc using the platform package manager and keep generated documents unless the user explicitly asks to remove them; review any separately installed PDF engine independently.",
         "removes_user_data": false
       }
+    },
+    {
+      "id": "trello-mcp",
+      "name": "Trello MCP",
+      "summary": "Atlassian's official hosted MCP server for Trello boards, lists, cards, and checklists with workspace-scoped OAuth and non-destructive operations.",
+      "source_url": "https://github.com/atlassian/trello-mcp-server",
+      "kind": "mcp_server",
+      "supported_agents": ["claude_code", "generic"],
+      "installation": {
+        "automatic": false,
+        "scope": "project_or_user",
+        "prerequisites": ["A Trello or Atlassian account", "An MCP client supporting remote Streamable HTTP and browser OAuth, or a compatible remote-server bridge", "An authorized Trello workspace"]
+      },
+      "data_boundary": {
+        "credentials": ["OAuth 2.0 token managed by the MCP client for the authorized Trello workspace"],
+        "reads": ["Sensitive Trello workspace identity, boards, lists, cards, custom fields, comments, checklists, and search results available to the connected account"],
+        "writes": ["Remote creation and updates of Trello cards, descriptions, checklist items, and comments in the authorized workspace", "Overwrite-capable updates to existing card descriptions, due dates, checklists, or list placements"]
+      },
+      "capabilities": {
+        "read": true,
+        "sensitive_read": true,
+        "write": true,
+        "remote_write": true,
+        "publish": false,
+        "overwrite": true,
+        "delete": false,
+        "arbitrary_execution": false,
+        "oauth": true,
+        "destructive": true,
+        "details": ["Start with read-only board and search queries; card creation, updates, and checklist modifications require separate confirmation", "Atlassian documents that the server exposes no destructive card operations; cards and lists can be moved or archived"]
+      },
+      "confirmation": {
+        "required_for": ["credential_setup", "external_install", "read_sensitive", "write", "write_remote", "overwrite", "oauth", "destructive"],
+        "notes": "Confirm the exact Trello workspace and board before reading sensitive board state; show card title, destination list, and proposed content before every remote card or checklist creation or overwrite-capable update."
+      },
+      "risk_tags": ["credentials", "hosted", "project-management", "sensitive-read", "remote-write", "overwrite-capable", "oauth", "destructive-capable", "prompt-injection"],
+      "maturity": "verified",
+      "last_verified": "2026-08-30",
+      "evidence": ["https://support.atlassian.com/trello/docs/connect-trello-to-ai-assistants-with-trello-mcp/", "https://github.com/atlassian/trello-mcp-server"],
+      "health_check": "Connect to https://mcp.trello.com/v1, verify the authorized workspace and user identity, then fetch one explicitly named board or list without creating or updating cards.",
+      "uninstall": {
+        "instructions": "Remove the Trello MCP entry from the client and revoke the authorized application connection in Trello account settings; preserve all boards, lists, cards, and workspace data.",
+        "removes_user_data": false
+      }
     }
   ]
 }

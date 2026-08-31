@@ -20,6 +20,7 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [Readwise MCP](https://docs.readwise.io/tools/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-18 |
 | [Substack MCP](https://github.com/conorbronsdon/substack-mcp) | `mcp_server` | verified | Yes | Yes | Yes | Yes | No | 2026-08-15 |
 | [Tolaria MCP](https://github.com/refactoringhq/tolaria) | `local_workspace` | verified | Yes | No | No | Yes | Yes | 2026-08-15 |
+| [Trello MCP](https://github.com/atlassian/trello-mcp-server) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-30 |
 
 ## Agent Skills
 
@@ -390,3 +391,26 @@ Capabilities and limits:
 - Prefer get\_note, diff review, and expectedMtime before update\_note
 - The MCP content-mutation surface is limited to create, append, update, attach, and local clone operations; open, highlight, and refresh also change transient UI state
 - Review embedded agents, direct provider models, stored provider keys, and AutoGit as separate trust boundaries before enabling them
+
+## Trello MCP
+
+Atlassian's official hosted MCP server for Trello boards, lists, cards, and checklists with workspace-scoped OAuth and non-destructive operations.
+
+- **Supported agents:** `claude_code`, `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** A Trello or Atlassian account; An MCP client supporting remote Streamable HTTP and browser OAuth, or a compatible remote-server bridge; An authorized Trello workspace
+- **Credentials:** OAuth 2.0 token managed by the MCP client for the authorized Trello workspace
+- **Reads:** Sensitive Trello workspace identity, boards, lists, cards, custom fields, comments, checklists, and search results available to the connected account
+- **Writes / external effects:** Remote creation and updates of Trello cards, descriptions, checklist items, and comments in the authorized workspace; Overwrite-capable updates to existing card descriptions, due dates, checklists, or list placements
+- **Typed safety signals:** sensitive read, remote write, overwrite, oauth
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `overwrite`, `oauth`, `destructive`
+- **Confirmation:** Confirm the exact Trello workspace and board before reading sensitive board state; show card title, destination list, and proposed content before every remote card or checklist creation or overwrite-capable update.
+- **Risk tags:** `credentials`, `hosted`, `project-management`, `sensitive-read`, `remote-write`, `overwrite-capable`, `oauth`, `destructive-capable`, `prompt-injection`
+- **Evidence:** [1](https://support.atlassian.com/trello/docs/connect-trello-to-ai-assistants-with-trello-mcp/); [2](https://github.com/atlassian/trello-mcp-server)
+- **Health check:** Connect to https://mcp.trello.com/v1, verify the authorized workspace and user identity, then fetch one explicitly named board or list without creating or updating cards.
+- **Uninstall:** Remove the Trello MCP entry from the client and revoke the authorized application connection in Trello account settings; preserve all boards, lists, cards, and workspace data. (removes user data: No)
+
+Capabilities and limits:
+
+- Start with read-only board and search queries; card creation, updates, and checklist modifications require separate confirmation
+- Atlassian documents that the server exposes no destructive card operations; cards and lists can be moved or archived

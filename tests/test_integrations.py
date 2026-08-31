@@ -27,7 +27,7 @@ class IntegrationCatalogTests(unittest.TestCase):
     def test_catalog_has_expected_entries_and_visible_safety_columns(self) -> None:
         rendered = MODULE.render_reference(self.catalog)
         self.assertEqual(self.catalog["schema_version"], 2)
-        self.assertEqual(len(self.catalog["integrations"]), 15)
+        self.assertEqual(len(self.catalog["integrations"]), 16)
         self.assertTrue(
             {
                 "github-mcp",
