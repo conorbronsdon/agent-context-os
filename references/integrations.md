@@ -20,6 +20,7 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [Readwise MCP](https://docs.readwise.io/tools/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-18 |
 | [Shortcut MCP](https://www.shortcut.com/help/integrations/mcp-server/) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-30 |
 | [Substack MCP](https://github.com/conorbronsdon/substack-mcp) | `mcp_server` | verified | Yes | Yes | Yes | Yes | No | 2026-08-15 |
+| [Todoist CLI](https://github.com/Doist/todoist-cli) | `connector` | verified | Yes | Yes | No | Yes | Yes | 2026-08-30 |
 | [Tolaria MCP](https://github.com/refactoringhq/tolaria) | `local_workspace` | verified | Yes | No | No | Yes | Yes | 2026-08-15 |
 | [Trello MCP](https://support.atlassian.com/trello/docs/connect-trello-to-ai-assistants-with-trello-mcp/) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-30 |
 
@@ -392,6 +393,30 @@ Capabilities and limits:
 
 - Long-form tooling is draft-only; scheduling and public-post mutation are unavailable
 - Note creation publishes immediately and has no server-side undo
+
+## Todoist CLI
+
+Doist's official command-line interface for Todoist tasks, projects, comments, and labels; supports a dedicated --read-only OAuth login flow.
+
+- **Supported agents:** `claude_code`, `codex`, `gemini_cli`, `cursor`, `opencode`, `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** A Todoist account; A current todoist-cli release (e.g. td); OAuth or API token credentials
+- **Credentials:** OAuth token stored by the CLI or an optional API token provided via environment variable
+- **Reads:** Sensitive Todoist tasks, projects, sections, comments, reminders, and labels across personal and shared workspaces
+- **Writes / external effects:** Creating, updating, completing, closing, and moving tasks, projects, sections, and comments; Resource deletion and task purge methods exposed by the write-capable CLI
+- **Typed safety signals:** sensitive read, remote write, overwrite, delete, oauth
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `overwrite`, `delete`, `oauth`, `destructive`
+- **Confirmation:** Confirm the target account and projects before reading sensitive task state; show proposed task or project changes and deletions before execution.
+- **Risk tags:** `credentials`, `personal-tasks`, `sensitive-read`, `remote-write`, `overwrite-capable`, `delete-capable`, `oauth`, `destructive-capable`, `prompt-injection`
+- **Evidence:** [1](https://github.com/Doist/todoist-cli)
+- **Health check:** Log in with td auth login --read-only, verify authenticated user identity, then fetch assigned tasks for today without writing or completing items.
+- **Uninstall:** Remove the CLI binary or client configuration and revoke the OAuth application or API token in Todoist settings; preserve all remote task and project data. (removes user data: No)
+
+Capabilities and limits:
+
+- Start with td auth login --read-only which requests data:read and blocks mutations in the CLI
+- Write-capable tokens can create, edit, close, move, and delete tasks and projects
+- Environment-provided API tokens are write-capable unless manually scoped
 
 ## Tolaria MCP
 
