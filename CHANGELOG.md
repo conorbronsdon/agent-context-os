@@ -14,6 +14,9 @@
   colocated v0.12 command form remains compatible.
 
 ### Fixed
+- The pre-commit secret filename tripwire now checks nested basenames and reads
+  staged paths NUL-safely, including names with spaces and rename destinations,
+  while allowing deletions. It remains a limited tripwire, not content scanning.
 - The enabled Claude worktree guard now counts exact Claude executable names and identifies linked worktrees from Git's common-directory structure, with must-fire and must-not-fire controls for primary, linked, guarded, unguarded, and single-session paths.
 - Release draft staging now creates only after a classified HTTP 404, recovers duplicate-create races without re-uploading, and binds publication and recovery to an operator-supplied positive numeric release ID.
 

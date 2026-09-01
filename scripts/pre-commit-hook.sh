@@ -32,7 +32,7 @@ fi
 
 CONTEXT_LIMIT=300
 
-for staged_file in $(git diff --cached --name-only --diff-filter=ACM 2>/dev/null); do
+while IFS= read -r -d '' staged_file; do
   case "$staged_file" in
     identity/*|projects/*/skills/*)
       if [ -f "$staged_file" ]; then
@@ -43,17 +43,21 @@ for staged_file in $(git diff --cached --name-only --diff-filter=ACM 2>/dev/null
       fi
       ;;
   esac
-done
+done < <(git diff --cached --name-only --diff-filter=ACMR -z 2>/dev/null)
 
 # ── 4. Prevent committing common secret files ───────────────────────────────
 
-for staged_file in $(git diff --cached --name-only 2>/dev/null); do
-  case "$staged_file" in
+# This is a filename tripwire, not a content scanner. Match the basename so
+# nested secret files cannot bypass it, and exclude deletions so the hook never
+# tries to block removal of an already tracked secret.
+while IFS= read -r -d '' staged_file; do
+  staged_basename=${staged_file##*/}
+  case "$staged_basename" in
     .env|.env.*|credentials.json|token.json|client_secret*)
       ERRORS+=("BLOCKED: $staged_file looks like a secrets file. Remove from staging.")
       ;;
   esac
-done
+done < <(git diff --cached --name-only --diff-filter=ACMR -z 2>/dev/null)
 
 # ── Report ───────────────────────────────────────────────────────────────────
 
