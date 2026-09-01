@@ -294,6 +294,30 @@ if [ "$PRECOMMIT_RENAME_STATUS" -ne 1 ] || \
   fail "pre-commit secret tripwire did not block a rename into a secret basename"
 fi
 
+# A staged type change still modifies a secret basename and must not disappear
+# when deletions are excluded from the diff filter.
+PRECOMMIT_TYPECHANGE_REPO="$TEMP_ROOT_WIN/precommit-typechange"
+prepare_precommit_repo "$PRECOMMIT_TYPECHANGE_REPO"
+mkdir -p "$PRECOMMIT_TYPECHANGE_REPO/nested"
+printf 'ordinary\n' > "$PRECOMMIT_TYPECHANGE_REPO/nested/token.json"
+git -C "$PRECOMMIT_TYPECHANGE_REPO" add -f -- nested/token.json
+git -C "$PRECOMMIT_TYPECHANGE_REPO" -c user.name=Test -c user.email=test@example.invalid \
+  commit -qm baseline
+TYPECHANGE_BLOB=$(printf 'link-target\n' | \
+  git -C "$PRECOMMIT_TYPECHANGE_REPO" hash-object -w --stdin)
+git -C "$PRECOMMIT_TYPECHANGE_REPO" update-index \
+  --cacheinfo 120000,"$TYPECHANGE_BLOB",nested/token.json
+set +e
+PRECOMMIT_TYPECHANGE_OUTPUT=$(cd "$PRECOMMIT_TYPECHANGE_REPO" && \
+  bash scripts/pre-commit-hook.sh 2>&1)
+PRECOMMIT_TYPECHANGE_STATUS=$?
+set -e
+if [ "$PRECOMMIT_TYPECHANGE_STATUS" -ne 1 ] || \
+  ! printf '%s' "$PRECOMMIT_TYPECHANGE_OUTPUT" | grep -Fq \
+    'BLOCKED: nested/token.json looks like a secrets file'; then
+  fail "pre-commit secret tripwire did not block a secret basename type change"
+fi
+
 # Context warnings use the same NUL-safe staged-path transport.
 PRECOMMIT_CONTEXT_REPO="$TEMP_ROOT_WIN/precommit-context"
 prepare_precommit_repo "$PRECOMMIT_CONTEXT_REPO"

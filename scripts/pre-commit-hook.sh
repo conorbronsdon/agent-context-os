@@ -57,7 +57,7 @@ while IFS= read -r -d '' staged_file; do
       ERRORS+=("BLOCKED: $staged_file looks like a secrets file. Remove from staging.")
       ;;
   esac
-done < <(git diff --cached --name-only --diff-filter=ACMR -z 2>/dev/null)
+done < <(git diff --cached --name-only --diff-filter=ACMRT -z 2>/dev/null)
 
 # ── Report ───────────────────────────────────────────────────────────────────
 
