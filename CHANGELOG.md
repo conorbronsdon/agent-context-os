@@ -13,6 +13,9 @@
   skills use the same provider-neutral kernel contract, while the existing
   colocated v0.12 command form remains compatible.
 
+### Changed
+- Aligned integration proposal, contributor guidance, and PR templates with catalog schema v2 (documentation and template changes only).
+
 ### Fixed
 - The enabled Claude worktree guard now counts exact Claude executable names and identifies linked worktrees from Git's common-directory structure, with must-fire and must-not-fire controls for primary, linked, guarded, unguarded, and single-session paths.
 - Release draft staging now creates only after a classified HTTP 404, recovers duplicate-create races without re-uploading, and binds publication and recovery to an operator-supplied positive numeric release ID.

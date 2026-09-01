@@ -86,13 +86,17 @@ to check the entry is wanted before writing it.
 4. Describe `capabilities` honestly, including the unpleasant parts. If a
    server can delete remote objects, `delete` and `destructive` are `true` even
    when you never intend to use those tools.
-5. Recommend the narrowest useful default profile. Most entries should default
-   to read-only scopes with writes behind a separate confirmation group.
+5. The catalog documents metadata. It does not configure tools, disable
+   functionality, or enforce default profiles. Place client-side scope and
+   tool recommendations, along with the full reachable surface area, in
+   `capabilities.details`. Provide confirmation guidance in `confirmation.notes`.
 6. Regenerate `references/integrations.md` and run the validator.
 
-`maturity` is a claim about metadata, not about testing. `verified` means you
-checked the fields against the linked source on the stated date. If you could
-not confirm something, `listed` is the honest value — and saying "I could not
+`maturity` is a claim about metadata, not about testing. `verified` means
+every submitted field is supported by current first-party evidence on the stated date.
+It does NOT mean that you created an account, installed the integration, authenticated,
+or performed a live end-to-end test. If you could
+not confirm something, `listed` is the honest value - and saying "I could not
 verify X" in the pull request is genuinely useful, not a failure.
 
 Nothing in this repository is installed or enabled at setup. A catalog entry is
