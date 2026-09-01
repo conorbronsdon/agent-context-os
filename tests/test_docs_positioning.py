@@ -145,6 +145,20 @@ class DocumentationPositioningTests(unittest.TestCase):
         self.assertIn("Nothing in this guide installs", guide)
         self.assertIn("not live authentication", guide)
 
+    def test_integration_prose_routes_to_the_generated_current_inventory(self) -> None:
+        for path in ("README.md", "docs/launch-copy.md"):
+            prose = self.text(path)
+            normalized = re.sub(r"\s+", " ", prose.casefold())
+            self.assertIn("generated catalog", normalized, path)
+            self.assertIn("current inventory", normalized, path)
+            self.assertNotRegex(
+                normalized, r"current catalog includes|catalog now covers"
+            )
+        self.assertIn("references/integrations.md", self.text("README.md"))
+        launch = self.text("docs/launch-copy.md")
+        self.assertIn("../references/integrations.md", launch)
+        self.assertIn("../integrations/catalog.json", launch)
+
     def test_uncataloged_integrations_are_not_live(self) -> None:
         tracked_mcp = subprocess.run(
             ["git", "ls-files", "--", ".mcp.json"],
