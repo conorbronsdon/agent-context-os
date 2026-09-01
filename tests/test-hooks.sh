@@ -223,6 +223,113 @@ if [ "$SEPARATE_GUARD_STATUS" -ne 2 ] || ! printf '%s' "$SEPARATE_GUARD_STDERR" 
   fail "worktree-guard mistook a primary checkout for a linked worktree from a path substring"
 fi
 
+prepare_precommit_repo() {
+  local repo=$1
+  mkdir -p "$repo/scripts"
+  git -C "$repo" init -q -b main
+  cp "$ROOT/scripts/pre-commit-hook.sh" "$repo/scripts/pre-commit-hook.sh"
+  printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$repo/scripts/validate-skills.sh"
+}
+
+# The filename tripwire must inspect basenames at any depth and preserve paths
+# containing spaces without splitting them into separate candidates.
+PRECOMMIT_BLOCK_REPO="$TEMP_ROOT_WIN/precommit-block"
+prepare_precommit_repo "$PRECOMMIT_BLOCK_REPO"
+mkdir -p "$PRECOMMIT_BLOCK_REPO/config" "$PRECOMMIT_BLOCK_REPO/secrets" \
+  "$PRECOMMIT_BLOCK_REPO/space dir"
+printf 'secret\n' > "$PRECOMMIT_BLOCK_REPO/.env"
+printf 'secret\n' > "$PRECOMMIT_BLOCK_REPO/config/.env.local"
+printf 'secret\n' > "$PRECOMMIT_BLOCK_REPO/secrets/token.json"
+printf 'secret\n' > "$PRECOMMIT_BLOCK_REPO/space dir/credentials.json"
+git -C "$PRECOMMIT_BLOCK_REPO" add -f -- .env config/.env.local \
+  secrets/token.json "space dir/credentials.json"
+set +e
+PRECOMMIT_BLOCK_OUTPUT=$(cd "$PRECOMMIT_BLOCK_REPO" && bash scripts/pre-commit-hook.sh 2>&1)
+PRECOMMIT_BLOCK_STATUS=$?
+set -e
+[ "$PRECOMMIT_BLOCK_STATUS" -eq 1 ] \
+  || fail "pre-commit secret tripwire did not block nested and spaced secret filenames"
+for blocked_path in .env config/.env.local secrets/token.json "space dir/credentials.json"; do
+  printf '%s' "$PRECOMMIT_BLOCK_OUTPUT" | grep -Fq "BLOCKED: $blocked_path looks like a secrets file" \
+    || fail "pre-commit secret tripwire omitted $blocked_path"
+done
+
+# Deletions must remain possible, and ordinary filenames that merely contain a
+# secret-looking name must not fire the basename rules.
+PRECOMMIT_SAFE_REPO="$TEMP_ROOT_WIN/precommit-safe"
+prepare_precommit_repo "$PRECOMMIT_SAFE_REPO"
+printf 'tracked secret\n' > "$PRECOMMIT_SAFE_REPO/token.json"
+git -C "$PRECOMMIT_SAFE_REPO" add -f -- token.json
+git -C "$PRECOMMIT_SAFE_REPO" -c user.name=Test -c user.email=test@example.invalid \
+  commit -qm baseline
+rm "$PRECOMMIT_SAFE_REPO/token.json"
+mkdir -p "$PRECOMMIT_SAFE_REPO/config" "$PRECOMMIT_SAFE_REPO/notes with spaces"
+printf 'safe\n' > "$PRECOMMIT_SAFE_REPO/config/credentials.json.example"
+printf 'safe\n' > "$PRECOMMIT_SAFE_REPO/notes with spaces/token.json.md"
+printf 'safe\n' > "$PRECOMMIT_SAFE_REPO/client-secret.txt"
+git -C "$PRECOMMIT_SAFE_REPO" add -A -- token.json config/credentials.json.example \
+  "notes with spaces/token.json.md" client-secret.txt
+PRECOMMIT_SAFE_OUTPUT=$(cd "$PRECOMMIT_SAFE_REPO" && bash scripts/pre-commit-hook.sh 2>&1) \
+  || fail "pre-commit secret tripwire blocked a deletion or near-miss filename"
+printf '%s' "$PRECOMMIT_SAFE_OUTPUT" | grep -Fq 'Pre-commit checks passed' \
+  || fail "pre-commit hook omitted its success result for safe staged paths"
+
+# A rename into a secret basename is an addition at the destination and must
+# still fire even though the source is removed.
+PRECOMMIT_RENAME_REPO="$TEMP_ROOT_WIN/precommit-rename"
+prepare_precommit_repo "$PRECOMMIT_RENAME_REPO"
+printf 'ordinary\n' > "$PRECOMMIT_RENAME_REPO/settings.json"
+git -C "$PRECOMMIT_RENAME_REPO" add settings.json
+git -C "$PRECOMMIT_RENAME_REPO" -c user.name=Test -c user.email=test@example.invalid \
+  commit -qm baseline
+mkdir -p "$PRECOMMIT_RENAME_REPO/nested"
+git -C "$PRECOMMIT_RENAME_REPO" mv settings.json nested/token.json
+set +e
+PRECOMMIT_RENAME_OUTPUT=$(cd "$PRECOMMIT_RENAME_REPO" && bash scripts/pre-commit-hook.sh 2>&1)
+PRECOMMIT_RENAME_STATUS=$?
+set -e
+if [ "$PRECOMMIT_RENAME_STATUS" -ne 1 ] || \
+  ! printf '%s' "$PRECOMMIT_RENAME_OUTPUT" | grep -Fq \
+    'BLOCKED: nested/token.json looks like a secrets file'; then
+  fail "pre-commit secret tripwire did not block a rename into a secret basename"
+fi
+
+# A staged type change still modifies a secret basename and must not disappear
+# when deletions are excluded from the diff filter.
+PRECOMMIT_TYPECHANGE_REPO="$TEMP_ROOT_WIN/precommit-typechange"
+prepare_precommit_repo "$PRECOMMIT_TYPECHANGE_REPO"
+mkdir -p "$PRECOMMIT_TYPECHANGE_REPO/nested"
+printf 'ordinary\n' > "$PRECOMMIT_TYPECHANGE_REPO/nested/token.json"
+git -C "$PRECOMMIT_TYPECHANGE_REPO" add -f -- nested/token.json
+git -C "$PRECOMMIT_TYPECHANGE_REPO" -c user.name=Test -c user.email=test@example.invalid \
+  commit -qm baseline
+TYPECHANGE_BLOB=$(printf 'link-target\n' | \
+  git -C "$PRECOMMIT_TYPECHANGE_REPO" hash-object -w --stdin)
+git -C "$PRECOMMIT_TYPECHANGE_REPO" update-index \
+  --cacheinfo 120000,"$TYPECHANGE_BLOB",nested/token.json
+set +e
+PRECOMMIT_TYPECHANGE_OUTPUT=$(cd "$PRECOMMIT_TYPECHANGE_REPO" && \
+  bash scripts/pre-commit-hook.sh 2>&1)
+PRECOMMIT_TYPECHANGE_STATUS=$?
+set -e
+if [ "$PRECOMMIT_TYPECHANGE_STATUS" -ne 1 ] || \
+  ! printf '%s' "$PRECOMMIT_TYPECHANGE_OUTPUT" | grep -Fq \
+    'BLOCKED: nested/token.json looks like a secrets file'; then
+  fail "pre-commit secret tripwire did not block a secret basename type change"
+fi
+
+# Context warnings use the same NUL-safe staged-path transport.
+PRECOMMIT_CONTEXT_REPO="$TEMP_ROOT_WIN/precommit-context"
+prepare_precommit_repo "$PRECOMMIT_CONTEXT_REPO"
+mkdir -p "$PRECOMMIT_CONTEXT_REPO/identity"
+seq 301 > "$PRECOMMIT_CONTEXT_REPO/identity/large context.md"
+git -C "$PRECOMMIT_CONTEXT_REPO" add "identity/large context.md"
+PRECOMMIT_CONTEXT_OUTPUT=$(cd "$PRECOMMIT_CONTEXT_REPO" && bash scripts/pre-commit-hook.sh 2>&1) \
+  || fail "pre-commit hook blocked a large context warning fixture"
+printf '%s' "$PRECOMMIT_CONTEXT_OUTPUT" | grep -Fq \
+  'identity/large context.md is 301 lines' \
+  || fail "pre-commit context warning split a staged path containing spaces"
+
 for hook in "$ROOT"/.claude/hooks/*.sh; do
   bash -n "$hook"
 done
