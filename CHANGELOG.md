@@ -13,7 +13,13 @@
   skills use the same provider-neutral kernel contract, while the existing
   colocated v0.12 command form remains compatible.
 
+### Changed
+- Aligned integration proposal, contributor guidance, and PR templates with catalog schema v2 (documentation and template changes only).
+
 ### Fixed
+- The pre-commit secret filename tripwire now checks nested basenames and reads
+  staged paths NUL-safely, including names with spaces and rename destinations,
+  while allowing deletions. It remains a limited tripwire, not content scanning.
 - README and launch copy now route readers to the generated integration catalog
   and chooser as the current inventory instead of freezing incomplete lists in
   hand-maintained prose.
