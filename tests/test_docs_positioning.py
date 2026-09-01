@@ -145,6 +145,33 @@ class DocumentationPositioningTests(unittest.TestCase):
         self.assertIn("Nothing in this guide installs", guide)
         self.assertIn("not live authentication", guide)
 
+    def test_integration_prose_routes_to_the_generated_current_inventory(self) -> None:
+        catalog = json.loads(self.text("integrations/catalog.json"))
+        sections = {
+            "README.md": self.text("README.md")
+            .split("## Optional integrations", 1)[1]
+            .split("\n## ", 1)[0],
+            "docs/launch-copy.md": self.text("docs/launch-copy.md")
+            .split("## Changelog post", 1)[1]
+            .split("\n## ", 1)[0],
+        }
+        for path, prose in sections.items():
+            normalized = re.sub(r"\s+", " ", prose.casefold())
+            self.assertIn("generated catalog", normalized, path)
+            self.assertIn("current inventory", normalized, path)
+            enumerated = [
+                item["name"]
+                for item in catalog["integrations"]
+                if item["name"].casefold() in normalized
+            ]
+            self.assertEqual(
+                [], enumerated, f"{path} must not enumerate catalog entries"
+            )
+        self.assertIn("references/integrations.md", self.text("README.md"))
+        launch = self.text("docs/launch-copy.md")
+        self.assertIn("../references/integrations.md", launch)
+        self.assertIn("../integrations/catalog.json", launch)
+
     def test_uncataloged_integrations_are_not_live(self) -> None:
         tracked_mcp = subprocess.run(
             ["git", "ls-files", "--", ".mcp.json"],
