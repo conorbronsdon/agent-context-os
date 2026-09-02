@@ -371,6 +371,18 @@ class MaterializerTest(unittest.TestCase):
             {"README.md": "core", "AGENTS.md": "agents-instructions"},
             generated_owners,
         )
+        initialized_proposal = json.loads(
+            (target / initialized["proposal"]).read_text(encoding="utf-8")
+        )
+        guide_plan = next(
+            action
+            for action in initialized_proposal["authorization"]["plan"]["actions"]
+            if action["path"] == "GUIDE.md"
+        )
+        self.assertNotEqual(
+            guide_plan["desired"]["sha256_raw"],
+            guide_plan["desired"]["sha256_text_lf"],
+        )
         apply_proposal(
             target,
             target / initialized["proposal"],

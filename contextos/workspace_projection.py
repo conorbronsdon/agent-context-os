@@ -129,12 +129,12 @@ def closure_aware_files(
     """Return generated entry surfaces for selected profile only."""
     if config.get("composition", {}).get("profile") != "selected":
         return {}
-    selected = _selected_runtimes(config, runtimes)
-    result = {"README.md": _readme(config, selected)}
+    selected_runtimes = _selected_runtimes(config, runtimes)
+    result = {"README.md": _readme(config, selected_runtimes)}
     if "agents-instructions" in desired_components:
-        result["AGENTS.md"] = _agents(selected)
+        result["AGENTS.md"] = _agents(selected_runtimes)
     if source_texts is not None:
-        selected = set(selected_paths)
+        selected_path_set = set(selected_paths)
         available = set(available_paths)
         for path, text in source_texts.items():
             if not path.endswith(".md") or path in result:
@@ -144,7 +144,7 @@ def closure_aware_files(
                 target = posixpath.normpath(
                     posixpath.join(posixpath.dirname(path), match.group(2))
                 )
-                if target in available and target not in selected:
+                if target in available and target not in selected_path_set:
                     return match.group(1)
                 return match.group(0)
 

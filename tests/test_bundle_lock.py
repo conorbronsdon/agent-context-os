@@ -17,6 +17,7 @@ from contextos.bundle_schema import (
     bundle_schema_document,
     canonical_json,
     create_bundle_lock,
+    create_initial_structural_plan,
     create_structural_plan,
     validate_bundle_lock,
     verify_bundle,
@@ -114,10 +115,9 @@ class BundleFixture:
             (root / "AGENTS.md").write_text(
                 "# Full fixture agents\n\nCodex and Hermes.\n", encoding="utf-8"
             )
-            (root / "GUIDE.md").write_text(
-                "Keep the [managed payload](managed.bin) while the "
-                "[optional add-on](addon.txt) is omitted.\n",
-                encoding="utf-8",
+            (root / "GUIDE.md").write_bytes(
+                b"Keep the [managed payload](managed.bin) while the "
+                b"[optional add-on](addon.txt) is omitted.\r\n"
             )
             components[0]["paths"].append(
                 {"path": "README.md", "policy": "managed"}
@@ -332,7 +332,7 @@ class BundleLockTest(unittest.TestCase):
         git_source.mkdir()
         fixture = BundleFixture(
             git_source, version="1.0.0", managed=b"binary\x00v1\r\n", addon=True,
-            source_mode="git-index",
+            source_mode="git-index", entry_surfaces=True,
         )
         self.assertGreater(len(fixture.lock["bundle"]["files"]), 1)
 
@@ -409,6 +409,59 @@ class BundleLockTest(unittest.TestCase):
                 expected_sha256=rebound["bundle_sha256"],
                 source_mode="git-index", retain_paths=(),
             )
+
+    def test_selected_projection_reverifies_only_owned_markdown_inputs(self) -> None:
+        source = self.root / "selected-projection-source"
+        source.mkdir()
+        fixture = BundleFixture(
+            source,
+            version="2.0.0",
+            managed=b"selected\n",
+            addon=True,
+            runtime_addon=False,
+            entry_surfaces=True,
+        )
+        candidate = verify_bundle(
+            fixture.lock_path,
+            source,
+            expected_sha256=fixture.lock["bundle_sha256"],
+            retain_paths=(),
+        )
+        self.assertEqual({}, candidate.verified_bytes)
+        target = self.root / "selected-projection-target"
+        target.mkdir()
+        config = {
+            "schema_version": 2,
+            "agents": ["codex"],
+            "composition": {"profile": "selected", "extras": []},
+            "paths": {
+                "state_dir": "state",
+                "sessions_dir": "sessions",
+                "task_file": "TODO.md",
+            },
+            "template": {
+                "source": candidate.name,
+                "version": candidate.version,
+                "bundle_sha256": candidate.digest,
+            },
+        }
+        with mock.patch(
+            "contextos.bundle_schema.verify_bundle", wraps=verify_bundle
+        ) as reverification:
+            create_initial_structural_plan(
+                target_root=target,
+                workspace_config=config,
+                candidate=candidate,
+                desired_components=["core", "agents-instructions"],
+            )
+        retained_sets = [
+            set(call.kwargs["retain_paths"])
+            for call in reverification.call_args_list
+            if call.kwargs.get("retain_paths")
+        ]
+        self.assertEqual(
+            [{"AGENTS.md", "GUIDE.md", "README.md"}], retained_sets
+        )
 
     def test_git_batch_reader_rejects_malformed_and_truncated_records(self) -> None:
         class BatchProcess:

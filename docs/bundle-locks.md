@@ -154,7 +154,13 @@ loop payload, which remains live until the next generator result is unpacked;
 it may double-count requested or schema payloads. Text decoding and LF
 normalization, directory-source snapshot assembly, parsed JSON objects, lock
 and plan metadata, filesystem snapshots, and interpreter overhead are outside
-this raw-buffer metric. Proposal planning requests no bundle payload retention.
+this raw-buffer metric. Full-template proposal planning requests no bundle
+payload retention. Selected-profile planning performs a separate streaming
+verification that retains only Markdown paths in the selected component closure
+while it computes closure-aware projections. Its bound uses the same formula
+with those selected Markdown paths as the requested set. The projection pass is
+sequential with ordinary candidate/current verification, so candidate write
+payloads are not retained again unless they are themselves selected Markdown.
 Apply retains only candidate bundle payloads referenced by write changes; those
 verified bytes are released when transaction staging completes.
 

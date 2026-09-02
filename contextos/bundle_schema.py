@@ -642,11 +642,6 @@ def verify_bundle(
             _fail("bundle.source_git_commit", "does not match the local Git HEAD commit")
     records = {item["path"]: item for item in lock["bundle"]["files"]}
     requested = set(records) if retain_paths is None else set(retain_paths)
-    # Selected-profile projection must be computed from the exact verified
-    # Markdown bytes at both proposal and apply boundaries. Retain those inputs
-    # consistently even when callers otherwise request a payload-bounded view.
-    if projection_capable and retain_paths is not None:
-        requested.update(path for path in records if path.endswith(".md"))
     unknown = requested - set(records)
     if unknown:
         _fail("retain_paths", "contains paths absent from the bundle: " + ", ".join(sorted(unknown)))
@@ -788,11 +783,42 @@ def _projected_records(
     component_ids: Sequence[str],
     records: dict[str, dict[str, Any]],
 ) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
-    source_texts = {
-        path: bundle.verified_bytes[path].decode("utf-8")
-        for path in records
-        if path.endswith(".md") and path in bundle.verified_bytes
-    }
+    source_texts: dict[str, str] = {}
+    if config.get("composition", {}).get("profile") == "selected":
+        missing_runtimes = sorted(set(config["agents"]) - set(bundle.runtimes))
+        if missing_runtimes:
+            _fail(
+                "current_bundle",
+                "cannot reconstruct selected-profile runtime projection: "
+                + ", ".join(missing_runtimes),
+            )
+        projection_paths = tuple(
+            path for path in records if path.endswith(".md")
+        )
+        projected_bundle = bundle
+        if not set(projection_paths).issubset(bundle.verified_bytes):
+            projected_bundle = verify_bundle(
+                bundle.lock_path,
+                bundle.root,
+                expected_sha256=bundle.digest,
+                source_mode=bundle.source_mode,
+                role=bundle.role,
+                retain_paths=projection_paths,
+            )
+        missing_inputs = set(projection_paths) - set(projected_bundle.verified_bytes)
+        if missing_inputs:
+            _fail(
+                "projection_inputs",
+                "verified Markdown inputs are missing: "
+                + ", ".join(sorted(missing_inputs, key=portable_path_identity)),
+            )
+        try:
+            source_texts = {
+                path: projected_bundle.verified_bytes[path].decode("utf-8")
+                for path in projection_paths
+            }
+        except UnicodeDecodeError as exc:
+            _fail("projection_inputs", f"selected Markdown must be UTF-8: {exc}")
     generated = closure_aware_files(
         config,
         bundle.runtimes,
@@ -809,7 +835,7 @@ def _projected_records(
         projected[path].update(
             {
                 "sha256_raw": sha256_bytes(payload),
-                "sha256_text_lf": sha256_bytes(payload),
+                "sha256_text_lf": _text_lf_digest(payload),
                 "size": len(payload),
                 "executable": False,
             }
