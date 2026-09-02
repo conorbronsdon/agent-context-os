@@ -159,6 +159,17 @@ class CursorLiveHarnessTest(unittest.TestCase):
                 live.CommandResult([], 0, stream, ""), self.root, "denied.txt", "deny"
             )
 
+    def test_deny_precedence_rejects_non_policy_tool_errors(self) -> None:
+        stream = "\n".join(json.dumps(item) for item in [
+            {"type": "tool_call", "subtype": "started", "call_id": "call-1", "tool_call": {"writeToolCall": {"args": {"path": "denied.txt"}}}},
+            {"type": "tool_call", "subtype": "completed", "call_id": "call-1", "tool_call": {"writeToolCall": {"args": {"path": "denied.txt"}, "result": {"error": {"reason": "disk full"}}}}},
+            {"type": "result", "subtype": "success", "is_error": False, "result": "Write failed"},
+        ])
+        with self.assertRaisesRegex(live.HarnessError, "other than policy"):
+            live.require_denied_write_attempt(
+                live.CommandResult([], 0, stream, ""), self.root, "denied.txt", "deny"
+            )
+
     def test_execute_requires_exact_json_controls_and_observed_denial(self) -> None:
         def json_result(value: str) -> str:
             return json.dumps({
@@ -186,8 +197,12 @@ class CursorLiveHarnessTest(unittest.TestCase):
             if prompt.startswith("Use the available Context OS control"):
                 return live.CommandResult([], 0, json_result("ordinary implicit answer"), "")
             if prompt.startswith("/contextos-live-explicit"):
+                config = json.loads((workspace / ".cursor/cli.json").read_text(encoding="utf-8"))
+                self.assertEqual(["Read(.agents/**)", "Shell(*)"], config["permissions"]["deny"])
                 value = (workspace / ".agents/skills/contextos-live-explicit/SKILL.md").read_text().split("Return only ", 1)[1].split(".", 1)[0]
                 return live.CommandResult([], 0, json_result(value), "")
+            if "proposed.txt" in prompt:
+                return live.CommandResult([], 0, json_result("PROPOSED_ONLY"), "")
             if "denied.txt" in prompt:
                 stream = [
                     {"type": "tool_call", "subtype": "started", "call_id": "call-denied", "tool_call": {"writeToolCall": {"args": {"path": "denied.txt"}}}},

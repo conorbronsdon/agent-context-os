@@ -172,7 +172,11 @@ def require_denied_write_attempt(
             attempts[call_id] = write
         elif event.get("subtype") == "completed" and call_id in attempts:
             outcome = write.get("result") if isinstance(write, dict) else None
-            if isinstance(outcome, dict) and outcome and "success" not in outcome:
+            if isinstance(outcome, dict) and "error" in outcome:
+                raise HarnessError(f"{subject} write failed for a reason other than policy denial")
+            if isinstance(outcome, dict) and "success" not in outcome and any(
+                key in outcome for key in ("denied", "rejected")
+            ):
                 return
     raise HarnessError(f"{subject} did not record a rejected denied write through Cursor")
 
@@ -359,7 +363,9 @@ class CursorHarness:
             if canaries["skill"] in implicit_text:
                 raise HarnessError("explicit-only skill body was model-invoked")
 
-            write_permissions(workspace, allow=[], deny=["Read(.agents/**)"])
+            write_permissions(
+                workspace, allow=[], deny=["Read(.agents/**)", "Shell(*)"]
+            )
             explicit = self.agent(
                 workspace,
                 "/contextos-live-explicit Return only the canary required by this skill.",
@@ -374,7 +380,9 @@ class CursorHarness:
                 "Create proposed.txt containing exactly PROPOSED_ONLY.",
                 "--mode", "ask",
             )
-            require_success(ask_write, "headless ask-mode write control")
+            ask_result = require_json_result(ask_write, "headless ask-mode write control")
+            if "PROPOSED_ONLY" not in ask_result:
+                raise HarnessError("headless ask mode did not propose the requested write")
             if proposed.exists():
                 raise HarnessError("headless ask mode wrote a file")
             if changed_paths(baseline, snapshot(workspace)):
