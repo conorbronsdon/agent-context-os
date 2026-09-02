@@ -26,6 +26,7 @@ Nothing in this guide installs, activates, authenticates, or grants permissions 
 | Export reviewed Markdown to DOCX, PDF, EPUB, or HTML | [Pandoc](../references/integrations.md#pandoc) | Sensitive local or network reads, output overwrite, and PDF-engine execution |
 | Plan or update Shortcut stories, epics, and iterations | [Shortcut MCP](../references/integrations.md#shortcut-mcp) | Workspace-wide sensitive reads and overwrite-capable story or doc updates |
 | Search Slack conversations or post messages | [Slack MCP](../references/integrations.md#slack-mcp) | Sensitive conversation reads and publicly visible message sends |
+| Inspect GitLab repositories, merge requests, or pipelines | [GitLab MCP](../references/integrations.md#gitlab-mcp) | Private-repository reads, public comments, branch writes, and CI/CD pipeline actions |
 
 The obsolete checked-in `gws mcp` configuration was removed. The current Google Workspace path uses the reviewed CLI setup in [`references/google-workspace-cli-setup.md`](../references/google-workspace-cli-setup.md); it is still opt-in and is not pre-approved by the command adapters.
 

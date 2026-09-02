@@ -10,6 +10,7 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [AI Tools for Creators](https://github.com/conorbronsdon/ai-tools-for-creators) | `resource_catalog` | listed | No | No | No | No | No | 2026-08-15 |
 | [Beads for Gemini CLI](https://beads.gascity.com/integrations/gemini) | `agent_extension` | verified | Yes | Yes | No | No | Yes | 2026-08-15 |
 | [GitHub MCP](https://github.com/github/github-mcp-server) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-18 |
+| [GitLab MCP](https://docs.gitlab.com/user/model_context_protocol/mcp_server/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-09-02 |
 | [Google Workspace CLI](https://github.com/googleworkspace/cli) | `connector` | verified | Yes | Yes | No | Yes | Yes | 2026-08-15 |
 | [Granola MCP](https://docs.granola.ai/help-center/sharing/integrations/mcp) | `mcp_server` | verified | No | No | No | Yes | No | 2026-08-15 |
 | [Linear MCP](https://linear.app/docs/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-18 |
@@ -141,6 +142,31 @@ Capabilities and limits:
 - Start with --read-only and only the context, repos, issues, and pull\_requests toolsets; read-only mode takes priority even if a write tool is requested explicitly
 - Toolsets and individual tools are allowlisted independently, so enabling all or the default surface can expose materially more data and actions than a bounded project workflow needs
 - Treat workflow dispatch, branch or file mutation, repository administration, and public comments as separate high-impact remote actions
+
+## GitLab MCP
+
+GitLab's official Beta MCP server exposes repository, issue, work item, merge request, discussion, and pipeline tools over OAuth 2.0 with the mcp scope.
+
+- **Supported agents:** `claude_code`, `codex`, `cursor`, `gemini_cli`, `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** An MCP-compatible client; A GitLab SaaS or self-managed account; GitLab Duo availability set to Always on or On by default; Beta and experimental features turned on; Access to the MCP server allowed; Activation settings configured for the top-level group on GitLab.com, or for the instance on GitLab Self-Managed and Dedicated; OAuth 2.0 Dynamic Client Registration available, or a pre-registered OAuth application with the mcp scope and Confidential checkbox cleared where an administrator turns Dynamic Client Registration off
+- **Credentials:** Per-user OAuth 2.0 access token with the mcp scope, obtained through Dynamic Client Registration or a pre-registered OAuth application, kept outside repository files
+- **Reads:** Private or public GitLab repository contents, commits, issues, work items, merge requests, diffs, comments, wiki page lists, project members, pipelines, and job logs allowed by the authenticated user
+- **Writes / external effects:** Remote GitLab writes including creating and updating issues, work items, merge requests, comments, branches, and merge request reviews; File actions committed to a branch through add\_commit, covering file creation, update, deletion, and move; Merging or scheduling the automatic merge of a merge request through accept\_merge\_request; CI/CD pipeline runs, retries, cancellations, and renames through save\_pipeline, and pipeline metadata updates or pipeline deletion through manage\_pipeline; Publicly visible posts, overwrite-capable branch and file updates, and security scan profile attachment to projects or groups
+- **Typed safety signals:** sensitive read, remote write, overwrite, delete, oauth
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `publish`, `overwrite`, `delete`, `oauth`, `destructive`
+- **Confirmation:** Confirm the exact GitLab instance, project scope, and token permissions; show exact target and payload before comments, branch writes, publication, overwrite, deletion, or CI/CD pipeline actions.
+- **Risk tags:** `credentials`, `private-repositories`, `sensitive-read`, `remote-write`, `publish-capable`, `public-publish`, `overwrite-capable`, `delete-capable`, `oauth`, `destructive-capable`, `ci-cd`, `prompt-injection`
+- **Evidence:** [1](https://docs.gitlab.com/user/model_context_protocol/mcp_server/); [2](https://docs.gitlab.com/user/model_context_protocol/mcp_server_tools/)
+- **Health check:** Connect to the GitLab MCP server, verify authenticated user identity and GitLab instance, then read one explicitly named project and issue without performing a write or pipeline action.
+- **Uninstall:** Remove the MCP client entry and revoke the authorized OAuth application for the MCP client in GitLab user settings; an administrator can also withdraw access by disallowing MCP server access for the top-level group or instance. Repositories and GitLab content are left unchanged. (removes user data: No)
+
+Capabilities and limits:
+
+- Start with read-only repository, issue, merge request, and pipeline inspection allowlists
+- No enforced server-side read-only mode is provided; restrict toolsets client-side
+- Treat pipeline triggering, retry, cancellation, and deletion as high-impact CI/CD actions requiring separate confirmation
+- This boundary describes the tool surface documented for GitLab 19.4; re-check the tools reference when the instance runs a different version
 
 ## Google Workspace CLI
 

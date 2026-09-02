@@ -800,6 +800,50 @@
       }
     },
     {
+      "id": "gitlab-mcp",
+      "name": "GitLab MCP",
+      "summary": "GitLab's official Beta MCP server exposes repository, issue, work item, merge request, discussion, and pipeline tools over OAuth 2.0 with the mcp scope.",
+      "source_url": "https://docs.gitlab.com/user/model_context_protocol/mcp_server/",
+      "kind": "mcp_server",
+      "supported_agents": ["claude_code", "codex", "cursor", "gemini_cli", "generic"],
+      "installation": {
+        "automatic": false,
+        "scope": "project_or_user",
+        "prerequisites": ["An MCP-compatible client", "A GitLab SaaS or self-managed account", "GitLab Duo availability set to Always on or On by default", "Beta and experimental features turned on", "Access to the MCP server allowed", "Activation settings configured for the top-level group on GitLab.com, or for the instance on GitLab Self-Managed and Dedicated", "OAuth 2.0 Dynamic Client Registration available, or a pre-registered OAuth application with the mcp scope and Confidential checkbox cleared where an administrator turns Dynamic Client Registration off"]
+      },
+      "data_boundary": {
+        "credentials": ["Per-user OAuth 2.0 access token with the mcp scope, obtained through Dynamic Client Registration or a pre-registered OAuth application, kept outside repository files"],
+        "reads": ["Private or public GitLab repository contents, commits, issues, work items, merge requests, diffs, comments, wiki page lists, project members, pipelines, and job logs allowed by the authenticated user"],
+        "writes": ["Remote GitLab writes including creating and updating issues, work items, merge requests, comments, branches, and merge request reviews", "File actions committed to a branch through add_commit, covering file creation, update, deletion, and move", "Merging or scheduling the automatic merge of a merge request through accept_merge_request", "CI/CD pipeline runs, retries, cancellations, and renames through save_pipeline, and pipeline metadata updates or pipeline deletion through manage_pipeline", "Publicly visible posts, overwrite-capable branch and file updates, and security scan profile attachment to projects or groups"]
+      },
+      "capabilities": {
+        "read": true,
+        "sensitive_read": true,
+        "write": true,
+        "remote_write": true,
+        "publish": true,
+        "overwrite": true,
+        "delete": true,
+        "arbitrary_execution": false,
+        "oauth": true,
+        "destructive": true,
+        "details": ["Start with read-only repository, issue, merge request, and pipeline inspection allowlists", "No enforced server-side read-only mode is provided; restrict toolsets client-side", "Treat pipeline triggering, retry, cancellation, and deletion as high-impact CI/CD actions requiring separate confirmation", "This boundary describes the tool surface documented for GitLab 19.4; re-check the tools reference when the instance runs a different version"]
+      },
+      "confirmation": {
+        "required_for": ["credential_setup", "external_install", "read_sensitive", "write", "write_remote", "publish", "overwrite", "delete", "oauth", "destructive"],
+        "notes": "Confirm the exact GitLab instance, project scope, and token permissions; show exact target and payload before comments, branch writes, publication, overwrite, deletion, or CI/CD pipeline actions."
+      },
+      "risk_tags": ["credentials", "private-repositories", "sensitive-read", "remote-write", "publish-capable", "public-publish", "overwrite-capable", "delete-capable", "oauth", "destructive-capable", "ci-cd", "prompt-injection"],
+      "maturity": "verified",
+      "last_verified": "2026-09-02",
+      "evidence": ["https://docs.gitlab.com/user/model_context_protocol/mcp_server/", "https://docs.gitlab.com/user/model_context_protocol/mcp_server_tools/"],
+      "health_check": "Connect to the GitLab MCP server, verify authenticated user identity and GitLab instance, then read one explicitly named project and issue without performing a write or pipeline action.",
+      "uninstall": {
+        "instructions": "Remove the MCP client entry and revoke the authorized OAuth application for the MCP client in GitLab user settings; an administrator can also withdraw access by disallowing MCP server access for the top-level group or instance. Repositories and GitLab content are left unchanged.",
+        "removes_user_data": false
+      }
+    },
+    {
       "id": "slack-mcp",
       "name": "Slack MCP",
       "summary": "Slack's official first-party MCP server for searching conversations, channels, canvases, files, and lists, and for posting messages, restricted to Marketplace-published or internal Slack apps using confidential OAuth 2.0 with workspace admin approval.",

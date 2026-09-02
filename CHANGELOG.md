@@ -31,6 +31,8 @@
   granular OAuth scopes and dedicated read-only mode (#49).
 - `slack-mcp` integration catalog entry for Slack's official first-party MCP server
   with channel history, canvas, and granular message confirmation boundaries (#52).
+- `gitlab-mcp` integration catalog entry for GitLab's official Beta MCP server
+  with repository, MR, issue, and pipeline capabilities (#50).
 
 ---
 
