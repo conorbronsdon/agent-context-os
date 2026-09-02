@@ -218,7 +218,16 @@ class CursorHarness:
                 config = json.loads(config_bytes.decode("utf-8"))
             except (UnicodeDecodeError, json.JSONDecodeError) as exc:
                 raise HarnessError("Cursor user CLI configuration is not valid JSON") from exc
-            if not isinstance(config, dict) or "permissions" in config:
+            permissions = config.get("permissions") if isinstance(config, dict) else None
+            if permissions is not None and not isinstance(permissions, dict):
+                raise HarnessError(
+                    "Cursor user CLI permissions would confound project permission conformance"
+                )
+            denied = permissions.get("deny", []) if permissions else []
+            if not isinstance(denied, list) or any(
+                not isinstance(rule, str) or rule.startswith(("Write(", "Shell("))
+                for rule in denied
+            ):
                 raise HarnessError(
                     "Cursor user CLI permissions would confound project permission conformance"
                 )
