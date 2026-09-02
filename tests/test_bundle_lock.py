@@ -70,6 +70,7 @@ class BundleFixture:
         self, root: Path, *, version: str, managed: bytes, addon: bool,
         runtime_addon: bool | None = None, include_seed: bool = True,
         addon_policy: str = "managed", source_mode: str = "directory",
+        entry_surfaces: bool = False,
     ) -> None:
         self.root = root
         (root / "components").mkdir(parents=True)
@@ -80,6 +81,8 @@ class BundleFixture:
         if runtime_addon is None:
             runtime_addon = addon
         runtime_components = ["core", "addon"] if runtime_addon else ["core"]
+        if entry_surfaces:
+            runtime_components.append("agents-instructions")
         runtime_descriptor = json.loads(
             (ROOT / "runtimes/codex.json").read_text(encoding="utf-8")
         )
@@ -104,6 +107,22 @@ class BundleFixture:
         ]
         if include_seed:
             components[0]["paths"].append({"path": "seed.txt", "policy": "seed"})
+        if entry_surfaces:
+            (root / "README.md").write_text(
+                "# Full fixture\n\nCodex and Hermes are supported.\n", encoding="utf-8"
+            )
+            (root / "AGENTS.md").write_text(
+                "# Full fixture agents\n\nCodex and Hermes.\n", encoding="utf-8"
+            )
+            components[0]["paths"].append(
+                {"path": "README.md", "policy": "managed"}
+            )
+            components.append({
+                "id": "agents-instructions",
+                "description": "Generated shared instructions fixture.",
+                "depends_on": ["core"],
+                "paths": [{"path": "AGENTS.md", "policy": "managed"}],
+            })
         if addon:
             (root / "addon.txt").write_text(f"addon {version}\n", encoding="utf-8")
             components.append({

@@ -35,6 +35,7 @@ from .primitives import (
     sha256_bytes,
 )
 from .workspace_schema import (
+    LEGACY_WORKSPACE_SCHEMA_VERSION,
     WORKSPACE_SCHEMA_VERSION,
     WorkspaceConfigError,
     render_workspace_config,
@@ -42,6 +43,12 @@ from .workspace_schema import (
     validate_workspace_config,
     validate_workspace_path,
 )
+from .workspace_composition import (
+    WorkspaceCompositionError,
+    component_ids as workspace_component_ids,
+    desired_component_closure,
+)
+from .workspace_projection import closure_aware_files
 
 
 BUNDLE_LOCK_SCHEMA_VERSION = 1
@@ -763,8 +770,48 @@ def _owned_records(bundle: VerifiedBundle, component_ids: Sequence[str]) -> dict
     }
 
 
+def _projected_records(
+    bundle: VerifiedBundle,
+    config: dict[str, Any],
+    component_ids: Sequence[str],
+    records: dict[str, dict[str, Any]],
+) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
+    source_texts = {
+        path: bundle.verified_bytes[path].decode("utf-8")
+        for path in records
+        if path.endswith(".md") and path in bundle.verified_bytes
+    }
+    generated = closure_aware_files(
+        config,
+        bundle.runtimes,
+        component_ids,
+        source_texts=source_texts,
+        available_paths=tuple(bundle.records),
+    )
+    projected = {path: dict(record) for path, record in records.items()}
+    for path, text in generated.items():
+        if path not in projected:
+            continue
+        payload = text.encode("utf-8")
+        projected[path].update(
+            {
+                "sha256_raw": sha256_bytes(payload),
+                "sha256_text_lf": sha256_bytes(payload),
+                "size": len(payload),
+                "executable": False,
+            }
+        )
+    return projected, {
+        path: text for path, text in generated.items() if path in projected
+    }
+
+
 def _runtime_ids(bundle: VerifiedBundle) -> list[str]:
     return sorted(bundle.runtimes)
+
+
+def _component_ids(bundle: VerifiedBundle) -> list[str]:
+    return workspace_component_ids(bundle.manifest)
 
 
 def _configured_components(bundle: VerifiedBundle, agents: Sequence[str]) -> list[str]:
@@ -774,6 +821,34 @@ def _configured_components(bundle: VerifiedBundle, agents: Sequence[str]) -> lis
             _fail("workspace.agents", f"runtime {agent!r} is unavailable in the bundle")
         requested.update(bundle.runtimes[agent]["components"])
     return _component_closure(bundle.manifest, sorted(requested))
+
+
+def _workspace_template(bundle: VerifiedBundle, schema_version: int) -> dict[str, str]:
+    template = {"source": bundle.name, "version": bundle.version}
+    if schema_version != LEGACY_WORKSPACE_SCHEMA_VERSION:
+        template["bundle_sha256"] = bundle.digest
+    return template
+
+
+def _desired_components(
+    bundle: VerifiedBundle,
+    config: dict[str, Any],
+    supplied_components: Sequence[str],
+) -> list[str]:
+    supplied = _component_closure(bundle.manifest, supplied_components)
+    if config["schema_version"] == LEGACY_WORKSPACE_SCHEMA_VERSION:
+        return supplied
+
+    try:
+        desired = desired_component_closure(config, bundle.manifest, bundle.runtimes)
+    except (WorkspaceCompositionError, ComponentManifestError) as exc:
+        _fail("workspace.composition", str(exc))
+    if supplied != desired:
+        _fail(
+            "desired_components",
+            "must equal the closure derived from workspace schema v2",
+        )
+    return desired
 
 
 def _assert_bundle_current(bundle: VerifiedBundle, field: str) -> None:
@@ -796,6 +871,7 @@ def create_structural_plan(
     desired_components: Sequence[str],
     current: VerifiedBundle | None = None,
     current_components: Sequence[str] = (),
+    intended_workspace: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return a deterministic, digest-bound plan without mutating either tree."""
     target_root = _source_root(target_root, "target_root")
@@ -828,18 +904,42 @@ def create_structural_plan(
             config_bytes.decode("utf-8"), source=config_relative
         )
         config = validate_workspace_config(
-            config_value, known_runtime_ids=_runtime_ids(candidate)
+            config_value,
+            known_runtime_ids=_runtime_ids(candidate),
+            known_component_ids=_component_ids(candidate),
         )
     except (UnicodeError, WorkspaceConfigError) as exc:
         raise BundleError(str(exc)) from exc
-    if config["template"] != {"source": authority.name, "version": authority.version}:
+    if config["template"] != _workspace_template(
+        authority, config["schema_version"]
+    ):
         authority_role = "current" if current is not None else "candidate"
         _fail(
             "workspace.template",
             f"does not match the {authority_role} bundle identity",
         )
-    desired_ids = _component_closure(candidate.manifest, desired_components)
-    required_desired_ids = _configured_components(candidate, config["agents"])
+    if intended_workspace is None:
+        intended = {
+            **config,
+            "template": _workspace_template(candidate, config["schema_version"]),
+        }
+    else:
+        try:
+            intended = validate_workspace_config(
+                intended_workspace,
+                known_runtime_ids=_runtime_ids(candidate),
+                known_component_ids=_component_ids(candidate),
+            )
+        except WorkspaceConfigError as exc:
+            raise BundleError(str(exc)) from exc
+        if intended["schema_version"] != WORKSPACE_SCHEMA_VERSION:
+            _fail("intended_workspace.schema_version", "must equal schema v2")
+        if intended["paths"] != config["paths"]:
+            _fail("intended_workspace.paths", "path changes require a separate migration")
+        if intended["template"] != _workspace_template(candidate, WORKSPACE_SCHEMA_VERSION):
+            _fail("intended_workspace.template", "does not match the candidate bundle pin")
+    desired_ids = _desired_components(candidate, intended, desired_components)
+    required_desired_ids = _configured_components(candidate, intended["agents"])
     if not set(required_desired_ids).issubset(desired_ids):
         missing = sorted(
             set(required_desired_ids) - set(desired_ids), key=portable_path_identity
@@ -848,12 +948,22 @@ def create_structural_plan(
             "desired_components",
             "omits components required by configured agents: " + ", ".join(missing),
         )
-    desired = _owned_records(candidate, desired_ids)
+    desired, generated_files = _projected_records(
+        candidate,
+        intended,
+        desired_ids,
+        _owned_records(candidate, desired_ids),
+    )
     base: dict[str, dict[str, Any]] = {}
     current_ids: list[str] = []
     if current is not None:
         current_ids = _component_closure(current.manifest, current_components)
-        base = _owned_records(current, current_ids)
+        base, _current_generated = _projected_records(
+            current,
+            config,
+            current_ids,
+            _owned_records(current, current_ids),
+        )
         all_current_ids = [item["id"] for item in current.manifest["components"]]
         all_current = _owned_records(current, all_current_ids)
         for relative in sorted(set(all_current) - set(base), key=portable_path_identity):
@@ -886,7 +996,12 @@ def create_structural_plan(
         policy = (after or before)["policy"]
         if before is None:
             if observed is not None:
-                if policy == "seed":
+                if _matches_base(observed_value, after_value):
+                    action, reason = (
+                        "noop",
+                        "unrecorded path already matches the selected bundle",
+                    )
+                elif policy == "seed":
                     action, reason = (
                         "preserve-seed",
                         "pre-existing seed path remains user-owned",
@@ -961,12 +1076,10 @@ def create_structural_plan(
             "current_source": current.mode_verified if current is not None else None,
             "target": os.name != "nt",
         },
-        "intended_workspace": {
-            **config,
-            "template": {"source": candidate.name, "version": candidate.version},
-        },
+        "intended_workspace": intended,
         "current_components": current_ids,
         "desired_components": desired_ids,
+        "generated_files": generated_files,
         "actions": actions,
     }
     return {
@@ -991,16 +1104,15 @@ def create_initial_structural_plan(
         raise BundleError(f"cannot compare source and target roots: {exc}") from exc
     try:
         config = validate_workspace_config(
-            workspace_config, known_runtime_ids=_runtime_ids(candidate)
+            workspace_config,
+            known_runtime_ids=_runtime_ids(candidate),
+            known_component_ids=_component_ids(candidate),
         )
     except WorkspaceConfigError as exc:
         raise BundleError(str(exc)) from exc
-    if config["template"] != {
-        "source": candidate.name,
-        "version": candidate.version,
-    }:
+    if config["template"] != _workspace_template(candidate, config["schema_version"]):
         _fail("workspace.template", "does not match the candidate bundle identity")
-    desired_ids = _component_closure(candidate.manifest, desired_components)
+    desired_ids = _desired_components(candidate, config, desired_components)
     required_desired_ids = _configured_components(candidate, config["agents"])
     if not set(required_desired_ids).issubset(desired_ids):
         missing = sorted(
@@ -1010,7 +1122,12 @@ def create_initial_structural_plan(
             "desired_components",
             "omits components required by configured agents: " + ", ".join(missing),
         )
-    desired = _owned_records(candidate, desired_ids)
+    desired, generated_files = _projected_records(
+        candidate,
+        config,
+        desired_ids,
+        _owned_records(candidate, desired_ids),
+    )
     actions: list[dict[str, Any]] = []
     for relative in sorted(desired, key=portable_path_identity):
         after = desired[relative]
@@ -1066,6 +1183,7 @@ def create_initial_structural_plan(
         "intended_workspace": config,
         "current_components": [],
         "desired_components": desired_ids,
+        "generated_files": generated_files,
         "actions": actions,
     }
     return {

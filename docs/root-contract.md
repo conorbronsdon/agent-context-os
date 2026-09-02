@@ -271,10 +271,11 @@ second ad hoc root path:
   invoking an explicit/bound ContextRoot through KernelRoot.
 - Apply and hooks read runtime/component authority from KernelRoot, never from
   writable context or application content.
-- OpenClaw plugin alias attachment and desired component composition remain
-  separately bounded follow-ups; this slice does not overclaim them.
+- OpenClaw plugin alias attachment remains separately bounded. Desired
+  component composition is tracked by workspace schema v2 and changes only the
+  explicit ContextRoot through the materialization transaction.
 
-Issue #116 owns that implementation and its Windows/Linux Claude-to-Codex
-golden path. Issue #118 owns later desired-composition schema work and is not a
-v0.12 dependency except for the bounded verification task tracked separately in
-#106.
+Issue #116 owns distinct-root execution and its Windows/Linux Claude-to-Codex
+golden path. Schema-v2 composition does not broaden those root roles: guided
+init/update/reconcile target one explicit ContextRoot, and pre-mutation bundle
+source revalidation remains mandatory.

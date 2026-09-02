@@ -108,6 +108,10 @@
                     "policy": "managed"
                 },
                 {
+                    "path": "contextos/installed_state.py",
+                    "policy": "managed"
+                },
+                {
                     "path": "contextos/coordination.py",
                     "policy": "managed"
                 },
@@ -129,6 +133,14 @@
                 },
                 {
                     "path": "contextos/workspace_schema.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "contextos/workspace_composition.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "contextos/workspace_projection.py",
                     "policy": "managed"
                 },
                 {
@@ -521,6 +533,10 @@
                 },
                 {
                     "path": "tests/fixtures/workspace-migrations.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/fixtures/workspace-v2-migrations.json",
                     "policy": "development"
                 },
                 {

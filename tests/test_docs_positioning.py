@@ -87,7 +87,8 @@ class DocumentationPositioningTests(unittest.TestCase):
         )
         workspace_contract = self.text("docs/workspace-configuration.md")
         self.assertIn("marker-only root is not the same as a core-only profile", workspace_contract)
-        self.assertIn("`bundle propose` without current-bundle inputs", workspace_contract)
+        self.assertIn("Use `workspace reconcile` for the supported path", workspace_contract)
+        self.assertIn("`template.bundle_sha256`", workspace_contract)
         for root in SETUP_ROOTS:
             self.assertIn(f"`{root}/`", contract)
         for filename in SETUP_FILES:

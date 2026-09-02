@@ -34,8 +34,8 @@ from .workspace_schema import (
     DEFAULT_PATHS,
     DEFAULT_TEMPLATE_SOURCE,
     DEFAULT_TEMPLATE_VERSION,
+    LEGACY_WORKSPACE_SCHEMA_VERSION,
     WORKSPACE_MODE,
-    WORKSPACE_SCHEMA_VERSION,
     WorkspaceConfigError,
     analyze_legacy_workspace,
     legacy_workspace_values,
@@ -46,6 +46,11 @@ from .workspace_schema import (
     strict_json_loads,
     validate_workspace_config,
     validate_workspace_path,
+)
+from .installed_state import InstalledStateError, validate_installed_state
+from .workspace_composition import (
+    WorkspaceCompositionError,
+    desired_component_closure,
 )
 from .primitives import (
     SnapshotError,
@@ -327,6 +332,7 @@ def discover_root(start: Path | None = None) -> Path:
                     marker,
                     root=path,
                     known_runtime_ids=runtime_ids(path),
+                    known_component_ids=_workspace_component_ids(path),
                 )
             except WorkspaceConfigError as exc:
                 raise ContextOSError(
@@ -430,6 +436,7 @@ def resolve_workspace(root: Path) -> WorkspaceResolution:
                 json_path,
                 root=root,
                 known_runtime_ids=runtime_ids(root),
+                known_component_ids=_workspace_component_ids(root),
             )
         except WorkspaceConfigError as exc:
             raise ContextOSError(f"invalid tracked workspace configuration: {exc}") from exc
@@ -672,7 +679,7 @@ def plan_workspace_migration(
         source = "legacy-yaml"
 
     candidate = {
-        "schema_version": WORKSPACE_SCHEMA_VERSION,
+        "schema_version": LEGACY_WORKSPACE_SCHEMA_VERSION,
         "mode": WORKSPACE_MODE,
         "agents": list(agents),
         "paths": paths,
@@ -836,6 +843,21 @@ def _selection_components(root: Path, agents: Sequence[str]) -> list[str]:
         raise ContextOSError(
             f"invalid component manifest: {component_path} ({exc})"
         ) from exc
+
+
+def _workspace_component_ids(root: Path) -> list[str] | None:
+    component_path = safe_repo_path(root, "components/manifest.json")
+    if not component_path.exists():
+        return None
+    try:
+        manifest = load_component_manifest(
+            component_path, root=root, check_paths=False
+        )
+    except (ComponentManifestError, OSError, UnicodeError) as exc:
+        raise ContextOSError(
+            f"invalid component manifest: {component_path} ({exc})"
+        ) from exc
+    return sorted(item["id"] for item in manifest["components"])
 
 
 def _agent_change(
@@ -1021,7 +1043,7 @@ def create_workspace_setup_proposal(
     """Create an additive setup proposal without inferring tracked intent."""
     requested_config = validate_workspace_config(
         {
-            "schema_version": WORKSPACE_SCHEMA_VERSION,
+            "schema_version": LEGACY_WORKSPACE_SCHEMA_VERSION,
             "mode": WORKSPACE_MODE,
             "agents": list(requested_agents),
             "paths": dict(DEFAULT_PATHS),
@@ -4755,6 +4777,14 @@ def doctor(
     workspace_source = "invalid"
     configured_agents: tuple[str, ...] | None = None
     workspace_valid = False
+    workspace_resolution: WorkspaceResolution | None = None
+    composition_report: dict[str, Any] = {
+        "status": "unknown",
+        "desired_components": [],
+        "installed_components": None,
+        "missing_components": [],
+        "extra_components": [],
+    }
     try:
         workspace_resolution = resolve_workspace(root)
         workspace = workspace_resolution.workspace
@@ -5005,6 +5035,100 @@ def doctor(
         add("component-inventory", "pass", "structurally valid")
     except (ContextOSError, ComponentManifestError, OSError, UnicodeError) as exc:
         add("component-inventory", "fail", str(exc))
+
+    if (
+        workspace_valid
+        and workspace_resolution is not None
+        and workspace_resolution.config is not None
+        and component_inventory is not None
+    ):
+        workspace_config = workspace_resolution.config
+        if workspace_config["schema_version"] == LEGACY_WORKSPACE_SCHEMA_VERSION:
+            composition_report["status"] = "legacy-undeclared"
+            add(
+                "desired-installed-components",
+                "warn",
+                "schema v1 does not declare reconstructable desired component closure",
+            )
+        else:
+            try:
+                selected_runtimes = {
+                    runtime_id: runtime_manifest(root, runtime_id, check_paths=False)
+                    for runtime_id in workspace_config["agents"]
+                }
+                desired = desired_component_closure(
+                    workspace_config, component_inventory, selected_runtimes
+                )
+                composition_report["desired_components"] = desired
+                installed_path = root / ".context-os" / "installed-bundle.json"
+                _guard_local_artifact_path(root, installed_path)
+                if not installed_path.exists():
+                    composition_report["status"] = "not-installed"
+                    composition_report["missing_components"] = desired
+                    add(
+                        "desired-installed-components",
+                        "warn",
+                        f"installed state absent; {len(desired)} desired component(s) require reconcile",
+                    )
+                else:
+                    installed_bytes, _metadata = read_regular_file_snapshot(
+                        installed_path, subject="installed bundle state"
+                    )
+                    installed = validate_installed_state(
+                        strict_json_loads(
+                            installed_bytes.decode("utf-8"),
+                            source=".context-os/installed-bundle.json",
+                        )
+                    )
+                    actual = installed["components"]
+                    missing = [item for item in desired if item not in set(actual)]
+                    extra = [item for item in actual if item not in set(desired)]
+                    expected_bundle = {
+                        "name": workspace_config["template"]["source"],
+                        "version": workspace_config["template"]["version"],
+                        "sha256": workspace_config["template"]["bundle_sha256"],
+                    }
+                    actual_bundle = {
+                        key: installed["bundle"][key]
+                        for key in ("name", "version", "sha256")
+                    }
+                    bundle_matches = actual_bundle == expected_bundle
+                    matches = not missing and not extra and bundle_matches
+                    composition_report.update(
+                        {
+                            "status": "current" if matches else "drifted",
+                            "installed_components": actual,
+                            "missing_components": missing,
+                            "extra_components": extra,
+                            "desired_bundle": expected_bundle,
+                            "installed_bundle": actual_bundle,
+                        }
+                    )
+                    detail_parts = []
+                    if missing:
+                        detail_parts.append("missing: " + ", ".join(missing))
+                    if extra:
+                        detail_parts.append("extra: " + ", ".join(extra))
+                    if not bundle_matches:
+                        detail_parts.append("installed bundle identity differs from desired pin")
+                    add(
+                        "desired-installed-components",
+                        "pass" if matches else "fail",
+                        "desired closure is installed" if matches else "; ".join(detail_parts),
+                    )
+            except (
+                ComponentManifestError,
+                ContextOSError,
+                InstalledStateError,
+                OSError,
+                SnapshotError,
+                UnicodeError,
+                WorkspaceCompositionError,
+                WorkspaceConfigError,
+            ) as exc:
+                composition_report["status"] = "invalid"
+                composition_report["detail"] = str(exc)
+                add("desired-installed-components", "fail", str(exc))
 
     if scope == "profile" and not validation_ids and component_inventory is not None:
         try:
@@ -5592,6 +5716,7 @@ def doctor(
             "configured_agents": (
                 list(configured_agents) if configured_agents is not None else None
             ),
+            "composition": composition_report,
         },
         "runtimes": runtime_reports,
         "checks": checks,

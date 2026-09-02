@@ -7,11 +7,14 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
+from collections.abc import Set as AbstractSet
 from typing import Any, Iterable, Sequence
 
 
-WORKSPACE_SCHEMA_VERSION = 1
+LEGACY_WORKSPACE_SCHEMA_VERSION = 1
+WORKSPACE_SCHEMA_VERSION = 2
 WORKSPACE_MODE = "full-template"
+WORKSPACE_PROFILES = {"full-template", "selected"}
 DEFAULT_TEMPLATE_VERSION = "0.12.0"
 DEFAULT_TEMPLATE_SOURCE = "agent-context-os-template"
 DEFAULT_PATHS = {
@@ -20,9 +23,14 @@ DEFAULT_PATHS = {
     "task_file": "TODO.md",
 }
 RUNTIME_ID_RE = re.compile(r"^[a-z][a-z0-9-]*$")
-TOP_LEVEL_KEYS = {"schema_version", "mode", "agents", "paths", "template"}
+V1_TOP_LEVEL_KEYS = {"schema_version", "mode", "agents", "paths", "template"}
+V2_TOP_LEVEL_KEYS = {
+    "schema_version", "agents", "composition", "paths", "template"
+}
 PATH_KEYS = {"state_dir", "sessions_dir", "task_file"}
-TEMPLATE_KEYS = {"version", "source"}
+V1_TEMPLATE_KEYS = {"version", "source"}
+V2_TEMPLATE_KEYS = {"version", "source", "bundle_sha256"}
+COMPOSITION_KEYS = {"profile", "extras"}
 LEGACY_KEYS = tuple(DEFAULT_PATHS)
 RESERVED_AGENT_TOKENS = {"auto", "generic", "none"}
 RESERVED_PATH_PARTS = {".git", ".context-os"}
@@ -32,6 +40,7 @@ WINDOWS_DEVICE_NAMES = {
     *(f"lpt{index}" for index in range(1, 10)),
 }
 WINDOWS_ILLEGAL_CHARACTERS = set('<>:"|?*')
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 class WorkspaceConfigError(ValueError):
@@ -137,35 +146,75 @@ def _reject_path_role_collisions(paths: dict[str, str]) -> None:
         _fail("paths", "task_file must not be an ancestor of a configured directory")
 
 
-def validate_workspace_config(
-    value: Any, *, known_runtime_ids: Iterable[str]
-) -> dict[str, Any]:
-    document = _exact_keys(value, TOP_LEVEL_KEYS, "workspace")
-    if (
-        type(document.get("schema_version")) is not int
-        or document["schema_version"] != WORKSPACE_SCHEMA_VERSION
-    ):
-        _fail("schema_version", f"must equal integer {WORKSPACE_SCHEMA_VERSION}")
-    if document.get("mode") != WORKSPACE_MODE:
-        _fail("mode", f"must equal {WORKSPACE_MODE!r}")
+def _validate_identifier_set(
+    raw_values: Any,
+    *,
+    field: str,
+    known_values: Iterable[str] | None,
+    reserved: AbstractSet[str] = frozenset(),
+) -> list[str]:
+    if not isinstance(raw_values, list):
+        _fail(field, "must be an array")
+    known = set(known_values) if known_values is not None else None
+    values: list[str] = []
+    seen: set[str] = set()
+    for index, raw_value in enumerate(raw_values):
+        value = _text(raw_value, f"{field}[{index}]")
+        if not RUNTIME_ID_RE.fullmatch(value) or value in reserved:
+            _fail(f"{field}[{index}]", "must be a registered lowercase id")
+        identity = portable_identity(value)
+        if identity in seen:
+            _fail(field, f"duplicate id {value!r}")
+        if known is not None and value not in known:
+            _fail(f"{field}[{index}]", f"unknown id {value!r}")
+        seen.add(identity)
+        values.append(value)
+    return sorted(values)
 
-    raw_agents = document.get("agents")
+
+def _validate_agents(raw_agents: Any, known_runtime_ids: Iterable[str]) -> list[str]:
     if not isinstance(raw_agents, list):
         _fail("agents", "must be an array")
-    known = set(known_runtime_ids)
-    agents: list[str] = []
-    seen: set[str] = set()
-    for index, raw_agent in enumerate(raw_agents):
-        agent = _text(raw_agent, f"agents[{index}]")
-        if not RUNTIME_ID_RE.fullmatch(agent) or agent in RESERVED_AGENT_TOKENS:
-            _fail(f"agents[{index}]", "must be a registered lowercase runtime id")
-        identity = portable_identity(agent)
-        if identity in seen:
-            _fail("agents", f"duplicate runtime id {agent!r}")
-        if agent not in known:
-            _fail(f"agents[{index}]", f"unknown runtime id {agent!r}")
-        seen.add(identity)
-        agents.append(agent)
+    try:
+        return _validate_identifier_set(
+            raw_agents,
+            field="agents",
+            known_values=known_runtime_ids,
+            reserved=RESERVED_AGENT_TOKENS,
+        )
+    except WorkspaceConfigError as exc:
+        message = str(exc).replace("registered lowercase id", "registered lowercase runtime id")
+        message = message.replace("duplicate id", "duplicate runtime id")
+        message = message.replace("unknown id", "unknown runtime id")
+        raise WorkspaceConfigError(message) from exc
+
+
+def validate_workspace_config(
+    value: Any,
+    *,
+    known_runtime_ids: Iterable[str],
+    known_component_ids: Iterable[str] | None = None,
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        _fail("workspace", "must be an object")
+    version = value.get("schema_version")
+    if type(version) is not int or version not in {
+        LEGACY_WORKSPACE_SCHEMA_VERSION,
+        WORKSPACE_SCHEMA_VERSION,
+    }:
+        _fail(
+            "schema_version",
+            f"must equal integer {LEGACY_WORKSPACE_SCHEMA_VERSION} or {WORKSPACE_SCHEMA_VERSION}",
+        )
+    document = _exact_keys(
+        value,
+        V1_TOP_LEVEL_KEYS if version == LEGACY_WORKSPACE_SCHEMA_VERSION else V2_TOP_LEVEL_KEYS,
+        "workspace",
+    )
+    if version == LEGACY_WORKSPACE_SCHEMA_VERSION and document.get("mode") != WORKSPACE_MODE:
+        _fail("mode", f"must equal {WORKSPACE_MODE!r}")
+
+    agents = _validate_agents(document.get("agents"), known_runtime_ids)
 
     raw_paths = _exact_keys(document.get("paths"), PATH_KEYS, "paths")
     paths = {
@@ -174,18 +223,90 @@ def validate_workspace_config(
     }
     _reject_path_role_collisions(paths)
 
-    raw_template = _exact_keys(document.get("template"), TEMPLATE_KEYS, "template")
+    if version == LEGACY_WORKSPACE_SCHEMA_VERSION:
+        composition = None
+        template_keys = V1_TEMPLATE_KEYS
+    else:
+        raw_composition = _exact_keys(
+            document.get("composition"), COMPOSITION_KEYS, "composition"
+        )
+        profile = raw_composition.get("profile")
+        if profile not in WORKSPACE_PROFILES:
+            _fail(
+                "composition.profile",
+                "must equal 'full-template' or 'selected'",
+            )
+        extras = _validate_identifier_set(
+            raw_composition.get("extras"),
+            field="composition.extras",
+            known_values=known_component_ids,
+        )
+        if profile == "full-template" and extras:
+            _fail(
+                "composition.extras",
+                "must be empty for the full-template profile",
+            )
+        composition = {"profile": profile, "extras": extras}
+        template_keys = V2_TEMPLATE_KEYS
+
+    raw_template = _exact_keys(document.get("template"), template_keys, "template")
     template = {
         "version": _text(raw_template.get("version"), "template.version"),
         "source": _text(raw_template.get("source"), "template.source"),
     }
-    return {
-        "schema_version": WORKSPACE_SCHEMA_VERSION,
-        "mode": WORKSPACE_MODE,
+    if version == WORKSPACE_SCHEMA_VERSION:
+        digest = raw_template.get("bundle_sha256")
+        if not isinstance(digest, str) or not SHA256_RE.fullmatch(digest):
+            _fail("template.bundle_sha256", "must be a lowercase SHA-256 digest")
+        template["bundle_sha256"] = digest
+
+    result = {
+        "schema_version": version,
         "agents": sorted(agents),
         "paths": paths,
         "template": template,
     }
+    if version == LEGACY_WORKSPACE_SCHEMA_VERSION:
+        result["mode"] = WORKSPACE_MODE
+        return {
+            key: result[key]
+            for key in ("schema_version", "mode", "agents", "paths", "template")
+        }
+    result["composition"] = composition
+    return {
+        key: result[key]
+        for key in ("schema_version", "agents", "composition", "paths", "template")
+    }
+
+
+def migrate_v1_workspace_config(
+    value: Any,
+    *,
+    known_runtime_ids: Iterable[str],
+    known_component_ids: Iterable[str],
+    bundle_sha256: str,
+) -> dict[str, Any]:
+    legacy = validate_workspace_config(
+        value,
+        known_runtime_ids=known_runtime_ids,
+        known_component_ids=known_component_ids,
+    )
+    if legacy["schema_version"] != LEGACY_WORKSPACE_SCHEMA_VERSION:
+        _fail("schema_version", "migration source must use schema version 1")
+    return validate_workspace_config(
+        {
+            "schema_version": WORKSPACE_SCHEMA_VERSION,
+            "agents": legacy["agents"],
+            "composition": {"profile": "full-template", "extras": []},
+            "paths": legacy["paths"],
+            "template": {
+                **legacy["template"],
+                "bundle_sha256": bundle_sha256,
+            },
+        },
+        known_runtime_ids=known_runtime_ids,
+        known_component_ids=known_component_ids,
+    )
 
 
 def render_workspace_config(value: dict[str, Any]) -> str:
@@ -210,17 +331,7 @@ def parse_agent_selection(
         return []
     if "none" in tokens:
         _fail("agents", "none cannot be combined with runtime ids")
-    probe = {
-        "schema_version": WORKSPACE_SCHEMA_VERSION,
-        "mode": WORKSPACE_MODE,
-        "agents": tokens,
-        "paths": DEFAULT_PATHS,
-        "template": {
-            "version": DEFAULT_TEMPLATE_VERSION,
-            "source": DEFAULT_TEMPLATE_SOURCE,
-        },
-    }
-    return validate_workspace_config(probe, known_runtime_ids=known_runtime_ids)["agents"]
+    return _validate_agents(tokens, known_runtime_ids)
 
 
 def _reject_constant(value: str) -> None:
@@ -252,7 +363,11 @@ def strict_json_loads(raw: str, *, source: str) -> Any:
 
 
 def load_workspace_config(
-    path: Path, *, root: Path, known_runtime_ids: Iterable[str]
+    path: Path,
+    *,
+    root: Path,
+    known_runtime_ids: Iterable[str],
+    known_component_ids: Iterable[str] | None = None,
 ) -> tuple[dict[str, Any], bool]:
     if path.is_symlink():
         raise WorkspaceConfigError(f"{path.name}: must not be a symlink")
@@ -274,6 +389,7 @@ def load_workspace_config(
     document = validate_workspace_config(
         strict_json_loads(raw, source=path.name),
         known_runtime_ids=known_runtime_ids,
+        known_component_ids=known_component_ids,
     )
     return document, raw == render_workspace_config(document)
 
@@ -390,20 +506,39 @@ def workspace_schema_document() -> dict[str, Any]:
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$comment": (
             "Generated structural subset. contextos.workspace_schema is authoritative "
-            "for runtime-registry membership, portable path safety, semantic set "
-            "uniqueness, role collisions, and canonical rendering."
+            "for runtime/component-registry membership, portable path safety, "
+            "semantic set uniqueness, role collisions, and canonical rendering. "
+            "Schema-v1 documents are accepted only as migration inputs."
         ),
         "title": "Context OS tracked workspace configuration",
         "type": "object",
         "additionalProperties": False,
-        "required": ["schema_version", "mode", "agents", "paths", "template"],
+        "required": ["schema_version", "agents", "composition", "paths", "template"],
         "properties": {
             "schema_version": {"const": WORKSPACE_SCHEMA_VERSION},
-            "mode": {"const": WORKSPACE_MODE},
             "agents": {
                 "type": "array",
                 "uniqueItems": True,
                 "items": {"type": "string", "pattern": RUNTIME_ID_RE.pattern},
+            },
+            "composition": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["profile", "extras"],
+                "properties": {
+                    "profile": {"enum": sorted(WORKSPACE_PROFILES)},
+                    "extras": {
+                        "type": "array",
+                        "uniqueItems": True,
+                        "items": {"type": "string", "pattern": RUNTIME_ID_RE.pattern},
+                    },
+                },
+                "allOf": [
+                    {
+                        "if": {"properties": {"profile": {"const": "full-template"}}},
+                        "then": {"properties": {"extras": {"maxItems": 0}}},
+                    }
+                ],
             },
             "paths": {
                 "type": "object",
@@ -414,8 +549,15 @@ def workspace_schema_document() -> dict[str, Any]:
             "template": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["version", "source"],
-                "properties": {"version": text, "source": text},
+                "required": ["version", "source", "bundle_sha256"],
+                "properties": {
+                    "version": text,
+                    "source": text,
+                    "bundle_sha256": {
+                        "type": "string",
+                        "pattern": SHA256_RE.pattern,
+                    },
+                },
             },
         },
     }

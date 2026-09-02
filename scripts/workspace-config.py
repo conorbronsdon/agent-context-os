@@ -12,7 +12,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from contextos.component_schema import write_generated_file  # noqa: E402
+from contextos.component_schema import (  # noqa: E402
+    load_component_manifest,
+    write_generated_file,
+)
 from contextos.kernel import ContextOSError, runtime_ids  # noqa: E402
 from contextos.workspace_schema import (  # noqa: E402
     WorkspaceConfigError,
@@ -30,10 +33,14 @@ def schema_text() -> str:
 
 
 def check() -> tuple[int, int]:
+    manifest = load_component_manifest(
+        ROOT / "components" / "manifest.json", root=ROOT, check_paths=False
+    )
     config, canonical = load_workspace_config(
         CONFIG_PATH,
         root=ROOT,
         known_runtime_ids=runtime_ids(ROOT),
+        known_component_ids=[item["id"] for item in manifest["components"]],
     )
     if not canonical:
         raise WorkspaceConfigError(
