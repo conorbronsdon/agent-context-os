@@ -19,12 +19,14 @@ digest, preventing proposal substitution. It does not authenticate who supplied
 the confirmation or prove that a human reviewed the diff.
 
 Devin skills default to automatic model invocation unless their frontmatter
-sets `triggers: ["user"]`. The portable Context OS skills do not currently ship
-that Devin-specific field, so explicit invocation is guidance rather than a
-native enforcement claim. An instruction to ask first is not the same as a
-host permission boundary. This adapter also has no execution-authorization or
-blocking-hook control that can prove human approval: do not run lifecycle skills
-in unattended sessions, and verify every diff outside the agent before apply.
+sets `triggers: ["user"]`. Every shipped lifecycle core and short alias carries
+that field, so Devin cannot model-invoke those skills. The same files carry
+Cursor's `disable-model-invocation: true`; each host ignores the other host's
+extension while the shared procedure remains provider-neutral. Explicit skill
+selection still is not human approval of a proposal. This adapter has no
+execution-authorization or blocking-hook control that can prove human approval:
+do not run lifecycle skills in unattended sessions, and verify every diff
+outside the agent before apply.
 
 ## Account-managed boundary
 

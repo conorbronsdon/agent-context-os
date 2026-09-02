@@ -1,6 +1,8 @@
 ---
 name: context-setup
 description: Build, import, or refresh this workspace's identity, project, reusable-workflow, and weekly-state files through a guided review. Use only when the user explicitly asks to initialize or redo workspace context.
+disable-model-invocation: true
+triggers: ["user"]
 ---
 
 # Set up workspace context

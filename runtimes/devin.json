@@ -32,7 +32,7 @@
       },
       "capabilities": {
         "agent_skills": "native",
-        "explicit_invocation": "advisory",
+        "explicit_invocation": "native",
         "project_hooks": "unsupported",
         "blocking_pre_tool_hook": "unsupported",
         "mcp": "unsupported",
@@ -80,7 +80,7 @@
     }
   },
   "evidence": {
-    "checked_on": "2026-08-27",
+    "checked_on": "2026-09-01",
     "tested_versions": [],
     "sources": [
       {
@@ -93,7 +93,7 @@
         "id": "devin-skills",
         "type": "official",
         "location": "https://docs.devin.ai/product-guides/skills",
-        "claims": ["agent_skills", "skill_sources", "invocation"]
+        "claims": ["agent_skills", "explicit_invocation", "skill_sources", "invocation"]
       },
       {
         "id": "devin-review",

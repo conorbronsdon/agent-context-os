@@ -1,6 +1,8 @@
 ---
 name: context-update
 description: Save a brief mid-session checkpoint to this workspace and update current state only when a priority or open thread changed. Use only when the user explicitly asks to checkpoint or save current progress.
+disable-model-invocation: true
+triggers: ["user"]
 ---
 
 # Checkpoint a workspace session

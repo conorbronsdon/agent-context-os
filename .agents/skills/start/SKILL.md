@@ -1,6 +1,8 @@
 ---
 name: start
 description: Load this context workspace and produce the canonical session briefing. Use only when the user explicitly invokes start.
+disable-model-invocation: true
+triggers: ["user"]
 ---
 
 # Start a workspace session

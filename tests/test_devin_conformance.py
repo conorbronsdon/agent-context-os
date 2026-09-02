@@ -9,6 +9,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DESCRIPTOR = json.loads((ROOT / "runtimes/devin.json").read_text(encoding="utf-8"))
 GUIDE_PATH = ROOT / "adapters/devin/README.md"
+LIFECYCLE_SKILLS = tuple(
+    ROOT / ".agents" / "skills" / name / "SKILL.md"
+    for name in (
+        "context-setup", "context-start", "context-update", "context-end",
+        "setup", "start", "update", "end",
+    )
+)
 
 
 class DevinDescriptorTest(unittest.TestCase):
@@ -40,7 +47,13 @@ class DevinDescriptorTest(unittest.TestCase):
             session["invocation"],
         )
         self.assertEqual("native", session["capabilities"]["agent_skills"])
-        self.assertEqual("advisory", session["capabilities"]["explicit_invocation"])
+        self.assertEqual("native", session["capabilities"]["explicit_invocation"])
+
+    def test_every_lifecycle_skill_is_user_only_in_devin(self) -> None:
+        for skill in LIFECYCLE_SKILLS:
+            with self.subTest(skill=skill.parent.name):
+                frontmatter = skill.read_text(encoding="utf-8").split("---", 2)[1]
+                self.assertIn('triggers: ["user"]', frontmatter)
 
     def test_review_does_not_inherit_session_lifecycle_or_skills(self) -> None:
         review = DESCRIPTOR["surfaces"]["review"]
@@ -73,7 +86,7 @@ class DevinDescriptorTest(unittest.TestCase):
         self.assertEqual(
             {
                 "agent_skills": "native",
-                "explicit_invocation": "advisory",
+                "explicit_invocation": "native",
                 "project_hooks": "unsupported",
                 "blocking_pre_tool_hook": "unsupported",
                 "mcp": "unsupported",
@@ -103,6 +116,7 @@ class DevinDescriptorTest(unittest.TestCase):
             "Review needs its own fixtures",
             "does not authenticate who supplied the confirmation",
             "do not run lifecycle skills in unattended sessions",
+            "Every shipped lifecycle core and short alias carries",
         ):
             with self.subTest(required=required):
                 self.assertIn(required, guide)

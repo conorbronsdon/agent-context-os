@@ -10,6 +10,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DESCRIPTOR = json.loads((ROOT / "runtimes/cursor.json").read_text(encoding="utf-8"))
+LIFECYCLE_SKILLS = tuple(
+    ROOT / ".agents" / "skills" / name / "SKILL.md"
+    for name in (
+        "context-setup", "context-start", "context-update", "context-end",
+        "setup", "start", "update", "end",
+    )
+)
 LIFECYCLE = {
     name: f"/context-{name}" for name in ("setup", "start", "update", "end")
 }
@@ -51,6 +58,12 @@ class CursorDescriptorTest(unittest.TestCase):
                 self.assertEqual("native", surface["capabilities"]["agent_skills"])
                 self.assertEqual("native", surface["capabilities"]["explicit_invocation"])
 
+    def test_every_lifecycle_skill_is_explicit_only_in_cursor(self) -> None:
+        for skill in LIFECYCLE_SKILLS:
+            with self.subTest(skill=skill.parent.name):
+                frontmatter = skill.read_text(encoding="utf-8").split("---", 2)[1]
+                self.assertIn("disable-model-invocation: true", frontmatter)
+
     def test_unverified_hooks_memory_and_collisions_are_not_claimed(self) -> None:
         self.assertEqual([], DESCRIPTOR["evidence"]["tested_versions"])
         for surface_name, surface in DESCRIPTOR["surfaces"].items():
@@ -75,6 +88,9 @@ class CursorDescriptorTest(unittest.TestCase):
         install_text = "\n".join(DESCRIPTOR["install"]["next_steps"])
         self.assertNotIn("--trust", install_text)
         self.assertNotIn("--force", install_text)
+        for surface in DESCRIPTOR["surfaces"].values():
+            self.assertIn("tests/test_cursor_live_harness.py", surface["conformance_tests"])
+            self.assertIn("cursor-live-harness", surface["evidence"])
 
     def test_adapter_does_not_ship_unverified_cursor_configuration(self) -> None:
         if os.environ.get("CONTEXTOS_VALIDATION_PROFILE") == "workspace":
@@ -106,7 +122,7 @@ class CursorDescriptorTest(unittest.TestCase):
             "explicit deny wins an allow",
             "not approval of a Context OS proposal",
             "ships no Cursor hook adapter",
-            "failClosed",
+            "otherwise fail open by default",
             "No Cursor-native memory is synchronized",
             "Never run a `--force` conformance check against a real context repository",
             "exact-version conformance for both surfaces",
@@ -115,7 +131,8 @@ class CursorDescriptorTest(unittest.TestCase):
             "Cursor CLI also reads a root `CLAUDE.md`",
             "removable seed",
             "Project-owned `.cursor/` configuration is permitted",
-            "portable skill frontmatter does not currently enforce",
+            "Every shipped lifecycle core and short alias",
+            "A passing CLI artifact is not IDE evidence",
         ):
             with self.subTest(required=required):
                 self.assertIn(required, normalized)
