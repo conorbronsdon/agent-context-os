@@ -220,6 +220,11 @@ def require_text(observations: Mapping[str, object], name: str) -> str:
     return value.strip()
 
 
+def normalize_fixture_reply(value: str, canary: str) -> str:
+    """Accept only the public fixture's documented inline-code wrapper."""
+    return value.strip().replace(f"`{canary}`", canary)
+
+
 def record(args: argparse.Namespace, *, transport: Transport = default_transport) -> None:
     if not args.allow_public_fixture_access or not args.acknowledge_operator_attestation:
         raise HarnessError("record requires both explicit opt-in flags")
@@ -242,9 +247,9 @@ def record(args: argparse.Namespace, *, transport: Transport = default_transport
 
     expected_root = f"{ROOT_CANARY} {manifest['fixture_sha']}"
     root_response = require_text(observations, "root_response")
-    if root_response != expected_root or SKILL_CANARY in root_response:
+    if normalize_fixture_reply(root_response, ROOT_CANARY) != expected_root or SKILL_CANARY in root_response:
         raise HarnessError("root or implicit-skill control did not return the exact expected output")
-    if require_text(observations, "explicit_response") != SKILL_CANARY:
+    if normalize_fixture_reply(require_text(observations, "explicit_response"), SKILL_CANARY) != SKILL_CANARY:
         raise HarnessError("explicit skill did not return its exact canary")
     for name in (
         "repository_remained_read_only", "no_pull_request_observed",

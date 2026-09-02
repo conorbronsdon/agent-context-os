@@ -117,6 +117,16 @@ class DevinUiHarnessTest(unittest.TestCase):
         self.assertNotIn("session_url", evidence)
         self.assertNotIn("devin-synthetic", json.dumps(evidence))
 
+    def test_public_fixture_inline_code_wrapper_is_accepted_without_extra_text(self) -> None:
+        self.assertEqual(
+            f"{ui.ROOT_CANARY} {self.fixture_sha}",
+            ui.normalize_fixture_reply(f"`{ui.ROOT_CANARY}` {self.fixture_sha}", ui.ROOT_CANARY),
+        )
+        self.assertNotEqual(
+            ui.SKILL_CANARY,
+            ui.normalize_fixture_reply(f"extra `{ui.SKILL_CANARY}`", ui.SKILL_CANARY),
+        )
+
     def test_record_rejects_skill_leak_or_pull_request_drift(self) -> None:
         self.prepare()
         observations = self.observations()
