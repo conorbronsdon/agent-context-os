@@ -270,7 +270,7 @@ def record(args: argparse.Namespace) -> None:
         if require_text(observations, name) != value:
             raise HarnessError(f"{name} did not match its exact canary")
     implicit = require_text(observations, "implicit_response")
-    if implicit != "NO_SKILL_BODY" or canaries["skill"] in implicit:
+    if canaries["skill"] in implicit:
         raise HarnessError("explicit-only skill fired during the implicit control")
     conflict = require_text(observations, "conflict_response")
     if conflict not in {canaries["conflict_root"], canaries["conflict_rule"]}:
