@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure full-bundle Git-index composition and upgrade resource bounds."""
+"""Measure full-template and selected Git-index materialization bounds."""
 
 from __future__ import annotations
 
@@ -33,7 +33,12 @@ from contextos.primitives import git_environment  # noqa: E402
 
 
 NOW = datetime(2026, 8, 29, 12, 0, tzinfo=timezone.utc)
-EXPECTED_GIT_PROCESSES = {"compose": 48, "upgrade": 96}
+EXPECTED_GIT_PROCESSES = {
+    "compose": 48,
+    "upgrade": 96,
+    "selected_compose": 72,
+    "selected_upgrade": 144,
+}
 
 
 def _sha256(path: Path) -> str:
@@ -206,7 +211,9 @@ def _metric(
     retained_paths: set[str],
     observed_retained_payload_bytes: int,
     traced_python_peak_bytes: int,
+    projection_paths: set[str] | None = None,
 ) -> dict[str, Any]:
+    projection_paths = set() if projection_paths is None else projection_paths
     batch_commands = [
         command for command in commands if "cat-file" in command and "--batch" in command
     ]
@@ -220,11 +227,17 @@ def _metric(
         _logical_verification_peak(
             lock, role="candidate", retain_paths=retained_paths
         ),
+        _logical_verification_peak(
+            lock, role="candidate", retain_paths=projection_paths
+        ),
     )
     logical_bound = max(
         _logical_verification_bound(lock, role="candidate", retain_paths=set()),
         _logical_verification_bound(
             lock, role="candidate", retain_paths=retained_paths
+        ),
+        _logical_verification_bound(
+            lock, role="candidate", retain_paths=projection_paths
         ),
     )
     return {
@@ -237,6 +250,7 @@ def _metric(
         "observed_staging_payload_bytes": observed_retained_payload_bytes,
         "tracemalloc_peak_bytes": traced_python_peak_bytes,
         "retained_bundle_path_count": len(retained_paths),
+        "projection_markdown_path_count": len(projection_paths),
         "matches_expected_git_process_count": (
             len(commands) == EXPECTED_GIT_PROCESSES[name]
         ),
@@ -357,6 +371,129 @@ def measure() -> dict[str, Any]:
             max(upgrade_retained, default=0), upgrade_python_peak[0],
         )
 
+        selected_components = ["core"]
+        selected_projection_paths = {
+            entry["path"]
+            for component in manifest["components"]
+            if component["id"] in selected_components
+            for entry in component["paths"]
+            if entry["policy"] != "development" and entry["path"].endswith(".md")
+        }
+        selected_target = root / "selected-target"
+        selected_target.mkdir()
+        selected_config_input = root / "selected-workspace-v2.json"
+        selected_config = {
+            "schema_version": 2,
+            "agents": [],
+            "composition": {"profile": "selected", "extras": []},
+            "paths": {
+                "state_dir": "state",
+                "sessions_dir": "sessions",
+                "task_file": "TODO.md",
+            },
+            "template": {
+                "source": "agent-context-os-template",
+                "version": "1.0.0",
+                "bundle_sha256": current_lock["bundle_sha256"],
+            },
+        }
+        _write_json(selected_config_input, selected_config)
+        with (
+            _git_process_measurement() as selected_compose_commands,
+            _retained_payload_measurement() as selected_compose_retained,
+            _python_peak_measurement() as selected_compose_python_peak,
+        ):
+            selected_compose_started = time.perf_counter()
+            selected_current = verify_bundle(
+                current_lock_path, current_source,
+                expected_sha256=current_lock["bundle_sha256"],
+                source_mode="git-index", retain_paths=(),
+            )
+            selected_compose_path, selected_compose_proposal = (
+                create_composition_proposal(
+                    target_root=selected_target,
+                    workspace_config_path=(
+                        selected_target / "contextos.workspace.json"
+                    ),
+                    workspace_config_input_path=selected_config_input,
+                    expected_config_input_sha256=_sha256(selected_config_input),
+                    candidate=selected_current,
+                    desired_components=selected_components,
+                    now=NOW.replace(second=2),
+                )
+            )
+            apply_proposal(
+                selected_target,
+                selected_compose_path,
+                selected_compose_proposal["proposal_digest"],
+                "generic",
+            )
+        selected_compose = _metric(
+            "selected_compose",
+            selected_compose_started,
+            selected_compose_commands,
+            current_lock,
+            _bundle_references(selected_compose_proposal),
+            max(selected_compose_retained, default=0),
+            selected_compose_python_peak[0],
+            selected_projection_paths,
+        )
+
+        selected_intended = {
+            **selected_config,
+            "template": {
+                "source": "agent-context-os-template",
+                "version": "2.0.0",
+                "bundle_sha256": candidate_lock["bundle_sha256"],
+            },
+        }
+        with (
+            _git_process_measurement() as selected_upgrade_commands,
+            _retained_payload_measurement() as selected_upgrade_retained,
+            _python_peak_measurement() as selected_upgrade_python_peak,
+        ):
+            selected_upgrade_started = time.perf_counter()
+            selected_candidate = verify_bundle(
+                candidate_lock_path, candidate_source,
+                expected_sha256=candidate_lock["bundle_sha256"],
+                source_mode="git-index", retain_paths=(),
+            )
+            selected_current = verify_bundle(
+                current_lock_path, current_source,
+                expected_sha256=current_lock["bundle_sha256"],
+                source_mode="git-index", role="current", retain_paths=(),
+            )
+            selected_config_path = selected_target / "contextos.workspace.json"
+            selected_upgrade_path, selected_upgrade_proposal = (
+                create_materialization_proposal(
+                    target_root=selected_target,
+                    workspace_config_path=selected_config_path,
+                    expected_config_sha256=_sha256(selected_config_path),
+                    candidate=selected_candidate,
+                    desired_components=selected_components,
+                    current=selected_current,
+                    current_components=selected_components,
+                    intended_workspace=selected_intended,
+                    now=NOW.replace(second=3),
+                )
+            )
+            apply_proposal(
+                selected_target,
+                selected_upgrade_path,
+                selected_upgrade_proposal["proposal_digest"],
+                "generic",
+            )
+        selected_upgrade = _metric(
+            "selected_upgrade",
+            selected_upgrade_started,
+            selected_upgrade_commands,
+            candidate_lock,
+            _bundle_references(selected_upgrade_proposal),
+            max(selected_upgrade_retained, default=0),
+            selected_upgrade_python_peak[0],
+            selected_projection_paths,
+        )
+
         return {
             "schema_version": 1,
             "measurement": "full-bundle-materialization-resource-bounds",
@@ -367,6 +504,8 @@ def measure() -> dict[str, Any]:
             "upgrade_changed_bundle_path": changed_path,
             "compose": compose,
             "upgrade": upgrade,
+            "selected_compose": selected_compose,
+            "selected_upgrade": selected_upgrade,
         }
 
 
@@ -380,7 +519,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     report = measure()
     print(json.dumps(report, indent=2, ensure_ascii=False))
     if args.check:
-        for name in ("compose", "upgrade"):
+        for name in (
+            "compose", "upgrade", "selected_compose", "selected_upgrade"
+        ):
             metric = report[name]
             if metric["git_per_blob_process_count"] != 0:
                 print(f"{name}: per-blob Git subprocesses detected", file=sys.stderr)

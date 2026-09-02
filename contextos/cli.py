@@ -50,11 +50,27 @@ from .coordination import (
     validate_board,
 )
 from .materializer import (
+    INSTALLED_STATE_PATH,
     MATERIALIZE_OPERATION,
     create_composition_proposal,
+    create_guided_composition_proposal,
     create_materialization_proposal,
 )
-from .workspace_schema import WorkspaceConfigError, parse_agent_selection
+from .installed_state import InstalledStateError, validate_installed_state
+from .primitives import read_regular_file_snapshot, sha256_bytes
+from .workspace_composition import (
+    WorkspaceCompositionError,
+    desired_component_closure,
+)
+from .workspace_schema import (
+    DEFAULT_PATHS,
+    WORKSPACE_SCHEMA_VERSION,
+    WorkspaceConfigError,
+    analyze_legacy_workspace,
+    load_workspace_config,
+    parse_agent_selection,
+    strict_json_loads,
+)
 
 
 def parser() -> argparse.ArgumentParser:
@@ -207,6 +223,41 @@ def parser() -> argparse.ArgumentParser:
         "migrate-local-runtime",
         help="Atomically copy legacy local runtime state into hosts.json",
     )
+    for guided_name, guided_help in (
+        ("init", "Propose a schema-v2 composition into a clean target"),
+        ("update", "Propose runtime, profile, extras, or bundle changes"),
+        ("reconcile", "Propose convergence to existing schema-v2 intent"),
+    ):
+        guided = workspace_commands.add_parser(guided_name, help=guided_help)
+        guided.add_argument("--target", type=Path, required=True)
+        guided.add_argument("--lock", type=Path, required=True)
+        guided.add_argument("--source", type=Path, required=True)
+        guided.add_argument("--expect-sha256", required=True)
+        guided.add_argument(
+            "--source-mode", choices=("git-index", "directory"), default="directory"
+        )
+        guided.add_argument("--now", help="ISO-8601 timestamp for deterministic proposal IDs")
+        if guided_name in {"init", "update"}:
+            guided.add_argument(
+                "--agents", required=True,
+                help="Comma-separated runtime ids, or none for core-only",
+            )
+            guided.add_argument(
+                "--profile", choices=("selected", "full-template"), required=True
+            )
+            guided.add_argument(
+                "--extras", default="none",
+                help="Comma-separated optional component roots, or none",
+            )
+        if guided_name in {"update", "reconcile"}:
+            guided.add_argument("--current-lock", type=Path)
+            guided.add_argument("--current-source", type=Path)
+            guided.add_argument("--expect-current-sha256")
+            guided.add_argument(
+                "--current-source-mode",
+                choices=("git-index", "directory"),
+                default="directory",
+            )
 
     board = commands.add_parser(
         "board", help="Coordination board operations (contract: coordination/README.md)"
@@ -356,6 +407,223 @@ def component_selection(raw: str, field: str) -> list[str]:
     return values
 
 
+def _guided_extras(raw: str) -> list[str]:
+    return [] if raw.strip() == "none" else component_selection(raw, "extras")
+
+
+def _guided_report(
+    target: Path, proposal_path: Path, proposal: dict[str, object]
+) -> dict[str, object]:
+    authorization = proposal["authorization"]
+    assert isinstance(authorization, dict)
+    plan = authorization["plan"]
+    assert isinstance(plan, dict)
+    return {
+        "schema_version": 1,
+        "proposal": proposal_path.relative_to(target).as_posix(),
+        "proposal_id": proposal["proposal_id"],
+        "proposal_digest": proposal["proposal_digest"],
+        "plan_digest": plan["plan_digest"],
+        "desired_components": plan["desired_components"],
+        "current_components": plan["current_components"],
+        "intended_workspace": plan["intended_workspace"],
+        "changes": [
+            {
+                "action": change["action"],
+                "path": change["path"],
+                "owner": change["authorization"]["owner"],
+                "policy": change["authorization"]["policy"],
+                "summary": change["diff"].strip(),
+            }
+            for change in proposal["changes"]
+        ],
+        "writes": True,
+        "applied": False,
+        "next": (
+            "review this single structural proposal, then run bundle apply with "
+            "the exact proposal digest"
+        ),
+    }
+
+
+def _load_guided_installed_state(target: Path) -> dict[str, object] | None:
+    path = target / INSTALLED_STATE_PATH
+    if not path.exists():
+        return None
+    try:
+        raw, _metadata = read_regular_file_snapshot(
+            path, subject="installed bundle state"
+        )
+        return validate_installed_state(
+            strict_json_loads(raw.decode("utf-8"), source=INSTALLED_STATE_PATH)
+        )
+    except (OSError, UnicodeError, WorkspaceConfigError, InstalledStateError) as exc:
+        raise BundleError(str(exc)) from exc
+
+
+def _guided_workspace_main(args: argparse.Namespace) -> int:
+    target = args.target.absolute().resolve()
+    if not target.is_dir():
+        raise BundleError("target must be an existing local directory")
+    candidate = verify_bundle(
+        args.lock,
+        args.source,
+        expected_sha256=args.expect_sha256,
+        source_mode=args.source_mode,
+        retain_paths=(),
+    )
+    component_ids = [item["id"] for item in candidate.manifest["components"]]
+    if args.workspace_command == "init":
+        agents = parse_agent_selection(
+            args.agents, known_runtime_ids=sorted(candidate.runtimes)
+        )
+        assert agents is not None
+        paths = dict(DEFAULT_PATHS)
+        legacy_path = target / "workspace.yaml"
+        if legacy_path.exists():
+            try:
+                legacy_bytes, _metadata = read_regular_file_snapshot(
+                    legacy_path, subject="legacy workspace configuration"
+                )
+                legacy = analyze_legacy_workspace(
+                    legacy_bytes.decode("utf-8-sig")
+                )
+            except (OSError, UnicodeError, WorkspaceConfigError) as exc:
+                raise BundleError(str(exc)) from exc
+            if legacy.issues:
+                raise BundleError(
+                    "workspace.yaml cannot be migrated losslessly: "
+                    + "; ".join(legacy.issues)
+                )
+            paths.update(legacy.values)
+        intended = {
+            "schema_version": WORKSPACE_SCHEMA_VERSION,
+            "agents": agents,
+            "composition": {
+                "profile": args.profile,
+                "extras": _guided_extras(args.extras),
+            },
+            "paths": paths,
+            "template": {
+                "source": candidate.name,
+                "version": candidate.version,
+                "bundle_sha256": candidate.digest,
+            },
+        }
+        desired = desired_component_closure(
+            intended, candidate.manifest, candidate.runtimes
+        )
+        proposal_path, proposal = create_guided_composition_proposal(
+            target_root=target,
+            workspace_config=intended,
+            candidate=candidate,
+            desired_components=desired,
+            now=parse_now(args.now),
+        )
+        emit(_guided_report(target, proposal_path, proposal))
+        return 0
+
+    config_path = target / "contextos.workspace.json"
+    try:
+        current_config, _canonical = load_workspace_config(
+            config_path,
+            root=target,
+            known_runtime_ids=sorted(candidate.runtimes),
+            known_component_ids=component_ids,
+        )
+    except WorkspaceConfigError as exc:
+        raise BundleError(str(exc)) from exc
+    legacy_v1 = current_config["schema_version"] != WORKSPACE_SCHEMA_VERSION
+    if legacy_v1 and args.workspace_command == "reconcile":
+        raise BundleError("schema v1 must be migrated with workspace update")
+    if legacy_v1 and args.profile != "full-template":
+        raise BundleError(
+            "schema-v1 migration must first preserve the full-template profile"
+        )
+    installed = _load_guided_installed_state(target)
+    current_values = (
+        args.current_lock,
+        args.current_source,
+        args.expect_current_sha256,
+    )
+    if any(value is not None for value in current_values) and not all(
+        value is not None for value in current_values
+    ):
+        raise BundleError(
+            "current bundle inputs are all required together: --current-lock, "
+            "--current-source, --expect-current-sha256"
+        )
+    current = None
+    current_components: list[str] = []
+    if installed is not None:
+        current_components = list(installed["components"])
+        installed_digest = installed["bundle"]["sha256"]
+        if installed_digest == candidate.digest:
+            current = candidate
+        elif args.current_lock is not None:
+            current = verify_bundle(
+                args.current_lock,
+                args.current_source,
+                expected_sha256=args.expect_current_sha256,
+                source_mode=args.current_source_mode,
+                role="current",
+                retain_paths=(),
+            )
+        else:
+            raise BundleError(
+                "installed bundle differs from the candidate; pinned current bundle inputs are required"
+            )
+    elif args.workspace_command == "update" and not legacy_v1:
+        raise BundleError(
+            "workspace update requires installed state; run workspace reconcile first"
+        )
+
+    if args.workspace_command == "reconcile":
+        intended = current_config
+        if intended["template"] != {
+            "source": candidate.name,
+            "version": candidate.version,
+            "bundle_sha256": candidate.digest,
+        }:
+            raise BundleError("reconcile candidate does not match the tracked bundle pin")
+    else:
+        agents = parse_agent_selection(
+            args.agents, known_runtime_ids=sorted(candidate.runtimes)
+        )
+        assert agents is not None
+        intended = {
+            **current_config,
+            "schema_version": WORKSPACE_SCHEMA_VERSION,
+            "agents": agents,
+            "composition": {
+                "profile": args.profile,
+                "extras": _guided_extras(args.extras),
+            },
+            "template": {
+                "source": candidate.name,
+                "version": candidate.version,
+                "bundle_sha256": candidate.digest,
+            },
+        }
+        intended.pop("mode", None)
+    desired = desired_component_closure(
+        intended, candidate.manifest, candidate.runtimes
+    )
+    proposal_path, proposal = create_materialization_proposal(
+        target_root=target,
+        workspace_config_path=config_path,
+        expected_config_sha256=sha256_bytes(config_path.read_bytes()),
+        candidate=candidate,
+        desired_components=desired,
+        current=current,
+        current_components=current_components,
+        intended_workspace=intended,
+        now=parse_now(args.now),
+    )
+    emit(_guided_report(target, proposal_path, proposal))
+    return 0
+
+
 def _bundle_main(args: argparse.Namespace) -> int:
     if args.bundle_command == "apply":
         root = args.target.absolute().resolve()
@@ -365,7 +633,12 @@ def _bundle_main(args: argparse.Namespace) -> int:
         receipt_path, receipt = apply_proposal(
             root, proposal, args.confirm, args.runtime
         )
-        emit({"receipt": receipt_path.relative_to(root).as_posix(), **receipt})
+        validation = doctor(root)
+        emit({
+            "receipt": receipt_path.relative_to(root).as_posix(),
+            **receipt,
+            "validation": validation,
+        })
         return 0
     if args.bundle_command == "generate":
         lock = create_bundle_lock(
@@ -591,6 +864,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "bundle":
             return _bundle_main(args)
+        if args.command == "workspace" and args.workspace_command in {
+            "init", "update", "reconcile"
+        }:
+            return _guided_workspace_main(args)
         roles = _resolve_cli_roles(args)
         root = roles.context_root
         split_mode = args.context_root is not None or args.working_root is not None
@@ -804,6 +1081,7 @@ def main(argv: list[str] | None = None) -> int:
         ContextOSError,
         BundleError,
         WorkspaceConfigError,
+        WorkspaceCompositionError,
         AttachmentError,
         json.JSONDecodeError,
         OSError,

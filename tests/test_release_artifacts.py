@@ -36,9 +36,9 @@ class ReleaseFixture:
             shutil.copyfile(source, root / "contextos" / source.name)
             contextos_paths.append((f"contextos/{source.name}", "managed"))
         workspace = {
-            "schema_version": 1,
-            "mode": "full-template",
+            "schema_version": 2,
             "agents": ["codex"],
+            "composition": {"profile": "full-template", "extras": []},
             "paths": {
                 "state_dir": "state",
                 "sessions_dir": "sessions",
@@ -47,6 +47,7 @@ class ReleaseFixture:
             "template": {
                 "version": self.version,
                 "source": "agent-context-os-template",
+                "bundle_sha256": "0" * 64,
             },
         }
         (root / "workspace/example.json").write_text(
