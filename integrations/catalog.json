@@ -835,7 +835,7 @@
       },
       "risk_tags": ["credentials", "hosted", "team-chat", "sensitive-read", "remote-write", "publish-capable", "public-publish", "overwrite-capable", "oauth", "destructive-capable", "prompt-injection"],
       "maturity": "verified",
-      "last_verified": "2026-09-03",
+      "last_verified": "2026-09-02",
       "evidence": ["https://docs.slack.dev/ai/slack-mcp-server/", "https://docs.slack.dev/ai/slack-mcp-server/connect-to-claude"],
       "health_check": "Connect to the Slack MCP endpoint, verify authorized workspace and user identity, then read history from one explicitly named test channel without posting messages.",
       "uninstall": {

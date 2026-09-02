@@ -19,7 +19,7 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [Pandoc](https://github.com/jgm/pandoc) | `connector` | verified | Yes | No | No | Yes | Yes | 2026-08-25 |
 | [Readwise MCP](https://docs.readwise.io/tools/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-18 |
 | [Shortcut MCP](https://www.shortcut.com/help/integrations/mcp-server/) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-30 |
-| [Slack MCP](https://docs.slack.dev/ai/slack-mcp-server/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-09-03 |
+| [Slack MCP](https://docs.slack.dev/ai/slack-mcp-server/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-09-02 |
 | [Substack MCP](https://github.com/conorbronsdon/substack-mcp) | `mcp_server` | verified | Yes | Yes | Yes | Yes | No | 2026-08-15 |
 | [Tolaria MCP](https://github.com/refactoringhq/tolaria) | `local_workspace` | verified | Yes | No | No | Yes | Yes | 2026-08-15 |
 | [Trello MCP](https://support.atlassian.com/trello/docs/connect-trello-to-ai-assistants-with-trello-mcp/) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-30 |
