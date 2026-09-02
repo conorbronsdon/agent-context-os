@@ -73,10 +73,11 @@ The IDE and CLI authorization controls are not interchangeable:
   fetch behavior. Cursor says Auto-review is not a security boundary.
 - CLI permissions live in user `~/.cursor/cli-config.json` and project
   `.cursor/cli.json`. An explicit deny wins an allow.
-- Current headless documentation says `agent -p` proposes without applying file
-  changes, while `agent -p --force` may write without confirmation except where
-  explicitly denied. Older usage text is less precise, so this behavior remains
-  an installed-version conformance gate.
+- In Cursor Agent CLI `2026.08.31-4057e58`, `agent -p` exposes write and shell
+  tools and can change files without `--force`. Use `--mode ask` or `--mode plan`
+  when the invocation must remain read-only. `--force` additionally force-allows
+  commands unless an explicit permission deny matches. These are installed-version
+  conformance gates because unattended behavior has changed across releases.
 - `--trust`, `--force`, and broad shell, write, MCP, or absolute-path grants are
   opt-in permission expansions. Setup never supplies them.
 
@@ -130,8 +131,9 @@ python adapters/cursor/live_conformance.py \
 The opt-in flag authorizes Cursor model traffic and writes only in a synthetic
 temporary workspace marked disposable. The harness proves root and nested
 instruction discovery, explicit-skill must-fire and implicit-skill
-must-not-fire behavior, no-`--force` preservation, deny precedence over
-`--force`, and an exact allowed write. It refuses a dirty source worktree,
+must-not-fire behavior, read-only ask mode, the exact unattended write behavior
+without `--force`, deny precedence over `--force`, and an exact allowed write.
+It refuses a dirty source worktree,
 version drift, missing authentication, evidence overwrite, unexpected fixture
 mutation, and the real repository as a target. It never invokes Cursor's
 built-in `/update` command. A passing CLI artifact is not IDE evidence.
@@ -144,6 +146,6 @@ First-class promotion requires exact-version conformance for both surfaces,
 including root and nested instruction discovery, `.cursor/rules` conflict
 controls, short-alias versus built-in resolution, the shipped explicit-only
 skill frontmatter, interactive must-fire and must-not-fire approval controls,
-headless no-`--force` and `--force` behavior, deny precedence, MCP scope,
+headless ask, no-`--force`, and `--force` behavior, deny precedence, MCP scope,
 native-state isolation, and either a tested Cursor-specific hook adapter or a
 continuing explicit no-hook claim.

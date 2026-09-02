@@ -116,6 +116,8 @@ class CursorLiveHarnessTest(unittest.TestCase):
         source = MODULE_PATH.read_text(encoding="utf-8")
         self.assertNotIn('"/update"', source)
         self.assertIn('"short_update_alias_not_invoked": True', source)
+        self.assertIn('"headless_ask_mode_preserves_files": True', source)
+        self.assertIn('"headless_without_force_is_write_capable": True', source)
 
 
 if __name__ == "__main__":

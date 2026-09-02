@@ -258,13 +258,28 @@ class CursorHarness:
             require_canary(explicit, canaries["skill"], "explicit skill invocation")
 
             proposed = workspace / "proposed.txt"
-            no_force = self.agent(
+            ask_write = self.agent(
                 workspace,
                 "Create proposed.txt containing exactly PROPOSED_ONLY.",
+                "--mode", "ask",
+            )
+            require_success(ask_write, "headless ask-mode write control")
+            if proposed.exists():
+                raise HarnessError("headless ask mode wrote a file")
+            if changed_paths(baseline, snapshot(workspace)):
+                raise HarnessError("headless ask-mode control changed the workspace")
+
+            unattended = workspace / "unattended.txt"
+            no_force = self.agent(
+                workspace,
+                "Create unattended.txt containing exactly UNATTENDED_CONTROL and no other text.",
             )
             require_success(no_force, "headless no-force control")
-            if proposed.exists():
-                raise HarnessError("headless print mode wrote without --force")
+            if not unattended.is_file() or unattended.read_text(encoding="utf-8").strip() != "UNATTENDED_CONTROL":
+                raise HarnessError("headless print mode did not perform the exact unattended write")
+            mutations = changed_paths(baseline, snapshot(workspace))
+            if mutations != {"unattended.txt"}:
+                raise HarnessError(f"headless print mode changed unexpected workspace paths: {sorted(mutations)}")
 
             write_permissions(workspace)
             permission_baseline = snapshot(workspace)
@@ -298,7 +313,8 @@ class CursorHarness:
             "nested_instruction_discovery": True,
             "implicit_skill_must_not_fire": True,
             "explicit_skill_must_fire": True,
-            "headless_without_force_preserves_files": True,
+            "headless_ask_mode_preserves_files": True,
+            "headless_without_force_is_write_capable": True,
             "deny_precedes_force": True,
             "forced_write_is_scoped": True,
             "short_update_alias_not_invoked": True,
