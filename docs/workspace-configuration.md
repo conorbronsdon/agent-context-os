@@ -55,6 +55,12 @@ components required by `agents`, then adds optional component roots from
 `template.bundle_sha256` pins the exact verified local release bundle; no
 workflow resolves or downloads `latest`.
 
+The tracked `workspace/example.json` uses an all-zero digest placeholder because
+the example is itself part of the release bundle and therefore cannot pin that
+bundle without creating a self-reference. Replace the placeholder with the
+verified lock digest when creating a real workspace; guided `workspace init`
+does this from the explicit local bundle input.
+
 Schema v1 remains readable only as a migration source. Its `mode:
 "full-template"`, agents, paths, template name, and version migrate to the v2
 `full-template` profile only when the caller also supplies the exact bundle

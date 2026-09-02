@@ -8,7 +8,7 @@ from typing import Any, Mapping, Sequence
 
 
 RELATIVE_LINK_RE = re.compile(
-    r"\[[^\]]*\]\((?!https?://|mailto:|#)([^)#]+)(?:#[^)]+)?\)"
+    r"!?\[([^\]]*)\]\((?!https?://|mailto:|#)([^)#]+)(?:#[^)]+)?\)"
 )
 
 
@@ -123,6 +123,7 @@ def closure_aware_files(
     desired_components: Sequence[str],
     *,
     source_texts: Mapping[str, str] | None = None,
+    selected_paths: Sequence[str] = (),
     available_paths: Sequence[str] = (),
 ) -> dict[str, str]:
     """Return generated entry surfaces for selected profile only."""
@@ -133,26 +134,21 @@ def closure_aware_files(
     if "agents-instructions" in desired_components:
         result["AGENTS.md"] = _agents(selected)
     if source_texts is not None:
-        selected_paths = set(source_texts)
+        selected = set(selected_paths)
         available = set(available_paths)
         for path, text in source_texts.items():
             if not path.endswith(".md") or path in result:
                 continue
-            kept: list[str] = []
-            changed = False
-            for line in text.splitlines(keepends=True):
-                omitted_link = False
-                for link in RELATIVE_LINK_RE.findall(line):
-                    target = posixpath.normpath(
-                        posixpath.join(posixpath.dirname(path), link)
-                    )
-                    if target in available and target not in selected_paths:
-                        omitted_link = True
-                        break
-                if omitted_link:
-                    changed = True
-                else:
-                    kept.append(line)
-            if changed:
-                result[path] = "".join(kept)
+
+            def preserve_label(match: re.Match[str]) -> str:
+                target = posixpath.normpath(
+                    posixpath.join(posixpath.dirname(path), match.group(2))
+                )
+                if target in available and target not in selected:
+                    return match.group(1)
+                return match.group(0)
+
+            rendered = RELATIVE_LINK_RE.sub(preserve_label, text)
+            if rendered != text:
+                result[path] = rendered
     return result

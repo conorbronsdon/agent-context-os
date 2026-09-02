@@ -345,7 +345,7 @@ class MaterializerTest(unittest.TestCase):
             source,
             version="4.0.0",
             managed=b"entry\n",
-            addon=False,
+            addon=True,
             runtime_addon=False,
             entry_surfaces=True,
         )
@@ -385,6 +385,47 @@ class MaterializerTest(unittest.TestCase):
         self.assertIn("Codex", agents)
         self.assertNotIn("Hermes", readme)
         self.assertNotIn("Hermes", agents)
+        guide = (target / "GUIDE.md").read_text(encoding="utf-8")
+        self.assertIn("[managed payload](managed.bin)", guide)
+        self.assertIn("the optional add-on is omitted", guide)
+        self.assertNotIn("(addon.txt)", guide)
+        self.assertFalse((target / "addon.txt").exists())
+
+        upgrade_source = self.root / "entry-upgrade-source"
+        upgrade_source.mkdir()
+        upgrade_fixture = BundleFixture(
+            upgrade_source,
+            version="5.0.0",
+            managed=b"entry v5\n",
+            addon=True,
+            runtime_addon=False,
+            entry_surfaces=True,
+        )
+        upgrade = upgrade_fixture.verify()
+        upgraded = self.guided_cli(
+            "workspace", "update",
+            "--target", str(target),
+            "--lock", str(upgrade_fixture.lock_path),
+            "--source", str(upgrade_source),
+            "--expect-sha256", upgrade.digest,
+            "--current-lock", str(fixture.lock_path),
+            "--current-source", str(source),
+            "--expect-current-sha256", candidate.digest,
+            "--agents", "codex",
+            "--profile", "selected",
+            "--now", NOW.isoformat(),
+        )
+        apply_proposal(
+            target,
+            target / upgraded["proposal"],
+            upgraded["proposal_digest"],
+            "generic",
+        )
+        self.assertEqual(b"entry v5\n", (target / "managed.bin").read_bytes())
+        self.assertIn(
+            "[managed payload](managed.bin)",
+            (target / "GUIDE.md").read_text(encoding="utf-8"),
+        )
 
         core_target = self.root / "core-entry-target"
         core_target.mkdir()

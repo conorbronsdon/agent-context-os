@@ -114,8 +114,16 @@ class BundleFixture:
             (root / "AGENTS.md").write_text(
                 "# Full fixture agents\n\nCodex and Hermes.\n", encoding="utf-8"
             )
+            (root / "GUIDE.md").write_text(
+                "Keep the [managed payload](managed.bin) while the "
+                "[optional add-on](addon.txt) is omitted.\n",
+                encoding="utf-8",
+            )
             components[0]["paths"].append(
                 {"path": "README.md", "policy": "managed"}
+            )
+            components[0]["paths"].append(
+                {"path": "GUIDE.md", "policy": "managed"}
             )
             components.append({
                 "id": "agents-instructions",

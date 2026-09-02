@@ -614,15 +614,22 @@ def verify_bundle(
     """Verify all bytes, retaining either every payload or only requested paths.
 
     Verification streams one source payload at a time. With ``retain_paths`` the
-    peak raw-payload-buffer bound is the retained set plus the manifest/runtime
-    descriptor bytes needed for schema validation plus the current and
-    preceding source payloads during generator handoff. Text normalization and
-    directory snapshot assembly have separate transient allocations.
+    peak raw-payload-buffer bound is that set plus verified Markdown needed for
+    closure-aware projection, manifest/runtime descriptor bytes needed for
+    schema validation, and the current and preceding source payloads during
+    generator handoff. Text normalization and directory snapshot assembly have
+    separate transient allocations.
     """
     expected_sha256 = _sha256(expected_sha256, "expected_sha256")
     lock_path = lock_path.absolute()
     lock = load_bundle_lock(lock_path)
     _validate_compatibility(lock, role)
+    compatibility = lock["bundle"]["compatibility"]
+    projection_capable = role == "candidate" or (
+        compatibility["runtime_descriptor_schema"]
+        == RUNTIME_DESCRIPTOR_SCHEMA_VERSION
+        and compatibility["workspace_schema"] == WORKSPACE_SCHEMA_VERSION
+    )
     if lock["bundle_sha256"] != expected_sha256:
         _fail("expected_sha256", "does not match the supplied bundle lock")
     root = _source_root(source_root, "source_root")
@@ -635,12 +642,17 @@ def verify_bundle(
             _fail("bundle.source_git_commit", "does not match the local Git HEAD commit")
     records = {item["path"]: item for item in lock["bundle"]["files"]}
     requested = set(records) if retain_paths is None else set(retain_paths)
+    # Selected-profile projection must be computed from the exact verified
+    # Markdown bytes at both proposal and apply boundaries. Retain those inputs
+    # consistently even when callers otherwise request a payload-bounded view.
+    if projection_capable and retain_paths is not None:
+        requested.update(path for path in records if path.endswith(".md"))
     unknown = requested - set(records)
     if unknown:
         _fail("retain_paths", "contains paths absent from the bundle: " + ", ".join(sorted(unknown)))
     manifest_relative = lock["bundle"]["component_manifest_path"]
     schema_paths = {manifest_relative}
-    if role == "candidate":
+    if projection_capable:
         schema_paths.update(
             path for path in records
             if len(PurePosixPath(path).parts) == 2
@@ -690,7 +702,7 @@ def verify_bundle(
         _fail("bundle.files", "does not equal the non-development component inventory: " + "; ".join(details))
     runtimes = (
         _validated_runtimes(verified_bytes, manifest, root=root)
-        if role == "candidate" else {}
+        if projection_capable else {}
     )
     missing_retained = requested - set(verified_bytes)
     if missing_retained:
@@ -786,6 +798,7 @@ def _projected_records(
         bundle.runtimes,
         component_ids,
         source_texts=source_texts,
+        selected_paths=tuple(records),
         available_paths=tuple(bundle.records),
     )
     projected = {path: dict(record) for path, record in records.items()}

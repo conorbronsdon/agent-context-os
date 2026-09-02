@@ -366,6 +366,7 @@ class WorkspaceConfigTest(unittest.TestCase):
                     runtimes,
                     closure,
                     source_texts=source_texts,
+                    selected_paths=tuple(selected_paths),
                     available_paths=tuple(available_paths),
                 )
                 self.assertIn("README.md", generated)
