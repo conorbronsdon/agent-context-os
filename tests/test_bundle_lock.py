@@ -133,11 +133,17 @@ class BundleFixture:
             })
         if addon:
             (root / "addon.txt").write_text(f"addon {version}\n", encoding="utf-8")
+            (root / "addon.md").write_text(
+                "# Optional add-on\n", encoding="utf-8"
+            )
             components.append({
                 "id": "addon",
                 "description": "Optional fixture.",
                 "depends_on": ["core"],
-                "paths": [{"path": "addon.txt", "policy": addon_policy}],
+                "paths": [
+                    {"path": "addon.txt", "policy": addon_policy},
+                    {"path": "addon.md", "policy": addon_policy},
+                ],
             })
         manifest = {
             "schema_version": 1,
@@ -462,6 +468,7 @@ class BundleLockTest(unittest.TestCase):
         self.assertEqual(
             [{"AGENTS.md", "GUIDE.md", "README.md"}], retained_sets
         )
+        self.assertNotIn("addon.md", retained_sets[0])
 
     def test_git_batch_reader_rejects_malformed_and_truncated_records(self) -> None:
         class BatchProcess:

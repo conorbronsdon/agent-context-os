@@ -614,11 +614,12 @@ def verify_bundle(
     """Verify all bytes, retaining either every payload or only requested paths.
 
     Verification streams one source payload at a time. With ``retain_paths`` the
-    peak raw-payload-buffer bound is that set plus verified Markdown needed for
-    closure-aware projection, manifest/runtime descriptor bytes needed for
-    schema validation, and the current and preceding source payloads during
-    generator handoff. Text normalization and directory snapshot assembly have
-    separate transient allocations.
+    peak raw-payload-buffer bound is that exact set plus manifest/runtime
+    descriptor bytes needed for schema validation and the current and preceding
+    source payloads during generator handoff. Selected-profile projection runs a
+    separate verification with its owned Markdown paths as ``retain_paths``.
+    Text normalization and directory snapshot assembly have separate transient
+    allocations.
     """
     expected_sha256 = _sha256(expected_sha256, "expected_sha256")
     lock_path = lock_path.absolute()
@@ -804,13 +805,6 @@ def _projected_records(
                 source_mode=bundle.source_mode,
                 role=bundle.role,
                 retain_paths=projection_paths,
-            )
-        missing_inputs = set(projection_paths) - set(projected_bundle.verified_bytes)
-        if missing_inputs:
-            _fail(
-                "projection_inputs",
-                "verified Markdown inputs are missing: "
-                + ", ".join(sorted(missing_inputs, key=portable_path_identity)),
             )
         try:
             source_texts = {

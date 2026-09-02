@@ -164,21 +164,22 @@ payloads are not retained again unless they are themselves selected Markdown.
 Apply retains only candidate bundle payloads referenced by write changes; those
 verified bytes are released when transaction staging completes.
 
-Maintainers can report the current full-component compose and upgrade bounds on
-Linux or Windows with:
+Maintainers can report the current full-template and selected-profile compose
+and upgrade bounds on Linux or Windows with:
 
 ```bash
 python scripts/measure-bundle-materialization.py --check
 ```
 
 The JSON report includes Git subprocess counts, elapsed wall time, the logical
-payload peak and bound, observed staging-payload retention, and Python's traced
-allocation peak. The upgrade measurement changes one managed bundle path so
-its retained-payload observation is nonzero. CI checks process batching and
-exact subprocess counts on
-both platforms, but records time and memory without platform-sensitive
+payload peak and bound, observed staging-payload retention, projection Markdown
+path counts, and Python's traced allocation peak. The upgrade measurements
+change one managed bundle path so their retained-payload observations are
+nonzero. CI checks process batching and exact subprocess counts for all four
+flows on both platforms, but records time and memory without platform-sensitive
 thresholds because shared-runner measurements are not stable correctness
-signals. Exact subset-retention tests enforce the payload policy separately.
+signals. Exact subset-retention tests enforce the payload policy separately,
+including exclusion of omitted-component Markdown.
 
 ## Low-level materializer interface
 
