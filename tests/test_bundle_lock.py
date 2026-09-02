@@ -495,13 +495,30 @@ class BundleLockTest(unittest.TestCase):
             item["path"]: item["size"]
             for item in fixture.lock["bundle"]["files"]
         }
+        current_lock = copy.deepcopy(fixture.lock)
+        current_guide = next(
+            item
+            for item in current_lock["bundle"]["files"]
+            if item["path"] == "GUIDE.md"
+        )
+        current_guide["size"] += 10_000
         outer_bytes = sum(sizes[path] for path in retained)
-        expected_peak = outer_bytes + bundle_measurement._logical_verification_peak(
+        candidate_projection_peak = bundle_measurement._logical_verification_peak(
             fixture.lock, role="candidate", retain_paths=projection
         )
-        expected_bound = outer_bytes + bundle_measurement._logical_verification_bound(
+        current_projection_peak = bundle_measurement._logical_verification_peak(
+            current_lock, role="candidate", retain_paths=projection
+        )
+        candidate_projection_bound = bundle_measurement._logical_verification_bound(
             fixture.lock, role="candidate", retain_paths=projection
         )
+        current_projection_bound = bundle_measurement._logical_verification_bound(
+            current_lock, role="candidate", retain_paths=projection
+        )
+        self.assertGreater(current_projection_peak, candidate_projection_peak)
+        self.assertGreater(current_projection_bound, candidate_projection_bound)
+        expected_peak = outer_bytes + current_projection_peak
+        expected_bound = outer_bytes + current_projection_bound
         metric = bundle_measurement._metric(
             "selected_upgrade",
             time.perf_counter(),
@@ -511,6 +528,7 @@ class BundleLockTest(unittest.TestCase):
             observed_retained_payload_bytes=outer_bytes,
             traced_python_peak_bytes=0,
             projection_paths=projection,
+            current_projection_lock=current_lock,
         )
         union_peak = bundle_measurement._logical_verification_peak(
             fixture.lock,
