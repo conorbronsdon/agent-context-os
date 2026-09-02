@@ -19,7 +19,7 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [Pandoc](https://github.com/jgm/pandoc) | `connector` | verified | Yes | No | No | Yes | Yes | 2026-08-25 |
 | [Readwise MCP](https://docs.readwise.io/tools/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-18 |
 | [Shortcut MCP](https://www.shortcut.com/help/integrations/mcp-server/) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-30 |
-| [Slack MCP](https://docs.slack.dev/ai/slack-mcp-server/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-30 |
+| [Slack MCP](https://docs.slack.dev/ai/slack-mcp-server/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-09-03 |
 | [Substack MCP](https://github.com/conorbronsdon/substack-mcp) | `mcp_server` | verified | Yes | Yes | Yes | Yes | No | 2026-08-15 |
 | [Tolaria MCP](https://github.com/refactoringhq/tolaria) | `local_workspace` | verified | Yes | No | No | Yes | Yes | 2026-08-15 |
 | [Trello MCP](https://support.atlassian.com/trello/docs/connect-trello-to-ai-assistants-with-trello-mcp/) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-30 |
@@ -373,17 +373,17 @@ Capabilities and limits:
 
 ## Slack MCP
 
-Slack's official first-party MCP server for searching conversations, channels, canvases, and posting messages with OAuth 2.0 and workspace admin approval.
+Slack's official first-party MCP server for searching conversations, channels, canvases, files, and lists, and for posting messages, restricted to Marketplace-published or internal Slack apps using confidential OAuth 2.0 with workspace admin approval.
 
-- **Supported agents:** `claude_code`, `generic`
+- **Supported agents:** `claude_code`, `cursor`, `generic`
 - **Install scope:** `project_or_user`; never automatic
-- **Prerequisites:** A Slack workspace account; Workspace admin approval or eligible app install permissions; An MCP client supporting remote Streamable HTTP and browser OAuth
-- **Credentials:** OAuth 2.0 token managed by the MCP client for the authorized Slack workspace
-- **Reads:** Sensitive public or private channel conversations, threads, DMs, canvases, files, user profiles, and emails depending on granted scopes
-- **Writes / external effects:** Remote creation and updates of Slack channel messages, thread replies, reactions, canvases, and conversations; Publicly visible message sends in shared channels and overwrite-capable updates to canvas content
+- **Prerequisites:** A Slack workspace account; An MCP client backed by a registered Slack app with a fixed, hardcoded app ID; An app published in the Slack Marketplace or an internal app; unlisted apps are prohibited from using MCP; Workspace admin approval through the standard Slack app approval process; The app's client\_id and client\_secret for confidential OAuth; Dynamic Client Registration is not supported; An MCP client supporting JSON-RPC 2.0 over Streamable HTTP at https://mcp.slack.com/mcp; SSE-based connections are not supported
+- **Credentials:** Confidential OAuth 2.0 client credentials, the registered Slack app's client\_id and client\_secret, kept outside repository files; Per-user OAuth 2.0 access token managed by the MCP client for the authorized Slack workspace
+- **Reads:** Sensitive public or private channel conversations, threads, DMs, canvases, files, user profiles, and emails depending on granted scopes; Slack list contents and schemas
+- **Writes / external effects:** Remote creation and updates of Slack channel messages, thread replies, reactions, drafts, canvases, and conversations; File uploads through the two-step flow of slack\_get\_file\_upload\_url then slack\_complete\_file\_upload, optionally sharing the uploaded file to a channel with a message; Slack Lists writes including creating lists with custom schemas, updating list metadata and columns, and adding or updating individual records; Publicly visible message sends in shared channels and overwrite-capable updates to canvas, list, and record content
 - **Typed safety signals:** sensitive read, remote write, overwrite, oauth
 - **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `publish`, `overwrite`, `oauth`, `destructive`
-- **Confirmation:** Confirm the target Slack workspace, channels, and granted OAuth scopes before reading conversations; show exact message text, target channel, and thread before posting messages, and keep DM and canvas access disabled by default.
+- **Confirmation:** Confirm the target Slack workspace, channels, and granted OAuth scopes before reading conversations; show exact message text, target channel, and thread before posting messages, show the exact file and destination before completing an upload, and keep DM, canvas, and list writes disabled by default.
 - **Risk tags:** `credentials`, `hosted`, `team-chat`, `sensitive-read`, `remote-write`, `publish-capable`, `public-publish`, `overwrite-capable`, `oauth`, `destructive-capable`, `prompt-injection`
 - **Evidence:** [1](https://docs.slack.dev/ai/slack-mcp-server/); [2](https://docs.slack.dev/ai/slack-mcp-server/connect-to-claude)
 - **Health check:** Connect to the Slack MCP endpoint, verify authorized workspace and user identity, then read history from one explicitly named test channel without posting messages.
@@ -392,9 +392,9 @@ Slack's official first-party MCP server for searching conversations, channels, c
 Capabilities and limits:
 
 - Start with read-only search and history tools for explicitly named public channels
-- Exclude DMs, user email addresses, files, canvas mutations, and write scopes by default
-- Posting messages or updating canvases creates immediate visible team communication and requires separate approval
-- The server focuses on messaging, search, and canvas updates; message retraction remains within Slack UI
+- Exclude DMs, user email addresses, files, canvas mutations, list writes, and write scopes by default
+- Posting messages, uploading files, or updating canvases and lists creates immediate visible team communication and requires separate approval
+- The server focuses on messaging, search, files, canvases, and lists; the documented tool surface is create-and-update only, and message retraction remains within the Slack UI
 
 ## Substack MCP
 
