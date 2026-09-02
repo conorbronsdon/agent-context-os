@@ -173,6 +173,18 @@ class StageReleaseTest(unittest.TestCase):
         self.assertFalse(result["created_by_this_run"])
         self.assertEqual(fake.create_count, 0)
 
+    def test_tag_lookup_404_searches_later_list_pages_before_creating(self) -> None:
+        first_page = [{"tag_name": f"v0.0.{index}"} for index in range(100)]
+        fake = FakeRunner(
+            [(404, None)],
+            list_responses=[first_page, [self._release()]],
+        )
+        result = self._stage(fake)
+        self.assertEqual(result["release_id"], RELEASE_ID)
+        self.assertFalse(result["created_by_this_run"])
+        self.assertEqual(fake.create_count, 0)
+        self.assertTrue(any("page=2" in call[-1] for call in fake.calls))
+
     def test_tag_lookup_404_rejects_duplicate_drafts_from_authenticated_list(self) -> None:
         fake = FakeRunner(
             [(404, None)],
