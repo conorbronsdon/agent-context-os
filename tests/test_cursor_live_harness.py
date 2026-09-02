@@ -33,6 +33,7 @@ class CursorLiveHarnessTest(unittest.TestCase):
 
     def test_fixture_has_explicit_skill_and_deny_precedence(self) -> None:
         workspace = self.root / "workspace"
+        workspace.mkdir()
         canaries = {"root": "ROOT", "nested": "NESTED", "skill": "SKILL"}
         live.write_fixture(workspace, canaries)
         live.write_permissions(

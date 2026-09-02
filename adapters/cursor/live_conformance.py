@@ -135,7 +135,7 @@ def changed_paths(before: Mapping[str, str], after: Mapping[str, str]) -> set[st
 
 
 def write_fixture(root: Path, canaries: Mapping[str, str]) -> None:
-    root.mkdir(parents=True)
+    root.mkdir(parents=True, exist_ok=True)
     (root / DISPOSABLE_MARKER).write_text("disposable\n", encoding="utf-8")
     (root / "AGENTS.md").write_text(
         "# Synthetic Cursor conformance\n\n"
