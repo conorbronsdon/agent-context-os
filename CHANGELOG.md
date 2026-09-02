@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+---
+
+## [0.13.0] — 2026-09-02 — External-project and workspace evolution
+
 ### Added
 - External-project attachment now keeps Context OS in its own ContextRoot while
   binding an ordinary application as a read-only WorkingRoot. `project attach`
@@ -12,6 +16,16 @@
   including bounded application status and history. Claude and Codex lifecycle
   skills use the same provider-neutral kernel contract, while the existing
   colocated v0.12 command form remains compatible.
+- Workspace schema v2 records the selected component profile and detached bundle
+  digest. Guided `workspace reconcile` proposals make compatible migration,
+  composition, rollback, and recovery explicit rather than treating an installed
+  template as an opaque copy.
+- A coordination board gives concurrent agent runs bounded claims, lease expiry,
+  successor handoff, and degraded-reference handling without making a central
+  service the source of truth.
+- The generated integration catalog adds Shortcut, Slack, and GitLab MCP entries
+  with declared OAuth scopes, data access, side effects, and confirmation
+  boundaries.
 
 ### Changed
 - Aligned integration proposal, contributor guidance, and PR templates with catalog schema v2 (documentation and template changes only).
@@ -25,14 +39,6 @@
   hand-maintained prose.
 - The enabled Claude worktree guard now counts exact Claude executable names and identifies linked worktrees from Git's common-directory structure, with must-fire and must-not-fire controls for primary, linked, guarded, unguarded, and single-session paths.
 - Release draft staging now creates only after a classified HTTP 404, recovers duplicate-create races without re-uploading, and binds publication and recovery to an operator-supplied positive numeric release ID.
-
-### Added
-- `shortcut-mcp` integration catalog entry for Shortcut's hosted MCP server with
-  granular OAuth scopes and dedicated read-only mode (#49).
-- `slack-mcp` integration catalog entry for Slack's official first-party MCP server
-  with channel history, canvas, and granular message confirmation boundaries (#52).
-- `gitlab-mcp` integration catalog entry for GitLab's official Beta MCP server
-  with repository, MR, issue, and pipeline capabilities (#50).
 
 ---
 

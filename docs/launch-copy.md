@@ -6,7 +6,9 @@ Drafts only. Review links, release status, and platform length before publishing
 
 I built `agent-context-os` because I was tired of rebuilding the same context across chats, projects, and coding agents.
 
-The project now has a clearer public name: Context OS.
+Context OS is a Git-backed context and workflow layer shared across Claude Code,
+Codex, and OpenClaw. Hermes Agent, Cursor, and Devin have experimental adapters
+with explicit evidence limits.
 
 It keeps the durable parts of working with an agent in plain Markdown:
 
@@ -15,9 +17,15 @@ It keeps the durable parts of working with an agent in plain Markdown:
 - reusable workflows
 - reviewed session handoffs
 
-Claude Code and Codex can now use the same repository state and the same setup, start, checkpoint, and end workflow. There is also a selective migration guide for bringing useful context forward from ChatGPT, Claude, Gemini, or another assistant without dumping your full private history into Git.
+v0.13 adds a clean boundary for ongoing application work: Context OS can stay
+in its own repository while an attached application contributes read-only Git
+evidence. The new workspace reconciliation flow also makes component and bundle
+changes reviewable before they touch a workspace.
 
-The new integration catalog is opt-in and explicit about what each add-on can read, write, publish, overwrite, or delete. Setup enables nothing automatically.
+Concurrent runs can use the new file-backed coordination board for bounded
+claims and handoffs. The integration catalog remains opt-in and explicit about
+what each add-on can read, write, publish, overwrite, or delete. Setup enables
+nothing automatically.
 
 If your AI context is scattered across five places and slowly going stale, this is the problem I want Context OS to solve.
 
@@ -25,14 +33,15 @@ https://github.com/conorbronsdon/agent-context-os
 
 ## Short announcement
 
-`agent-context-os` is now Context OS: a Git-backed context and workflow layer for Claude Code and Codex.
+Context OS is a Git-backed context and workflow layer for Claude Code, Codex,
+and OpenClaw, with experimental Hermes Agent, Cursor, and Devin adapters.
 
 New in this release:
 
-- one shared lifecycle across both coding agents
-- a selective migration guide for ChatGPT, Claude, Gemini, and other systems
+- external-project attachment with a read-only application boundary
+- schema v2 workspace reconciliation, composition, rollback, and recovery
+- a file-backed coordination board for concurrent agent runs
 - a safety-gated catalog of optional integrations
-- clearer setup, privacy, and maintenance docs
 
 Your durable context stays in files you can inspect, version, and move.
 
@@ -42,7 +51,14 @@ https://github.com/conorbronsdon/agent-context-os
 
 Context OS update:
 
-Codex is now a first-class path, not a fork. The same repository state powers `$setup`, `$start`, `$update`, and `$end`, while Claude Code keeps its slash-command adapters.
+v0.13 adds external-project attachment: Context OS keeps its own writable
+repository while an application repository contributes read-only Git evidence.
+Workspace schema v2 makes reconciliation, composition, rollback, and recovery
+explicit. The new coordination board lets concurrent runs record bounded claims
+and handoffs without a central service.
+
+Claude Code, Codex, and OpenClaw share the lifecycle core. Hermes Agent, Cursor,
+and Devin are separate experimental adapters with their own documented limits.
 
 The optional integration catalog covers portable skill collections, creator
 tools, CLIs, and MCP servers. The [generated catalog](../references/integrations.md)

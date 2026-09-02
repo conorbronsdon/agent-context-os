@@ -2,7 +2,7 @@
 
 # Context OS
 
-A portable Git-backed context and workflow layer for agents like Claude Code, Codex, Hermes, OpenClaw, Cursor, and Devin. Evolves alongside you and your agents.
+A Git-backed context and workflow layer shared across Claude Code, Codex, and OpenClaw, with experimental Hermes Agent, Cursor, and Devin adapters.
 
 [![GitHub stars](https://img.shields.io/github/stars/conorbronsdon/agent-context-os?style=social)](https://github.com/conorbronsdon/agent-context-os/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
@@ -285,7 +285,7 @@ behavior of an installed agent version or an external service.
 | See every command and portable skill | [Commands and skills](docs/commands-and-skills.md) |
 | Understand component ownership and the composition/materialization substrate | [Component model](docs/component-model.md) |
 | Verify an offline bundle or inspect a structural plan | [Bundle locks and plans](docs/bundle-locks.md) |
-| Read the v0.12 release scope and evidence limits | [v0.12.0 release notes](docs/releases/v0.12.0.md) |
+| Read release scope and evidence limits | [v0.13.0 release notes](docs/releases/v0.13.0.md); [v0.12.0 archive](docs/releases/v0.12.0.md) |
 | Understand KernelRoot, ContextRoot, WorkingRoot, and the v0.12 compatibility boundary | [Root contract](docs/root-contract.md) |
 | Choose an optional add-on | [Integration chooser](docs/integrations-guide.md) and [catalog](references/integrations.md) |
 | Understand product language and boundaries | [Positioning](docs/positioning.md) |

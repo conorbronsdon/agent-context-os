@@ -21,8 +21,8 @@ SPEC.loader.exec_module(publish_release)
 
 
 REPOSITORY = "conorbronsdon/agent-context-os"
-VERSION = "0.12.0"
-TAG = "v0.12.0"
+VERSION = "0.13.0"
+TAG = "v0.13.0"
 COMMIT = "a" * 40
 RUN_ID = 12345
 ATTEMPT = 3
@@ -32,10 +32,10 @@ RELEASE_ID = 24680
 
 class FakeArtifacts:
     names = {
-        "archive": "agent-context-os-template-v0.12.0.tar",
-        "lock": "agent-context-os-template-v0.12.0.bundle.lock.json",
-        "provenance": "agent-context-os-template-v0.12.0.provenance.json",
-        "instructions": "agent-context-os-template-v0.12.0.OFFLINE-VERIFY.md",
+        "archive": "agent-context-os-template-v0.13.0.tar",
+        "lock": "agent-context-os-template-v0.13.0.bundle.lock.json",
+        "provenance": "agent-context-os-template-v0.13.0.provenance.json",
+        "instructions": "agent-context-os-template-v0.13.0.OFFLINE-VERIFY.md",
         "checksums": "SHA256SUMS",
     }
 
@@ -67,7 +67,7 @@ class FakeGitHubRunner:
         self.payloads = {
             name: (name + "\n").encode("utf-8") for name in FakeArtifacts.names.values()
         }
-        self.body = (root / "docs/releases/v0.12.0.md").read_text(encoding="utf-8")
+        self.body = (root / "docs/releases/v0.13.0.md").read_text(encoding="utf-8")
 
     def _completed(self, arguments: tuple[str, ...], stdout: str = "", returncode: int = 0):
         self.calls.append(arguments)
@@ -378,8 +378,8 @@ class PublishReleaseTest(unittest.TestCase):
                     "digest": "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest(),
                 })
             release = {
-                "tag_name": "v0.12.0",
-                "name": "Context OS v0.12.0",
+                "tag_name": "v0.13.0",
+                "name": "Context OS v0.13.0",
                 "body": "notes\r\n",
                 "draft": True,
                 "prerelease": False,
@@ -388,8 +388,8 @@ class PublishReleaseTest(unittest.TestCase):
             snapshot = publish_release._asset_snapshot(
                 release,
                 expected_names=expected_names,
-                expected_tag="v0.12.0",
-                expected_title="Context OS v0.12.0",
+                expected_tag="v0.13.0",
+                expected_title="Context OS v0.13.0",
                 expected_body="notes\n",
                 draft=True,
             )
@@ -427,7 +427,7 @@ class PublishReleaseTest(unittest.TestCase):
     def test_workflow_artifact_name_binds_run_and_attempt_without_overwrite(self) -> None:
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         qualified = (
-            "v0.12.0-candidate-${{ inputs.commit }}-"
+            "v0.13.0-candidate-${{ inputs.commit }}-"
             "${{ github.run_id }}-${{ github.run_attempt }}"
         )
         self.assertGreaterEqual(source.count(qualified), 5)
