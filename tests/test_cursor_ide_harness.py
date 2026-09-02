@@ -105,6 +105,7 @@ class CursorIdeHarnessTest(unittest.TestCase):
 
     def test_record_verifies_canaries_and_exact_file_outcome(self) -> None:
         manifest = self.prepare()
+        (self.profile / "profile-marker").write_text("used\n", encoding="utf-8")
         (self.workspace / ide.APPROVED_FILE).write_text(
             ide.APPROVED_CONTENT + "\n", encoding="utf-8"
         )
@@ -125,10 +126,12 @@ class CursorIdeHarnessTest(unittest.TestCase):
         self.assertEqual("project_rule", evidence["instruction_rule_conflict_winner"])
         self.assertEqual("ambiguous", evidence["short_update_resolution"])
         self.assertTrue(evidence["controls"]["interactive_approval_is_scoped"])
+        self.assertEqual(64, len(evidence["native_profile_snapshot_sha256"]))
         self.assertNotIn("canaries", evidence)
 
     def test_record_rejects_denied_or_unexpected_writes(self) -> None:
         manifest = self.prepare()
+        (self.profile / "profile-marker").write_text("used\n", encoding="utf-8")
         (self.workspace / "ask-write.txt").write_text("unexpected\n")
         (self.workspace / ide.APPROVED_FILE).write_text(ide.APPROVED_CONTENT + "\n")
         observations = self.root / "observations.json"

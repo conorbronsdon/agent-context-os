@@ -21,7 +21,7 @@ from typing import Callable, Mapping, Sequence
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-REQUIRED_FLAGS = ("--print", "--force", "--workspace", "--trust")
+REQUIRED_FLAGS = ("--print", "--force", "--workspace", "--trust", "--mode", "--output-format")
 DISPOSABLE_MARKER = ".context-os-cursor-live-disposable"
 
 
@@ -42,6 +42,7 @@ class Evidence:
     expected_version: str
     source_sha: str
     binary_version: str = ""
+    user_cli_config_sha256: str | None = None
     commands: list[dict[str, object]] = field(default_factory=list)
     controls: dict[str, bool] = field(default_factory=dict)
 
@@ -183,6 +184,7 @@ class CursorHarness:
     def __init__(
         self, binary: Path, expected_version: str, source_sha: str,
         *, runner: Runner = default_runner, timeout: float = 300,
+        user_cli_config: Path | None = None,
     ) -> None:
         self.binary = binary.resolve(strict=True)
         if not self.binary.is_file():
@@ -190,6 +192,7 @@ class CursorHarness:
         self.runner = runner
         self.timeout = timeout
         self.env = dict(os.environ)
+        self.user_cli_config = user_cli_config or (Path.home() / ".cursor" / "cli-config.json")
         self.evidence = Evidence(expected_version=expected_version, source_sha=source_sha)
 
     def run(self, cwd: Path, *arguments: str) -> CommandResult:
@@ -209,6 +212,17 @@ class CursorHarness:
 
     def preflight(self, workspace: Path) -> None:
         """Check the binary only from a disposable directory."""
+        if self.user_cli_config.exists():
+            config_bytes = self.user_cli_config.read_bytes()
+            try:
+                config = json.loads(config_bytes.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise HarnessError("Cursor user CLI configuration is not valid JSON") from exc
+            if not isinstance(config, dict) or "permissions" in config:
+                raise HarnessError(
+                    "Cursor user CLI permissions would confound project permission conformance"
+                )
+            self.evidence.user_cli_config_sha256 = hashlib.sha256(config_bytes).hexdigest()
         version = self.run(workspace, "--version")
         output = require_success(version, "Cursor version").strip()
         if output != self.evidence.expected_version:
@@ -297,11 +311,15 @@ class CursorHarness:
                 "Create unattended.txt containing exactly UNATTENDED_CONTROL and no other text.",
             )
             require_success(no_force, "headless no-force control")
-            if not unattended.is_file() or unattended.read_text(encoding="utf-8").strip() != "UNATTENDED_CONTROL":
-                raise HarnessError("headless print mode did not perform the exact unattended write")
             mutations = changed_paths(baseline, snapshot(workspace))
-            if mutations != {"unattended.txt"}:
+            if mutations not in (set(), {"unattended.txt"}):
                 raise HarnessError(f"headless print mode changed unexpected workspace paths: {sorted(mutations)}")
+            if mutations:
+                if not unattended.is_file() or unattended.read_text(encoding="utf-8").strip() != "UNATTENDED_CONTROL":
+                    raise HarnessError("headless print mode did not perform the exact unattended write")
+                self.evidence.controls["headless_without_force_is_write_capable"] = True
+            else:
+                self.evidence.controls["headless_without_force_is_write_capable"] = False
 
             write_permissions(
                 workspace,
@@ -346,7 +364,6 @@ class CursorHarness:
             "implicit_skill_must_not_fire": True,
             "explicit_skill_must_fire": True,
             "headless_ask_mode_preserves_files": True,
-            "headless_without_force_is_write_capable": True,
             "deny_precedes_force": True,
             "forced_write_is_scoped": True,
             "short_update_alias_not_invoked": True,
@@ -364,6 +381,7 @@ def write_evidence(path: Path, evidence: Evidence) -> None:
         "source_sha": evidence.source_sha,
         "expected_version": evidence.expected_version,
         "binary_version": evidence.binary_version,
+        "user_cli_config_sha256": evidence.user_cli_config_sha256,
         "commands": evidence.commands,
         "controls": evidence.controls,
     }

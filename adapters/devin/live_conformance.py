@@ -247,7 +247,7 @@ class DevinHarness:
     def active_build(self) -> Mapping[str, object]:
         response = self.client.request(
             "GET",
-            f"/v3beta1/organizations/{self.client.org_id}/snapshot-setup/builds?active=true&first=2",
+            f"/v3/organizations/{self.client.org_id}/snapshot-setup/builds?active=true&first=2",
         )
         items = require_items(response, "active build")
         if len(items) != 1:
@@ -264,7 +264,7 @@ class DevinHarness:
             "first": 100,
         })
         response = self.client.request(
-            "GET", f"/v3beta1/organizations/{self.client.org_id}/repositories?{query}"
+            "GET", f"/v3/organizations/{self.client.org_id}/repositories?{query}"
         )
         matches = [item for item in require_items(response, "repository access") if item.get("repo_path") == self.repository]
         if len(matches) != 1:
@@ -281,7 +281,7 @@ class DevinHarness:
 
     def wait_for_devin(
         self, session_id: str, *, after_events: set[str], canary: str
-    ) -> tuple[str, set[str]]:
+    ) -> tuple[list[str], set[str]]:
         deadline = time.monotonic() + self.poll_timeout
         while time.monotonic() < deadline:
             messages = self.messages(session_id)
@@ -289,8 +289,8 @@ class DevinHarness:
                 item for item in messages
                 if item.get("source") == "devin" and item.get("event_id") not in after_events
             ]
-            text = "\n".join(str(item.get("message", "")) for item in new)
-            if canary in text:
+            text = [str(item.get("message", "")) for item in new]
+            if canary in "\n".join(text):
                 return text, {str(item.get("event_id")) for item in messages}
             state = self.session(session_id)
             if state.get("status") in {"error", "exit", "suspended"}:
@@ -337,9 +337,10 @@ class DevinHarness:
             self.evidence.session_id_sha256 = hashlib.sha256(session_id.encode()).hexdigest()
             self.evidence.devin_mode = created.get("devin_mode") if isinstance(created.get("devin_mode"), str) else None
 
-            implicit, events = self.wait_for_devin(session_id, after_events=set(), canary=ROOT_CANARY)
+            implicit_messages, events = self.wait_for_devin(session_id, after_events=set(), canary=ROOT_CANARY)
+            implicit = "\n".join(implicit_messages)
             expected_root = f"{ROOT_CANARY} {self.fixture_sha}"
-            if implicit.strip() != expected_root:
+            if not implicit_messages or implicit_messages[-1].strip() != expected_root:
                 if SKILL_CANARY in implicit:
                     raise HarnessError("user-only Devin skill fired without explicit invocation")
                 raise HarnessError("implicit control did not return the exact root and fixture output")
@@ -349,10 +350,10 @@ class DevinHarness:
                 f"{self.org_path}/sessions/{session_id}/messages",
                 {"message": f"@skills:{SKILL_NAME} Return only the canary required by this skill."},
             )
-            explicit, _ = self.wait_for_devin(
+            explicit_messages, _ = self.wait_for_devin(
                 session_id, after_events=events, canary=SKILL_CANARY
             )
-            if explicit.strip() != SKILL_CANARY:
+            if not explicit_messages or explicit_messages[-1].strip() != SKILL_CANARY:
                 raise HarnessError("explicit skill control did not return its exact canary")
 
             final = self.session(session_id)

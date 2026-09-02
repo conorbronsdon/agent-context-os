@@ -54,6 +54,8 @@
         "devin-skills",
         "devin-api-auth",
         "devin-api-sessions",
+        "devin-api-overview",
+        "devin-api-release-notes",
         "devin-kernel",
         "devin-conformance",
         "devin-live-harness",
@@ -117,6 +119,18 @@
         "id": "devin-api-sessions",
         "type": "official",
         "location": "https://docs.devin.ai/api-reference/v3/sessions/post-organizations-sessions-archive",
+        "claims": ["support"]
+      },
+      {
+        "id": "devin-api-overview",
+        "type": "official",
+        "location": "https://docs.devin.ai/api-reference/overview",
+        "claims": ["support"]
+      },
+      {
+        "id": "devin-api-release-notes",
+        "type": "official",
+        "location": "https://docs.devin.ai/api-reference/release-notes",
         "claims": ["support"]
       },
       {

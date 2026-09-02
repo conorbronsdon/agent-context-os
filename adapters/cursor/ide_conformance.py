@@ -253,6 +253,9 @@ def record(args: argparse.Namespace) -> None:
     profile = Path(str(manifest["profile"])).resolve(strict=True)
     if not profile.is_dir() or workspace == profile or workspace in profile.parents or profile in workspace.parents:
         raise HarnessError("native profile isolation is not intact")
+    profile_snapshot = snapshot(profile)
+    if not profile_snapshot:
+        raise HarnessError("native profile was not used during the IDE conformance run")
     if (workspace / ".cursor/mcp.json").exists() or (workspace / ".cursor/hooks.json").exists():
         raise HarnessError("fixture acquired unsupported project MCP or hook configuration")
 
@@ -302,6 +305,7 @@ def record(args: argparse.Namespace) -> None:
         "tested_version": manifest["expected_version"],
         "binary_sha256": manifest["binary_sha256"],
         "fixture_baseline_sha256": manifest["baseline_sha256"],
+        "native_profile_snapshot_sha256": snapshot_digest(profile_snapshot),
         "instruction_rule_conflict_winner": conflict_winner,
         "short_update_resolution": short_update,
         "controls": {

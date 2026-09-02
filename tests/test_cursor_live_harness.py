@@ -61,12 +61,12 @@ class CursorLiveHarnessTest(unittest.TestCase):
     def test_preflight_requires_exact_version_flags_and_authentication(self) -> None:
         responses = iter([
             live.CommandResult([], 0, "2026.08.31-4057e58\n", ""),
-            live.CommandResult([], 0, "--print --force --workspace --trust", ""),
+            live.CommandResult([], 0, "--print --force --workspace --trust --mode --output-format", ""),
             live.CommandResult([], 0, "Logged in", ""),
         ])
         harness = live.CursorHarness(
             self.binary, "2026.08.31-4057e58", "a" * 40,
-            runner=lambda *_: next(responses),
+            runner=lambda *_: next(responses), user_cli_config=self.root / "no-user-config.json",
         )
         harness.preflight(self.root)
         self.assertTrue(harness.evidence.controls["authenticated"])
@@ -86,12 +86,12 @@ class CursorLiveHarnessTest(unittest.TestCase):
     def test_preflight_rejects_unauthenticated_cli(self) -> None:
         responses = iter([
             live.CommandResult([], 0, "2026.08.31-4057e58\n", ""),
-            live.CommandResult([], 0, "--print --force --workspace --trust", ""),
+            live.CommandResult([], 0, "--print --force --workspace --trust --mode --output-format", ""),
             live.CommandResult([], 0, "Not logged in", ""),
         ])
         harness = live.CursorHarness(
             self.binary, "2026.08.31-4057e58", "a" * 40,
-            runner=lambda *_: next(responses),
+            runner=lambda *_: next(responses), user_cli_config=self.root / "no-user-config.json",
         )
         with self.assertRaisesRegex(live.HarnessError, "not authenticated"):
             harness.preflight(self.root)
@@ -99,14 +99,23 @@ class CursorLiveHarnessTest(unittest.TestCase):
     def test_preflight_requires_positive_authentication_marker(self) -> None:
         responses = iter([
             live.CommandResult([], 0, "2026.08.31-4057e58\n", ""),
-            live.CommandResult([], 0, "--print --force --workspace --trust", ""),
+            live.CommandResult([], 0, "--print --force --workspace --trust --mode --output-format", ""),
             live.CommandResult([], 0, "Authentication status unavailable", ""),
         ])
         harness = live.CursorHarness(
             self.binary, "2026.08.31-4057e58", "a" * 40,
-            runner=lambda *_: next(responses),
+            runner=lambda *_: next(responses), user_cli_config=self.root / "no-user-config.json",
         )
         with self.assertRaisesRegex(live.HarnessError, "positively confirm"):
+            harness.preflight(self.root)
+
+    def test_preflight_rejects_user_cli_permissions(self) -> None:
+        config = self.root / "cli-config.json"
+        config.write_text('{"permissions": {"deny": ["Write(*)"]}}', encoding="utf-8")
+        harness = live.CursorHarness(
+            self.binary, "v1", "a" * 40, user_cli_config=config,
+        )
+        with self.assertRaisesRegex(live.HarnessError, "confound"):
             harness.preflight(self.root)
 
     def test_require_canary_rejects_benign_success_without_evidence(self) -> None:
@@ -173,7 +182,7 @@ class CursorLiveHarnessTest(unittest.TestCase):
         self.assertNotIn('"/update"', source)
         self.assertIn('"short_update_alias_not_invoked": True', source)
         self.assertIn('"headless_ask_mode_preserves_files": True', source)
-        self.assertIn('"headless_without_force_is_write_capable": True', source)
+        self.assertIn('self.evidence.controls["headless_without_force_is_write_capable"] =', source)
 
 
 if __name__ == "__main__":
