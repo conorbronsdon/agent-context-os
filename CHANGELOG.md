@@ -26,6 +26,12 @@
 - The enabled Claude worktree guard now counts exact Claude executable names and identifies linked worktrees from Git's common-directory structure, with must-fire and must-not-fire controls for primary, linked, guarded, unguarded, and single-session paths.
 - Release draft staging now creates only after a classified HTTP 404, recovers duplicate-create races without re-uploading, and binds publication and recovery to an operator-supplied positive numeric release ID.
 
+### Added
+- `shortcut-mcp` integration catalog entry for Shortcut's hosted MCP server with
+  granular OAuth scopes and dedicated read-only mode (#49).
+- `slack-mcp` integration catalog entry for Slack's official first-party MCP server
+  with channel history, canvas, and granular message confirmation boundaries (#52).
+
 ---
 
 ## [0.12.0] — 2026-08-31 — Immutable full-template release

@@ -798,6 +798,50 @@
         "instructions": "Remove the Shortcut MCP entry from the client and revoke the authorized application connection in Shortcut account settings; preserve all workspace, story, epic, and doc data.",
         "removes_user_data": false
       }
+    },
+    {
+      "id": "slack-mcp",
+      "name": "Slack MCP",
+      "summary": "Slack's official first-party MCP server for searching conversations, channels, canvases, files, and lists, and for posting messages, restricted to Marketplace-published or internal Slack apps using confidential OAuth 2.0 with workspace admin approval.",
+      "source_url": "https://docs.slack.dev/ai/slack-mcp-server/",
+      "kind": "mcp_server",
+      "supported_agents": ["claude_code", "cursor", "generic"],
+      "installation": {
+        "automatic": false,
+        "scope": "project_or_user",
+        "prerequisites": ["A Slack workspace account", "An MCP client backed by a registered Slack app with a fixed, hardcoded app ID", "An app published in the Slack Marketplace or an internal app; unlisted apps are prohibited from using MCP", "Workspace admin approval through the standard Slack app approval process", "The app's client_id and client_secret for confidential OAuth; Dynamic Client Registration is not supported", "An MCP client supporting JSON-RPC 2.0 over Streamable HTTP at https://mcp.slack.com/mcp; SSE-based connections are not supported"]
+      },
+      "data_boundary": {
+        "credentials": ["Confidential OAuth 2.0 client credentials, the registered Slack app's client_id and client_secret, kept outside repository files", "Per-user OAuth 2.0 access token managed by the MCP client for the authorized Slack workspace"],
+        "reads": ["Sensitive public or private channel conversations, threads, DMs, canvases, files, user profiles, and emails depending on granted scopes", "Slack list contents and schemas"],
+        "writes": ["Remote creation and updates of Slack channel messages, thread replies, reactions, drafts, canvases, and conversations", "File uploads through the two-step flow of slack_get_file_upload_url then slack_complete_file_upload, optionally sharing the uploaded file to a channel with a message", "Slack Lists writes including creating lists with custom schemas, updating list metadata and columns, and adding or updating individual records", "Publicly visible message sends in shared channels and overwrite-capable updates to canvas, list, and record content"]
+      },
+      "capabilities": {
+        "read": true,
+        "sensitive_read": true,
+        "write": true,
+        "remote_write": true,
+        "publish": true,
+        "overwrite": true,
+        "delete": false,
+        "arbitrary_execution": false,
+        "oauth": true,
+        "destructive": true,
+        "details": ["Start with read-only search and history tools for explicitly named public channels", "Exclude DMs, user email addresses, files, canvas mutations, list writes, and write scopes by default", "Posting messages, uploading files, or updating canvases and lists creates immediate visible team communication and requires separate approval", "The server focuses on messaging, search, files, canvases, and lists; the documented tool surface is create-and-update only, and message retraction remains within the Slack UI"]
+      },
+      "confirmation": {
+        "required_for": ["credential_setup", "external_install", "read_sensitive", "write", "write_remote", "publish", "overwrite", "oauth", "destructive"],
+        "notes": "Confirm the target Slack workspace, channels, and granted OAuth scopes before reading conversations; show exact message text, target channel, and thread before posting messages, show the exact file and destination before completing an upload, and keep DM, canvas, and list writes disabled by default."
+      },
+      "risk_tags": ["credentials", "hosted", "team-chat", "sensitive-read", "remote-write", "publish-capable", "public-publish", "overwrite-capable", "oauth", "destructive-capable", "prompt-injection"],
+      "maturity": "verified",
+      "last_verified": "2026-09-02",
+      "evidence": ["https://docs.slack.dev/ai/slack-mcp-server/", "https://docs.slack.dev/ai/slack-mcp-server/connect-to-claude"],
+      "health_check": "Connect to the Slack MCP endpoint, verify authorized workspace and user identity, then read history from one explicitly named test channel without posting messages.",
+      "uninstall": {
+        "instructions": "Remove the Slack MCP entry from the client and revoke the authorized application connection in Slack workspace settings; preserve all messages and conversation history.",
+        "removes_user_data": false
+      }
     }
   ]
 }
