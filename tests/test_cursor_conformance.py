@@ -88,9 +88,14 @@ class CursorDescriptorTest(unittest.TestCase):
         install_text = "\n".join(DESCRIPTOR["install"]["next_steps"])
         self.assertNotIn("--trust", install_text)
         self.assertNotIn("--force", install_text)
-        for surface in DESCRIPTOR["surfaces"].values():
-            self.assertIn("tests/test_cursor_live_harness.py", surface["conformance_tests"])
-            self.assertIn("cursor-live-harness", surface["evidence"])
+        cli = DESCRIPTOR["surfaces"]["cli"]
+        self.assertIn("tests/test_cursor_live_harness.py", cli["conformance_tests"])
+        self.assertIn("cursor-live-harness", cli["evidence"])
+        self.assertNotIn(
+            "tests/test_cursor_live_harness.py",
+            DESCRIPTOR["surfaces"]["ide"]["conformance_tests"],
+        )
+        self.assertNotIn("cursor-live-harness", ide_evidence)
 
     def test_adapter_does_not_ship_unverified_cursor_configuration(self) -> None:
         if os.environ.get("CONTEXTOS_VALIDATION_PROFILE") == "workspace":

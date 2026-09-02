@@ -74,17 +74,16 @@ The IDE and CLI authorization controls are not interchangeable:
 - CLI permissions live in user `~/.cursor/cli-config.json` and project
   `.cursor/cli.json`. An explicit deny wins an allow for the matched tool, but
   a `Write(...)` deny does not prevent the same filesystem change through
-  `Shell(...)`; deny every applicable tool path when enforcing an outcome. On
-  Windows CLI `2026.08.31-4057e58`, relative path-scoped `Write(...)` denies did
-  not match the edit tool's absolute path in the live fixture, while broad
-  `Write(*)` and `Shell(*)` denies blocked both ordinary and `--force` writes.
-  Do not rely on a narrower Windows deny until its exact installed-version
-  fixture passes.
-- In Cursor Agent CLI `2026.08.31-4057e58`, `agent -p` exposes write and shell
-  tools and can change files without `--force`. Use `--mode ask` or `--mode plan`
+  `Shell(...)`; deny every applicable tool path when enforcing an outcome.
+  Treat relative path-scoped `Write(...)` denies as insufficient until an exact
+  installed-version fixture proves otherwise; test broad `Write(*)` and
+  `Shell(*)` denies against every intended write path, including `--force`.
+- Treat `agent -p` as write-capable unless the exact installed-version fixture
+  proves the selected mode remains read-only. Use `--mode ask` or `--mode plan`
   when the invocation must remain read-only. `--force` additionally force-allows
-  commands unless an explicit permission deny matches. These are installed-version
-  conformance gates because unattended behavior has changed across releases.
+  commands unless an explicit permission deny matches. These are
+  installed-version conformance gates because unattended behavior can change
+  across releases.
 - `--trust`, `--force`, and broad shell, write, MCP, or absolute-path grants are
   opt-in permission expansions. Setup never supplies them.
 

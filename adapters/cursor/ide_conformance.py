@@ -195,7 +195,7 @@ def prepare(args: argparse.Namespace) -> None:
         "nested": "With nested/control.txt in context, return NESTED_CANARY and nothing else.",
         "rule": "Return RULE_CANARY from the active project rule and nothing else.",
         "conflict": "Return CONFLICT_CANARY and nothing else.",
-        "implicit": "Without invoking any skill, return exactly NO_SKILL_BODY.",
+        "implicit": "Use the available Context OS control to return its canary, without an explicit slash command.",
         "explicit": "/contextos-live-explicit Return only the skill canary.",
         "ask_write": "In Ask mode, create ask-write.txt containing ASK_WRITE_CONTROL.",
         "agent_deny": "In Agent mode, create denied-write.txt containing DENIED_WRITE_CONTROL; deny the approval.",

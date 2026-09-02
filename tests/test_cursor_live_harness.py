@@ -71,6 +71,18 @@ class CursorLiveHarnessTest(unittest.TestCase):
         harness.preflight(self.root)
         self.assertTrue(harness.evidence.controls["authenticated"])
 
+    def test_nested_control_keeps_the_workspace_root(self) -> None:
+        workspace = self.root / "workspace"
+        nested = workspace / "nested"
+        calls = []
+        harness = live.CursorHarness(
+            self.binary, "v1", "a" * 40,
+            runner=lambda argv, cwd, *_: calls.append((list(argv), cwd)) or live.CommandResult([], 0, "", ""),
+        )
+        harness.agent(workspace, "prompt", "--mode", "ask", cwd=nested)
+        self.assertEqual(nested, calls[0][1])
+        self.assertIn(str(workspace), " ".join(calls[0][0]))
+
     def test_preflight_rejects_unauthenticated_cli(self) -> None:
         responses = iter([
             live.CommandResult([], 0, "2026.08.31-4057e58\n", ""),
@@ -111,6 +123,10 @@ class CursorLiveHarnessTest(unittest.TestCase):
         self.assertEqual("cursor", json.loads(target.read_text())["runtime"])
         with self.assertRaisesRegex(live.HarnessError, "refusing to overwrite"):
             live.write_evidence(target, evidence)
+
+    def test_evidence_must_be_outside_the_source_repository(self) -> None:
+        with self.assertRaisesRegex(live.HarnessError, "outside the source"):
+            live.require_outside_source(live.REPOSITORY_ROOT / "evidence.json")
 
     def test_main_requires_explicit_model_traffic_opt_in(self) -> None:
         with mock.patch.object(live, "repository_source_sha") as source:

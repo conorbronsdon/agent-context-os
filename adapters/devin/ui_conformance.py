@@ -198,7 +198,8 @@ def prepare(args: argparse.Namespace, *, transport: Transport = default_transpor
         "baseline_pull_count": pull_count,
         "prompts": {
             "root": (
-                "Read-only conformance. Do not edit, branch, commit, push, open a PR, or invoke a skill. "
+                "Read-only conformance. Do not edit, branch, commit, push, or open a PR. "
+                "Use the available Context OS control without an explicit @skills reference. "
                 f"Verify git rev-parse HEAD is {args.fixture_sha}. Follow AGENTS.md and return only "
                 f"{ROOT_CANARY} followed by one space and that exact SHA."
             ),

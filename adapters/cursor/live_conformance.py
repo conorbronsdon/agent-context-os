@@ -71,7 +71,10 @@ def default_runner(
 
 def output_summary(result: CommandResult) -> dict[str, object]:
     return {
-        "argv": [Path(item).name if index == 0 else item for index, item in enumerate(result.argv)],
+        "command": Path(result.argv[0]).name if result.argv else "",
+        "argv_sha256": hashlib.sha256(
+            json.dumps(result.argv, separators=(",", ":")).encode("utf-8")
+        ).hexdigest(),
         "returncode": result.returncode,
         "stdout_sha256": hashlib.sha256(result.stdout.encode("utf-8")).hexdigest(),
         "stderr_sha256": hashlib.sha256(result.stderr.encode("utf-8")).hexdigest(),
@@ -87,6 +90,15 @@ def repository_source_sha(runner: Runner = default_runner) -> str:
     if head.returncode or len(value) != 40 or any(character not in "0123456789abcdef" for character in value):
         raise HarnessError("could not bind live conformance to the source commit")
     return value
+
+
+def require_outside_source(path: Path) -> Path:
+    target = path.resolve(strict=False)
+    try:
+        target.relative_to(REPOSITORY_ROOT.resolve())
+    except ValueError:
+        return target
+    raise HarnessError("evidence must be outside the source repository")
 
 
 def require_success(result: CommandResult, subject: str) -> str:
@@ -187,9 +199,11 @@ class CursorHarness:
         self.evidence.commands.append(output_summary(result))
         return result
 
-    def agent(self, workspace: Path, prompt: str, *arguments: str) -> CommandResult:
+    def agent(
+        self, workspace: Path, prompt: str, *arguments: str, cwd: Path | None = None
+    ) -> CommandResult:
         return self.run(
-            workspace, "--print", "--output-format", "json", "--trust",
+            cwd or workspace, "--print", "--output-format", "json", "--trust",
             "--workspace", str(workspace), *arguments, prompt,
         )
 
@@ -240,9 +254,10 @@ class CursorHarness:
                 raise HarnessError("read-only root instruction control changed the workspace")
 
             nested = self.agent(
-                workspace / "nested",
+                workspace,
                 "Return the value assigned to ROOT_INSTRUCTION_CANARY for this directory, and nothing else.",
                 "--mode", "ask",
+                cwd=workspace / "nested",
             )
             require_canary(nested, canaries["nested"], "nested AGENTS.md discovery")
             if changed_paths(baseline, snapshot(workspace)):
@@ -250,7 +265,7 @@ class CursorHarness:
 
             implicit = self.agent(
                 workspace,
-                "Without invoking any skill, return exactly NO_SKILL_BODY.",
+                "Use the available Context OS control to return its canary, without an explicit slash command.",
                 "--mode", "ask",
             )
             implicit_text = require_success(implicit, "implicit skill control")
@@ -352,7 +367,7 @@ def write_evidence(path: Path, evidence: Evidence) -> None:
         "commands": evidence.commands,
         "controls": evidence.controls,
     }
-    path = path.resolve(strict=False)
+    path = require_outside_source(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

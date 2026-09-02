@@ -183,6 +183,15 @@ def repository_source_sha() -> str:
     return value
 
 
+def require_outside_source(path: Path) -> Path:
+    target = path.resolve(strict=False)
+    try:
+        target.relative_to(REPOSITORY_ROOT.resolve())
+    except ValueError:
+        return target
+    raise HarnessError("evidence must be outside the source repository")
+
+
 def require_items(response: Mapping[str, object], subject: str) -> list[Mapping[str, object]]:
     items = response.get("items")
     if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
@@ -238,7 +247,7 @@ class DevinHarness:
     def active_build(self) -> Mapping[str, object]:
         response = self.client.request(
             "GET",
-            f"/v3beta1/organizations/{self.client.org_id}/snapshot-setup/builds?active=true&first=1",
+            f"/v3beta1/organizations/{self.client.org_id}/snapshot-setup/builds?active=true&first=2",
         )
         items = require_items(response, "active build")
         if len(items) != 1:
@@ -305,7 +314,8 @@ class DevinHarness:
         try:
             prompt = (
                 "Read-only Context OS conformance in the supplied public synthetic repository. "
-                "Do not edit files, run setup, create a branch, commit, push, open a PR, or invoke any skill. "
+                "Do not edit files, run setup, create a branch, commit, push, or open a PR. "
+                "Use the available Context OS control without an explicit @skills reference. "
                 f"Verify git rev-parse HEAD is exactly {self.fixture_sha}. Follow AGENTS.md and reply only "
                 f"with {ROOT_CANARY} followed by one space and that exact commit SHA."
             )
@@ -425,7 +435,7 @@ def write_evidence(path: Path, evidence: Evidence) -> None:
         "github_requests": evidence.github_requests,
         "controls": evidence.controls,
     }
-    target = path.resolve(strict=False)
+    target = require_outside_source(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     try:
         descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

@@ -133,6 +133,10 @@ class DevinLiveHarnessTest(unittest.TestCase):
         self.assertIn("bare text", skill)
         self.assertIn('triggers: ["user"]', skill)
 
+    def test_live_evidence_must_be_outside_the_source_repository(self) -> None:
+        with self.assertRaisesRegex(live.HarnessError, "outside the source"):
+            live.require_outside_source(ROOT / "evidence.json")
+
     def test_client_rejects_legacy_or_missing_credentials(self) -> None:
         for token in ("", "apk_fixture", "plain"):
             with self.subTest(token=token):
