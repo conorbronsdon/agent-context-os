@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import io
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
@@ -21,6 +24,7 @@ from contextos.coordination import (
     validate_board,
 )
 from contextos.kernel import ContextOSError
+from contextos.cli import main as cli_main
 
 
 NOW = datetime.fromisoformat("2026-08-31T14:30:00+00:00")
@@ -156,6 +160,15 @@ class CoordinationTests(unittest.TestCase):
         git(self.repo_b, "commit", "-m", message)
         git(self.repo_b, "push", "origin", "coordination:coordination")
         return self._remote_head(self.repo_b)
+
+    def _run_cli(self, *args: str, stdin: str = "") -> tuple[int, str, str]:
+        (self.repo_a / "AGENTS.md").write_text("# Fixture\n", encoding="utf-8")
+        (self.repo_a / "state").mkdir(exist_ok=True)
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch.object(sys, "stdin", io.StringIO(stdin)), redirect_stdout(stdout), redirect_stderr(stderr):
+            status = cli_main(["--root", str(self.repo_a), *args])
+        return status, stdout.getvalue(), stderr.getvalue()
 
     def test_bootstrap_creates_ref_and_second_bootstrap_is_noop(self) -> None:
         before_branch = git(
@@ -305,6 +318,65 @@ class CoordinationTests(unittest.TestCase):
         )
         self.assertNotIn(":", Path(receipt["path"]).name)
         self.assertTrue(receipt["delivered"])
+
+    def test_post_rejects_secret_before_bootstrap_queue_or_primary_mutation(self) -> None:
+        primary_before = git(self.repo_a, "rev-parse", "HEAD").stdout.strip()
+        with self.assertRaisesRegex(ContextOSError, "Context OS test canary") as caught:
+            post_message(
+                self.repo_a,
+                sender="claude/researcher",
+                audience="all",
+                kind="note",
+                body="CONTEXTOS_TEST_SECRET_BOARD_POST",
+                runtime="claude",
+                now=NOW,
+            )
+        self.assertNotIn("CONTEXTOS_TEST_SECRET_BOARD_POST", str(caught.exception))
+        self.assertEqual("", git(self.repo_a, "ls-remote", "origin", "refs/heads/coordination").stdout)
+        self.assertFalse((self.repo_a / ".contextos-outbox").exists())
+        self.assertEqual(primary_before, git(self.repo_a, "rev-parse", "HEAD").stdout.strip())
+
+    def test_post_allows_a_near_miss_to_keep_detection_narrow(self) -> None:
+        bootstrap_board(self.repo_a, now=NOW)
+        receipt = post_message(
+            self.repo_a,
+            sender="claude/researcher",
+            audience="all",
+            kind="note",
+            body="CONTEXTOS_TEST_SECRETS is a documentation heading, not a canary.",
+            runtime="claude",
+            now=NOW,
+        )
+        self.assertTrue(receipt["delivered"])
+
+    def test_board_cli_dispatches_bootstrap_stdin_post_validate_and_rejection(self) -> None:
+        status, stdout, stderr = self._run_cli("board", "bootstrap", "--now", "2026-08-31T14:30:00Z")
+        self.assertEqual(0, status, stderr)
+        self.assertTrue(json.loads(stdout)["delivered"])
+
+        status, stdout, stderr = self._run_cli(
+            "board", "post", "--runtime", "claude", "--from", "claude/researcher",
+            "--audience", "all", "--kind", "note", "--body", "-",
+            "--now", "2026-08-31T14:30:01Z", stdin="CLI body from stdin\n",
+        )
+        self.assertEqual(0, status, stderr)
+        self.assertTrue(json.loads(stdout)["delivered"])
+
+        status, stdout, stderr = self._run_cli("board", "validate", "--now", "2026-08-31T14:30:02Z")
+        self.assertEqual(0, status, stderr)
+        self.assertTrue(json.loads(stdout)["valid"])
+
+        primary_before = git(self.repo_a, "rev-parse", "HEAD").stdout.strip()
+        status, stdout, stderr = self._run_cli(
+            "board", "post", "--runtime", "claude", "--from", "claude/researcher",
+            "--audience", "all", "--kind", "note", "--body", "CONTEXTOS_TEST_SECRET_CLI",
+            "--now", "2026-08-31T14:30:03Z",
+        )
+        self.assertEqual(2, status)
+        self.assertEqual("", stdout)
+        self.assertIn("Context OS test canary", stderr)
+        self.assertNotIn("CONTEXTOS_TEST_SECRET_CLI", stderr)
+        self.assertEqual(primary_before, git(self.repo_a, "rev-parse", "HEAD").stdout.strip())
 
     def test_non_fast_forward_race_retries_and_keeps_both_messages(self) -> None:
         bootstrap_board(self.repo_a, now=NOW)
@@ -807,6 +879,27 @@ class CoordinationTests(unittest.TestCase):
         self.assertIn("user approved", joined_warnings)
         self.assertIn("run this now", joined_warnings)
         self.assertEqual(report["notices"], report["warnings"])
+
+    def test_validate_reports_secret_finding_without_echoing_the_message(self) -> None:
+        bootstrap_board(self.repo_a, now=NOW)
+        path = "coordination/board/20260831T143001Z-acde-claude-secret.md"
+        canary = "CONTEXTOS_TEST_SECRET_VALIDATE"
+        self._plant_files(
+            {
+                path: (
+                    "---\nfrom: claude/researcher\naudience: all\nkind: note\n"
+                    "expires: 2026-09-07T14:30:01Z\n---\n\n"
+                    f"Do not retain {canary}.\n"
+                )
+            },
+            "Plant secret validation fixture",
+        )
+        report = validate_board(self.repo_a, now=NOW)
+        self.assertFalse(report["valid"])
+        self.assertIn(path, "\n".join(report["errors"]))
+        self.assertIn("Context OS test canary", "\n".join(report["errors"]))
+        self.assertNotIn(canary, json.dumps(report))
+        self.assertEqual("[redacted: suspected credential material]", report["messages"][0]["body"])
 
     def test_claim_succession_after_release_and_lease_ttl_bound(self) -> None:
         bootstrap_board(self.repo_a, now=NOW)

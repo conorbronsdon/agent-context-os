@@ -54,6 +54,29 @@ _SUSPICIOUS_PATTERNS = (
     ("urgent", re.compile(r"\burgent\b", re.IGNORECASE)),
 )
 
+# These are intentionally narrow tripwires, not a claim of comprehensive secret
+# detection. Labels, rather than matched text, are returned to callers so a
+# validation report does not become another place that leaks a credential.
+_SECRET_PATTERNS = (
+    ("Context OS test canary", re.compile(r"\bCONTEXTOS_TEST_SECRET_[A-Z0-9_]+\b")),
+    (
+        "GitHub token",
+        re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})\b"),
+    ),
+    ("OpenAI-style API key", re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b")),
+    ("AWS access key ID", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),
+    ("private key block", re.compile(r"-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----")),
+)
+
+
+def _secret_labels(value: str) -> list[str]:
+    """Return detector labels only; never return credential-like matches."""
+    return [label for label, pattern in _SECRET_PATTERNS if pattern.search(value)]
+
+
+def _secret_error(labels: list[str]) -> str:
+    return "board content contains suspected credential material: " + ", ".join(labels)
+
 
 def _git(
     root: Path,
@@ -793,6 +816,16 @@ def post_message(
     if not isinstance(body, str) or not body.strip():
         raise ContextOSError("body must not be empty")
 
+    secret_labels = _secret_labels(
+        "\n".join(
+            value
+            for value in (sender_value, audience_value, kind_value, body, re_ref, expires, runtime_value)
+            if value is not None
+        )
+    )
+    if secret_labels:
+        raise ContextOSError(_secret_error(secret_labels))
+
     expiry_value = _expiry(expires, now=current, field="expires")
     normalized_ref, notices = _prepare_reference(root, re_ref)
 
@@ -1462,6 +1495,9 @@ def validate_board(
             except ContextOSError as exc:
                 errors.append(f"{path}: {exc}")
                 continue
+            secret_labels = _secret_labels(text) if document_type == "message" else []
+            if secret_labels:
+                file_errors.append(_secret_error(secret_labels))
             if document_type == "message" and len(text.encode("utf-8")) > MAX_MESSAGE_BYTES:
                 file_errors.append(
                     f"message exceeds the {MAX_MESSAGE_BYTES}-byte whole-file limit"
@@ -1521,7 +1557,11 @@ def validate_board(
                     "audience": fields.get("audience"),
                     "kind": fields.get("kind"),
                     "expires": fields.get("expires"),
-                    "body": body,
+                    "body": (
+                        "[redacted: suspected credential material]"
+                        if secret_labels
+                        else body
+                    ),
                 }
                 message_reports.append(report)
             else:
