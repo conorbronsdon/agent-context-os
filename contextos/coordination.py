@@ -67,6 +67,7 @@ _SECRET_PATTERNS = (
     ("AWS access key ID", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),
     ("private key block", re.compile(r"-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----")),
 )
+_REDACTED_BOARD_VALUE = "[redacted: suspected credential material]"
 
 
 def _secret_labels(value: str) -> list[str]:
@@ -1557,12 +1558,14 @@ def validate_board(
                     "audience": fields.get("audience"),
                     "kind": fields.get("kind"),
                     "expires": fields.get("expires"),
-                    "body": (
-                        "[redacted: suspected credential material]"
-                        if secret_labels
-                        else body
-                    ),
+                    "body": body,
                 }
+                # Detection scans the raw frontmatter and body.  If it fires,
+                # redact every user-controlled field that this report exposes,
+                # not only the body that is commonly the source of a match.
+                if secret_labels:
+                    for key in ("from", "audience", "kind", "expires", "body"):
+                        report[key] = _REDACTED_BOARD_VALUE
                 message_reports.append(report)
             else:
                 required = ("task", "owner", "lease-expires")

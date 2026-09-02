@@ -901,6 +901,27 @@ class CoordinationTests(unittest.TestCase):
         self.assertNotIn(canary, json.dumps(report))
         self.assertEqual("[redacted: suspected credential material]", report["messages"][0]["body"])
 
+    def test_validate_redacts_frontmatter_when_it_contains_a_secret(self) -> None:
+        bootstrap_board(self.repo_a, now=NOW)
+        path = "coordination/board/20260831T143001Z-acde-claude-frontmatter.md"
+        canary = "CONTEXTOS_TEST_SECRET_FRONTMATTER"
+        self._plant_files(
+            {
+                path: (
+                    f"---\nfrom: {canary}\naudience: all\nkind: note\n"
+                    "expires: 2026-09-07T14:30:01Z\n---\n\n"
+                    "A manually planted invalid board message.\n"
+                )
+            },
+            "Plant frontmatter secret validation fixture",
+        )
+        report = validate_board(self.repo_a, now=NOW)
+        self.assertFalse(report["valid"])
+        self.assertNotIn(canary, json.dumps(report))
+        message = report["messages"][0]
+        for key in ("from", "audience", "kind", "expires", "body"):
+            self.assertEqual("[redacted: suspected credential material]", message[key])
+
     def test_claim_succession_after_release_and_lease_ttl_bound(self) -> None:
         bootstrap_board(self.repo_a, now=NOW)
         with mock.patch.object(coordination.secrets, "token_hex", return_value="aaaa"):
