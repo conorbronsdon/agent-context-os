@@ -27,6 +27,7 @@ SKILL_NAME = "contextos-devin-live-control"
 SHA_RE = re.compile(r"[0-9a-f]{40}")
 ORG_RE = re.compile(r"org-[A-Za-z0-9_-]+")
 REPO_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
+TOKEN_RE = re.compile(r"cog_[A-Za-z0-9_-]+")
 
 
 class HarnessError(RuntimeError):
@@ -39,6 +40,11 @@ Transport = Callable[[str, str, Mapping[str, object] | None, Mapping[str, str], 
 def canonical_hash(value: object) -> str:
     payload = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def safe_error_detail(value: object) -> str:
+    """Return a bounded diagnostic that cannot echo a current Devin token."""
+    return TOKEN_RE.sub("[REDACTED]", str(value))[:1000]
 
 
 def default_transport(
@@ -59,7 +65,10 @@ def default_transport(
             detail = json.loads(raw.decode("utf-8")).get("detail")
         except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
             detail = None
-        raise HarnessError(f"Devin API {method} failed with HTTP {exc.code}: {detail or 'no safe detail'}") from exc
+        safe_detail = safe_error_detail(detail) if detail else "no safe detail"
+        raise HarnessError(
+            f"Devin API {method} failed with HTTP {exc.code}: {safe_detail}"
+        ) from exc
     try:
         decoded = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -71,7 +80,7 @@ def default_transport(
 
 @dataclass
 class DevinClient:
-    token: str
+    token: str = field(repr=False)
     org_id: str
     timeout: float = 30
     transport: Transport = default_transport
@@ -245,7 +254,6 @@ class DevinHarness:
                 {
                     "prompt": prompt,
                     "repos": [self.repository],
-                    "resumable": False,
                     "structured_output_required": False,
                     "title": "Context OS disposable Devin conformance",
                 },
@@ -294,10 +302,40 @@ class DevinHarness:
             })
         finally:
             if session_id:
-                self.client.request(
-                    "DELETE", f"{self.org_path}/sessions/{session_id}?archive=true"
-                )
-                self.evidence.controls["session_terminated_and_archived"] = True
+                try:
+                    archived = self.client.request(
+                        "POST", f"{self.org_path}/sessions/{session_id}/archive"
+                    )
+                    if archived.get("session_id") != session_id:
+                        raise HarnessError("session archive returned a different session ID")
+                    archive_deadline = time.monotonic() + min(
+                        30.0, max(1.0, self.poll_interval * 3)
+                    )
+                    while archived.get("is_archived") is not True:
+                        if time.monotonic() >= archive_deadline:
+                            break
+                        time.sleep(min(5.0, max(0.1, self.poll_interval)))
+                        archived = self.session(session_id)
+                    if archived.get("is_archived") is not True:
+                        raise HarnessError("Devin did not confirm that the session was archived")
+                    self.evidence.controls["session_archived"] = True
+                except HarnessError as archive_error:
+                    try:
+                        terminated = self.client.request(
+                            "DELETE", f"{self.org_path}/sessions/{session_id}"
+                        )
+                        if terminated.get("session_id") != session_id:
+                            raise HarnessError("session termination returned a different session ID")
+                        if terminated.get("status") not in {"exit", "error", "suspended"}:
+                            raise HarnessError("Devin did not confirm fallback session termination")
+                        self.evidence.controls["session_terminated_after_archive_failure"] = True
+                    except HarnessError as terminate_error:
+                        raise HarnessError(
+                            "Devin cleanup failed: archive and fallback termination both failed"
+                        ) from terminate_error
+                    raise HarnessError(
+                        "Devin session was terminated, but required archival failed"
+                    ) from archive_error
         self.evidence.requests = list(self.client.requests)
         return self.evidence
 
@@ -361,6 +399,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             expected_active_build=args.expected_active_build,
             poll_timeout=args.poll_timeout,
         ).execute()
+        if repository_source_sha() != source_sha:
+            raise HarnessError("source commit changed during Devin live conformance")
         write_evidence(args.evidence, evidence)
     except (HarnessError, OSError, subprocess.SubprocessError, ValueError) as exc:
         print(f"Devin live conformance failed safely: {exc}", file=sys.stderr)

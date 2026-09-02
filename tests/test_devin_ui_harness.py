@@ -134,6 +134,23 @@ class DevinUiHarnessTest(unittest.TestCase):
             with self.assertRaisesRegex(ui.HarnessError, "implicit-skill"):
                 ui.record(args, transport=self.github)
 
+    def test_record_requires_exact_devin_session_url(self) -> None:
+        self.prepare()
+        observations = self.observations()
+        observations["session_url"] = "https://app.devin.ai/devin-synthetic"
+        path = self.root / "observations.json"
+        path.write_text(json.dumps(observations), encoding="utf-8")
+        args = argparse.Namespace(
+            manifest=self.manifest,
+            observations=path,
+            evidence=self.evidence,
+            allow_public_fixture_access=True,
+            acknowledge_operator_attestation=True,
+        )
+        with mock.patch.object(ui, "repository_source_sha", return_value=self.source_sha):
+            with self.assertRaisesRegex(ui.HarnessError, "session URL"):
+                ui.record(args, transport=self.github)
+
         observations["root_response"] = f"{ui.ROOT_CANARY} {self.fixture_sha}"
         path.write_text(json.dumps(observations), encoding="utf-8")
         self.github.pulls.append({

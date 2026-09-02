@@ -113,10 +113,12 @@ python adapters/devin/live_conformance.py \
 ```
 
 The harness verifies exact repository access and the active build before it
-creates one non-resumable API session. It tests root instructions, the fixture
+creates one read-only API session. It tests root instructions, the fixture
 skill's user-only must-not-fire control, its explicit must-fire control, exact
-fixture commit reporting, and absence of a created pull request. It then
-terminates and archives the session. Evidence contains hashes and public
+fixture commit reporting, and absence of a created pull request. It then uses
+the current v3 archive endpoint and verifies the archived state. If archival
+fails, it attempts a separate termination but still fails conformance. Evidence
+contains hashes and public
 fixture identifiers, never the token or session messages. Missing credentials,
 opt-ins, repository access, or build identity fail as unverified. The harness
 does not enable, trigger, or inspect Devin Review.
@@ -178,4 +180,5 @@ Current first-party references:
 - [Knowledge](https://docs.devin.ai/product-guides/knowledge)
 - [Secrets](https://docs.devin.ai/product-guides/secrets)
 - [API authentication and PAT availability](https://docs.devin.ai/api-reference/authentication)
+- [Archive session](https://docs.devin.ai/api-reference/v3/sessions/post-organizations-sessions-archive)
 - [Devin Review](https://docs.devin.ai/work-with-devin/devin-review)

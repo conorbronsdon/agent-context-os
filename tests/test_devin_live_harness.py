@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import os
 import sys
 import tempfile
 import unittest
 import urllib.parse
+from contextlib import redirect_stderr
 from pathlib import Path
 from unittest import mock
 
@@ -21,9 +23,12 @@ SPEC.loader.exec_module(live)
 
 
 class FakeTransport:
-    def __init__(self, *, implicit_skill: bool = False) -> None:
+    def __init__(
+        self, *, implicit_skill: bool = False, archive_fails: bool = False
+    ) -> None:
         self.phase = "implicit"
         self.implicit_skill = implicit_skill
+        self.archive_fails = archive_fails
         self.calls: list[tuple[str, str, object, dict[str, str]]] = []
 
     def __call__(self, method, url, payload, headers, _timeout):
@@ -56,7 +61,15 @@ class FakeTransport:
             ]}
         if method == "GET" and "/sessions/devin-fixture" in path:
             return {"status": "running", "status_detail": "finished", "pull_requests": []}
-        if method == "DELETE" and "/sessions/devin-fixture" in path:
+        if method == "POST" and path.endswith("/sessions/devin-fixture/archive"):
+            if self.archive_fails:
+                raise live.HarnessError("synthetic archive failure")
+            return {
+                "session_id": "devin-fixture",
+                "status": "suspended",
+                "is_archived": True,
+            }
+        if method == "DELETE" and path.endswith("/sessions/devin-fixture"):
             return {"session_id": "devin-fixture", "status": "exit"}
         raise AssertionError((method, url, payload))
 
@@ -101,6 +114,12 @@ class DevinLiveHarnessTest(unittest.TestCase):
                 with self.assertRaisesRegex(live.HarnessError, "cog_-"):
                     live.DevinClient(token, "org-fixture")
 
+    def test_client_repr_and_error_details_do_not_expose_tokens(self) -> None:
+        client = live.DevinClient("cog_fixture_secret", "org-fixture")
+        self.assertNotIn("cog_fixture_secret", repr(client))
+        detail = live.safe_error_detail("request rejected for cog_fixture_secret")
+        self.assertEqual("request rejected for [REDACTED]", detail)
+
     def test_live_flow_binds_repo_build_commit_and_separate_skill_turn(self) -> None:
         harness, transport = self.harness()
         evidence = harness.execute()
@@ -108,10 +127,11 @@ class DevinLiveHarnessTest(unittest.TestCase):
         self.assertEqual("build-fixture", evidence.active_build_id)
         self.assertEqual("normal", evidence.devin_mode)
         self.assertNotEqual("", evidence.session_id_sha256)
-        self.assertEqual("DELETE", evidence.requests[-1]["method"])
+        self.assertEqual("POST", evidence.requests[-1]["method"])
+        self.assertTrue(evidence.requests[-1]["path"].endswith("/archive"))
         self.assertNotIn("cog_fixture", json.dumps(evidence.requests))
         create = next(call for call in transport.calls if call[0] == "POST" and call[1].endswith("/sessions"))
-        self.assertFalse(create[2]["resumable"])
+        self.assertNotIn("resumable", create[2])
         self.assertEqual(["conorbronsdon/contextos-devin-live-fixture"], create[2]["repos"])
         self.assertTrue(all(call[3]["Authorization"] == "Bearer cog_fixture" for call in transport.calls))
 
@@ -119,8 +139,21 @@ class DevinLiveHarnessTest(unittest.TestCase):
         harness, transport = self.harness(FakeTransport(implicit_skill=True))
         with self.assertRaisesRegex(live.HarnessError, "fired without explicit"):
             harness.execute()
+        self.assertTrue(
+            any(call[0] == "POST" and call[1].endswith("/archive") for call in transport.calls)
+        )
+        self.assertTrue(harness.evidence.controls["session_archived"])
+
+    def test_archive_failure_terminates_session_and_fails_conformance(self) -> None:
+        harness, transport = self.harness(FakeTransport(archive_fails=True))
+        with self.assertRaisesRegex(
+            live.HarnessError, "terminated, but required archival failed"
+        ):
+            harness.execute()
         self.assertTrue(any(call[0] == "DELETE" for call in transport.calls))
-        self.assertTrue(harness.evidence.controls["session_terminated_and_archived"])
+        self.assertTrue(
+            harness.evidence.controls["session_terminated_after_archive_failure"]
+        )
 
     def test_expected_build_and_exact_identifiers_are_required(self) -> None:
         client = live.DevinClient("cog_fixture", "org-fixture", transport=FakeTransport())
@@ -162,6 +195,31 @@ class DevinLiveHarnessTest(unittest.TestCase):
                 ])
         self.assertEqual(1, status)
         source.assert_not_called()
+
+    def test_main_rechecks_source_before_writing_evidence(self) -> None:
+        evidence = live.Evidence("a" * 40, "b" * 40, "owner/repo")
+        with mock.patch.dict(os.environ, {"DEVIN_API_TOKEN": "cog_fixture"}):
+            with mock.patch.object(
+                live, "repository_source_sha", side_effect=["a" * 40, "c" * 40]
+            ):
+                with mock.patch.object(
+                    live.DevinHarness, "execute", return_value=evidence
+                ):
+                    with mock.patch.object(live, "write_evidence") as write:
+                        with redirect_stderr(io.StringIO()):
+                            status = live.main([
+                                "--org-id", "org-fixture",
+                                "--repository", "owner/repo",
+                                "--fixture-sha", "b" * 40,
+                                "--source-sha", "a" * 40,
+                                "--expected-active-build", "build-fixture",
+                                "--evidence", str(self.root / "evidence.json"),
+                                "--allow-account-access",
+                                "--allow-session-create",
+                                "--acknowledge-public-fixture",
+                            ])
+        self.assertEqual(1, status)
+        write.assert_not_called()
 
 
 if __name__ == "__main__":

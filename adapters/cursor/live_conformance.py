@@ -208,8 +208,11 @@ class CursorHarness:
             raise HarnessError(f"Cursor help omitted required controls: {missing}")
         status = self.run(REPOSITORY_ROOT, "status")
         status_text = require_success(status, "Cursor authentication status")
-        if "not logged in" in status_text.casefold():
-            raise HarnessError("Cursor CLI is not authenticated")
+        normalized_status = status_text.casefold()
+        if "not logged in" in normalized_status or "logged in" not in normalized_status:
+            raise HarnessError(
+                "Cursor CLI is not authenticated or did not positively confirm authentication"
+            )
         self.evidence.controls["exact_version"] = True
         self.evidence.controls["required_flags"] = True
         self.evidence.controls["authenticated"] = True
@@ -380,6 +383,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         harness = CursorHarness(args.binary, args.expected_version, actual_sha)
         evidence = harness.execute()
+        if repository_source_sha() != actual_sha:
+            raise HarnessError("source commit changed during Cursor live conformance")
         write_evidence(args.evidence, evidence)
     except (HarnessError, OSError, subprocess.SubprocessError) as exc:
         print(f"cursor live conformance failed: {exc}", file=os.sys.stderr)

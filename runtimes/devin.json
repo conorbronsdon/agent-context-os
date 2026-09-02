@@ -53,6 +53,7 @@
         "devin-agents",
         "devin-skills",
         "devin-api-auth",
+        "devin-api-sessions",
         "devin-kernel",
         "devin-conformance",
         "devin-live-harness",
@@ -110,6 +111,12 @@
         "id": "devin-api-auth",
         "type": "official",
         "location": "https://docs.devin.ai/api-reference/authentication",
+        "claims": ["support"]
+      },
+      {
+        "id": "devin-api-sessions",
+        "type": "official",
+        "location": "https://docs.devin.ai/api-reference/v3/sessions/post-organizations-sessions-archive",
         "claims": ["support"]
       },
       {

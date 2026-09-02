@@ -52,6 +52,7 @@ class DevinDescriptorTest(unittest.TestCase):
         self.assertIn("devin-live-harness", session["evidence"])
         self.assertIn("devin-ui-harness", session["evidence"])
         self.assertIn("devin-api-auth", session["evidence"])
+        self.assertIn("devin-api-sessions", session["evidence"])
 
     def test_every_lifecycle_skill_is_user_only_in_devin(self) -> None:
         for skill in LIFECYCLE_SKILLS:

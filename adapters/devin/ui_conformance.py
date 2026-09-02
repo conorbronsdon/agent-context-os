@@ -35,7 +35,7 @@ FIXTURE_PATHS = (
 )
 REPO_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 SHA_RE = re.compile(r"[0-9a-f]{40}")
-SESSION_RE = re.compile(r"https://app\.devin\.ai/(?:sessions/)?[A-Za-z0-9_-]+/?")
+SESSION_RE = re.compile(r"https://app\.devin\.ai/sessions/[A-Za-z0-9_-]+/?")
 GITHUB_ROOT = "https://api.github.com"
 
 
@@ -260,6 +260,8 @@ def record(args: argparse.Namespace, *, transport: Transport = default_transport
     account_identity_inspectable = environment_identity != "unavailable"
     build_identity_inspectable = product_build != "unavailable"
 
+    if repository_source_sha() != source_sha:
+        raise HarnessError("source commit changed during Devin UI evidence recording")
     write_create_only(args.evidence, {
         "schema_version": 1,
         "checked_at": datetime.now(timezone.utc).isoformat(),

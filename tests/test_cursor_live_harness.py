@@ -84,6 +84,19 @@ class CursorLiveHarnessTest(unittest.TestCase):
         with self.assertRaisesRegex(live.HarnessError, "not authenticated"):
             harness.preflight()
 
+    def test_preflight_requires_positive_authentication_marker(self) -> None:
+        responses = iter([
+            live.CommandResult([], 0, "2026.08.31-4057e58\n", ""),
+            live.CommandResult([], 0, "--print --force --workspace --trust", ""),
+            live.CommandResult([], 0, "Authentication status unavailable", ""),
+        ])
+        harness = live.CursorHarness(
+            self.binary, "2026.08.31-4057e58", "a" * 40,
+            runner=lambda *_: next(responses),
+        )
+        with self.assertRaisesRegex(live.HarnessError, "positively confirm"):
+            harness.preflight()
+
     def test_require_canary_rejects_benign_success_without_evidence(self) -> None:
         with self.assertRaisesRegex(live.HarnessError, "did not return"):
             live.require_canary(live.CommandResult([], 0, "ordinary", ""), "CANARY", "root")
@@ -110,6 +123,27 @@ class CursorLiveHarnessTest(unittest.TestCase):
                 ])
         self.assertEqual(1, status)
         source.assert_not_called()
+
+    def test_main_rechecks_source_before_writing_evidence(self) -> None:
+        target = self.root / "evidence.json"
+        evidence = live.Evidence(
+            expected_version="v1", source_sha="a" * 40, binary_version="v1"
+        )
+        with mock.patch.object(
+            live, "repository_source_sha", side_effect=["a" * 40, "b" * 40]
+        ):
+            with mock.patch.object(live.CursorHarness, "execute", return_value=evidence):
+                with mock.patch.object(live, "write_evidence") as write:
+                    with redirect_stderr(io.StringIO()):
+                        status = live.main([
+                            "--binary", str(self.binary),
+                            "--expected-version", "v1",
+                            "--source-sha", "a" * 40,
+                            "--evidence", str(target),
+                            "--allow-model-traffic",
+                        ])
+        self.assertEqual(1, status)
+        write.assert_not_called()
 
     def test_source_sha_requires_clean_worktree(self) -> None:
         responses = iter([

@@ -291,6 +291,8 @@ def record(args: argparse.Namespace) -> None:
         raise HarnessError(f"IDE changed unexpected fixture paths: {sorted(mutations)}")
 
     conflict_winner = "agents" if conflict == canaries["conflict_root"] else "project_rule"
+    if repository_source_sha() != actual_sha:
+        raise HarnessError("source commit changed during Cursor IDE evidence recording")
     write_create_only(evidence_path, {
         "schema_version": 1,
         "checked_at": datetime.now(timezone.utc).isoformat(),
