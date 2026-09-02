@@ -908,16 +908,17 @@ class CoordinationTests(unittest.TestCase):
         self._plant_files(
             {
                 path: (
-                    f"---\nfrom: {canary}\naudience: all\nkind: note\n"
+                    f"---\nfrom: claude/researcher\naudience: {canary}\nkind: note\n"
                     "expires: 2026-09-07T14:30:01Z\n---\n\n"
                     "A manually planted invalid board message.\n"
                 )
             },
             "Plant frontmatter secret validation fixture",
         )
-        report = validate_board(self.repo_a, now=NOW)
+        report = validate_board(self.repo_a, roles=["publisher"], now=NOW)
         self.assertFalse(report["valid"])
         self.assertNotIn(canary, json.dumps(report))
+        self.assertIn("diagnostics withheld", "\n".join(report["warnings"]))
         message = report["messages"][0]
         for key in ("from", "audience", "kind", "expires", "body"):
             self.assertEqual("[redacted: suspected credential material]", message[key])

@@ -1511,6 +1511,7 @@ def validate_board(
                 fields, body = {}, ""
 
             if document_type == "message":
+                message_warnings: list[str] = []
                 required = ("from", "audience", "kind", "expires")
                 for key in required:
                     if key not in fields:
@@ -1531,7 +1532,7 @@ def validate_board(
                     else:
                         valid_reference, reason = _reference_status(root, fields["re"])
                         if not valid_reference:
-                            warnings.append(
+                            message_warnings.append(
                                 f"{path}: reference degraded to summary-only: {reason}"
                             )
 
@@ -1539,14 +1540,14 @@ def validate_board(
                 if audience is not None:
                     warning = _audience_notice(audience, roles, path)
                     if warning is not None:
-                        warnings.append(warning)
+                        message_warnings.append(warning)
                 matched = [
                     label
                     for label, pattern in _SUSPICIOUS_PATTERNS
                     if pattern.search(body)
                 ]
                 if matched:
-                    warnings.append(
+                    message_warnings.append(
                         f"{path}: suspicious imperative or authorization language: "
                         + ", ".join(matched)
                     )
@@ -1566,6 +1567,15 @@ def validate_board(
                 if secret_labels:
                     for key in ("from", "audience", "kind", "expires", "body"):
                         report[key] = _REDACTED_BOARD_VALUE
+                    # Some diagnostics interpolate metadata. Suppress every
+                    # per-message diagnostic once raw-text detection fires so
+                    # a warning cannot reintroduce the value just redacted.
+                    if message_warnings:
+                        warnings.append(
+                            f"{path}: diagnostics withheld for suspected credential material"
+                        )
+                else:
+                    warnings.extend(message_warnings)
                 message_reports.append(report)
             else:
                 required = ("task", "owner", "lease-expires")
