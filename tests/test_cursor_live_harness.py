@@ -35,7 +35,11 @@ class CursorLiveHarnessTest(unittest.TestCase):
         workspace = self.root / "workspace"
         canaries = {"root": "ROOT", "nested": "NESTED", "skill": "SKILL"}
         live.write_fixture(workspace, canaries)
-        live.write_permissions(workspace)
+        live.write_permissions(
+            workspace,
+            allow=["Write(*)"],
+            deny=["Write(*)", "Shell(*)"],
+        )
         skill = (workspace / ".agents/skills/contextos-live-explicit/SKILL.md").read_text(
             encoding="utf-8"
         )
@@ -43,7 +47,7 @@ class CursorLiveHarnessTest(unittest.TestCase):
         config = json.loads((workspace / ".cursor/cli.json").read_text(encoding="utf-8"))
         self.assertEqual(["Write(*)"], config["permissions"]["allow"])
         self.assertEqual(
-            ["Write(denied.txt)", "Shell(*)"], config["permissions"]["deny"]
+            ["Write(*)", "Shell(*)"], config["permissions"]["deny"]
         )
         self.assertEqual("disposable\n", (workspace / live.DISPOSABLE_MARKER).read_text())
 

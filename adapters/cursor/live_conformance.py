@@ -151,14 +151,16 @@ def write_fixture(root: Path, canaries: Mapping[str, str]) -> None:
     )
 
 
-def write_permissions(root: Path) -> None:
+def write_permissions(
+    root: Path, *, allow: Sequence[str], deny: Sequence[str]
+) -> None:
     cursor = root / ".cursor"
     cursor.mkdir(exist_ok=True)
     (cursor / "cli.json").write_text(
         json.dumps({
             "permissions": {
-                "allow": ["Write(*)"],
-                "deny": ["Write(denied.txt)", "Shell(*)"],
+                "allow": list(allow),
+                "deny": list(deny),
             }
         }, indent=2) + "\n",
         encoding="utf-8",
@@ -281,8 +283,12 @@ class CursorHarness:
             if mutations != {"unattended.txt"}:
                 raise HarnessError(f"headless print mode changed unexpected workspace paths: {sorted(mutations)}")
 
-            write_permissions(workspace)
-            permission_baseline = snapshot(workspace)
+            write_permissions(
+                workspace,
+                allow=["Write(*)"],
+                deny=["Write(*)", "Shell(*)"],
+            )
+            denied_baseline = snapshot(workspace)
             denied = workspace / "denied.txt"
             denied_result = self.agent(
                 workspace,
@@ -292,9 +298,15 @@ class CursorHarness:
             require_success(denied_result, "deny-precedence control")
             if denied.exists():
                 raise HarnessError("project deny did not override --force")
-            if changed_paths(permission_baseline, snapshot(workspace)):
+            if changed_paths(denied_baseline, snapshot(workspace)):
                 raise HarnessError("deny-precedence control changed the workspace")
 
+            write_permissions(
+                workspace,
+                allow=["Write(*)"],
+                deny=["Shell(*)"],
+            )
+            permission_baseline = snapshot(workspace)
             allowed = workspace / "allowed.txt"
             allowed_result = self.agent(
                 workspace,
