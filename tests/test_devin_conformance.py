@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import unittest
 from pathlib import Path
 
@@ -48,6 +47,8 @@ class DevinDescriptorTest(unittest.TestCase):
         )
         self.assertEqual("native", session["capabilities"]["agent_skills"])
         self.assertEqual("native", session["capabilities"]["explicit_invocation"])
+        self.assertIn("tests/test_devin_live_harness.py", session["conformance_tests"])
+        self.assertIn("devin-live-harness", session["evidence"])
 
     def test_every_lifecycle_skill_is_user_only_in_devin(self) -> None:
         for skill in LIFECYCLE_SKILLS:
@@ -127,15 +128,19 @@ class DevinDescriptorTest(unittest.TestCase):
                 self.assertFalse((ROOT / path).exists())
 
 
-@unittest.skipUnless(
-    os.environ.get("CONTEXTOS_DEVIN_LIVE_ACCOUNT") == "1",
-    "set CONTEXTOS_DEVIN_LIVE_ACCOUNT=1 only in a dedicated synthetic account fixture",
-)
-class DevinLiveAccountGate(unittest.TestCase):
-    def test_live_account_fixture_is_not_yet_implemented(self) -> None:
-        self.fail(
-            "live Devin conformance is intentionally unimplemented; do not mark the account verified"
-        )
+class DevinLiveAccountGateTest(unittest.TestCase):
+    def test_live_account_harness_requires_explicit_credentials_and_opt_ins(self) -> None:
+        source = (ROOT / "adapters/devin/live_conformance.py").read_text(encoding="utf-8")
+        for required in (
+            "DEVIN_API_TOKEN",
+            "--expected-active-build",
+            "--allow-account-access",
+            "--allow-session-create",
+            "--acknowledge-public-fixture",
+            '"review_not_invoked": True',
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, source)
 
 
 if __name__ == "__main__":

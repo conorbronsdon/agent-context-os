@@ -45,13 +45,15 @@
       "binary_probes": [],
       "conformance_tests": [
         "tests/test_devin_conformance.py",
+        "tests/test_devin_live_harness.py",
         "tests/test_contextos_kernel.py"
       ],
       "evidence": [
         "devin-agents",
         "devin-skills",
         "devin-kernel",
-        "devin-conformance"
+        "devin-conformance",
+        "devin-live-harness"
       ]
     },
     "review": {
@@ -112,6 +114,12 @@
         "type": "conformance",
         "location": "tests/test_devin_conformance.py",
         "claims": ["explicit_invocation", "support"]
+      },
+      {
+        "id": "devin-live-harness",
+        "type": "conformance",
+        "location": "adapters/devin/live_conformance.py",
+        "claims": ["instruction_sources", "agent_skills", "explicit_invocation"]
       }
     ]
   }

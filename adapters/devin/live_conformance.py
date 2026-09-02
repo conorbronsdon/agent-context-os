@@ -1,0 +1,373 @@
+"""Opt-in Devin cloud-session conformance against a public synthetic fixture."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Callable, Mapping, Sequence
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+API_ROOT = "https://api.devin.ai"
+ROOT_CANARY = "CONTEXTOS_DEVIN_ROOT_7D6A41C9"
+SKILL_CANARY = "CONTEXTOS_DEVIN_SKILL_49B28E73"
+SKILL_NAME = "contextos-devin-live-control"
+SHA_RE = re.compile(r"[0-9a-f]{40}")
+ORG_RE = re.compile(r"org-[A-Za-z0-9_-]+")
+REPO_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
+
+
+class HarnessError(RuntimeError):
+    """A live conformance control failed safely."""
+
+
+Transport = Callable[[str, str, Mapping[str, object] | None, Mapping[str, str], float], Mapping[str, object]]
+
+
+def canonical_hash(value: object) -> str:
+    payload = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def default_transport(
+    method: str,
+    url: str,
+    payload: Mapping[str, object] | None,
+    headers: Mapping[str, str],
+    timeout: float,
+) -> Mapping[str, object]:
+    body = None if payload is None else json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(url, data=body, headers=dict(headers), method=method)
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            raw = response.read()
+    except urllib.error.HTTPError as exc:
+        raw = exc.read()
+        try:
+            detail = json.loads(raw.decode("utf-8")).get("detail")
+        except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
+            detail = None
+        raise HarnessError(f"Devin API {method} failed with HTTP {exc.code}: {detail or 'no safe detail'}") from exc
+    try:
+        decoded = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HarnessError(f"Devin API {method} returned invalid JSON") from exc
+    if not isinstance(decoded, dict):
+        raise HarnessError(f"Devin API {method} returned a non-object response")
+    return decoded
+
+
+@dataclass
+class DevinClient:
+    token: str
+    org_id: str
+    timeout: float = 30
+    transport: Transport = default_transport
+    requests: list[dict[str, object]] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if not self.token.startswith("cog_"):
+            raise HarnessError("DEVIN_API_TOKEN must be a current cog_-prefixed credential")
+        if not ORG_RE.fullmatch(self.org_id):
+            raise HarnessError("--org-id must be an org- identifier")
+
+    def request(
+        self, method: str, path: str, payload: Mapping[str, object] | None = None
+    ) -> Mapping[str, object]:
+        url = f"{API_ROOT}{path}"
+        response = self.transport(
+            method,
+            url,
+            payload,
+            {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"},
+            self.timeout,
+        )
+        safe_path = path.replace(self.org_id, "{org_id}")
+        safe_path = re.sub(r"devin-[A-Za-z0-9_-]+", "{devin_id}", safe_path)
+        self.requests.append({
+            "method": method,
+            "path": safe_path,
+            "request_sha256": canonical_hash(payload) if payload is not None else None,
+            "response_sha256": canonical_hash(response),
+        })
+        return response
+
+
+def repository_source_sha() -> str:
+    status = subprocess.run(
+        ["git", "status", "--short"], cwd=REPOSITORY_ROOT, text=True,
+        encoding="utf-8", errors="replace", capture_output=True, check=False,
+    )
+    if status.returncode or status.stdout.strip():
+        raise HarnessError("live conformance must run from one clean source commit")
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=REPOSITORY_ROOT, text=True,
+        encoding="utf-8", errors="replace", capture_output=True, check=False,
+    )
+    value = head.stdout.strip()
+    if head.returncode or not SHA_RE.fullmatch(value):
+        raise HarnessError("could not bind live conformance to the source commit")
+    return value
+
+
+def require_items(response: Mapping[str, object], subject: str) -> list[Mapping[str, object]]:
+    items = response.get("items")
+    if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
+        raise HarnessError(f"{subject} response omitted an object items list")
+    return items
+
+
+@dataclass
+class Evidence:
+    source_sha: str
+    fixture_sha: str
+    repository: str
+    active_build_id: str = ""
+    session_id_sha256: str = ""
+    devin_mode: str | None = None
+    requests: list[dict[str, object]] = field(default_factory=list)
+    controls: dict[str, bool] = field(default_factory=dict)
+
+
+class DevinHarness:
+    def __init__(
+        self,
+        client: DevinClient,
+        *,
+        repository: str,
+        fixture_sha: str,
+        source_sha: str,
+        expected_active_build: str,
+        poll_timeout: float = 900,
+        poll_interval: float = 10,
+    ) -> None:
+        if not REPO_RE.fullmatch(repository):
+            raise HarnessError("--repository must be an exact owner/name path")
+        if not SHA_RE.fullmatch(fixture_sha) or not SHA_RE.fullmatch(source_sha):
+            raise HarnessError("source and fixture SHAs must be exact lowercase 40-character commits")
+        if not expected_active_build:
+            raise HarnessError("--expected-active-build is required")
+        self.client = client
+        self.repository = repository
+        self.fixture_sha = fixture_sha
+        self.expected_active_build = expected_active_build
+        self.poll_timeout = poll_timeout
+        self.poll_interval = poll_interval
+        self.evidence = Evidence(source_sha, fixture_sha, repository)
+
+    @property
+    def org_path(self) -> str:
+        return f"/v3/organizations/{self.client.org_id}"
+
+    def active_build(self) -> Mapping[str, object]:
+        response = self.client.request(
+            "GET",
+            f"/v3beta1/organizations/{self.client.org_id}/snapshot-setup/builds?active=true&first=1",
+        )
+        items = require_items(response, "active build")
+        if len(items) != 1:
+            raise HarnessError("Devin did not report exactly one active build")
+        build = items[0]
+        if build.get("build_id") != self.expected_active_build or build.get("status") != "succeeded":
+            raise HarnessError("active Devin build does not match the expected successful build")
+        return build
+
+    def verify_repository_access(self) -> None:
+        query = urllib.parse.urlencode({
+            "filter_name": self.repository.rsplit("/", 1)[1],
+            "load_indexing_status": "false",
+            "first": 100,
+        })
+        response = self.client.request(
+            "GET", f"/v3beta1/organizations/{self.client.org_id}/repositories?{query}"
+        )
+        matches = [item for item in require_items(response, "repository access") if item.get("repo_path") == self.repository]
+        if len(matches) != 1:
+            raise HarnessError("the exact public fixture repository is not available to this Devin organization")
+
+    def messages(self, session_id: str) -> list[Mapping[str, object]]:
+        response = self.client.request(
+            "GET", f"{self.org_path}/sessions/{session_id}/messages?first=200"
+        )
+        return require_items(response, "session messages")
+
+    def session(self, session_id: str) -> Mapping[str, object]:
+        return self.client.request("GET", f"{self.org_path}/sessions/{session_id}")
+
+    def wait_for_devin(
+        self, session_id: str, *, after_events: set[str], canary: str
+    ) -> tuple[str, set[str]]:
+        deadline = time.monotonic() + self.poll_timeout
+        while time.monotonic() < deadline:
+            messages = self.messages(session_id)
+            new = [
+                item for item in messages
+                if item.get("source") == "devin" and item.get("event_id") not in after_events
+            ]
+            text = "\n".join(str(item.get("message", "")) for item in new)
+            if canary in text:
+                return text, {str(item.get("event_id")) for item in messages}
+            state = self.session(session_id)
+            if state.get("status") in {"error", "exit", "suspended"}:
+                raise HarnessError(
+                    f"Devin session ended before the required canary: {state.get('status_detail') or state.get('status')}"
+                )
+            time.sleep(self.poll_interval)
+        raise HarnessError("timed out waiting for Devin conformance output")
+
+    def execute(self) -> Evidence:
+        self.verify_repository_access()
+        before_build = self.active_build()
+        self.evidence.active_build_id = str(before_build["build_id"])
+        session_id = ""
+        try:
+            prompt = (
+                "Read-only Context OS conformance in the supplied public synthetic repository. "
+                "Do not edit files, run setup, create a branch, commit, push, open a PR, or invoke any skill. "
+                f"Verify git rev-parse HEAD is exactly {self.fixture_sha}. Follow AGENTS.md and reply only "
+                f"with {ROOT_CANARY} followed by one space and that exact commit SHA."
+            )
+            created = self.client.request(
+                "POST",
+                f"{self.org_path}/sessions",
+                {
+                    "prompt": prompt,
+                    "repos": [self.repository],
+                    "resumable": False,
+                    "structured_output_required": False,
+                    "title": "Context OS disposable Devin conformance",
+                },
+            )
+            session_id = str(created.get("session_id", ""))
+            if not re.fullmatch(r"devin-[A-Za-z0-9_-]+", session_id):
+                raise HarnessError("session creation omitted a valid Devin session ID")
+            if created.get("org_id") != self.client.org_id:
+                raise HarnessError("session creation returned a different organization")
+            self.evidence.session_id_sha256 = hashlib.sha256(session_id.encode()).hexdigest()
+            self.evidence.devin_mode = created.get("devin_mode") if isinstance(created.get("devin_mode"), str) else None
+
+            implicit, events = self.wait_for_devin(session_id, after_events=set(), canary=ROOT_CANARY)
+            if self.fixture_sha not in implicit:
+                raise HarnessError("implicit control did not report the exact fixture commit")
+            if SKILL_CANARY in implicit:
+                raise HarnessError("user-only Devin skill fired without explicit invocation")
+
+            self.client.request(
+                "POST",
+                f"{self.org_path}/sessions/{session_id}/messages",
+                {"message": f"@skills:{SKILL_NAME} Return only the canary required by this skill."},
+            )
+            explicit, _ = self.wait_for_devin(
+                session_id, after_events=events, canary=SKILL_CANARY
+            )
+            if ROOT_CANARY in explicit:
+                raise HarnessError("explicit skill control returned unexpected root output")
+
+            final = self.session(session_id)
+            if final.get("pull_requests") not in ([], None):
+                raise HarnessError("disposable Devin session created a pull request")
+            after_build = self.active_build()
+            if after_build.get("build_id") != before_build.get("build_id"):
+                raise HarnessError("the active Devin build changed during conformance")
+
+            self.evidence.controls.update({
+                "repository_access": True,
+                "exact_fixture_commit": True,
+                "exact_active_build": True,
+                "root_instruction_discovery": True,
+                "implicit_skill_must_not_fire": True,
+                "explicit_skill_must_fire": True,
+                "no_pull_request_created": True,
+                "review_not_invoked": True,
+            })
+        finally:
+            if session_id:
+                self.client.request(
+                    "DELETE", f"{self.org_path}/sessions/{session_id}?archive=true"
+                )
+                self.evidence.controls["session_terminated_and_archived"] = True
+        self.evidence.requests = list(self.client.requests)
+        return self.evidence
+
+
+def write_evidence(path: Path, evidence: Evidence) -> None:
+    payload = {
+        "schema_version": 1,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "runtime": "devin",
+        "surface": "session",
+        "source_sha": evidence.source_sha,
+        "fixture_sha": evidence.fixture_sha,
+        "repository": evidence.repository,
+        "active_build_id": evidence.active_build_id,
+        "session_id_sha256": evidence.session_id_sha256,
+        "devin_mode": evidence.devin_mode,
+        "requests": evidence.requests,
+        "controls": evidence.controls,
+    }
+    target = path.resolve(strict=False)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError as exc:
+        raise HarnessError(f"refusing to overwrite evidence: {target}") from exc
+    with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+        json.dump(payload, stream, indent=2, sort_keys=True)
+        stream.write("\n")
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--org-id", required=True)
+    parser.add_argument("--repository", required=True)
+    parser.add_argument("--fixture-sha", required=True)
+    parser.add_argument("--source-sha", required=True)
+    parser.add_argument("--expected-active-build", required=True)
+    parser.add_argument("--evidence", required=True, type=Path)
+    parser.add_argument("--poll-timeout", type=float, default=900)
+    parser.add_argument("--allow-account-access", action="store_true")
+    parser.add_argument("--allow-session-create", action="store_true")
+    parser.add_argument("--acknowledge-public-fixture", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
+    try:
+        if not args.allow_account_access or not args.allow_session_create or not args.acknowledge_public_fixture:
+            raise HarnessError("live Devin conformance requires all three explicit opt-in flags")
+        source_sha = repository_source_sha()
+        if args.source_sha != source_sha:
+            raise HarnessError(f"--source-sha must equal the clean harness commit {source_sha}")
+        token = os.environ.get("DEVIN_API_TOKEN", "")
+        client = DevinClient(token, args.org_id)
+        evidence = DevinHarness(
+            client,
+            repository=args.repository,
+            fixture_sha=args.fixture_sha,
+            source_sha=source_sha,
+            expected_active_build=args.expected_active_build,
+            poll_timeout=args.poll_timeout,
+        ).execute()
+        write_evidence(args.evidence, evidence)
+    except (HarnessError, OSError, subprocess.SubprocessError, ValueError) as exc:
+        print(f"Devin live conformance failed safely: {exc}", file=sys.stderr)
+        return 1
+    print(f"Devin session conformance passed; evidence: {args.evidence}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

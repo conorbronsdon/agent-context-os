@@ -994,11 +994,27 @@
                     "policy": "managed"
                 },
                 {
+                    "path": "adapters/devin/live_conformance.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "adapters/devin/live-fixture/AGENTS.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "adapters/devin/live-fixture/.agents/skills/contextos-devin-live-control/SKILL.md",
+                    "policy": "managed"
+                },
+                {
                     "path": "runtimes/devin.json",
                     "policy": "managed"
                 },
                 {
                     "path": "tests/test_devin_conformance.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_devin_live_harness.py",
                     "policy": "development"
                 }
             ]

@@ -80,6 +80,46 @@ bridge, skill allowlist, execution-authorization adapter, Blueprint, Knowledge
 record, secret, playbook, MCP config, or Review config. `MEMORY.md` has no
 documented special Devin session semantics and is not synchronized.
 
+## Live session conformance
+
+The repository includes a sanitized fixture source under
+`adapters/devin/live-fixture/` and an opt-in v3 API harness at
+`adapters/devin/live_conformance.py`. Publish only that fixture tree to a
+dedicated public repository, without adding personal data or secrets, and bind
+the run to its exact remote commit. Do not use this repository or another user
+workspace as the fixture.
+
+Use a short-lived human PAT from **Settings > Devin API > PATs** for a local
+maintainer run and store it only in `DEVIN_API_TOKEN`. Record the exact
+organization ID and the successful build returned by the active-build API,
+then run from one clean harness commit:
+
+```bash
+python adapters/devin/live_conformance.py \
+  --org-id <org-id> \
+  --repository <owner/public-fixture> \
+  --fixture-sha <exact-fixture-commit> \
+  --source-sha <exact-clean-harness-commit> \
+  --expected-active-build <exact-active-build-id> \
+  --evidence /outside/repository/devin-session-evidence.json \
+  --allow-account-access \
+  --allow-session-create \
+  --acknowledge-public-fixture
+```
+
+The harness verifies exact repository access and the active build before it
+creates one non-resumable API session. It tests root instructions, the fixture
+skill's user-only must-not-fire control, its explicit must-fire control, exact
+fixture commit reporting, and absence of a created pull request. It then
+terminates and archives the session. Evidence contains hashes and public
+fixture identifiers, never the token or session messages. Missing credentials,
+opt-ins, repository access, or build identity fail as unverified. The harness
+does not enable, trigger, or inspect Devin Review.
+
+This fixture proves the cloud instruction and skill substrate. Promotion still
+requires a separate lifecycle proposal/apply authorization fixture and a
+separately approved Review fixture; neither may inherit this result.
+
 Promotion requires dated live-account fixtures that demonstrate instruction
 and skill discovery, explicit lifecycle behavior, proposal/apply authorization,
 repository access, and exact account/build identity. Account-dependent checks
