@@ -967,6 +967,10 @@
                     "policy": "managed"
                 },
                 {
+                    "path": "adapters/cursor/ide_conformance.py",
+                    "policy": "managed"
+                },
+                {
                     "path": "runtimes/cursor.json",
                     "policy": "managed"
                 },
@@ -976,6 +980,10 @@
                 },
                 {
                     "path": "tests/test_cursor_live_harness.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_cursor_ide_harness.py",
                     "policy": "development"
                 }
             ]

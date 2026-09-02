@@ -145,6 +145,22 @@ version drift, missing authentication, evidence overwrite, unexpected fixture
 mutation, and the real repository as a target. It never invokes Cursor's
 built-in `/update` command. A passing CLI artifact is not IDE evidence.
 
+The IDE has a separate operator-assisted harness at
+`adapters/cursor/ide_conformance.py`. Its `prepare` command requires an exact
+clean source commit, installed binary hash, disposable workspace, isolated
+native profile, and explicit model-traffic opt-ins. Open only the generated
+workspace with the generated profile. Follow the prompts stored in the
+create-only manifest, record the exact synthetic observations in a JSON file,
+then use `record` with `--acknowledge-operator-attestation`. The recorder checks
+root and nested instructions, an always-applied project rule, installed-build
+instruction/rule conflict behavior, explicit-skill must-fire and implicit-skill
+must-not-fire controls, Ask-mode preservation, interactive denial and scoped
+approval, native-profile isolation, and absence of project MCP and hook config.
+It accepts only one exact approved fixture write and emits create-only evidence
+outside the repository. For the short `/update` collision, observe the slash
+menu and record `builtin`, `skill`, `ambiguous`, or `unavailable`; never submit
+or execute it.
+
 Project-owned `.cursor/` configuration is permitted by workspace validation.
 Strict maintainer validation still requires every template-owned path to have
 an explicit component owner.

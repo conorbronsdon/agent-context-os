@@ -43,12 +43,13 @@
       ],
       "conformance_tests": [
         "tests/test_cursor_conformance.py",
+        "tests/test_cursor_ide_harness.py",
         "tests/test_cursor_live_harness.py",
         "tests/test_contextos_kernel.py"
       ],
       "evidence": [
         "cursor-rules", "cursor-skills", "cursor-hooks", "cursor-mcp", "cursor-run-modes",
-        "cursor-kernel", "cursor-conformance", "cursor-live-harness"
+        "cursor-kernel", "cursor-conformance", "cursor-ide-harness", "cursor-live-harness"
       ]
     },
     "cli": {
@@ -155,6 +156,12 @@
         "type": "conformance",
         "location": "tests/test_cursor_conformance.py",
         "claims": ["support"]
+      },
+      {
+        "id": "cursor-ide-harness",
+        "type": "conformance",
+        "location": "adapters/cursor/ide_conformance.py",
+        "claims": ["instruction_sources", "agent_skills", "explicit_invocation", "execution_authorization"]
       },
       {
         "id": "cursor-live-harness",
