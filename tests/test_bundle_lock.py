@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import importlib.util
 import io
 import json
 import os
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -36,6 +38,12 @@ from contextos.primitives import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
+MEASURE_SPEC = importlib.util.spec_from_file_location(
+    "bundle_measurement", ROOT / "scripts/measure-bundle-materialization.py"
+)
+assert MEASURE_SPEC is not None and MEASURE_SPEC.loader is not None
+bundle_measurement = importlib.util.module_from_spec(MEASURE_SPEC)
+MEASURE_SPEC.loader.exec_module(bundle_measurement)
 
 
 def digest(path: Path) -> str:
@@ -469,6 +477,53 @@ class BundleLockTest(unittest.TestCase):
             [{"AGENTS.md", "GUIDE.md", "README.md"}], retained_sets
         )
         self.assertNotIn("addon.md", retained_sets[0])
+
+    def test_selected_apply_metric_adds_outer_and_projection_buffers(self) -> None:
+        source = self.root / "concurrent-metric-source"
+        source.mkdir()
+        fixture = BundleFixture(
+            source,
+            version="2.0.0",
+            managed=b"selected\n",
+            addon=True,
+            runtime_addon=False,
+            entry_surfaces=True,
+        )
+        retained = {"managed.bin", "GUIDE.md"}
+        projection = {"AGENTS.md", "GUIDE.md", "README.md"}
+        sizes = {
+            item["path"]: item["size"]
+            for item in fixture.lock["bundle"]["files"]
+        }
+        outer_bytes = sum(sizes[path] for path in retained)
+        expected_peak = outer_bytes + bundle_measurement._logical_verification_peak(
+            fixture.lock, role="candidate", retain_paths=projection
+        )
+        expected_bound = outer_bytes + bundle_measurement._logical_verification_bound(
+            fixture.lock, role="candidate", retain_paths=projection
+        )
+        metric = bundle_measurement._metric(
+            "selected_upgrade",
+            time.perf_counter(),
+            [],
+            fixture.lock,
+            retained,
+            observed_retained_payload_bytes=outer_bytes,
+            traced_python_peak_bytes=0,
+            projection_paths=projection,
+        )
+        union_peak = bundle_measurement._logical_verification_peak(
+            fixture.lock,
+            role="candidate",
+            retain_paths=retained | projection,
+        )
+        self.assertEqual(expected_peak, metric["logical_concurrent_apply_peak_bytes"])
+        self.assertEqual(
+            expected_bound, metric["logical_concurrent_apply_bound_bytes"]
+        )
+        self.assertEqual(expected_peak, metric["logical_peak_retained_payload_bytes"])
+        self.assertEqual(expected_bound, metric["logical_retained_payload_bound_bytes"])
+        self.assertGreater(expected_peak, union_peak)
 
     def test_git_batch_reader_rejects_malformed_and_truncated_records(self) -> None:
         class BatchProcess:

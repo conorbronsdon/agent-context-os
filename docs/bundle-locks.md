@@ -158,11 +158,12 @@ this raw-buffer metric. Full-template proposal planning requests no bundle
 payload retention. Selected-profile planning performs a separate streaming
 verification that retains only Markdown paths in the selected component closure
 while it computes closure-aware projections. Its bound uses the same formula
-with those selected Markdown paths as the requested set. The projection pass is
-sequential with ordinary candidate/current verification, so candidate write
-payloads are not retained again unless they are themselves selected Markdown.
-Apply retains only candidate bundle payloads referenced by write changes; those
-verified bytes are released when transaction staging completes.
+with those selected Markdown paths as the requested set. During selected apply,
+the outer verified candidate still holds bundle-backed write payloads while the
+separate projection verification runs. The concurrent logical peak and bound
+therefore add those outer retained bytes to the larger candidate/current
+projection verification metric; overlapping paths may occupy both buffers.
+Candidate write payloads are released when transaction staging completes.
 
 Maintainers can report the current full-template and selected-profile compose
 and upgrade bounds on Linux or Windows with:
@@ -178,8 +179,9 @@ change one managed bundle path so their retained-payload observations are
 nonzero. CI checks process batching and exact subprocess counts for all four
 flows on both platforms, but records time and memory without platform-sensitive
 thresholds because shared-runner measurements are not stable correctness
-signals. Exact subset-retention tests enforce the payload policy separately,
-including exclusion of omitted-component Markdown.
+signals. Selected metrics also report the concurrent apply peak and bound.
+Exact subset-retention tests enforce the payload policy separately, including
+exclusion of omitted-component Markdown.
 
 ## Low-level materializer interface
 

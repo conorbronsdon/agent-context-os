@@ -212,8 +212,42 @@ def _metric(
     observed_retained_payload_bytes: int,
     traced_python_peak_bytes: int,
     projection_paths: set[str] | None = None,
+    current_projection_lock: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     projection_paths = set() if projection_paths is None else projection_paths
+    records = {item["path"]: item["size"] for item in lock["bundle"]["files"]}
+    retained_payload_bytes = sum(records[path] for path in retained_paths)
+    projection_locks = (
+        (lock, current_projection_lock)
+        if current_projection_lock is not None
+        else (lock,)
+    )
+    projection_peak = max(
+        _logical_verification_peak(
+            projection_lock,
+            role="candidate",
+            retain_paths=projection_paths,
+        )
+        for projection_lock in projection_locks
+    )
+    projection_bound = max(
+        _logical_verification_bound(
+            projection_lock,
+            role="candidate",
+            retain_paths=projection_paths,
+        )
+        for projection_lock in projection_locks
+    )
+    concurrent_peak = (
+        retained_payload_bytes + projection_peak
+        if projection_paths
+        else None
+    )
+    concurrent_bound = (
+        retained_payload_bytes + projection_bound
+        if projection_paths
+        else None
+    )
     batch_commands = [
         command for command in commands if "cat-file" in command and "--batch" in command
     ]
@@ -230,6 +264,7 @@ def _metric(
         _logical_verification_peak(
             lock, role="candidate", retain_paths=projection_paths
         ),
+        concurrent_peak or 0,
     )
     logical_bound = max(
         _logical_verification_bound(lock, role="candidate", retain_paths=set()),
@@ -239,6 +274,7 @@ def _metric(
         _logical_verification_bound(
             lock, role="candidate", retain_paths=projection_paths
         ),
+        concurrent_bound or 0,
     )
     return {
         "git_subprocess_count": len(commands),
@@ -247,6 +283,8 @@ def _metric(
         "wall_seconds": round(time.perf_counter() - started, 6),
         "logical_peak_retained_payload_bytes": logical_peak,
         "logical_retained_payload_bound_bytes": logical_bound,
+        "logical_concurrent_apply_peak_bytes": concurrent_peak,
+        "logical_concurrent_apply_bound_bytes": concurrent_bound,
         "observed_staging_payload_bytes": observed_retained_payload_bytes,
         "tracemalloc_peak_bytes": traced_python_peak_bytes,
         "retained_bundle_path_count": len(retained_paths),
@@ -492,6 +530,7 @@ def measure() -> dict[str, Any]:
             max(selected_upgrade_retained, default=0),
             selected_upgrade_python_peak[0],
             selected_projection_paths,
+            current_lock,
         )
 
         return {
