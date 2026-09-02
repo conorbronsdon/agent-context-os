@@ -6,9 +6,9 @@ Drafts only. Review links, release status, and platform length before publishing
 
 I built `agent-context-os` because I was tired of rebuilding the same context across chats, projects, and coding agents.
 
-Context OS is a Git-backed context and workflow layer shared across Claude Code,
-Codex, and OpenClaw. Hermes Agent, Cursor, and Devin have experimental adapters
-with explicit evidence limits.
+Context OS is a portable, evolving Git-backed context and workflow layer for
+coding agents. Claude Code, Codex, and OpenClaw are first-class; Hermes Agent,
+Cursor, and Devin have experimental adapters with explicit evidence limits.
 
 It keeps the durable parts of working with an agent in plain Markdown:
 
@@ -33,8 +33,9 @@ https://github.com/conorbronsdon/agent-context-os
 
 ## Short announcement
 
-Context OS is a Git-backed context and workflow layer for Claude Code, Codex,
-and OpenClaw, with experimental Hermes Agent, Cursor, and Devin adapters.
+Context OS is a portable, evolving Git-backed context and workflow layer for
+coding agents. Claude Code, Codex, and OpenClaw are first-class; Hermes Agent,
+Cursor, and Devin adapters are experimental.
 
 New in this release:
 

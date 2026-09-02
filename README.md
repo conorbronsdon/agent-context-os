@@ -2,7 +2,7 @@
 
 # Context OS
 
-A Git-backed context and workflow layer shared across Claude Code, Codex, and OpenClaw, with experimental Hermes Agent, Cursor, and Devin adapters.
+A portable, evolving Git-backed context and workflow layer for coding agents. Claude Code, Codex, and OpenClaw are first-class; Hermes Agent, Cursor, and Devin adapters are experimental.
 
 [![GitHub stars](https://img.shields.io/github/stars/conorbronsdon/agent-context-os?style=social)](https://github.com/conorbronsdon/agent-context-os/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)

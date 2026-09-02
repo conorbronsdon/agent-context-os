@@ -25,8 +25,8 @@
   <line x1="80" y1="200" x2="320" y2="200" stroke="#7c5cff" stroke-width="2"/>
 
   <!-- tagline -->
-  <text x="80" y="290" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="44" font-weight="600" fill="#e6e9f2">Git-backed context and workflows for coding agents.</text>
-  <text x="80" y="350" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="44" font-weight="600" fill="#e6e9f2">One source. Reviewed handoffs.</text>
+  <text x="80" y="290" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="44" font-weight="600" fill="#e6e9f2">Portable Git-backed context for coding agents.</text>
+  <text x="80" y="350" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="44" font-weight="600" fill="#e6e9f2">Evolves with you. Reviewed handoffs.</text>
 
   <!-- sub bullets -->
   <text x="80" y="438" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="24" fill="#9aa3b8">+ First-class: Claude Code, Codex, and OpenClaw</text>
