@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Run the lifecycle kernel with the repository's resolved Python interpreter.
-# In v0.12 the script parent is the colocated KernelRoot and ContextRoot, and
-# the wrapper intentionally changes into it before invoking the kernel.
+# The script parent is the trusted KernelRoot.  Execute Python from that root so
+# an attached WorkingRoot cannot shadow standard-library imports; split-root
+# invocations bind the application explicitly with --working-root.  When no
+# split-root options are supplied the CLI retains v0.12 colocated compatibility.
 # Use this instead of `python3 -m contextos` so hosts that expose Python 3 only
 # as `python` work, and so CONTEXTOS_PYTHON is honored.
 #
@@ -10,8 +12,11 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 source "$SCRIPT_DIR/python-env.sh"
 
-cd "$(cd "$SCRIPT_DIR/.." && pwd)"
-exec "$CONTEXTOS_PYTHON_CMD" -m contextos "$@"
+KERNEL_ROOT="$(cd -P -- "$SCRIPT_DIR/.." && pwd -P)"
+cd "$KERNEL_ROOT"
+exec "$CONTEXTOS_PYTHON_CMD" -c \
+  'import runpy, sys; sys.path.insert(0, sys.argv.pop(1)); runpy.run_module("contextos", run_name="__main__")' \
+  "$KERNEL_ROOT" --kernel-root "$KERNEL_ROOT" "$@"

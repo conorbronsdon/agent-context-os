@@ -32,6 +32,7 @@ from contextos.primitives import git_environment  # noqa: E402
 
 
 GENERATOR_VERSION = 1
+EXAMPLE_BUNDLE_SHA256 = "0" * 64
 TEMPLATE_NAME = "agent-context-os-template"
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
@@ -119,7 +120,11 @@ def _require_release_identity(root: Path, version: str, tag: str) -> None:
     if source_match is None or source_match.group(1) != TEMPLATE_NAME:
         raise ReleaseArtifactError("DEFAULT_TEMPLATE_SOURCE does not match the release template")
     workspace = json.loads((root / "workspace/example.json").read_text(encoding="utf-8"))
-    if workspace.get("template") != {"version": version, "source": TEMPLATE_NAME}:
+    if workspace.get("template") != {
+        "version": version,
+        "source": TEMPLATE_NAME,
+        "bundle_sha256": EXAMPLE_BUNDLE_SHA256,
+    }:
         raise ReleaseArtifactError("workspace/example.json template identity does not match")
     changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
     if not re.search(rf"^## \[{re.escape(version)}\] [—-] \d{{4}}-\d{{2}}-\d{{2}}\b", changelog, re.MULTILINE):

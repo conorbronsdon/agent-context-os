@@ -212,43 +212,29 @@ jobs:
           fi
           test "$(git ls-remote origin "refs/tags/$TAG" | cut -f1)" = "$RELEASE_COMMIT"
 
-          if gh release view "$TAG" --json isDraft,isPrerelease > "$RUNNER_TEMP/existing-release.json" 2>/dev/null; then
-            python -c 'import json, os, pathlib; value=json.loads(pathlib.Path(os.environ["RUNNER_TEMP"] + "/existing-release.json").read_text()); assert value == {"isDraft": True, "isPrerelease": False}'
-            gh release download "$TAG" --dir "$RUNNER_TEMP/existing-assets"
-            python scripts/release-artifacts.py verify \
-              --artifacts "$RUNNER_TEMP/existing-assets" \
-              --extract-to "$RUNNER_TEMP/existing-extracted" \
-              --version "$VERSION" \
-              --tag "$TAG" \
-              --commit "$RELEASE_COMMIT" \
-              > "$RUNNER_TEMP/existing-verification.json"
-            diff --recursive --brief "$RUNNER_TEMP/assets" "$RUNNER_TEMP/existing-assets"
-          else
-            gh release create "$TAG" \
-              "$RUNNER_TEMP/assets/$ASSET_STEM.tar" \
-              "$RUNNER_TEMP/assets/$ASSET_STEM.bundle.lock.json" \
-              "$RUNNER_TEMP/assets/$ASSET_STEM.provenance.json" \
-              "$RUNNER_TEMP/assets/$ASSET_STEM.OFFLINE-VERIFY.md" \
-              "$RUNNER_TEMP/assets/SHA256SUMS" \
-              --draft \
-              --verify-tag \
-              --title "Context OS v0.12.0" \
-              --notes-file docs/releases/v0.12.0.md
-            READY=false
-            for attempt in 1 2 3 4 5; do
-              if gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null | grep -Fx true; then
-                READY=true
-                break
-              fi
-              sleep 2
-            done
-            if [[ "$READY" != "true" ]]; then
-              echo "draft release did not become readable" >&2
-              exit 1
-            fi
-          fi
-          RELEASE_ID=$(gh release view "$TAG" --json databaseId --jq .databaseId)
+          python scripts/stage-release.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --tag "$TAG" \
+            --title "Context OS v0.12.0" \
+            --notes-file docs/releases/v0.12.0.md \
+            --artifact "$RUNNER_TEMP/assets/$ASSET_STEM.tar" \
+            --artifact "$RUNNER_TEMP/assets/$ASSET_STEM.bundle.lock.json" \
+            --artifact "$RUNNER_TEMP/assets/$ASSET_STEM.provenance.json" \
+            --artifact "$RUNNER_TEMP/assets/$ASSET_STEM.OFFLINE-VERIFY.md" \
+            --artifact "$RUNNER_TEMP/assets/SHA256SUMS" \
+            > "$RUNNER_TEMP/staged-release.json"
+          RELEASE_ID=$(python -c 'import json, os, pathlib; print(json.loads(pathlib.Path(os.environ["RUNNER_TEMP"] + "/staged-release.json").read_text())["release_id"])')
           [[ "$RELEASE_ID" =~ ^[0-9]+$ ]]
+
+          gh release download "$TAG" --dir "$RUNNER_TEMP/existing-assets"
+          python scripts/release-artifacts.py verify \
+            --artifacts "$RUNNER_TEMP/existing-assets" \
+            --extract-to "$RUNNER_TEMP/existing-extracted" \
+            --version "$VERSION" \
+            --tag "$TAG" \
+            --commit "$RELEASE_COMMIT" \
+            > "$RUNNER_TEMP/existing-verification.json"
+          diff --recursive --brief "$RUNNER_TEMP/assets" "$RUNNER_TEMP/existing-assets"
           echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
 
   verify-draft-linux:

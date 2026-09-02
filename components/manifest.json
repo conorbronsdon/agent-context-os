@@ -88,6 +88,10 @@
                     "policy": "managed"
                 },
                 {
+                    "path": "contextos/attachment.py",
+                    "policy": "managed"
+                },
+                {
                     "path": "contextos/cli.py",
                     "policy": "managed"
                 },
@@ -104,6 +108,18 @@
                     "policy": "managed"
                 },
                 {
+                    "path": "contextos/installed_state.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "contextos/coordination.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "coordination/README.md",
+                    "policy": "managed"
+                },
+                {
                     "path": "contextos/materializer.py",
                     "policy": "managed"
                 },
@@ -117,6 +133,14 @@
                 },
                 {
                     "path": "contextos/workspace_schema.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "contextos/workspace_composition.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "contextos/workspace_projection.py",
                     "policy": "managed"
                 },
                 {
@@ -348,6 +372,10 @@
                     "policy": "development"
                 },
                 {
+                    "path": "scripts/stage-release.py",
+                    "policy": "development"
+                },
+                {
                     "path": "scripts/pre-commit-hook.sh",
                     "policy": "managed"
                 },
@@ -404,6 +432,10 @@
                     "policy": "seed"
                 },
                 {
+                    "path": "state/roles.md",
+                    "policy": "seed"
+                },
+                {
                     "path": "state/gws-references.md",
                     "policy": "seed"
                 },
@@ -417,6 +449,14 @@
                 },
                 {
                     "path": "tests/test_agent_lifecycle_transactions.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_attachment.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_attachment_lifecycle.py",
                     "policy": "development"
                 },
                 {
@@ -440,7 +480,15 @@
                     "policy": "development"
                 },
                 {
+                    "path": "tests/test_stage_release.py",
+                    "policy": "development"
+                },
+                {
                     "path": "tests/test_contextos_kernel.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_coordination.py",
                     "policy": "development"
                 },
                 {
@@ -485,6 +533,10 @@
                 },
                 {
                     "path": "tests/fixtures/workspace-migrations.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/fixtures/workspace-v2-migrations.json",
                     "policy": "development"
                 },
                 {

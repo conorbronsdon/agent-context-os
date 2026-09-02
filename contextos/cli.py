@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .attachment import AttachmentError, RootRoles, resolve_root_roles
 from .bundle_schema import (
     BundleError,
     create_bundle_lock,
@@ -14,10 +15,12 @@ from .bundle_schema import (
 )
 from .kernel import (
     ContextOSError,
+    PROJECT_OPERATIONS,
     agent_list_report,
     apply_proposal,
     create_agent_activation_proposal,
     create_proposal,
+    create_project_attachment_proposal,
     create_workspace_migration_proposal,
     create_workspace_setup_proposal,
     discover_root,
@@ -26,6 +29,7 @@ from .kernel import (
     install_runtime,
     migrate_legacy_runtime_state,
     parse_now,
+    project_attachment_doctor,
     plan_workspace_migration,
     read_json,
     render_hook_payload,
@@ -33,14 +37,40 @@ from .kernel import (
     runtime_manifest,
     runtime_surface,
     start_report,
+    load_project_attachment,
     workspace_resolution_report,
 )
+from .coordination import (
+    bootstrap_board,
+    compact_board,
+    create_claim,
+    post_message,
+    release_claim,
+    sync_board,
+    validate_board,
+)
 from .materializer import (
+    INSTALLED_STATE_PATH,
     MATERIALIZE_OPERATION,
     create_composition_proposal,
+    create_guided_composition_proposal,
     create_materialization_proposal,
 )
-from .workspace_schema import WorkspaceConfigError, parse_agent_selection
+from .installed_state import InstalledStateError, validate_installed_state
+from .primitives import read_regular_file_snapshot, sha256_bytes
+from .workspace_composition import (
+    WorkspaceCompositionError,
+    desired_component_closure,
+)
+from .workspace_schema import (
+    DEFAULT_PATHS,
+    WORKSPACE_SCHEMA_VERSION,
+    WorkspaceConfigError,
+    analyze_legacy_workspace,
+    load_workspace_config,
+    parse_agent_selection,
+    strict_json_loads,
+)
 
 
 def parser() -> argparse.ArgumentParser:
@@ -53,6 +83,21 @@ def parser() -> argparse.ArgumentParser:
             "(ContextRoot and nominal WorkingRoot; also KernelRoot for the "
             "full-template wrapper path)"
         ),
+    )
+    result.add_argument(
+        "--kernel-root",
+        type=Path,
+        help="exact trusted product root (normally supplied by scripts/contextos.sh)",
+    )
+    result.add_argument(
+        "--context-root",
+        type=Path,
+        help="exact attached ContextRoot; requires --working-root and --kernel-root",
+    )
+    result.add_argument(
+        "--working-root",
+        type=Path,
+        help="exact attached application root; requires --context-root and --kernel-root",
     )
     result.add_argument("--version", action="version", version=__version__)
     commands = result.add_subparsers(dest="command", required=True)
@@ -95,6 +140,22 @@ def parser() -> argparse.ArgumentParser:
         activation.add_argument(
             "--now", help="ISO-8601 timestamp for deterministic proposal IDs"
         )
+
+    project = commands.add_parser(
+        "project", help="Create or inspect an external-project attachment"
+    )
+    project_commands = project.add_subparsers(dest="project_command", required=True)
+    attach = project_commands.add_parser(
+        "attach", help="Propose an exact tracked identity and machine-local binding"
+    )
+    attach.add_argument("--id", dest="project_id", required=True)
+    attach.add_argument("--now", help="ISO-8601 timestamp for deterministic proposal IDs")
+    rebind = project_commands.add_parser(
+        "rebind", help="Propose a new local path for an existing tracked project"
+    )
+    rebind.add_argument("--id", dest="project_id", required=True)
+    rebind.add_argument("--now", help="ISO-8601 timestamp for deterministic proposal IDs")
+    project_commands.add_parser("show", help="Validate and show the active attachment")
 
     diagnose = commands.add_parser(
         "doctor", help="Check workspace health with tracked agent-set awareness"
@@ -162,6 +223,88 @@ def parser() -> argparse.ArgumentParser:
         "migrate-local-runtime",
         help="Atomically copy legacy local runtime state into hosts.json",
     )
+    for guided_name, guided_help in (
+        ("init", "Propose a schema-v2 composition into a clean target"),
+        ("update", "Propose runtime, profile, extras, or bundle changes"),
+        ("reconcile", "Propose convergence to existing schema-v2 intent"),
+    ):
+        guided = workspace_commands.add_parser(guided_name, help=guided_help)
+        guided.add_argument("--target", type=Path, required=True)
+        guided.add_argument("--lock", type=Path, required=True)
+        guided.add_argument("--source", type=Path, required=True)
+        guided.add_argument("--expect-sha256", required=True)
+        guided.add_argument(
+            "--source-mode", choices=("git-index", "directory"), default="directory"
+        )
+        guided.add_argument("--now", help="ISO-8601 timestamp for deterministic proposal IDs")
+        if guided_name in {"init", "update"}:
+            guided.add_argument(
+                "--agents", required=True,
+                help="Comma-separated runtime ids, or none for core-only",
+            )
+            guided.add_argument(
+                "--profile", choices=("selected", "full-template"), required=True
+            )
+            guided.add_argument(
+                "--extras", default="none",
+                help="Comma-separated optional component roots, or none",
+            )
+        if guided_name in {"update", "reconcile"}:
+            guided.add_argument("--current-lock", type=Path)
+            guided.add_argument("--current-source", type=Path)
+            guided.add_argument("--expect-current-sha256")
+            guided.add_argument(
+                "--current-source-mode",
+                choices=("git-index", "directory"),
+                default="directory",
+            )
+
+    board = commands.add_parser(
+        "board", help="Coordination board operations (contract: coordination/README.md)"
+    )
+    board_commands = board.add_subparsers(dest="board_command", required=True)
+    board_bootstrap = board_commands.add_parser(
+        "bootstrap", help="Create the coordination ref on the remote if absent"
+    )
+    board_bootstrap.add_argument("--now")
+    board_post = board_commands.add_parser("post", help="Validate and publish one board message")
+    board_post.add_argument("--runtime", required=True)
+    board_post.add_argument("--from", dest="sender", required=True, help="runtime/role of the posting run")
+    board_post.add_argument("--audience", required=True, help="all, an enumerated role, or runtime/run-id")
+    board_post.add_argument("--kind", required=True, choices=["note", "alert", "query", "handoff"])
+    board_post.add_argument("--re", dest="re_ref", help="commit:path reference, optional #sha256:<hex>")
+    board_post.add_argument("--expires", help="UTC ISO expiry; defaults to now + 7 days")
+    board_post.add_argument("--body", required=True, help="message body, or '-' to read stdin")
+    board_post.add_argument("--now")
+    board_claim = board_commands.add_parser("claim", help="Publish an advisory claim")
+    board_claim.add_argument("--runtime", required=True)
+    board_claim.add_argument("--task", required=True, help="stable reference: commit:path or a task id")
+    board_claim.add_argument("--owner", required=True, help="runtime/run-id")
+    board_claim.add_argument("--lease-expires", dest="lease_expires", help="UTC ISO; defaults to now + 7 days")
+    board_claim.add_argument("--now")
+    board_release = board_commands.add_parser(
+        "release", help="Release a claim, optionally handing off atomically in the same commit"
+    )
+    board_release.add_argument("--runtime", required=True)
+    board_release.add_argument("--claim", dest="claim_id", required=True)
+    board_release.add_argument("--then-claim-task", dest="then_claim_task")
+    board_release.add_argument("--then-claim-owner", dest="then_claim_owner")
+    board_release.add_argument("--now")
+    board_sync = board_commands.add_parser(
+        "sync", help="Fetch and surface unexpired messages addressed to this run"
+    )
+    board_sync.add_argument("--runtime", required=True)
+    board_sync.add_argument("--role", required=True)
+    board_sync.add_argument("--run-id", dest="run_id", required=True)
+    board_sync.add_argument("--cursor-file", dest="cursor_file", type=Path)
+    board_sync.add_argument("--now")
+    board_compact = board_commands.add_parser(
+        "compact", help="Report expired messages and stale claims; --apply deletes expired messages"
+    )
+    board_compact.add_argument("--apply", action="store_true")
+    board_compact.add_argument("--now")
+    board_validate = board_commands.add_parser("validate", help="Validate the fetched coordination tree")
+    board_validate.add_argument("--now")
 
     hook = commands.add_parser("hook", help="Run a normalized read-only lifecycle hook check")
     hook.add_argument("event", choices=("session-start", "pre-write"))
@@ -232,11 +375,253 @@ def emit(value: object) -> None:
     print(json.dumps(value, indent=2, ensure_ascii=False))
 
 
+def _resolve_cli_roles(args: argparse.Namespace) -> RootRoles:
+    split_requested = args.context_root is not None or args.working_root is not None
+    if args.root is not None and split_requested:
+        raise ContextOSError("--root cannot be combined with split-root options")
+    if split_requested:
+        if args.kernel_root is None:
+            raise ContextOSError(
+                "split attachment requires --kernel-root, --context-root, and --working-root"
+            )
+        try:
+            return resolve_root_roles(
+                kernel_root=args.kernel_root,
+                context_root=args.context_root,
+                working_root=args.working_root,
+            )
+        except AttachmentError as exc:
+            raise ContextOSError(str(exc)) from exc
+    root = discover_root(args.root if args.root is not None else args.kernel_root)
+    kernel = args.kernel_root.resolve() if args.kernel_root is not None else root
+    try:
+        return resolve_root_roles(kernel_root=kernel, legacy_root=root)
+    except AttachmentError as exc:
+        raise ContextOSError(str(exc)) from exc
+
+
 def component_selection(raw: str, field: str) -> list[str]:
     values = [item.strip() for item in raw.split(",")]
     if not values or any(not item for item in values):
         raise BundleError(f"{field}: must be a comma-separated component list")
     return values
+
+
+def _guided_extras(raw: str) -> list[str]:
+    return [] if raw.strip() == "none" else component_selection(raw, "extras")
+
+
+def _guided_report(
+    target: Path, proposal_path: Path, proposal: dict[str, object]
+) -> dict[str, object]:
+    authorization = proposal["authorization"]
+    assert isinstance(authorization, dict)
+    plan = authorization["plan"]
+    assert isinstance(plan, dict)
+    return {
+        "schema_version": 1,
+        "proposal": proposal_path.relative_to(target).as_posix(),
+        "proposal_id": proposal["proposal_id"],
+        "proposal_digest": proposal["proposal_digest"],
+        "plan_digest": plan["plan_digest"],
+        "desired_components": plan["desired_components"],
+        "current_components": plan["current_components"],
+        "intended_workspace": plan["intended_workspace"],
+        "changes": [
+            {
+                "action": change["action"],
+                "path": change["path"],
+                "owner": change["authorization"]["owner"],
+                "policy": change["authorization"]["policy"],
+                "summary": change["diff"].strip(),
+            }
+            for change in proposal["changes"]
+        ],
+        "writes": True,
+        "applied": False,
+        "next": (
+            "review this single structural proposal, then run bundle apply with "
+            "the exact proposal digest"
+        ),
+    }
+
+
+def _load_guided_installed_state(target: Path) -> dict[str, object] | None:
+    path = target / INSTALLED_STATE_PATH
+    if not path.exists():
+        return None
+    try:
+        raw, _metadata = read_regular_file_snapshot(
+            path, subject="installed bundle state"
+        )
+        return validate_installed_state(
+            strict_json_loads(raw.decode("utf-8"), source=INSTALLED_STATE_PATH)
+        )
+    except (OSError, UnicodeError, WorkspaceConfigError, InstalledStateError) as exc:
+        raise BundleError(str(exc)) from exc
+
+
+def _guided_workspace_main(args: argparse.Namespace) -> int:
+    target = args.target.absolute().resolve()
+    if not target.is_dir():
+        raise BundleError("target must be an existing local directory")
+    candidate = verify_bundle(
+        args.lock,
+        args.source,
+        expected_sha256=args.expect_sha256,
+        source_mode=args.source_mode,
+        retain_paths=(),
+    )
+    component_ids = [item["id"] for item in candidate.manifest["components"]]
+    if args.workspace_command == "init":
+        agents = parse_agent_selection(
+            args.agents, known_runtime_ids=sorted(candidate.runtimes)
+        )
+        assert agents is not None
+        paths = dict(DEFAULT_PATHS)
+        legacy_path = target / "workspace.yaml"
+        if legacy_path.exists():
+            try:
+                legacy_bytes, _metadata = read_regular_file_snapshot(
+                    legacy_path, subject="legacy workspace configuration"
+                )
+                legacy = analyze_legacy_workspace(
+                    legacy_bytes.decode("utf-8-sig")
+                )
+            except (OSError, UnicodeError, WorkspaceConfigError) as exc:
+                raise BundleError(str(exc)) from exc
+            if legacy.issues:
+                raise BundleError(
+                    "workspace.yaml cannot be migrated losslessly: "
+                    + "; ".join(legacy.issues)
+                )
+            paths.update(legacy.values)
+        intended = {
+            "schema_version": WORKSPACE_SCHEMA_VERSION,
+            "agents": agents,
+            "composition": {
+                "profile": args.profile,
+                "extras": _guided_extras(args.extras),
+            },
+            "paths": paths,
+            "template": {
+                "source": candidate.name,
+                "version": candidate.version,
+                "bundle_sha256": candidate.digest,
+            },
+        }
+        desired = desired_component_closure(
+            intended, candidate.manifest, candidate.runtimes
+        )
+        proposal_path, proposal = create_guided_composition_proposal(
+            target_root=target,
+            workspace_config=intended,
+            candidate=candidate,
+            desired_components=desired,
+            now=parse_now(args.now),
+        )
+        emit(_guided_report(target, proposal_path, proposal))
+        return 0
+
+    config_path = target / "contextos.workspace.json"
+    try:
+        current_config, _canonical = load_workspace_config(
+            config_path,
+            root=target,
+            known_runtime_ids=sorted(candidate.runtimes),
+            known_component_ids=component_ids,
+        )
+    except WorkspaceConfigError as exc:
+        raise BundleError(str(exc)) from exc
+    legacy_v1 = current_config["schema_version"] != WORKSPACE_SCHEMA_VERSION
+    if legacy_v1 and args.workspace_command == "reconcile":
+        raise BundleError("schema v1 must be migrated with workspace update")
+    if legacy_v1 and args.profile != "full-template":
+        raise BundleError(
+            "schema-v1 migration must first preserve the full-template profile"
+        )
+    installed = _load_guided_installed_state(target)
+    current_values = (
+        args.current_lock,
+        args.current_source,
+        args.expect_current_sha256,
+    )
+    if any(value is not None for value in current_values) and not all(
+        value is not None for value in current_values
+    ):
+        raise BundleError(
+            "current bundle inputs are all required together: --current-lock, "
+            "--current-source, --expect-current-sha256"
+        )
+    current = None
+    current_components: list[str] = []
+    if installed is not None:
+        current_components = list(installed["components"])
+        installed_digest = installed["bundle"]["sha256"]
+        if installed_digest == candidate.digest:
+            current = candidate
+        elif args.current_lock is not None:
+            current = verify_bundle(
+                args.current_lock,
+                args.current_source,
+                expected_sha256=args.expect_current_sha256,
+                source_mode=args.current_source_mode,
+                role="current",
+                retain_paths=(),
+            )
+        else:
+            raise BundleError(
+                "installed bundle differs from the candidate; pinned current bundle inputs are required"
+            )
+    elif args.workspace_command == "update" and not legacy_v1:
+        raise BundleError(
+            "workspace update requires installed state; run workspace reconcile first"
+        )
+
+    if args.workspace_command == "reconcile":
+        intended = current_config
+        if intended["template"] != {
+            "source": candidate.name,
+            "version": candidate.version,
+            "bundle_sha256": candidate.digest,
+        }:
+            raise BundleError("reconcile candidate does not match the tracked bundle pin")
+    else:
+        agents = parse_agent_selection(
+            args.agents, known_runtime_ids=sorted(candidate.runtimes)
+        )
+        assert agents is not None
+        intended = {
+            **current_config,
+            "schema_version": WORKSPACE_SCHEMA_VERSION,
+            "agents": agents,
+            "composition": {
+                "profile": args.profile,
+                "extras": _guided_extras(args.extras),
+            },
+            "template": {
+                "source": candidate.name,
+                "version": candidate.version,
+                "bundle_sha256": candidate.digest,
+            },
+        }
+        intended.pop("mode", None)
+    desired = desired_component_closure(
+        intended, candidate.manifest, candidate.runtimes
+    )
+    proposal_path, proposal = create_materialization_proposal(
+        target_root=target,
+        workspace_config_path=config_path,
+        expected_config_sha256=sha256_bytes(config_path.read_bytes()),
+        candidate=candidate,
+        desired_components=desired,
+        current=current,
+        current_components=current_components,
+        intended_workspace=intended,
+        now=parse_now(args.now),
+    )
+    emit(_guided_report(target, proposal_path, proposal))
+    return 0
 
 
 def _bundle_main(args: argparse.Namespace) -> int:
@@ -248,7 +633,12 @@ def _bundle_main(args: argparse.Namespace) -> int:
         receipt_path, receipt = apply_proposal(
             root, proposal, args.confirm, args.runtime
         )
-        emit({"receipt": receipt_path.relative_to(root).as_posix(), **receipt})
+        validation = doctor(root)
+        emit({
+            "receipt": receipt_path.relative_to(root).as_posix(),
+            **receipt,
+            "validation": validation,
+        })
         return 0
     if args.bundle_command == "generate":
         lock = create_bundle_lock(
@@ -456,15 +846,43 @@ def workspace_proposal_report(
     }
 
 
+def _board_roles(root: Path) -> list[str] | None:
+    roles_file = root / "state" / "roles.md"
+    if not roles_file.exists():
+        return None
+    roles: list[str] = []
+    for line in roles_file.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- "):
+            roles.append(stripped[2:].strip().lower())
+    return roles or None
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     hook_output: str | None = None
     try:
         if args.command == "bundle":
             return _bundle_main(args)
-        root = discover_root(args.root)
+        if args.command == "workspace" and args.workspace_command in {
+            "init", "update", "reconcile"
+        }:
+            return _guided_workspace_main(args)
+        roles = _resolve_cli_roles(args)
+        root = roles.context_root
+        split_mode = args.context_root is not None or args.working_root is not None
+        if split_mode and args.command not in {
+            "start", "propose", "apply", "hook", "project", "doctor"
+        }:
+            raise ContextOSError(
+                f"{args.command} is not yet a split-root lifecycle surface"
+            )
+        if split_mode and args.command not in {"doctor", "apply"} and not (
+            args.command == "project" and args.project_command in {"attach", "rebind"}
+        ):
+            load_project_attachment(roles)
         if args.command == "start":
-            emit(start_report(root, parse_now(args.now)))
+            emit(start_report(root, parse_now(args.now), roles=roles if split_mode else None))
         elif args.command == "propose":
             path, document = create_proposal(root, args.workflow, read_json(args.input), parse_now(args.now))
             emit({
@@ -475,8 +893,54 @@ def main(argv: list[str] | None = None) -> int:
             })
         elif args.command == "apply":
             proposal = args.proposal if args.proposal.is_absolute() else root / args.proposal
-            receipt_path, receipt = apply_proposal(root, proposal, args.confirm, args.runtime)
+            if split_mode and read_json(proposal).get("operation") not in PROJECT_OPERATIONS:
+                load_project_attachment(roles)
+            receipt_path, receipt = apply_proposal(
+                root,
+                proposal,
+                args.confirm,
+                args.runtime,
+                roles=roles if split_mode else None,
+            )
             emit({"receipt": receipt_path.relative_to(root).as_posix(), **receipt})
+        elif args.command == "project":
+            if not split_mode:
+                raise ContextOSError(
+                    "project attachment requires exact --kernel-root, --context-root, and --working-root"
+                )
+            if args.project_command in {"attach", "rebind"}:
+                path, document = create_project_attachment_proposal(
+                    roles,
+                    args.project_id,
+                    parse_now(args.now),
+                    rebind=args.project_command == "rebind",
+                )
+                emit({
+                    "proposal": path.relative_to(root).as_posix(),
+                    "proposal_id": document["proposal_id"],
+                    "proposal_digest": document["proposal_digest"],
+                    "operation": document["operation"],
+                    "changes": [
+                        {"path": item["path"], "diff": item["diff"]}
+                        for item in document["changes"]
+                    ],
+                    "working_root_access": "read-only",
+                    "nonexclusive_claim": True,
+                })
+            else:
+                manifest, binding = load_project_attachment(roles)
+                emit({
+                    "schema_version": 1,
+                    "root_roles": {
+                        "kernel_root": str(roles.kernel_root),
+                        "context_root": str(roles.context_root),
+                        "working_root": str(roles.working_root),
+                    },
+                    "project": manifest,
+                    "binding": binding,
+                    "working_root_access": "read-only",
+                    "nonexclusive_claim": True,
+                })
         elif args.command == "install":
             path, manifest = install_runtime(root, args.runtime)
             relative = path.relative_to(root).as_posix()
@@ -498,7 +962,13 @@ def main(argv: list[str] | None = None) -> int:
                 ]
                 emit(workspace_proposal_report(root, path, document, notices))
         elif args.command == "doctor":
-            report = doctor(root, args.runtime, all_runtimes=args.all)
+            report = (
+                project_attachment_doctor(
+                    roles, args.runtime, all_runtimes=args.all
+                )
+                if split_mode
+                else doctor(root, args.runtime, all_runtimes=args.all)
+            )
             emit(report)
             return 1 if report["status"] == "fail" else 0
         elif args.command == "workspace":
@@ -545,8 +1015,49 @@ def main(argv: list[str] | None = None) -> int:
                     "legacy_runtime_retained": False,
                     **state,
                 })
+        elif args.command == "board":
+            now = parse_now(getattr(args, "now", None))
+            if args.board_command == "bootstrap":
+                emit(bootstrap_board(root, now=now))
+            elif args.board_command == "post":
+                body = sys.stdin.read() if args.body == "-" else args.body
+                emit(post_message(
+                    root, sender=args.sender, audience=args.audience, kind=args.kind,
+                    body=body, re_ref=args.re_ref, expires=args.expires,
+                    runtime=args.runtime, now=now,
+                ))
+            elif args.board_command == "claim":
+                emit(create_claim(
+                    root, task=args.task, owner=args.owner,
+                    lease_expires=args.lease_expires, runtime=args.runtime, now=now,
+                ))
+            elif args.board_command == "release":
+                then_claim = None
+                if args.then_claim_task or args.then_claim_owner:
+                    if not (args.then_claim_task and args.then_claim_owner):
+                        raise ContextOSError(
+                            "--then-claim-task and --then-claim-owner are required together"
+                        )
+                    then_claim = {"task": args.then_claim_task, "owner": args.then_claim_owner}
+                emit(release_claim(
+                    root, claim_id=args.claim_id, then_claim=then_claim,
+                    runtime=args.runtime, now=now,
+                ))
+            elif args.board_command == "sync":
+                cursor = args.cursor_file or (
+                    root / ".context-os" / "coordination" / f"cursor-{args.runtime}.json"
+                )
+                emit(sync_board(
+                    root, runtime=args.runtime, role=args.role, run_id=args.run_id,
+                    cursor_file=cursor, roles=_board_roles(root), now=now,
+                ))
+            elif args.board_command == "compact":
+                emit(compact_board(root, apply=args.apply, now=now))
+            elif args.board_command == "validate":
+                emit(validate_board(root, roles=_board_roles(root), now=now))
         elif args.command == "hook":
-            hook_manifest = runtime_manifest(root, args.runtime, check_paths=False)
+            product_root = roles.kernel_root if split_mode else root
+            hook_manifest = runtime_manifest(product_root, args.runtime, check_paths=False)
             surface_outputs = {
                 surface.get("hook_output")
                 for surface in hook_manifest["surfaces"].values()
@@ -558,7 +1069,9 @@ def main(argv: list[str] | None = None) -> int:
             payload = json.loads(raw) if raw else {}
             if not isinstance(payload, dict):
                 raise ContextOSError("hook input must be a JSON object")
-            report = hook_report(root, args.event, payload)
+            report = hook_report(
+                root, args.event, payload, roles=roles if split_mode else None
+            )
             messages = [item["message"] for item in report["findings"]]
             rendered = render_hook_payload(hook_output, messages)
             if rendered is not None:
@@ -568,6 +1081,8 @@ def main(argv: list[str] | None = None) -> int:
         ContextOSError,
         BundleError,
         WorkspaceConfigError,
+        WorkspaceCompositionError,
+        AttachmentError,
         json.JSONDecodeError,
         OSError,
         UnicodeError,

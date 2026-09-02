@@ -18,10 +18,12 @@ from contextos.kernel import (
     ContextOSError,
     _recover_pending_agent_journals,
     apply_proposal,
+    doctor,
 )
 from contextos.materializer import (
     INSTALLED_STATE_PATH,
     create_composition_proposal,
+    create_guided_composition_proposal,
     create_materialization_proposal,
     prepare_materialization_preflight,
 )
@@ -139,6 +141,12 @@ class MaterializerTest(unittest.TestCase):
             now=NOW,
         )
 
+    def guided_cli(self, *arguments: str) -> dict:
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(0, cli_main(list(arguments)))
+        return json.loads(output.getvalue())
+
     def test_clean_composition_installs_config_binary_components_and_state(self) -> None:
         target, config_input = self.composition_input()
         (target / "seed.txt").write_text("personal seed\n", encoding="utf-8")
@@ -157,6 +165,361 @@ class MaterializerTest(unittest.TestCase):
         )
         self.assertEqual("compose", proposal["authorization"]["mode"])
         self.assertEqual("component-materialize", receipt["operation"])
+
+    def test_schema_v2_doctor_reports_desired_vs_installed_drift(self) -> None:
+        target = self.root / "v2-target"
+        target.mkdir()
+        desired = {
+            "schema_version": 2,
+            "agents": [],
+            "composition": {"profile": "full-template", "extras": []},
+            "paths": {
+                "state_dir": "state",
+                "sessions_dir": "sessions",
+                "task_file": "TODO.md",
+            },
+            "template": {
+                "source": self.candidate.name,
+                "version": self.candidate.version,
+                "bundle_sha256": self.candidate.digest,
+            },
+        }
+        proposal_path, proposal = create_guided_composition_proposal(
+            target_root=target,
+            workspace_config=desired,
+            candidate=self.candidate,
+            desired_components=["core", "addon"],
+            now=NOW,
+        )
+        apply_proposal(target, proposal_path, proposal["proposal_digest"], "generic")
+
+        healthy = doctor(target)
+        healthy_check = next(
+            item
+            for item in healthy["checks"]
+            if item["name"] == "desired-installed-components"
+        )
+        self.assertEqual("pass", healthy_check["status"], healthy_check)
+        self.assertEqual(
+            "current", healthy["workspace"]["composition"]["status"]
+        )
+
+        installed_path = target / INSTALLED_STATE_PATH
+        installed = json.loads(installed_path.read_text(encoding="utf-8"))
+        installed["components"] = ["core"]
+        installed_path.write_text(
+            json.dumps(installed, indent=2) + "\n", encoding="utf-8"
+        )
+        drifted = doctor(target)
+        drift_check = next(
+            item
+            for item in drifted["checks"]
+            if item["name"] == "desired-installed-components"
+        )
+        self.assertEqual("fail", drift_check["status"])
+        self.assertEqual(
+            ["addon"],
+            drifted["workspace"]["composition"]["missing_components"],
+        )
+
+    def test_guided_init_reconcile_remove_and_add_share_transaction_path(self) -> None:
+        target = self.root / "guided-target"
+        target.mkdir()
+        common = (
+            "--target", str(target),
+            "--lock", str(self.candidate.lock_path),
+            "--source", str(self.candidate.root),
+            "--expect-sha256", self.candidate.digest,
+            "--now", NOW.isoformat(),
+        )
+        initialized = self.guided_cli(
+            "workspace", "init", *common,
+            "--agents", "none", "--profile", "full-template",
+        )
+        self.assertEqual(["core", "addon"], initialized["desired_components"])
+        apply_proposal(
+            target,
+            target / initialized["proposal"],
+            initialized["proposal_digest"],
+            "generic",
+        )
+        self.assertTrue((target / "addon.txt").is_file())
+
+        (target / INSTALLED_STATE_PATH).unlink()
+        reconciled = self.guided_cli("workspace", "reconcile", *common)
+        self.assertEqual([], reconciled["current_components"])
+        self.assertEqual(["core", "addon"], reconciled["desired_components"])
+        apply_proposal(
+            target,
+            target / reconciled["proposal"],
+            reconciled["proposal_digest"],
+            "generic",
+        )
+
+        removed = self.guided_cli(
+            "workspace", "update", *common,
+            "--agents", "none", "--profile", "selected",
+        )
+        apply_proposal(
+            target,
+            target / removed["proposal"],
+            removed["proposal_digest"],
+            "generic",
+        )
+        self.assertFalse((target / "addon.txt").exists())
+
+        added = self.guided_cli(
+            "workspace", "update", *common,
+            "--agents", "none", "--profile", "selected", "--extras", "addon",
+        )
+        apply_proposal(
+            target,
+            target / added["proposal"],
+            added["proposal_digest"],
+            "generic",
+        )
+        self.assertTrue((target / "addon.txt").is_file())
+        self.assertTrue((target / INSTALLED_STATE_PATH).is_file())
+
+        upgrade_root = self.root / "guided-upgrade-source"
+        upgrade_root.mkdir()
+        upgrade_fixture = BundleFixture(
+            upgrade_root,
+            version="3.0.0",
+            managed=b"binary\x00v3\n",
+            addon=True,
+        )
+        upgrade = upgrade_fixture.verify()
+        upgraded = self.guided_cli(
+            "workspace", "update",
+            "--target", str(target),
+            "--lock", str(upgrade.lock_path),
+            "--source", str(upgrade.root),
+            "--expect-sha256", upgrade.digest,
+            "--current-lock", str(self.candidate.lock_path),
+            "--current-source", str(self.candidate.root),
+            "--expect-current-sha256", self.candidate.digest,
+            "--agents", "none", "--profile", "selected", "--extras", "addon",
+            "--now", NOW.isoformat(),
+        )
+        apply_proposal(
+            target,
+            target / upgraded["proposal"],
+            upgraded["proposal_digest"],
+            "generic",
+        )
+        self.assertEqual(b"binary\x00v3\n", (target / "managed.bin").read_bytes())
+        self.assertEqual(
+            upgrade.digest,
+            json.loads(
+                (target / "contextos.workspace.json").read_text(encoding="utf-8")
+            )["template"]["bundle_sha256"],
+        )
+
+        moved = self.root / "moved-clean-clone"
+        shutil.copytree(target, moved, ignore=shutil.ignore_patterns(".context-os"))
+        moved_common = (
+            "--target", str(moved),
+            "--lock", str(upgrade.lock_path),
+            "--source", str(upgrade.root),
+            "--expect-sha256", upgrade.digest,
+            "--now", NOW.isoformat(),
+        )
+        moved_reconcile = self.guided_cli(
+            "workspace", "reconcile", *moved_common
+        )
+        apply_proposal(
+            moved,
+            moved / moved_reconcile["proposal"],
+            moved_reconcile["proposal_digest"],
+            "generic",
+        )
+        self.assertEqual(
+            "current", doctor(moved)["workspace"]["composition"]["status"]
+        )
+
+    def test_selected_projection_has_one_owner_and_no_omitted_runtime_claims(self) -> None:
+        source = self.root / "entry-source"
+        source.mkdir()
+        fixture = BundleFixture(
+            source,
+            version="4.0.0",
+            managed=b"entry\n",
+            addon=True,
+            runtime_addon=False,
+            entry_surfaces=True,
+        )
+        candidate = fixture.verify()
+        target = self.root / "entry-target"
+        target.mkdir()
+        initialized = self.guided_cli(
+            "workspace", "init",
+            "--target", str(target),
+            "--lock", str(fixture.lock_path),
+            "--source", str(source),
+            "--expect-sha256", candidate.digest,
+            "--agents", "codex",
+            "--profile", "selected",
+            "--now", NOW.isoformat(),
+        )
+        generated_owners = {
+            change["path"]: change["owner"]
+            for change in initialized["changes"]
+            if change["path"] in {"README.md", "AGENTS.md"}
+        }
+        self.assertEqual(
+            {"README.md": "core", "AGENTS.md": "agents-instructions"},
+            generated_owners,
+        )
+        initialized_proposal = json.loads(
+            (target / initialized["proposal"]).read_text(encoding="utf-8")
+        )
+        guide_plan = next(
+            action
+            for action in initialized_proposal["authorization"]["plan"]["actions"]
+            if action["path"] == "GUIDE.md"
+        )
+        self.assertNotEqual(
+            guide_plan["desired"]["sha256_raw"],
+            guide_plan["desired"]["sha256_text_lf"],
+        )
+        apply_proposal(
+            target,
+            target / initialized["proposal"],
+            initialized["proposal_digest"],
+            "generic",
+        )
+        readme = (target / "README.md").read_text(encoding="utf-8")
+        agents = (target / "AGENTS.md").read_text(encoding="utf-8")
+        self.assertIn("owner=core", readme)
+        self.assertIn("owner=agents-instructions", agents)
+        self.assertIn("Codex", readme)
+        self.assertIn("Codex", agents)
+        self.assertNotIn("Hermes", readme)
+        self.assertNotIn("Hermes", agents)
+        guide = (target / "GUIDE.md").read_text(encoding="utf-8")
+        self.assertIn("[managed payload](managed.bin)", guide)
+        self.assertIn("the optional add-on is omitted", guide)
+        self.assertNotIn("(addon.txt)", guide)
+        self.assertFalse((target / "addon.txt").exists())
+
+        upgrade_source = self.root / "entry-upgrade-source"
+        upgrade_source.mkdir()
+        upgrade_fixture = BundleFixture(
+            upgrade_source,
+            version="5.0.0",
+            managed=b"entry v5\n",
+            addon=True,
+            runtime_addon=False,
+            entry_surfaces=True,
+        )
+        upgrade = upgrade_fixture.verify()
+        upgraded = self.guided_cli(
+            "workspace", "update",
+            "--target", str(target),
+            "--lock", str(upgrade_fixture.lock_path),
+            "--source", str(upgrade_source),
+            "--expect-sha256", upgrade.digest,
+            "--current-lock", str(fixture.lock_path),
+            "--current-source", str(source),
+            "--expect-current-sha256", candidate.digest,
+            "--agents", "codex",
+            "--profile", "selected",
+            "--now", NOW.isoformat(),
+        )
+        apply_proposal(
+            target,
+            target / upgraded["proposal"],
+            upgraded["proposal_digest"],
+            "generic",
+        )
+        self.assertEqual(b"entry v5\n", (target / "managed.bin").read_bytes())
+        self.assertIn(
+            "[managed payload](managed.bin)",
+            (target / "GUIDE.md").read_text(encoding="utf-8"),
+        )
+
+        core_target = self.root / "core-entry-target"
+        core_target.mkdir()
+        core_initialized = self.guided_cli(
+            "workspace", "init",
+            "--target", str(core_target),
+            "--lock", str(fixture.lock_path),
+            "--source", str(source),
+            "--expect-sha256", candidate.digest,
+            "--agents", "none",
+            "--profile", "selected",
+            "--now", NOW.isoformat(),
+        )
+        apply_proposal(
+            core_target,
+            core_target / core_initialized["proposal"],
+            core_initialized["proposal_digest"],
+            "generic",
+        )
+        core_readme = (core_target / "README.md").read_text(encoding="utf-8")
+        self.assertIn("Core-only", core_readme)
+        self.assertNotIn("Codex", core_readme)
+        self.assertNotIn("Hermes", core_readme)
+        self.assertFalse((core_target / "AGENTS.md").exists())
+
+    def test_guided_legacy_yaml_and_schema_v1_migrate_transactionally(self) -> None:
+        legacy_target = self.root / "legacy-yaml-target"
+        legacy_target.mkdir()
+        (legacy_target / "workspace.yaml").write_text(
+            "state_dir: memory\nsessions_dir: handoffs\ntask_file: TASKS.md\n",
+            encoding="utf-8",
+        )
+        common = (
+            "--lock", str(self.candidate.lock_path),
+            "--source", str(self.candidate.root),
+            "--expect-sha256", self.candidate.digest,
+            "--agents", "none", "--profile", "full-template",
+            "--now", NOW.isoformat(),
+        )
+        initialized = self.guided_cli(
+            "workspace", "init", "--target", str(legacy_target), *common
+        )
+        self.assertIn(
+            "workspace.yaml",
+            [change["path"] for change in initialized["changes"]],
+        )
+        apply_proposal(
+            legacy_target,
+            legacy_target / initialized["proposal"],
+            initialized["proposal_digest"],
+            "generic",
+        )
+        migrated = json.loads(
+            (legacy_target / "contextos.workspace.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(2, migrated["schema_version"])
+        self.assertEqual("memory", migrated["paths"]["state_dir"])
+        self.assertFalse((legacy_target / "workspace.yaml").exists())
+
+        v1_target = self.root / "schema-v1-target"
+        shutil.copytree(self.candidate.root, v1_target)
+        v1_config = workspace(self.candidate.name, self.candidate.version)
+        v1_config["agents"] = []
+        (v1_target / "contextos.workspace.json").write_text(
+            json.dumps(v1_config, indent=2) + "\n", encoding="utf-8"
+        )
+        updated = self.guided_cli(
+            "workspace", "update", "--target", str(v1_target), *common
+        )
+        apply_proposal(
+            v1_target,
+            v1_target / updated["proposal"],
+            updated["proposal_digest"],
+            "generic",
+        )
+        migrated_v1 = json.loads(
+            (v1_target / "contextos.workspace.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(2, migrated_v1["schema_version"])
+        self.assertEqual(
+            self.candidate.digest, migrated_v1["template"]["bundle_sha256"]
+        )
 
     def test_marker_only_core_profile_can_materialize_verified_product_authority(self) -> None:
         target = self.root / "marker-only-target"
@@ -275,7 +638,10 @@ class MaterializerTest(unittest.TestCase):
                     "--confirm", compose_report["proposal_digest"],
                 ]),
             )
-        self.assertEqual("component-materialize", json.loads(apply_output.getvalue())["operation"])
+        apply_report = json.loads(apply_output.getvalue())
+        self.assertEqual("component-materialize", apply_report["operation"])
+        self.assertIn(apply_report["validation"]["status"], {"pass", "warn", "fail"})
+        self.assertEqual("profile", apply_report["validation"]["scope"])
         self.assertEqual(b"index line\n", (target / "managed.bin").read_bytes())
 
         propose_output = io.StringIO()

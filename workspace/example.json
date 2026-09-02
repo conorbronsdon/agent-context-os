@@ -1,7 +1,10 @@
 {
-  "schema_version": 1,
-  "mode": "full-template",
+  "schema_version": 2,
   "agents": [],
+  "composition": {
+    "profile": "full-template",
+    "extras": []
+  },
   "paths": {
     "state_dir": "state",
     "sessions_dir": "sessions",
@@ -9,6 +12,7 @@
   },
   "template": {
     "version": "0.12.0",
-    "source": "agent-context-os-template"
+    "source": "agent-context-os-template",
+    "bundle_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
   }
 }

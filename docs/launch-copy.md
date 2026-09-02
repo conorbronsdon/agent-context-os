@@ -44,7 +44,12 @@ Context OS update:
 
 Codex is now a first-class path, not a fork. The same repository state powers `$setup`, `$start`, `$update`, and `$end`, while Claude Code keeps its slash-command adapters.
 
-The optional integration catalog now covers portable skill collections and creator tools, plus reviewed paths for Tolaria, Obsidian, Beads, Granola, Google Workspace, Notion, and Substack. Each entry declares data access, side effects, confirmation gates, evidence, health checks, and uninstall behavior.
+The optional integration catalog covers portable skill collections, creator
+tools, CLIs, and MCP servers. The [generated catalog](../references/integrations.md)
+and its source, [`integrations/catalog.json`](../integrations/catalog.json), are
+the current inventory rather than this launch summary. Each entry declares data
+access, side effects, confirmation gates, evidence, health checks, and uninstall
+behavior.
 
 I also rewrote the onboarding and migration docs around the actual user journey: bring forward selected context, choose a host, add only the tools you need, and keep the result current.
 

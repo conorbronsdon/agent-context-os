@@ -108,8 +108,6 @@ class FakeGitHubRunner:
             return self._completed(args, COMMIT + "\n")
         if args[:2] == ("git", "status"):
             return self._completed(args, "")
-        if args[:3] == ("gh", "release", "view"):
-            return self._completed(args, str(RELEASE_ID) + "\n")
         if args[:3] == ("gh", "release", "download"):
             destination = Path(args[args.index("--dir") + 1])
             for name, payload in self.payloads.items():
@@ -148,8 +146,10 @@ class FakeGitHubRunner:
             return {"artifacts": [self._artifact()]}
         if endpoint.endswith(f"/actions/artifacts/{ARTIFACT_ID}"):
             return self._artifact()
-        if endpoint.endswith(f"/releases/{RELEASE_ID}"):
+        if "/releases/" in endpoint and "/actions/" not in endpoint:
             if "PATCH" in args:
+                if not endpoint.endswith(f"/releases/{RELEASE_ID}"):
+                    raise AssertionError("PATCH targeted an unselected release")
                 self.patch_count += 1
                 self.published = True
                 self.immutable = True
@@ -171,10 +171,14 @@ class FakeGitHubRunner:
 
 
 class PublishReleaseTest(unittest.TestCase):
-    def _publish(self, fake: FakeGitHubRunner, *, verify_published: bool = False):
+    def _publish(
+        self, fake: FakeGitHubRunner, *, release_id: int = RELEASE_ID,
+        verify_published: bool = False,
+    ):
         with mock.patch.object(publish_release, "_load_release_artifacts", return_value=FakeArtifacts):
             return publish_release.publish_release(
-                root=ROOT, repository=REPOSITORY, run_id=RUN_ID, commit=COMMIT,
+                root=ROOT, repository=REPOSITORY, run_id=RUN_ID,
+                release_id=release_id, commit=COMMIT,
                 version=VERSION, tag=TAG, wait_attempts=1, wait_seconds=0,
                 verify_published=verify_published, runner=fake,
             )
@@ -189,7 +193,45 @@ class PublishReleaseTest(unittest.TestCase):
         patches = [call for call in fake.calls if "PATCH" in call]
         self.assertEqual(len(patches), 1)
         self.assertIn(f"repos/{REPOSITORY}/releases/{RELEASE_ID}", patches[0])
+        self.assertFalse(any(call[:3] == ("gh", "release", "view") for call in fake.calls))
         self.assertFalse(any(call[:3] == ("git", "ls-remote", "origin") for call in fake.calls))
+
+    def test_wrong_numeric_release_id_prevents_patch(self) -> None:
+        fake = FakeGitHubRunner(ROOT)
+        with self.assertRaisesRegex(
+            publish_release.PublishError, "selected numeric ID"
+        ):
+            self._publish(fake, release_id=RELEASE_ID + 1)
+        self.assertEqual(fake.patch_count, 0)
+        self.assertFalse(any("PATCH" in call for call in fake.calls))
+        self.assertFalse(
+            any(call[:3] == ("gh", "release", "download") for call in fake.calls)
+        )
+
+    def test_invalid_release_id_fails_before_runner_calls_in_both_modes(self) -> None:
+        for release_id in (0, -1, True):
+            for verify_published in (False, True):
+                with self.subTest(
+                    release_id=release_id, verify_published=verify_published
+                ):
+                    fake = FakeGitHubRunner(ROOT, published=verify_published)
+                    with self.assertRaisesRegex(
+                        publish_release.PublishError, "release ID must be"
+                    ):
+                        self._publish(
+                            fake, release_id=release_id,
+                            verify_published=verify_published,
+                        )
+                    self.assertEqual(fake.calls, [])
+                    self.assertEqual(fake.patch_count, 0)
+
+    def test_cli_requires_release_id(self) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            publish_release.main([
+                "--repository", REPOSITORY, "--run-id", str(RUN_ID),
+                "--commit", COMMIT, "--version", VERSION, "--tag", TAG,
+            ])
+        self.assertEqual(raised.exception.code, 2)
 
     def test_binary_artifact_download_binds_zip_digest_and_exact_files(self) -> None:
         payloads = {name: (name + "\n").encode() for name in FakeArtifacts.names.values()}
@@ -271,6 +313,13 @@ class PublishReleaseTest(unittest.TestCase):
         self.assertEqual(
             result["asset_attestations_verified"], sorted(FakeArtifacts.names.values())
         )
+
+    def test_read_only_published_verification_is_patch_free(self) -> None:
+        fake = FakeGitHubRunner(ROOT, published=True)
+        result = self._publish(fake, verify_published=True)
+        self.assertEqual(result["mode"], "verify-published")
+        self.assertEqual(fake.patch_count, 0)
+        self.assertFalse(any("PATCH" in call for call in fake.calls))
 
     def test_read_only_mode_rejects_draft_without_patch(self) -> None:
         fake = FakeGitHubRunner(ROOT)
