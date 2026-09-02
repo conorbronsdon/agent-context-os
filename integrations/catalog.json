@@ -835,7 +835,7 @@
       },
       "risk_tags": ["credentials", "private-repositories", "sensitive-read", "remote-write", "publish-capable", "public-publish", "overwrite-capable", "delete-capable", "oauth", "destructive-capable", "ci-cd", "prompt-injection"],
       "maturity": "verified",
-      "last_verified": "2026-09-03",
+      "last_verified": "2026-09-02",
       "evidence": ["https://docs.gitlab.com/user/model_context_protocol/mcp_server/", "https://docs.gitlab.com/user/model_context_protocol/mcp_server_tools/"],
       "health_check": "Connect to the GitLab MCP server, verify authenticated user identity and GitLab instance, then read one explicitly named project and issue without performing a write or pipeline action.",
       "uninstall": {

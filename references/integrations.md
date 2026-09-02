@@ -10,7 +10,7 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [AI Tools for Creators](https://github.com/conorbronsdon/ai-tools-for-creators) | `resource_catalog` | listed | No | No | No | No | No | 2026-08-15 |
 | [Beads for Gemini CLI](https://beads.gascity.com/integrations/gemini) | `agent_extension` | verified | Yes | Yes | No | No | Yes | 2026-08-15 |
 | [GitHub MCP](https://github.com/github/github-mcp-server) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-18 |
-| [GitLab MCP](https://docs.gitlab.com/user/model_context_protocol/mcp_server/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-09-03 |
+| [GitLab MCP](https://docs.gitlab.com/user/model_context_protocol/mcp_server/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-09-02 |
 | [Google Workspace CLI](https://github.com/googleworkspace/cli) | `connector` | verified | Yes | Yes | No | Yes | Yes | 2026-08-15 |
 | [Granola MCP](https://docs.granola.ai/help-center/sharing/integrations/mcp) | `mcp_server` | verified | No | No | No | Yes | No | 2026-08-15 |
 | [Linear MCP](https://linear.app/docs/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-18 |
