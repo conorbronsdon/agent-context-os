@@ -89,8 +89,13 @@ dedicated public repository, without adding personal data or secrets, and bind
 the run to its exact remote commit. Do not use this repository or another user
 workspace as the fixture.
 
-Use a short-lived human PAT from **Settings > Devin API > PATs** for a local
-maintainer run and store it only in `DEVIN_API_TOKEN`. Record the exact
+The API harness requires a currently supported `cog_` credential. Devin's
+current authentication documentation lists human PATs as closed beta, so a
+free or otherwise unflagged account may correctly have no PAT control. Never
+claim that as a local installation failure. Where PAT access is enabled, use a
+short-lived human PAT for a local maintainer run and store it only in
+`DEVIN_API_TOKEN`. A supported organization service-user key is also accepted,
+but creating one is account administration outside Context OS. Record the exact
 organization ID and the successful build returned by the active-build API,
 then run from one clean harness commit:
 
@@ -115,6 +120,26 @@ terminates and archives the session. Evidence contains hashes and public
 fixture identifiers, never the token or session messages. Missing credentials,
 opt-ins, repository access, or build identity fail as unverified. The harness
 does not enable, trigger, or inspect Devin Review.
+
+For an account without API credentials, use the operator-assisted web-session
+recorder at `adapters/devin/ui_conformance.py`. `prepare` verifies that the
+dedicated public repository still contains exactly the two synthetic fixture
+files at the requested commit and records its complete pull-request inventory.
+It emits create-only prompts outside the source repository. In Devin, start one
+read-only session for that exact public repository, run the root prompt, then
+explicitly invoke the synthetic user-only skill. Do not edit, branch, commit,
+push, open a pull request, or enable/invoke Review. Archive the session and use
+`record` with an operator observation JSON. The recorder re-verifies the remote
+fixture and unchanged pull-request inventory, checks the exact root and skill
+canaries, hashes rather than stores the session URL, and records whether the UI
+exposed product-build and environment identities. If either identity is
+unavailable, the live substrate result may justify continued experimental
+support but cannot be represented as exact account/build promotion evidence.
+
+The UI path proves only the same read-only instruction and explicit-skill
+substrate as the API harness. Operator attestation is not an execution-
+authorization control, and UI evidence does not inherit API-only active-build
+or account-inspection claims.
 
 This fixture proves the cloud instruction and skill substrate. Promotion still
 requires a separate lifecycle proposal/apply authorization fixture and a
@@ -152,4 +177,5 @@ Current first-party references:
 - [Blueprint reference](https://docs.devin.ai/onboard-devin/environment/blueprint-reference)
 - [Knowledge](https://docs.devin.ai/product-guides/knowledge)
 - [Secrets](https://docs.devin.ai/product-guides/secrets)
+- [API authentication and PAT availability](https://docs.devin.ai/api-reference/authentication)
 - [Devin Review](https://docs.devin.ai/work-with-devin/devin-review)

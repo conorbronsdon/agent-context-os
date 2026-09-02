@@ -1006,6 +1006,10 @@
                     "policy": "managed"
                 },
                 {
+                    "path": "adapters/devin/ui_conformance.py",
+                    "policy": "managed"
+                },
+                {
                     "path": "adapters/devin/live-fixture/AGENTS.md",
                     "policy": "managed"
                 },
@@ -1031,6 +1035,10 @@
                 },
                 {
                     "path": "tests/test_devin_live_harness.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_devin_ui_harness.py",
                     "policy": "development"
                 }
             ]

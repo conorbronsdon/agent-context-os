@@ -48,7 +48,10 @@ class DevinDescriptorTest(unittest.TestCase):
         self.assertEqual("native", session["capabilities"]["agent_skills"])
         self.assertEqual("native", session["capabilities"]["explicit_invocation"])
         self.assertIn("tests/test_devin_live_harness.py", session["conformance_tests"])
+        self.assertIn("tests/test_devin_ui_harness.py", session["conformance_tests"])
         self.assertIn("devin-live-harness", session["evidence"])
+        self.assertIn("devin-ui-harness", session["evidence"])
+        self.assertIn("devin-api-auth", session["evidence"])
 
     def test_every_lifecycle_skill_is_user_only_in_devin(self) -> None:
         for skill in LIFECYCLE_SKILLS:

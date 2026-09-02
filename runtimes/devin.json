@@ -46,14 +46,17 @@
       "conformance_tests": [
         "tests/test_devin_conformance.py",
         "tests/test_devin_live_harness.py",
+        "tests/test_devin_ui_harness.py",
         "tests/test_contextos_kernel.py"
       ],
       "evidence": [
         "devin-agents",
         "devin-skills",
+        "devin-api-auth",
         "devin-kernel",
         "devin-conformance",
-        "devin-live-harness"
+        "devin-live-harness",
+        "devin-ui-harness"
       ]
     },
     "review": {
@@ -104,6 +107,12 @@
         "claims": ["instruction_sources", "support"]
       },
       {
+        "id": "devin-api-auth",
+        "type": "official",
+        "location": "https://docs.devin.ai/api-reference/authentication",
+        "claims": ["support"]
+      },
+      {
         "id": "devin-kernel",
         "type": "conformance",
         "location": "tests/test_contextos_kernel.py",
@@ -119,6 +128,12 @@
         "id": "devin-live-harness",
         "type": "conformance",
         "location": "adapters/devin/live_conformance.py",
+        "claims": ["instruction_sources", "agent_skills", "explicit_invocation"]
+      },
+      {
+        "id": "devin-ui-harness",
+        "type": "conformance",
+        "location": "adapters/devin/ui_conformance.py",
         "claims": ["instruction_sources", "agent_skills", "explicit_invocation"]
       }
     ]
