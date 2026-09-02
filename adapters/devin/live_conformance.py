@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -20,6 +21,7 @@ from typing import Callable, Mapping, Sequence
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+LOCAL_FIXTURE = REPOSITORY_ROOT / "adapters" / "devin" / "live-fixture"
 API_ROOT = "https://api.devin.ai"
 GITHUB_API_ROOT = "https://api.github.com"
 ROOT_CANARY = "CONTEXTOS_DEVIN_ROOT_7D6A41C9"
@@ -29,6 +31,10 @@ SHA_RE = re.compile(r"[0-9a-f]{40}")
 ORG_RE = re.compile(r"org-[A-Za-z0-9_-]+")
 REPO_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 TOKEN_RE = re.compile(r"cog_[A-Za-z0-9_-]+")
+FIXTURE_PATHS = (
+    ".agents/skills/contextos-devin-live-control/SKILL.md",
+    "AGENTS.md",
+)
 
 
 class HarnessError(RuntimeError):
@@ -133,6 +139,67 @@ def verify_public_fixture_head(
         raise HarnessError("GitHub fixture default branch did not resolve to a commit")
     if target.get("sha") != fixture_sha:
         raise HarnessError("public fixture default branch drifted from the exact fixture commit")
+
+
+def verify_public_fixture_content(
+    repository: str,
+    fixture_sha: str,
+    *,
+    transport: GitHubTransport = default_github_transport,
+    audit: list[dict[str, str]] | None = None,
+) -> str:
+    """Bind the remote fixture's exact two blobs to the checked-in fixture."""
+    commit = transport(f"{GITHUB_API_ROOT}/repos/{repository}/commits/{fixture_sha}", 30)
+    if audit is not None:
+        audit.append({"endpoint": "fixture_commit", "response_sha256": canonical_hash(commit)})
+    if commit.get("sha") != fixture_sha:
+        raise HarnessError("GitHub did not return the exact fixture commit")
+    tree = transport(
+        f"{GITHUB_API_ROOT}/repos/{repository}/git/trees/{fixture_sha}?recursive=1", 30
+    )
+    if audit is not None:
+        audit.append({"endpoint": "fixture_tree", "response_sha256": canonical_hash(tree)})
+    entries = tree.get("tree")
+    if tree.get("truncated") is True or not isinstance(entries, list):
+        raise HarnessError("GitHub did not return a complete fixture tree")
+    blob_paths = sorted(
+        str(item.get("path")) for item in entries
+        if isinstance(item, dict) and item.get("type") == "blob"
+    )
+    if blob_paths != list(FIXTURE_PATHS):
+        raise HarnessError(f"public fixture contains unexpected files: {blob_paths}")
+    remote_hashes: dict[str, str] = {}
+    for path in FIXTURE_PATHS:
+        encoded_path = "/".join(urllib.parse.quote(part, safe="") for part in path.split("/"))
+        content = transport(
+            f"{GITHUB_API_ROOT}/repos/{repository}/contents/{encoded_path}?ref={fixture_sha}", 30
+        )
+        if audit is not None:
+            audit.append({
+                "endpoint": f"fixture_content:{path}",
+                "response_sha256": canonical_hash(content),
+            })
+        if content.get("encoding") != "base64" or not isinstance(content.get("content"), str):
+            raise HarnessError(f"GitHub omitted base64 content for {path}")
+        try:
+            remote = base64.b64decode("".join(content["content"].split()), validate=True)
+        except ValueError as exc:
+            raise HarnessError(f"GitHub returned invalid content for {path}") from exc
+        if remote != (LOCAL_FIXTURE / Path(path)).read_bytes():
+            raise HarnessError(f"public fixture content drifted from source: {path}")
+        remote_hashes[path] = hashlib.sha256(remote).hexdigest()
+    return canonical_hash(remote_hashes)
+
+
+def verify_public_fixture(
+    repository: str,
+    fixture_sha: str,
+    *,
+    transport: GitHubTransport = default_github_transport,
+    audit: list[dict[str, str]] | None = None,
+) -> str:
+    verify_public_fixture_head(repository, fixture_sha, transport=transport, audit=audit)
+    return verify_public_fixture_content(repository, fixture_sha, transport=transport, audit=audit)
 
 
 @dataclass
@@ -306,7 +373,7 @@ class DevinHarness:
         raise HarnessError("timed out waiting for Devin conformance output")
 
     def execute(self) -> Evidence:
-        verify_public_fixture_head(
+        fixture_content_sha = verify_public_fixture(
             self.repository,
             self.fixture_sha,
             transport=self.github_transport,
@@ -322,7 +389,7 @@ class DevinHarness:
                 "Do not edit files, run setup, create a branch, commit, push, or open a PR. "
                 "Use the available Context OS control without an explicit @skills reference. "
                 f"Verify git rev-parse HEAD is exactly {self.fixture_sha}. Follow AGENTS.md and reply only "
-                f"with {ROOT_CANARY} followed by one space and that exact commit SHA."
+                "with the root instruction canary named there, followed by one space and that exact commit SHA."
             )
             created = self.client.request(
                 "POST",
@@ -345,11 +412,11 @@ class DevinHarness:
             implicit_messages, events = self.wait_for_devin(session_id, after_events=set(), canary=ROOT_CANARY)
             implicit = "\n".join(implicit_messages)
             expected_root = f"{ROOT_CANARY} {self.fixture_sha}"
+            if SKILL_CANARY in implicit:
+                raise HarnessError("user-only Devin skill fired without explicit invocation")
             if not implicit_messages or normalize_fixture_reply(
                 implicit_messages[-1], ROOT_CANARY
             ) != expected_root:
-                if SKILL_CANARY in implicit:
-                    raise HarnessError("user-only Devin skill fired without explicit invocation")
                 raise HarnessError("implicit control did not return the exact root and fixture output")
 
             self.client.request(
@@ -371,16 +438,18 @@ class DevinHarness:
             after_build = self.active_build()
             if after_build.get("build_id") != before_build.get("build_id"):
                 raise HarnessError("the active Devin build changed during conformance")
-            verify_public_fixture_head(
+            if verify_public_fixture(
                 self.repository,
                 self.fixture_sha,
                 transport=self.github_transport,
                 audit=self.evidence.github_requests,
-            )
+            ) != fixture_content_sha:
+                raise HarnessError("public fixture content changed during conformance")
 
             self.evidence.controls.update({
                 "repository_access": True,
                 "exact_fixture_commit": True,
+                "public_fixture_content_exact": True,
                 "public_fixture_default_head_unchanged": True,
                 "exact_active_build": True,
                 "root_instruction_discovery": True,

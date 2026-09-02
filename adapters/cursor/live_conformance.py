@@ -109,10 +109,57 @@ def require_success(result: CommandResult, subject: str) -> str:
     return f"{result.stdout}\n{result.stderr}"
 
 
+def require_json_result(result: CommandResult, subject: str) -> str:
+    """Return the sole final-response field from Cursor's documented JSON mode."""
+    require_success(result, subject)
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise HarnessError(f"{subject} did not return one JSON result") from exc
+    if not isinstance(payload, dict):
+        raise HarnessError(f"{subject} returned a non-object JSON result")
+    if payload.get("type") != "result" or payload.get("subtype") != "success":
+        raise HarnessError(f"{subject} did not return a successful JSON result")
+    if payload.get("is_error") is not False or not isinstance(payload.get("result"), str):
+        raise HarnessError(f"{subject} omitted a successful text result")
+    return payload["result"]
+
+
 def require_canary(result: CommandResult, canary: str, subject: str) -> None:
-    output = require_success(result, subject)
-    if canary not in output:
-        raise HarnessError(f"{subject} did not return its instruction canary")
+    if require_json_result(result, subject) != canary:
+        raise HarnessError(f"{subject} did not return only its instruction canary")
+
+
+def require_denied_write_attempt(result: CommandResult, filename: str, subject: str) -> None:
+    """Require a documented stream-json write attempt that project policy denied."""
+    require_success(result, subject)
+    events: list[Mapping[str, object]] = []
+    try:
+        for line in result.stdout.splitlines():
+            if line.strip():
+                event = json.loads(line)
+                if not isinstance(event, dict):
+                    raise ValueError("non-object event")
+                events.append(event)
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise HarnessError(f"{subject} did not return valid stream-json") from exc
+    terminal = [
+        event for event in events
+        if event.get("type") == "result" and event.get("subtype") == "success"
+        and event.get("is_error") is False
+    ]
+    if len(terminal) != 1 or not isinstance(terminal[0].get("result"), str):
+        raise HarnessError(f"{subject} did not complete with one successful stream result")
+    for event in events:
+        tool_call = event.get("tool_call")
+        if not isinstance(tool_call, dict):
+            continue
+        write = tool_call.get("writeToolCall")
+        args = write.get("args") if isinstance(write, dict) else None
+        path = args.get("path") if isinstance(args, dict) else None
+        if isinstance(path, str) and Path(path).name == filename:
+            return
+    raise HarnessError(f"{subject} did not attempt the denied write through Cursor")
 
 
 def snapshot(root: Path) -> dict[str, str]:
@@ -204,10 +251,11 @@ class CursorHarness:
         return result
 
     def agent(
-        self, workspace: Path, prompt: str, *arguments: str, cwd: Path | None = None
+        self, workspace: Path, prompt: str, *arguments: str, cwd: Path | None = None,
+        output_format: str = "json",
     ) -> CommandResult:
         return self.run(
-            cwd or workspace, "--print", "--output-format", "json", "--trust",
+            cwd or workspace, "--print", "--output-format", output_format, "--trust",
             "--workspace", str(workspace), *arguments, prompt,
         )
 
@@ -292,7 +340,7 @@ class CursorHarness:
                 "Use the available Context OS control to return its canary, without an explicit slash command.",
                 "--mode", "ask",
             )
-            implicit_text = require_success(implicit, "implicit skill control")
+            implicit_text = require_json_result(implicit, "implicit skill control")
             if canaries["skill"] in implicit_text:
                 raise HarnessError("explicit-only skill body was model-invoked")
 
@@ -342,12 +390,14 @@ class CursorHarness:
                 workspace,
                 "Create denied.txt containing exactly DENIED_CONTROL.",
                 "--force",
+                output_format="stream-json",
             )
-            require_success(denied_result, "deny-precedence control")
+            require_denied_write_attempt(denied_result, "denied.txt", "deny-precedence control")
             if denied.exists():
                 raise HarnessError("project deny did not override --force")
             if changed_paths(denied_baseline, snapshot(workspace)):
                 raise HarnessError("deny-precedence control changed the workspace")
+            self.evidence.controls["project_deny_rejected_a_write_attempt"] = True
 
             write_permissions(
                 workspace,

@@ -135,10 +135,12 @@ python adapters/cursor/live_conformance.py \
 ```
 
 The opt-in flag authorizes Cursor model traffic and writes only in a synthetic
-temporary workspace marked disposable. The harness proves root and nested
-instruction discovery, explicit-skill must-fire and implicit-skill
+temporary workspace marked disposable. The harness proves exact structured root
+and nested instruction discovery, explicit-skill must-fire and implicit-skill
 must-not-fire behavior, read-only ask mode, the exact unattended write behavior
-without `--force`, deny precedence over `--force`, and an exact allowed write.
+without `--force`, a stream-observed denied write attempt under `--force`, and
+an exact allowed write. It does not treat a model merely choosing not to write
+as evidence that project denial precedence works.
 It refuses a dirty source worktree,
 version drift, missing authentication, evidence overwrite, unexpected fixture
 mutation, and the real repository as a target. It never invokes Cursor's
@@ -156,7 +158,9 @@ instruction/rule conflict behavior, explicit-skill must-fire and implicit-skill
 must-not-fire controls, Ask-mode preservation, interactive denial and scoped
 approval, native-profile isolation, and absence of project MCP and hook config.
 It accepts only one exact approved fixture write and emits create-only evidence
-outside the repository. For the short `/update` collision, observe the slash
+outside the repository. Its artifact labels host observations as
+`operator-attested-with-local-verification`, separating them from the fixture
+and file-state controls it verifies itself. For the short `/update` collision, observe the slash
 menu and record `builtin`, `skill`, `ambiguous`, or `unavailable`; never submit
 or execute it.
 

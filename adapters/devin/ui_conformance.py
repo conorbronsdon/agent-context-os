@@ -201,7 +201,7 @@ def prepare(args: argparse.Namespace, *, transport: Transport = default_transpor
                 "Read-only conformance. Do not edit, branch, commit, push, or open a PR. "
                 "Use the available Context OS control without an explicit @skills reference. "
                 f"Verify git rev-parse HEAD is {args.fixture_sha}. Follow AGENTS.md and return only "
-                f"{ROOT_CANARY} followed by one space and that exact SHA."
+                "the root instruction canary named there, followed by one space and that exact SHA."
             ),
             "explicit": f"@skills:{SKILL_NAME} Return only the canary required by this skill.",
         },
@@ -273,6 +273,7 @@ def record(args: argparse.Namespace, *, transport: Transport = default_transport
         "checked_at": datetime.now(timezone.utc).isoformat(),
         "runtime": "devin",
         "surface": "session-ui",
+        "evidence_kind": "operator-attested-with-local-verification",
         "source_sha": source_sha,
         "repository": manifest["repository"],
         "fixture_sha": manifest["fixture_sha"],
@@ -286,9 +287,15 @@ def record(args: argparse.Namespace, *, transport: Transport = default_transport
         "devin_mode": devin_mode,
         "account_identity_inspectable": account_identity_inspectable,
         "build_identity_inspectable": build_identity_inspectable,
-        "controls": {
-            "repository_access": True,
+        "verified_controls": {
             "exact_fixture_commit": True,
+            "public_fixture_content_unchanged": True,
+            "pull_request_inventory_unchanged": True,
+            "recorded_response_values_exact": True,
+            "source_commit_unchanged": True,
+        },
+        "attested_controls": {
+            "repository_access": True,
             "root_instruction_discovery": True,
             "implicit_skill_must_not_fire": True,
             "explicit_skill_must_fire": True,

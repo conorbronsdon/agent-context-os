@@ -125,7 +125,9 @@ class CursorIdeHarnessTest(unittest.TestCase):
         evidence = json.loads(self.evidence.read_text(encoding="utf-8"))
         self.assertEqual("project_rule", evidence["instruction_rule_conflict_winner"])
         self.assertEqual("ambiguous", evidence["short_update_resolution"])
-        self.assertTrue(evidence["controls"]["interactive_approval_is_scoped"])
+        self.assertEqual("operator-attested-with-local-verification", evidence["evidence_kind"])
+        self.assertTrue(evidence["attested_controls"]["interactive_approval_is_scoped"])
+        self.assertTrue(evidence["verified_controls"]["fixture_mutation_is_scoped"])
         self.assertEqual(64, len(evidence["native_profile_snapshot_sha256"]))
         self.assertNotIn("canaries", evidence)
 

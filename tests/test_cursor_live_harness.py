@@ -122,8 +122,75 @@ class CursorLiveHarnessTest(unittest.TestCase):
             harness.preflight(self.root)
 
     def test_require_canary_rejects_benign_success_without_evidence(self) -> None:
+        result = live.CommandResult(
+            [], 0, json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": "ordinary"}), ""
+        )
         with self.assertRaisesRegex(live.HarnessError, "did not return"):
-            live.require_canary(live.CommandResult([], 0, "ordinary", ""), "CANARY", "root")
+            live.require_canary(result, "CANARY", "root")
+
+    def test_require_canary_rejects_substring_and_non_json_output(self) -> None:
+        substring = live.CommandResult(
+            [], 0, json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": "CANARY extra"}), ""
+        )
+        with self.assertRaisesRegex(live.HarnessError, "only"):
+            live.require_canary(substring, "CANARY", "root")
+        with self.assertRaisesRegex(live.HarnessError, "JSON"):
+            live.require_canary(live.CommandResult([], 0, "CANARY", ""), "CANARY", "root")
+
+    def test_deny_precedence_requires_observed_stream_write_attempt(self) -> None:
+        terminal = json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": "Denied"})
+        with self.assertRaisesRegex(live.HarnessError, "did not attempt"):
+            live.require_denied_write_attempt(
+                live.CommandResult([], 0, terminal, ""), "denied.txt", "deny"
+            )
+
+    def test_execute_requires_exact_json_controls_and_observed_denial(self) -> None:
+        def json_result(value: str) -> str:
+            return json.dumps({
+                "type": "result", "subtype": "success", "is_error": False,
+                "result": value,
+            })
+
+        def runner(argv, _cwd, _env, _timeout):
+            command = " ".join(argv)
+            if "--version" in command:
+                return live.CommandResult([], 0, "v1\n", "")
+            if "--help" in command:
+                return live.CommandResult([], 0, "--print --force --workspace --trust --mode --output-format", "")
+            if command.endswith(" status"):
+                return live.CommandResult([], 0, "Logged in", "")
+            workspace_text = command.split("--workspace ", 1)[1].split(" --", 1)[0].strip('"')
+            workspace = Path(workspace_text)
+            prompt = command.rsplit('"', 2)[1] if command.count('"') >= 2 else command.rsplit(" ", 1)[-1]
+            if "ROOT_INSTRUCTION_CANARY in the repository" in prompt:
+                value = (workspace / "AGENTS.md").read_text().split("=", 1)[1].splitlines()[0]
+                return live.CommandResult([], 0, json_result(value), "")
+            if "@nested/control.txt" in prompt:
+                value = (workspace / "nested/AGENTS.md").read_text().split("=", 1)[1].splitlines()[0]
+                return live.CommandResult([], 0, json_result(value), "")
+            if prompt.startswith("Use the available Context OS control"):
+                return live.CommandResult([], 0, json_result("ordinary implicit answer"), "")
+            if prompt.startswith("/contextos-live-explicit"):
+                value = (workspace / ".agents/skills/contextos-live-explicit/SKILL.md").read_text().split("Return only ", 1)[1].split(".", 1)[0]
+                return live.CommandResult([], 0, json_result(value), "")
+            if "denied.txt" in prompt:
+                stream = [
+                    {"type": "tool_call", "subtype": "started", "tool_call": {"writeToolCall": {"args": {"path": "denied.txt"}}}},
+                    {"type": "result", "subtype": "success", "is_error": False, "result": "Write denied"},
+                ]
+                return live.CommandResult([], 0, "\n".join(json.dumps(item) for item in stream), "")
+            if "allowed.txt" in prompt:
+                (workspace / "allowed.txt").write_text("ALLOWED_CONTROL\n", encoding="utf-8")
+                return live.CommandResult([], 0, json_result("written"), "")
+            return live.CommandResult([], 0, json_result("ok"), "")
+
+        harness = live.CursorHarness(
+            self.binary, "v1", "a" * 40, runner=runner,
+            user_cli_config=self.root / "no-user-config.json",
+        )
+        evidence = harness.execute()
+        self.assertTrue(evidence.controls["project_deny_rejected_a_write_attempt"])
+        self.assertTrue(evidence.controls["forced_write_is_scoped"])
 
     def test_write_evidence_is_create_only(self) -> None:
         target = self.root / "evidence.json"

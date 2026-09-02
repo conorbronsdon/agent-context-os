@@ -301,6 +301,7 @@ def record(args: argparse.Namespace) -> None:
         "checked_at": datetime.now(timezone.utc).isoformat(),
         "runtime": "cursor",
         "surface": "ide",
+        "evidence_kind": "operator-attested-with-local-verification",
         "source_sha": actual_sha,
         "tested_version": manifest["expected_version"],
         "binary_sha256": manifest["binary_sha256"],
@@ -308,7 +309,15 @@ def record(args: argparse.Namespace) -> None:
         "native_profile_snapshot_sha256": snapshot_digest(profile_snapshot),
         "instruction_rule_conflict_winner": conflict_winner,
         "short_update_resolution": short_update,
-        "controls": {
+        "verified_controls": {
+            "project_mcp_absent": True,
+            "project_hooks_absent": True,
+            "native_profile_isolated": True,
+            "fixture_mutation_is_scoped": True,
+            "recorded_response_values_exact": True,
+            "real_workspace_not_used": True,
+        },
+        "attested_controls": {
             "root_instruction_discovery": True,
             "nested_instruction_discovery": True,
             "project_rule_discovery": True,
@@ -319,10 +328,6 @@ def record(args: argparse.Namespace) -> None:
             "interactive_denial_preserves_files": True,
             "interactive_approval_is_scoped": True,
             "short_update_alias_not_invoked": True,
-            "project_mcp_absent": True,
-            "project_hooks_absent": True,
-            "native_profile_isolated": True,
-            "real_workspace_not_used": True,
         },
     })
 

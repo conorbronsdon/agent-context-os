@@ -1011,11 +1011,11 @@
                 },
                 {
                     "path": "adapters/devin/live-fixture/AGENTS.md",
-                    "policy": "managed"
+                    "policy": "development"
                 },
                 {
                     "path": "adapters/devin/live-fixture/.agents/skills/contextos-devin-live-control/SKILL.md",
-                    "policy": "managed"
+                    "policy": "development"
                 },
                 {
                     "path": "adapters/devin/review-fixture/REVIEW.md",

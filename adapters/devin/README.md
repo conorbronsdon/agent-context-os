@@ -112,11 +112,13 @@ python adapters/devin/live_conformance.py \
   --acknowledge-public-fixture
 ```
 
-The harness verifies exact repository access and the active build before it
-creates one read-only API session. It tests root instructions, the fixture
-skill's user-only must-not-fire control, its explicit must-fire control, exact
-fixture commit reporting, unchanged public default-branch head, and absence of
-a created pull request. It then uses
+The harness verifies exact repository access, the active build, and the complete
+two-file public fixture tree and byte content before it creates one read-only
+API session. It tests root instructions without placing the root answer in the
+prompt, the fixture skill's user-only must-not-fire control across every returned
+message, its explicit must-fire control, exact fixture commit reporting,
+unchanged public default-branch head and content, and absence of a created pull
+request. It then uses
 the current v3 archive endpoint and verifies the archived state. If archival
 fails, it attempts a separate termination but still fails conformance. Evidence
 contains hashes and public
@@ -135,7 +137,10 @@ push, open a pull request, or enable/invoke Review. Archive the session and use
 `record` with an operator observation JSON. The recorder re-verifies the remote
 fixture and unchanged pull-request inventory, checks the exact root and skill
 canaries, hashes rather than stores the session URL, and records whether the UI
-exposed product-build and environment identities. If either identity is
+exposed product-build and environment identities. Its artifact labels those
+host outcomes as `operator-attested-with-local-verification`, distinct from the
+fixture, source-commit, response-syntax, and pull-inventory controls the recorder
+checks directly. If either identity is
 unavailable, the live substrate result may justify continued experimental
 support but cannot be represented as exact account/build promotion evidence.
 

@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 import urllib.parse
+import base64
 from contextlib import redirect_stderr
 from pathlib import Path
 from unittest import mock
@@ -25,12 +26,13 @@ SPEC.loader.exec_module(live)
 class FakeTransport:
     def __init__(
         self, *, implicit_skill: bool = False, archive_fails: bool = False,
-        extra_output: bool = False,
+        extra_output: bool = False, implicit_skill_first: bool = False,
     ) -> None:
         self.phase = "implicit"
         self.implicit_skill = implicit_skill
         self.archive_fails = archive_fails
         self.extra_output = extra_output
+        self.implicit_skill_first = implicit_skill_first
         self.calls: list[tuple[str, str, object, dict[str, str]]] = []
 
     def __call__(self, method, url, payload, headers, _timeout):
@@ -54,6 +56,11 @@ class FakeTransport:
         if method == "GET" and path.endswith("/messages"):
             if self.phase == "implicit":
                 text = f"{live.ROOT_CANARY} {'a' * 40}"
+                if self.implicit_skill_first:
+                    return {"items": [
+                        {"event_id": "event-skill-leak", "source": "devin", "message": live.SKILL_CANARY},
+                        {"event_id": "event-root", "source": "devin", "message": text},
+                    ]}
                 if self.implicit_skill:
                     text += f" {live.SKILL_CANARY}"
                 elif self.extra_output:
@@ -84,17 +91,35 @@ class FakeTransport:
 
 
 class FakeGitHub:
-    def __init__(self, *heads: str) -> None:
+    def __init__(self, *heads: str, drifted_path: str | None = None) -> None:
         self.heads = list(heads)
         self.reference_calls = 0
+        self.drifted_path = drifted_path
 
     def __call__(self, url: str, _timeout: float):
-        if url.endswith("/repos/conorbronsdon/contextos-devin-live-fixture"):
+        parsed = urllib.parse.urlsplit(url)
+        path = parsed.path
+        if path.endswith("/repos/conorbronsdon/contextos-devin-live-fixture"):
             return {"default_branch": "main"}
-        if url.endswith("/git/ref/heads/main"):
+        if path.endswith("/git/ref/heads/main"):
             index = min(self.reference_calls, len(self.heads) - 1)
             self.reference_calls += 1
             return {"object": {"type": "commit", "sha": self.heads[index]}}
+        fixture_sha = self.heads[0]
+        if path.endswith(f"/commits/{fixture_sha}"):
+            return {"sha": fixture_sha}
+        if path.endswith(f"/git/trees/{fixture_sha}"):
+            return {
+                "truncated": False,
+                "tree": [{"path": item, "type": "blob"} for item in live.FIXTURE_PATHS],
+            }
+        marker = "/contents/"
+        if marker in path:
+            relative = urllib.parse.unquote(path.split(marker, 1)[1])
+            content = (live.LOCAL_FIXTURE / Path(relative)).read_bytes()
+            if relative == self.drifted_path:
+                content += b"drift\n"
+            return {"encoding": "base64", "content": base64.b64encode(content).decode()}
         raise AssertionError(url)
 
 
@@ -166,10 +191,12 @@ class DevinLiveHarnessTest(unittest.TestCase):
         self.assertEqual("build-fixture", evidence.active_build_id)
         self.assertEqual("normal", evidence.devin_mode)
         self.assertNotEqual("", evidence.session_id_sha256)
-        self.assertEqual(
-            ["repository", "default_branch_ref", "repository", "default_branch_ref"],
-            [request["endpoint"] for request in evidence.github_requests],
-        )
+        endpoints = [request["endpoint"] for request in evidence.github_requests]
+        self.assertEqual("repository", endpoints[0])
+        self.assertEqual("default_branch_ref", endpoints[1])
+        self.assertEqual(2, endpoints.count("fixture_commit"))
+        self.assertEqual(2, endpoints.count("fixture_tree"))
+        self.assertTrue(all(f"fixture_content:{path}" in endpoints for path in live.FIXTURE_PATHS))
         self.assertTrue(all(len(request["response_sha256"]) == 64 for request in evidence.github_requests))
         self.assertEqual("POST", evidence.requests[-1]["method"])
         self.assertTrue(evidence.requests[-1]["path"].endswith("/archive"))
@@ -195,6 +222,29 @@ class DevinLiveHarnessTest(unittest.TestCase):
             any(call[0] == "POST" and call[1].endswith("/archive") for call in transport.calls)
         )
         self.assertTrue(harness.evidence.controls["session_archived"])
+
+    def test_implicit_skill_leak_in_earlier_message_fails_and_archives(self) -> None:
+        harness, transport = self.harness(FakeTransport(implicit_skill_first=True))
+        with self.assertRaisesRegex(live.HarnessError, "fired without explicit"):
+            harness.execute()
+        self.assertTrue(
+            any(call[0] == "POST" and call[1].endswith("/archive") for call in transport.calls)
+        )
+
+    def test_public_fixture_content_drift_fails_before_session_creation(self) -> None:
+        harness, transport = self.harness(github=FakeGitHub(
+            "a" * 40, drifted_path="AGENTS.md"
+        ))
+        with self.assertRaisesRegex(live.HarnessError, "content drifted"):
+            harness.execute()
+        self.assertFalse(any(call[1].endswith("/sessions") for call in transport.calls))
+
+    def test_root_prompt_requires_discovery_without_embedding_the_canary(self) -> None:
+        harness, transport = self.harness()
+        harness.execute()
+        create = next(call for call in transport.calls if call[0] == "POST" and call[1].endswith("/sessions"))
+        self.assertIn("root instruction canary named there", create[2]["prompt"])
+        self.assertNotIn(live.ROOT_CANARY, create[2]["prompt"])
 
     def test_extra_model_output_fails_exact_control_and_archives(self) -> None:
         harness, transport = self.harness(FakeTransport(extra_output=True))
