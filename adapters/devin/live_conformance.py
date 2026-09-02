@@ -49,6 +49,11 @@ def safe_error_detail(value: object) -> str:
     return TOKEN_RE.sub("[REDACTED]", str(value))[:1000]
 
 
+def normalize_fixture_reply(value: str, canary: str) -> str:
+    """Accept only the fixture's documented inline-code wrapper."""
+    return value.strip().replace(f"`{canary}`", canary)
+
+
 def default_transport(
     method: str,
     url: str,
@@ -340,7 +345,9 @@ class DevinHarness:
             implicit_messages, events = self.wait_for_devin(session_id, after_events=set(), canary=ROOT_CANARY)
             implicit = "\n".join(implicit_messages)
             expected_root = f"{ROOT_CANARY} {self.fixture_sha}"
-            if not implicit_messages or implicit_messages[-1].strip() != expected_root:
+            if not implicit_messages or normalize_fixture_reply(
+                implicit_messages[-1], ROOT_CANARY
+            ) != expected_root:
                 if SKILL_CANARY in implicit:
                     raise HarnessError("user-only Devin skill fired without explicit invocation")
                 raise HarnessError("implicit control did not return the exact root and fixture output")
@@ -353,7 +360,9 @@ class DevinHarness:
             explicit_messages, _ = self.wait_for_devin(
                 session_id, after_events=events, canary=SKILL_CANARY
             )
-            if not explicit_messages or explicit_messages[-1].strip() != SKILL_CANARY:
+            if not explicit_messages or normalize_fixture_reply(
+                explicit_messages[-1], SKILL_CANARY
+            ) != SKILL_CANARY:
                 raise HarnessError("explicit skill control did not return its exact canary")
 
             final = self.session(session_id)

@@ -129,8 +129,8 @@ class DevinLiveHarnessTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn(live.ROOT_CANARY, agents)
         self.assertIn(live.SKILL_CANARY, skill)
-        self.assertIn("bare text", agents)
-        self.assertIn("bare text", skill)
+        self.assertIn(f"`{live.ROOT_CANARY}`", agents)
+        self.assertIn(f"`{live.SKILL_CANARY}`", skill)
         self.assertIn('triggers: ["user"]', skill)
 
     def test_live_evidence_must_be_outside_the_source_repository(self) -> None:
@@ -148,6 +148,16 @@ class DevinLiveHarnessTest(unittest.TestCase):
         self.assertNotIn("cog_fixture_secret", repr(client))
         detail = live.safe_error_detail("request rejected for cog_fixture_secret")
         self.assertEqual("request rejected for [REDACTED]", detail)
+
+    def test_fixture_inline_code_wrapper_is_normalized_without_accepting_extra_text(self) -> None:
+        self.assertEqual(
+            live.ROOT_CANARY + " " + "a" * 40,
+            live.normalize_fixture_reply(f"`{live.ROOT_CANARY}` {'a' * 40}", live.ROOT_CANARY),
+        )
+        self.assertNotEqual(
+            live.SKILL_CANARY,
+            live.normalize_fixture_reply(f"extra `{live.SKILL_CANARY}`", live.SKILL_CANARY),
+        )
 
     def test_live_flow_binds_repo_build_commit_and_separate_skill_turn(self) -> None:
         harness, transport = self.harness()
