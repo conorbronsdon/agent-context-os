@@ -29,7 +29,11 @@ exist on the `coordination` branch.
    overlap justifies reporting only — never deleting or rewriting another
    run's work.
 3. **No secrets, credentials, or sensitive personal data, ever.** Expiry
-   removes a message from the active view; git history keeps it forever.
+   removes a message from the active view; git history keeps it forever. `post`
+   rejects a narrow set of high-confidence credential shapes before it writes or
+   queues a message, and `validate` flags and redacts matching messages in its
+   report. This is a tripwire, not proof that content is safe; never rely on it
+   to approve a credential for the board.
 4. **The board is user-visible by design.** Plain files, git history, surfaced
    at session start.
 5. **Human-paced.** No always-on agents poll this board. The only sanctioned

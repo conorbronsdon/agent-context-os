@@ -54,6 +54,30 @@ _SUSPICIOUS_PATTERNS = (
     ("urgent", re.compile(r"\burgent\b", re.IGNORECASE)),
 )
 
+# These are intentionally narrow tripwires, not a claim of comprehensive secret
+# detection. Labels, rather than matched text, are returned to callers so a
+# validation report does not become another place that leaks a credential.
+_SECRET_PATTERNS = (
+    ("Context OS test canary", re.compile(r"\bCONTEXTOS_TEST_SECRET_[A-Z0-9_]+\b")),
+    (
+        "GitHub token",
+        re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})\b"),
+    ),
+    ("OpenAI-style API key", re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b")),
+    ("AWS access key ID", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),
+    ("private key block", re.compile(r"-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----")),
+)
+_REDACTED_BOARD_VALUE = "[redacted: suspected credential material]"
+
+
+def _secret_labels(value: str) -> list[str]:
+    """Return detector labels only; never return credential-like matches."""
+    return [label for label, pattern in _SECRET_PATTERNS if pattern.search(value)]
+
+
+def _secret_error(labels: list[str]) -> str:
+    return "board content contains suspected credential material: " + ", ".join(labels)
+
 
 def _git(
     root: Path,
@@ -793,6 +817,16 @@ def post_message(
     if not isinstance(body, str) or not body.strip():
         raise ContextOSError("body must not be empty")
 
+    secret_labels = _secret_labels(
+        "\n".join(
+            value
+            for value in (sender_value, audience_value, kind_value, body, re_ref, expires, runtime_value)
+            if value is not None
+        )
+    )
+    if secret_labels:
+        raise ContextOSError(_secret_error(secret_labels))
+
     expiry_value = _expiry(expires, now=current, field="expires")
     normalized_ref, notices = _prepare_reference(root, re_ref)
 
@@ -1449,6 +1483,11 @@ def validate_board(
                 continue
             filename = PurePosixPath(path).name
             identifier = PurePosixPath(path).stem
+            reported_path = (
+                _REDACTED_BOARD_VALUE
+                if document_type == "message" and _secret_labels(path)
+                else path
+            )
             file_errors = _filename_errors(path)
             if identifier in seen_ids:
                 file_errors.append(
@@ -1460,8 +1499,17 @@ def validate_board(
             try:
                 text = _read_tree_text(root, head, path)
             except ContextOSError as exc:
-                errors.append(f"{path}: {exc}")
+                errors.append(f"{reported_path}: {exc}")
                 continue
+            secret_labels = (
+                _secret_labels(f"{path}\n{text}")
+                if document_type == "message"
+                else []
+            )
+            if secret_labels:
+                reported_path = _REDACTED_BOARD_VALUE
+            if secret_labels:
+                file_errors.append(_secret_error(secret_labels))
             if document_type == "message" and len(text.encode("utf-8")) > MAX_MESSAGE_BYTES:
                 file_errors.append(
                     f"message exceeds the {MAX_MESSAGE_BYTES}-byte whole-file limit"
@@ -1474,6 +1522,7 @@ def validate_board(
                 fields, body = {}, ""
 
             if document_type == "message":
+                message_warnings: list[str] = []
                 required = ("from", "audience", "kind", "expires")
                 for key in required:
                     if key not in fields:
@@ -1494,7 +1543,7 @@ def validate_board(
                     else:
                         valid_reference, reason = _reference_status(root, fields["re"])
                         if not valid_reference:
-                            warnings.append(
+                            message_warnings.append(
                                 f"{path}: reference degraded to summary-only: {reason}"
                             )
 
@@ -1502,27 +1551,42 @@ def validate_board(
                 if audience is not None:
                     warning = _audience_notice(audience, roles, path)
                     if warning is not None:
-                        warnings.append(warning)
+                        message_warnings.append(warning)
                 matched = [
                     label
                     for label, pattern in _SUSPICIOUS_PATTERNS
                     if pattern.search(body)
                 ]
                 if matched:
-                    warnings.append(
+                    message_warnings.append(
                         f"{path}: suspicious imperative or authorization language: "
                         + ", ".join(matched)
                     )
 
                 report = {
-                    "id": identifier,
-                    "path": path,
+                    "id": _REDACTED_BOARD_VALUE if secret_labels else identifier,
+                    "path": reported_path,
                     "from": fields.get("from"),
                     "audience": fields.get("audience"),
                     "kind": fields.get("kind"),
                     "expires": fields.get("expires"),
                     "body": body,
                 }
+                # Detection scans the raw frontmatter and body.  If it fires,
+                # redact every user-controlled field that this report exposes,
+                # not only the body that is commonly the source of a match.
+                if secret_labels:
+                    for key in ("from", "audience", "kind", "expires", "body"):
+                        report[key] = _REDACTED_BOARD_VALUE
+                    # Some diagnostics interpolate metadata. Suppress every
+                    # per-message diagnostic once raw-text detection fires so
+                    # a warning cannot reintroduce the value just redacted.
+                    if message_warnings:
+                        warnings.append(
+                            f"{reported_path}: diagnostics withheld for suspected credential material"
+                        )
+                else:
+                    warnings.extend(message_warnings)
                 message_reports.append(report)
             else:
                 required = ("task", "owner", "lease-expires")
@@ -1566,7 +1630,16 @@ def validate_board(
                     }
                 )
 
-            errors.extend(f"{path}: {finding}" for finding in file_errors)
+            if document_type == "message" and secret_labels:
+                # Filename and parser diagnostics can interpolate raw metadata.
+                # Preserve the actionable detector label, but withhold all
+                # other per-message diagnostics from a report that is meant
+                # not to echo suspected credential material.
+                file_errors = [
+                    _secret_error(secret_labels),
+                    "message diagnostics withheld for suspected credential material",
+                ]
+            errors.extend(f"{reported_path}: {finding}" for finding in file_errors)
 
     order_notices: list[str] = []
     ordered_claims = _current_claims(root, head, current, order_notices)
