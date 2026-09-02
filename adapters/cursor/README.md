@@ -72,7 +72,9 @@ The IDE and CLI authorization controls are not interchangeable:
 - IDE Run Modes and project/user `permissions.json` govern IDE shell, MCP, and
   fetch behavior. Cursor says Auto-review is not a security boundary.
 - CLI permissions live in user `~/.cursor/cli-config.json` and project
-  `.cursor/cli.json`. An explicit deny wins an allow.
+  `.cursor/cli.json`. An explicit deny wins an allow for the matched tool, but
+  a `Write(...)` deny does not prevent the same filesystem change through
+  `Shell(...)`; deny every applicable tool path when enforcing an outcome.
 - In Cursor Agent CLI `2026.08.31-4057e58`, `agent -p` exposes write and shell
   tools and can change files without `--force`. Use `--mode ask` or `--mode plan`
   when the invocation must remain read-only. `--force` additionally force-allows

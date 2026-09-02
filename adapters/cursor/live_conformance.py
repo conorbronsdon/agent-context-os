@@ -158,7 +158,7 @@ def write_permissions(root: Path) -> None:
         json.dumps({
             "permissions": {
                 "allow": ["Write(*)"],
-                "deny": ["Write(denied.txt)"],
+                "deny": ["Write(denied.txt)", "Shell(*)"],
             }
         }, indent=2) + "\n",
         encoding="utf-8",

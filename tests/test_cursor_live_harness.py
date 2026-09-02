@@ -42,7 +42,9 @@ class CursorLiveHarnessTest(unittest.TestCase):
         self.assertIn("disable-model-invocation: true", skill)
         config = json.loads((workspace / ".cursor/cli.json").read_text(encoding="utf-8"))
         self.assertEqual(["Write(*)"], config["permissions"]["allow"])
-        self.assertEqual(["Write(denied.txt)"], config["permissions"]["deny"])
+        self.assertEqual(
+            ["Write(denied.txt)", "Shell(*)"], config["permissions"]["deny"]
+        )
         self.assertEqual("disposable\n", (workspace / live.DISPOSABLE_MARKER).read_text())
 
     def test_snapshot_reports_only_real_mutations(self) -> None:
