@@ -27,16 +27,18 @@ class FakeRunner:
     def __init__(
         self, responses: list[tuple[int | None, dict[str, object] | None]], *,
         create_returncode: int = 0,
+        list_responses: list[list[dict[str, object]]] | None = None,
     ) -> None:
         self.responses = list(responses)
         self.create_returncode = create_returncode
+        self.list_responses = list(list_responses or [])
         self.create_count = 0
         self.calls: list[tuple[str, ...]] = []
 
     def run(self, arguments, *, check=True):
         args = tuple(str(value) for value in arguments)
         self.calls.append(args)
-        if args[:3] == ("gh", "api", "--include"):
+        if args[:3] == ("gh", "api", "--include") and "/releases/tags/" in args[-1]:
             if not self.responses:
                 raise AssertionError("unexpected lookup")
             status, value = self.responses.pop(0)
@@ -47,6 +49,14 @@ class FakeRunner:
             return subprocess.CompletedProcess(
                 args, 0 if 200 <= status < 300 else 1, output, f"HTTP {status}"
             )
+        if args[:3] == ("gh", "api", "--include") and "/releases?" in args[-1]:
+            releases = self.list_responses.pop(0) if self.list_responses else []
+            output = (
+                "HTTP/2.0 200 status\r\ncontent-type: application/json\r\n\r\n"
+                + json.dumps(releases)
+                + "\n"
+            )
+            return subprocess.CompletedProcess(args, 0, output, "")
         if args[:3] == ("gh", "release", "create"):
             self.create_count += 1
             return subprocess.CompletedProcess(
@@ -152,6 +162,25 @@ class StageReleaseTest(unittest.TestCase):
         result = self._stage(fake)
         self.assertEqual(result["release_id"], RELEASE_ID)
         self.assertEqual(fake.create_count, 1)
+
+    def test_tag_lookup_404_recovers_exact_draft_from_authenticated_list(self) -> None:
+        fake = FakeRunner(
+            [(404, None)],
+            list_responses=[[self._release()]],
+        )
+        result = self._stage(fake)
+        self.assertEqual(result["release_id"], RELEASE_ID)
+        self.assertFalse(result["created_by_this_run"])
+        self.assertEqual(fake.create_count, 0)
+
+    def test_tag_lookup_404_rejects_duplicate_drafts_from_authenticated_list(self) -> None:
+        fake = FakeRunner(
+            [(404, None)],
+            list_responses=[[self._release(), self._release(id=RELEASE_ID + 1)]],
+        )
+        with self.assertRaisesRegex(stage_release.StageReleaseError, "multiple entries"):
+            self._stage(fake)
+        self.assertEqual(fake.create_count, 0)
 
     def test_post_create_fatal_lookup_is_not_reclassified_as_absent(self) -> None:
         fake = FakeRunner([(404, None), (503, None)])

@@ -80,10 +80,26 @@ def _lookup_by_tag(
         f"repos/{repository}/releases/tags/{tag}",
     ], check=False)
     status, value = _included_json(completed)
-    if status == 404:
-        return None
-    _require(isinstance(value, dict), "release lookup response must be an object")
-    return value
+    if status != 404:
+        _require(isinstance(value, dict), "release lookup response must be an object")
+        return value
+
+    # GitHub's tag endpoint can return 404 for an unpublished draft even to a
+    # token that can list that draft. The list endpoint is therefore a bounded
+    # recovery read, not permission to create or alter another release.
+    listed = runner.run([
+        "gh", "api", "--include", "-H", "X-GitHub-Api-Version: 2026-03-10",
+        f"repos/{repository}/releases?per_page=100",
+    ], check=False)
+    list_status, releases = _included_json(listed)
+    _require(200 <= list_status < 300, f"release list returned HTTP {list_status}")
+    _require(isinstance(releases, list), "release list response must be an array")
+    matches = [
+        release for release in releases
+        if isinstance(release, dict) and release.get("tag_name") == tag
+    ]
+    _require(len(matches) <= 1, "release list contains multiple entries for the tag")
+    return matches[0] if matches else None
 
 
 def _exact_draft(
