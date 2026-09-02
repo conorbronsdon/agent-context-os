@@ -116,7 +116,8 @@ The harness verifies exact repository access, the active build, and the complete
 two-file public fixture tree and byte content before it creates one read-only
 API session. It tests root instructions without placing the root answer in the
 prompt, the fixture skill's user-only must-not-fire control across every returned
-message, its explicit must-fire control, exact fixture commit reporting,
+message and a settling window before the explicit turn, its explicit must-fire
+control ordered after the harness's user message, exact fixture commit reporting,
 unchanged public default-branch head and content, and absence of a created pull
 request. It then uses
 the current v3 archive endpoint and verifies the archived state. If archival
@@ -129,7 +130,8 @@ does not enable, trigger, or inspect Devin Review.
 For an account without API credentials, use the operator-assisted web-session
 recorder at `adapters/devin/ui_conformance.py`. `prepare` verifies that the
 dedicated public repository still contains exactly the two synthetic fixture
-files at the requested commit and records its complete pull-request inventory.
+files at the requested commit, that its default branch still points to that
+commit, and records its complete pull-request inventory.
 It emits create-only prompts outside the source repository. In Devin, start one
 read-only session for that exact public repository, run the root prompt, then
 explicitly invoke the synthetic user-only skill. Do not edit, branch, commit,

@@ -121,6 +121,10 @@ class CursorLiveHarnessTest(unittest.TestCase):
         with self.assertRaisesRegex(live.HarnessError, "confound"):
             harness.preflight(self.root)
 
+        config.write_text('{"permissions": {"deny": ["Read(.agents/**)"]}}', encoding="utf-8")
+        with self.assertRaisesRegex(live.HarnessError, "confound"):
+            harness.preflight(self.root)
+
     def test_require_canary_rejects_benign_success_without_evidence(self) -> None:
         result = live.CommandResult(
             [], 0, json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": "ordinary"}), ""
@@ -139,9 +143,20 @@ class CursorLiveHarnessTest(unittest.TestCase):
 
     def test_deny_precedence_requires_observed_stream_write_attempt(self) -> None:
         terminal = json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": "Denied"})
-        with self.assertRaisesRegex(live.HarnessError, "did not attempt"):
+        with self.assertRaisesRegex(live.HarnessError, "rejected denied write"):
             live.require_denied_write_attempt(
-                live.CommandResult([], 0, terminal, ""), "denied.txt", "deny"
+                live.CommandResult([], 0, terminal, ""), self.root, "denied.txt", "deny"
+            )
+
+    def test_deny_precedence_rejects_an_outside_workspace_attempt(self) -> None:
+        stream = "\n".join(json.dumps(item) for item in [
+            {"type": "tool_call", "subtype": "started", "call_id": "call-1", "tool_call": {"writeToolCall": {"args": {"path": str(self.root.parent / "denied.txt")}}}},
+            {"type": "tool_call", "subtype": "completed", "call_id": "call-1", "tool_call": {"writeToolCall": {"args": {"path": str(self.root.parent / "denied.txt")}, "result": {"denied": {"reason": "policy"}}}}},
+            {"type": "result", "subtype": "success", "is_error": False, "result": "Denied"},
+        ])
+        with self.assertRaisesRegex(live.HarnessError, "outside"):
+            live.require_denied_write_attempt(
+                live.CommandResult([], 0, stream, ""), self.root, "denied.txt", "deny"
             )
 
     def test_execute_requires_exact_json_controls_and_observed_denial(self) -> None:
@@ -175,7 +190,8 @@ class CursorLiveHarnessTest(unittest.TestCase):
                 return live.CommandResult([], 0, json_result(value), "")
             if "denied.txt" in prompt:
                 stream = [
-                    {"type": "tool_call", "subtype": "started", "tool_call": {"writeToolCall": {"args": {"path": "denied.txt"}}}},
+                    {"type": "tool_call", "subtype": "started", "call_id": "call-denied", "tool_call": {"writeToolCall": {"args": {"path": "denied.txt"}}}},
+                    {"type": "tool_call", "subtype": "completed", "call_id": "call-denied", "tool_call": {"writeToolCall": {"args": {"path": "denied.txt"}, "result": {"denied": {"reason": "policy"}}}}},
                     {"type": "result", "subtype": "success", "is_error": False, "result": "Write denied"},
                 ]
                 return live.CommandResult([], 0, "\n".join(json.dumps(item) for item in stream), "")

@@ -31,6 +31,10 @@ class FakeGitHub:
         self.calls.append(url)
         parsed = urllib.parse.urlsplit(url)
         path = parsed.path
+        if path.endswith("/repos/conorbronsdon/contextos-devin-live-fixture"):
+            return {"default_branch": "main"}
+        if path.endswith("/git/ref/heads/main"):
+            return {"object": {"type": "commit", "sha": self.fixture_sha}}
         if path.endswith(f"/commits/{self.fixture_sha}"):
             return {"sha": self.fixture_sha}
         if path.endswith(f"/git/trees/{self.fixture_sha}"):
@@ -187,6 +191,20 @@ class DevinUiHarnessTest(unittest.TestCase):
             self.repository, self.fixture_sha, transport=Drifted(self.fixture_sha)
         )
         with self.assertRaisesRegex(ui.HarnessError, "unexpected files"):
+            fixture.verify()
+
+    def test_default_branch_head_drift_fails(self) -> None:
+        class DriftedHead(FakeGitHub):
+            def __call__(self, url: str) -> object:
+                result = super().__call__(url)
+                if urllib.parse.urlsplit(url).path.endswith("/git/ref/heads/main"):
+                    return {"object": {"type": "commit", "sha": "c" * 40}}
+                return result
+
+        fixture = ui.GitHubFixture(
+            self.repository, self.fixture_sha, transport=DriftedHead(self.fixture_sha)
+        )
+        with self.assertRaisesRegex(ui.HarnessError, "default branch drifted"):
             fixture.verify()
 
     def test_opt_ins_and_create_only_output_are_required(self) -> None:

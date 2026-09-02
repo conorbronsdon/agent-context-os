@@ -27,12 +27,16 @@ class FakeTransport:
     def __init__(
         self, *, implicit_skill: bool = False, archive_fails: bool = False,
         extra_output: bool = False, implicit_skill_first: bool = False,
+        delayed_implicit_skill: bool = False,
     ) -> None:
         self.phase = "implicit"
         self.implicit_skill = implicit_skill
         self.archive_fails = archive_fails
         self.extra_output = extra_output
         self.implicit_skill_first = implicit_skill_first
+        self.delayed_implicit_skill = delayed_implicit_skill
+        self.implicit_message_reads = 0
+        self.explicit_prompt = ""
         self.calls: list[tuple[str, str, object, dict[str, str]]] = []
 
     def __call__(self, method, url, payload, headers, _timeout):
@@ -52,10 +56,17 @@ class FakeTransport:
             }
         if method == "POST" and path.endswith("/messages"):
             self.phase = "explicit"
+            self.explicit_prompt = str(payload["message"])
             return {"ok": True}
         if method == "GET" and path.endswith("/messages"):
             if self.phase == "implicit":
+                self.implicit_message_reads += 1
                 text = f"{live.ROOT_CANARY} {'a' * 40}"
+                if self.delayed_implicit_skill and self.implicit_message_reads > 1:
+                    return {"items": [
+                        {"event_id": "event-root", "source": "devin", "message": text},
+                        {"event_id": "event-late-skill", "source": "devin", "message": live.SKILL_CANARY},
+                    ]}
                 if self.implicit_skill_first:
                     return {"items": [
                         {"event_id": "event-skill-leak", "source": "devin", "message": live.SKILL_CANARY},
@@ -68,6 +79,7 @@ class FakeTransport:
                 return {"items": [{"event_id": "event-root", "source": "devin", "message": text}]}
             return {"items": [
                 {"event_id": "event-root", "source": "devin", "message": live.ROOT_CANARY},
+                {"event_id": "event-user-explicit", "source": "user", "message": self.explicit_prompt},
                 {"event_id": "event-skill", "source": "devin", "message": live.SKILL_CANARY},
             ]}
         if method == "GET" and "/sessions/devin-fixture" in path:
@@ -230,6 +242,12 @@ class DevinLiveHarnessTest(unittest.TestCase):
         self.assertTrue(
             any(call[0] == "POST" and call[1].endswith("/archive") for call in transport.calls)
         )
+
+    def test_delayed_implicit_skill_fails_before_the_explicit_turn(self) -> None:
+        harness, transport = self.harness(FakeTransport(delayed_implicit_skill=True))
+        with self.assertRaisesRegex(live.HarnessError, "fired without explicit"):
+            harness.execute()
+        self.assertFalse(any(call[1].endswith("/messages") for call in transport.calls))
 
     def test_public_fixture_content_drift_fails_before_session_creation(self) -> None:
         harness, transport = self.harness(github=FakeGitHub(

@@ -372,6 +372,53 @@ class DevinHarness:
             time.sleep(self.poll_interval)
         raise HarnessError("timed out waiting for Devin conformance output")
 
+    def settle_implicit_output(self, session_id: str, observed_events: set[str]) -> set[str]:
+        """Reject delayed implicit output before the explicit skill turn begins."""
+        observed = set(observed_events)
+        for _ in range(2):
+            messages = self.messages(session_id)
+            new = [
+                item for item in messages
+                if item.get("source") == "devin" and str(item.get("event_id")) not in observed
+            ]
+            text = "\n".join(str(item.get("message", "")) for item in new)
+            if SKILL_CANARY in text:
+                raise HarnessError("user-only Devin skill fired without explicit invocation")
+            if new:
+                raise HarnessError("implicit control emitted delayed output before explicit invocation")
+            observed.update(str(item.get("event_id")) for item in messages)
+            time.sleep(self.poll_interval)
+        return observed
+
+    def wait_for_devin_after_user_message(
+        self, session_id: str, user_message: str, *, canary: str
+    ) -> tuple[list[str], set[str]]:
+        """Use the API's chronological message order to bind the explicit turn."""
+        deadline = time.monotonic() + self.poll_timeout
+        while time.monotonic() < deadline:
+            messages = self.messages(session_id)
+            user_positions = [
+                index for index, item in enumerate(messages)
+                if item.get("source") != "devin" and item.get("message") == user_message
+            ]
+            if len(user_positions) > 1:
+                raise HarnessError("Devin returned multiple matching explicit user messages")
+            if user_positions:
+                following = [
+                    item for item in messages[user_positions[0] + 1:]
+                    if item.get("source") == "devin"
+                ]
+                text = [str(item.get("message", "")) for item in following]
+                if canary in "\n".join(text):
+                    return text, {str(item.get("event_id")) for item in messages}
+            state = self.session(session_id)
+            if state.get("status") in {"error", "exit", "suspended"}:
+                raise HarnessError(
+                    f"Devin session ended before the required canary: {state.get('status_detail') or state.get('status')}"
+                )
+            time.sleep(self.poll_interval)
+        raise HarnessError("timed out waiting for Devin explicit conformance output")
+
     def execute(self) -> Evidence:
         fixture_content_sha = verify_public_fixture(
             self.repository,
@@ -418,14 +465,16 @@ class DevinHarness:
                 implicit_messages[-1], ROOT_CANARY
             ) != expected_root:
                 raise HarnessError("implicit control did not return the exact root and fixture output")
+            events = self.settle_implicit_output(session_id, events)
 
+            explicit_prompt = f"@skills:{SKILL_NAME} Return only the canary required by this skill."
             self.client.request(
                 "POST",
                 f"{self.org_path}/sessions/{session_id}/messages",
-                {"message": f"@skills:{SKILL_NAME} Return only the canary required by this skill."},
+                {"message": explicit_prompt},
             )
-            explicit_messages, _ = self.wait_for_devin(
-                session_id, after_events=events, canary=SKILL_CANARY
+            explicit_messages, _ = self.wait_for_devin_after_user_message(
+                session_id, explicit_prompt, canary=SKILL_CANARY
             )
             if not explicit_messages or normalize_fixture_reply(
                 explicit_messages[-1], SKILL_CANARY

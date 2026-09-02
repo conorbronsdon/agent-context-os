@@ -141,6 +141,8 @@ must-not-fire behavior, read-only ask mode, the exact unattended write behavior
 without `--force`, a stream-observed denied write attempt under `--force`, and
 an exact allowed write. It does not treat a model merely choosing not to write
 as evidence that project denial precedence works.
+For the explicit-skill control it denies direct `.agents/**` reads, so a passing
+run must use Cursor's skill mechanism rather than merely reading the skill file.
 It refuses a dirty source worktree,
 version drift, missing authentication, evidence overwrite, unexpected fixture
 mutation, and the real repository as a target. It never invokes Cursor's

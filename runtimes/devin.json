@@ -149,13 +149,13 @@
         "id": "devin-live-harness",
         "type": "conformance",
         "location": "adapters/devin/live_conformance.py",
-        "claims": ["instruction_sources", "agent_skills", "explicit_invocation"]
+        "claims": ["instruction_sources"]
       },
       {
         "id": "devin-ui-harness",
         "type": "conformance",
         "location": "adapters/devin/ui_conformance.py",
-        "claims": ["instruction_sources", "agent_skills", "explicit_invocation"]
+        "claims": ["instruction_sources"]
       }
     ]
   }

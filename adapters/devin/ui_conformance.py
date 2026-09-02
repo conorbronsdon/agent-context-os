@@ -125,6 +125,15 @@ class GitHubFixture:
         return self.transport(f"{GITHUB_ROOT}/repos/{self.repository}{path}")
 
     def verify(self) -> str:
+        repository = self.request("")
+        default_branch = repository.get("default_branch") if isinstance(repository, dict) else None
+        if not isinstance(default_branch, str) or not default_branch:
+            raise HarnessError("GitHub fixture response omitted its default branch")
+        branch = urllib.parse.quote(default_branch, safe="")
+        reference = self.request(f"/git/ref/heads/{branch}")
+        target = reference.get("object") if isinstance(reference, dict) else None
+        if not isinstance(target, dict) or target.get("type") != "commit" or target.get("sha") != self.fixture_sha:
+            raise HarnessError("public fixture default branch drifted from the exact fixture commit")
         commit = self.request(f"/commits/{self.fixture_sha}")
         if not isinstance(commit, dict) or commit.get("sha") != self.fixture_sha:
             raise HarnessError("GitHub did not return the exact fixture commit")
@@ -154,7 +163,10 @@ class GitHubFixture:
             if remote != local:
                 raise HarnessError(f"public fixture content drifted from source: {path}")
             remote_hashes[path] = hashlib.sha256(remote).hexdigest()
-        return canonical_hash(remote_hashes)
+        return canonical_hash({
+            "default_branch_head": self.fixture_sha,
+            "fixture_file_hashes": remote_hashes,
+        })
 
     def pull_snapshot(self) -> tuple[str, int]:
         pulls = self.request("/pulls?state=all&per_page=100")

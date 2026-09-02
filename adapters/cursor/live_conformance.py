@@ -130,7 +130,9 @@ def require_canary(result: CommandResult, canary: str, subject: str) -> None:
         raise HarnessError(f"{subject} did not return only its instruction canary")
 
 
-def require_denied_write_attempt(result: CommandResult, filename: str, subject: str) -> None:
+def require_denied_write_attempt(
+    result: CommandResult, workspace: Path, filename: str, subject: str
+) -> None:
     """Require a documented stream-json write attempt that project policy denied."""
     require_success(result, subject)
     events: list[Mapping[str, object]] = []
@@ -150,6 +152,7 @@ def require_denied_write_attempt(result: CommandResult, filename: str, subject: 
     ]
     if len(terminal) != 1 or not isinstance(terminal[0].get("result"), str):
         raise HarnessError(f"{subject} did not complete with one successful stream result")
+    attempts: dict[str, Mapping[str, object]] = {}
     for event in events:
         tool_call = event.get("tool_call")
         if not isinstance(tool_call, dict):
@@ -157,9 +160,21 @@ def require_denied_write_attempt(result: CommandResult, filename: str, subject: 
         write = tool_call.get("writeToolCall")
         args = write.get("args") if isinstance(write, dict) else None
         path = args.get("path") if isinstance(args, dict) else None
-        if isinstance(path, str) and Path(path).name == filename:
-            return
-    raise HarnessError(f"{subject} did not attempt the denied write through Cursor")
+        call_id = event.get("call_id")
+        if not isinstance(path, str) or not isinstance(call_id, str) or Path(path).name != filename:
+            continue
+        target = (workspace / path).resolve(strict=False) if not Path(path).is_absolute() else Path(path).resolve(strict=False)
+        try:
+            target.relative_to(workspace.resolve())
+        except ValueError as exc:
+            raise HarnessError(f"{subject} attempted a write outside the disposable workspace") from exc
+        if event.get("subtype") == "started":
+            attempts[call_id] = write
+        elif event.get("subtype") == "completed" and call_id in attempts:
+            outcome = write.get("result") if isinstance(write, dict) else None
+            if isinstance(outcome, dict) and outcome and "success" not in outcome:
+                return
+    raise HarnessError(f"{subject} did not record a rejected denied write through Cursor")
 
 
 def snapshot(root: Path) -> dict[str, str]:
@@ -274,7 +289,7 @@ class CursorHarness:
                 )
             denied = permissions.get("deny", []) if permissions else []
             if not isinstance(denied, list) or any(
-                not isinstance(rule, str) or rule.startswith(("Write(", "Shell("))
+                not isinstance(rule, str) or rule.startswith(("Write(", "Shell(", "Read(.agents"))
                 for rule in denied
             ):
                 raise HarnessError(
@@ -344,12 +359,14 @@ class CursorHarness:
             if canaries["skill"] in implicit_text:
                 raise HarnessError("explicit-only skill body was model-invoked")
 
+            write_permissions(workspace, allow=[], deny=["Read(.agents/**)"])
             explicit = self.agent(
                 workspace,
                 "/contextos-live-explicit Return only the canary required by this skill.",
                 "--mode", "ask",
             )
             require_canary(explicit, canaries["skill"], "explicit skill invocation")
+            baseline = snapshot(workspace)
 
             proposed = workspace / "proposed.txt"
             ask_write = self.agent(
@@ -392,7 +409,9 @@ class CursorHarness:
                 "--force",
                 output_format="stream-json",
             )
-            require_denied_write_attempt(denied_result, "denied.txt", "deny-precedence control")
+            require_denied_write_attempt(
+                denied_result, workspace, "denied.txt", "deny-precedence control"
+            )
             if denied.exists():
                 raise HarnessError("project deny did not override --force")
             if changed_paths(denied_baseline, snapshot(workspace)):
