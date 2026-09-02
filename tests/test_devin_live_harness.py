@@ -24,11 +24,13 @@ SPEC.loader.exec_module(live)
 
 class FakeTransport:
     def __init__(
-        self, *, implicit_skill: bool = False, archive_fails: bool = False
+        self, *, implicit_skill: bool = False, archive_fails: bool = False,
+        extra_output: bool = False,
     ) -> None:
         self.phase = "implicit"
         self.implicit_skill = implicit_skill
         self.archive_fails = archive_fails
+        self.extra_output = extra_output
         self.calls: list[tuple[str, str, object, dict[str, str]]] = []
 
     def __call__(self, method, url, payload, headers, _timeout):
@@ -54,6 +56,8 @@ class FakeTransport:
                 text = f"{live.ROOT_CANARY} {'a' * 40}"
                 if self.implicit_skill:
                     text += f" {live.SKILL_CANARY}"
+                elif self.extra_output:
+                    text += " extra"
                 return {"items": [{"event_id": "event-root", "source": "devin", "message": text}]}
             return {"items": [
                 {"event_id": "event-root", "source": "devin", "message": live.ROOT_CANARY},
@@ -79,23 +83,42 @@ class FakeTransport:
             raise AssertionError(query)
 
 
+class FakeGitHub:
+    def __init__(self, *heads: str) -> None:
+        self.heads = list(heads)
+        self.reference_calls = 0
+
+    def __call__(self, url: str, _timeout: float):
+        if url.endswith("/repos/conorbronsdon/contextos-devin-live-fixture"):
+            return {"default_branch": "main"}
+        if url.endswith("/git/ref/heads/main"):
+            index = min(self.reference_calls, len(self.heads) - 1)
+            self.reference_calls += 1
+            return {"object": {"type": "commit", "sha": self.heads[index]}}
+        raise AssertionError(url)
+
+
 class DevinLiveHarnessTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
 
-    def harness(self, transport: FakeTransport | None = None):
+    def harness(
+        self, transport: FakeTransport | None = None, github: FakeGitHub | None = None
+    ):
         selected = transport or FakeTransport()
         client = live.DevinClient("cog_fixture", "org-fixture", transport=selected)
+        fixture_sha = "a" * 40
         return live.DevinHarness(
             client,
             repository="conorbronsdon/contextos-devin-live-fixture",
-            fixture_sha="a" * 40,
+            fixture_sha=fixture_sha,
             source_sha="b" * 40,
             expected_active_build="build-fixture",
             poll_timeout=1,
             poll_interval=0,
+            github_transport=github or FakeGitHub(fixture_sha),
         ), selected
 
     def test_fixture_canaries_match_harness_and_skill_is_user_only(self) -> None:
@@ -135,6 +158,14 @@ class DevinLiveHarnessTest(unittest.TestCase):
         self.assertEqual(["conorbronsdon/contextos-devin-live-fixture"], create[2]["repos"])
         self.assertTrue(all(call[3]["Authorization"] == "Bearer cog_fixture" for call in transport.calls))
 
+    def test_public_fixture_default_head_drift_fails_and_archives(self) -> None:
+        harness, transport = self.harness(github=FakeGitHub("a" * 40, "c" * 40))
+        with self.assertRaisesRegex(live.HarnessError, "default branch drifted"):
+            harness.execute()
+        self.assertTrue(
+            any(call[0] == "POST" and call[1].endswith("/archive") for call in transport.calls)
+        )
+
     def test_implicit_skill_failure_still_terminates_session(self) -> None:
         harness, transport = self.harness(FakeTransport(implicit_skill=True))
         with self.assertRaisesRegex(live.HarnessError, "fired without explicit"):
@@ -143,6 +174,14 @@ class DevinLiveHarnessTest(unittest.TestCase):
             any(call[0] == "POST" and call[1].endswith("/archive") for call in transport.calls)
         )
         self.assertTrue(harness.evidence.controls["session_archived"])
+
+    def test_extra_model_output_fails_exact_control_and_archives(self) -> None:
+        harness, transport = self.harness(FakeTransport(extra_output=True))
+        with self.assertRaisesRegex(live.HarnessError, "exact root and fixture"):
+            harness.execute()
+        self.assertTrue(
+            any(call[0] == "POST" and call[1].endswith("/archive") for call in transport.calls)
+        )
 
     def test_archive_failure_terminates_session_and_fails_conformance(self) -> None:
         harness, transport = self.harness(FakeTransport(archive_fails=True))

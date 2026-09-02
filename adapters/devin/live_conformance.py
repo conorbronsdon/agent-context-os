@@ -21,6 +21,7 @@ from typing import Callable, Mapping, Sequence
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 API_ROOT = "https://api.devin.ai"
+GITHUB_API_ROOT = "https://api.github.com"
 ROOT_CANARY = "CONTEXTOS_DEVIN_ROOT_7D6A41C9"
 SKILL_CANARY = "CONTEXTOS_DEVIN_SKILL_49B28E73"
 SKILL_NAME = "contextos-devin-live-control"
@@ -35,6 +36,7 @@ class HarnessError(RuntimeError):
 
 
 Transport = Callable[[str, str, Mapping[str, object] | None, Mapping[str, str], float], Mapping[str, object]]
+GitHubTransport = Callable[[str, float], Mapping[str, object]]
 
 
 def canonical_hash(value: object) -> str:
@@ -76,6 +78,48 @@ def default_transport(
     if not isinstance(decoded, dict):
         raise HarnessError(f"Devin API {method} returned a non-object response")
     return decoded
+
+
+def default_github_transport(url: str, timeout: float) -> Mapping[str, object]:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "agent-context-os-devin-conformance",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            raw = response.read()
+    except urllib.error.HTTPError as exc:
+        raise HarnessError(f"GitHub fixture request failed with HTTP {exc.code}") from exc
+    try:
+        decoded = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HarnessError("GitHub fixture request returned invalid JSON") from exc
+    if not isinstance(decoded, dict):
+        raise HarnessError("GitHub fixture request returned a non-object response")
+    return decoded
+
+
+def verify_public_fixture_head(
+    repository: str, fixture_sha: str, *, transport: GitHubTransport = default_github_transport
+) -> None:
+    """Ensure the fixture's public default branch still names the exact commit."""
+    repository_info = transport(f"{GITHUB_API_ROOT}/repos/{repository}", 30)
+    default_branch = repository_info.get("default_branch")
+    if not isinstance(default_branch, str) or not default_branch:
+        raise HarnessError("GitHub fixture response omitted its default branch")
+    encoded_branch = urllib.parse.quote(default_branch, safe="")
+    reference = transport(
+        f"{GITHUB_API_ROOT}/repos/{repository}/git/ref/heads/{encoded_branch}", 30
+    )
+    target = reference.get("object")
+    if not isinstance(target, dict) or target.get("type") != "commit":
+        raise HarnessError("GitHub fixture default branch did not resolve to a commit")
+    if target.get("sha") != fixture_sha:
+        raise HarnessError("public fixture default branch drifted from the exact fixture commit")
 
 
 @dataclass
@@ -161,6 +205,7 @@ class DevinHarness:
         expected_active_build: str,
         poll_timeout: float = 900,
         poll_interval: float = 10,
+        github_transport: GitHubTransport = default_github_transport,
     ) -> None:
         if not REPO_RE.fullmatch(repository):
             raise HarnessError("--repository must be an exact owner/name path")
@@ -174,6 +219,7 @@ class DevinHarness:
         self.expected_active_build = expected_active_build
         self.poll_timeout = poll_timeout
         self.poll_interval = poll_interval
+        self.github_transport = github_transport
         self.evidence = Evidence(source_sha, fixture_sha, repository)
 
     @property
@@ -237,6 +283,9 @@ class DevinHarness:
         raise HarnessError("timed out waiting for Devin conformance output")
 
     def execute(self) -> Evidence:
+        verify_public_fixture_head(
+            self.repository, self.fixture_sha, transport=self.github_transport
+        )
         self.verify_repository_access()
         before_build = self.active_build()
         self.evidence.active_build_id = str(before_build["build_id"])
@@ -267,10 +316,11 @@ class DevinHarness:
             self.evidence.devin_mode = created.get("devin_mode") if isinstance(created.get("devin_mode"), str) else None
 
             implicit, events = self.wait_for_devin(session_id, after_events=set(), canary=ROOT_CANARY)
-            if self.fixture_sha not in implicit:
-                raise HarnessError("implicit control did not report the exact fixture commit")
-            if SKILL_CANARY in implicit:
-                raise HarnessError("user-only Devin skill fired without explicit invocation")
+            expected_root = f"{ROOT_CANARY} {self.fixture_sha}"
+            if implicit.strip() != expected_root:
+                if SKILL_CANARY in implicit:
+                    raise HarnessError("user-only Devin skill fired without explicit invocation")
+                raise HarnessError("implicit control did not return the exact root and fixture output")
 
             self.client.request(
                 "POST",
@@ -280,8 +330,8 @@ class DevinHarness:
             explicit, _ = self.wait_for_devin(
                 session_id, after_events=events, canary=SKILL_CANARY
             )
-            if ROOT_CANARY in explicit:
-                raise HarnessError("explicit skill control returned unexpected root output")
+            if explicit.strip() != SKILL_CANARY:
+                raise HarnessError("explicit skill control did not return its exact canary")
 
             final = self.session(session_id)
             if final.get("pull_requests") not in ([], None):
@@ -289,10 +339,14 @@ class DevinHarness:
             after_build = self.active_build()
             if after_build.get("build_id") != before_build.get("build_id"):
                 raise HarnessError("the active Devin build changed during conformance")
+            verify_public_fixture_head(
+                self.repository, self.fixture_sha, transport=self.github_transport
+            )
 
             self.evidence.controls.update({
                 "repository_access": True,
                 "exact_fixture_commit": True,
+                "public_fixture_default_head_unchanged": True,
                 "exact_active_build": True,
                 "root_instruction_discovery": True,
                 "implicit_skill_must_not_fire": True,

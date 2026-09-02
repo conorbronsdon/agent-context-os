@@ -115,7 +115,8 @@ python adapters/devin/live_conformance.py \
 The harness verifies exact repository access and the active build before it
 creates one read-only API session. It tests root instructions, the fixture
 skill's user-only must-not-fire control, its explicit must-fire control, exact
-fixture commit reporting, and absence of a created pull request. It then uses
+fixture commit reporting, unchanged public default-branch head, and absence of
+a created pull request. It then uses
 the current v3 archive endpoint and verifies the archived state. If archival
 fails, it attempts a separate termination but still fails conformance. Evidence
 contains hashes and public
