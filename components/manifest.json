@@ -232,6 +232,10 @@
                     "policy": "managed"
                 },
                 {
+                    "path": "docs/releases/v0.13.0.md",
+                    "policy": "managed"
+                },
+                {
                     "path": "docs/root-contract.md",
                     "policy": "managed"
                 },

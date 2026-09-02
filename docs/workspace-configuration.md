@@ -35,7 +35,7 @@ Schema v2 has exact keys:
     "task_file": "TODO.md"
   },
   "template": {
-    "version": "0.12.0",
+    "version": "0.13.0",
     "source": "agent-context-os-template",
     "bundle_sha256": "<exact-64-character-lowercase-digest>"
   }
