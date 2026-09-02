@@ -896,7 +896,7 @@ class CoordinationTests(unittest.TestCase):
         )
         report = validate_board(self.repo_a, now=NOW)
         self.assertFalse(report["valid"])
-        self.assertIn(path, "\n".join(report["errors"]))
+        self.assertNotIn(path, json.dumps(report))
         self.assertIn("Context OS test canary", "\n".join(report["errors"]))
         self.assertNotIn(canary, json.dumps(report))
         self.assertEqual("[redacted: suspected credential material]", report["messages"][0]["body"])
@@ -922,6 +922,26 @@ class CoordinationTests(unittest.TestCase):
         message = report["messages"][0]
         for key in ("from", "audience", "kind", "expires", "body"):
             self.assertEqual("[redacted: suspected credential material]", message[key])
+
+    def test_validate_redacts_matching_message_path_and_id(self) -> None:
+        bootstrap_board(self.repo_a, now=NOW)
+        canary = "CONTEXTOS_TEST_SECRET_PATH"
+        path = f"coordination/board/20260831T143001Z-acde-{canary}.md"
+        self._plant_files(
+            {
+                path: (
+                    "---\nfrom: claude/researcher\naudience: all\nkind: note\n"
+                    "expires: 2026-09-07T14:30:01Z\n---\n\n"
+                    "A manually named invalid board message.\n"
+                )
+            },
+            "Plant path secret validation fixture",
+        )
+        report = validate_board(self.repo_a, now=NOW)
+        self.assertFalse(report["valid"])
+        self.assertNotIn(canary, json.dumps(report))
+        self.assertEqual("[redacted: suspected credential material]", report["messages"][0]["path"])
+        self.assertEqual("[redacted: suspected credential material]", report["messages"][0]["id"])
 
     def test_claim_succession_after_release_and_lease_ttl_bound(self) -> None:
         bootstrap_board(self.repo_a, now=NOW)

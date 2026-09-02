@@ -1483,6 +1483,11 @@ def validate_board(
                 continue
             filename = PurePosixPath(path).name
             identifier = PurePosixPath(path).stem
+            reported_path = (
+                _REDACTED_BOARD_VALUE
+                if document_type == "message" and _secret_labels(path)
+                else path
+            )
             file_errors = _filename_errors(path)
             if identifier in seen_ids:
                 file_errors.append(
@@ -1494,9 +1499,15 @@ def validate_board(
             try:
                 text = _read_tree_text(root, head, path)
             except ContextOSError as exc:
-                errors.append(f"{path}: {exc}")
+                errors.append(f"{reported_path}: {exc}")
                 continue
-            secret_labels = _secret_labels(text) if document_type == "message" else []
+            secret_labels = (
+                _secret_labels(f"{path}\n{text}")
+                if document_type == "message"
+                else []
+            )
+            if secret_labels:
+                reported_path = _REDACTED_BOARD_VALUE
             if secret_labels:
                 file_errors.append(_secret_error(secret_labels))
             if document_type == "message" and len(text.encode("utf-8")) > MAX_MESSAGE_BYTES:
@@ -1553,8 +1564,8 @@ def validate_board(
                     )
 
                 report = {
-                    "id": identifier,
-                    "path": path,
+                    "id": _REDACTED_BOARD_VALUE if secret_labels else identifier,
+                    "path": reported_path,
                     "from": fields.get("from"),
                     "audience": fields.get("audience"),
                     "kind": fields.get("kind"),
@@ -1572,7 +1583,7 @@ def validate_board(
                     # a warning cannot reintroduce the value just redacted.
                     if message_warnings:
                         warnings.append(
-                            f"{path}: diagnostics withheld for suspected credential material"
+                            f"{reported_path}: diagnostics withheld for suspected credential material"
                         )
                 else:
                     warnings.extend(message_warnings)
@@ -1619,7 +1630,16 @@ def validate_board(
                     }
                 )
 
-            errors.extend(f"{path}: {finding}" for finding in file_errors)
+            if document_type == "message" and secret_labels:
+                # Filename and parser diagnostics can interpolate raw metadata.
+                # Preserve the actionable detector label, but withhold all
+                # other per-message diagnostics from a report that is meant
+                # not to echo suspected credential material.
+                file_errors = [
+                    _secret_error(secret_labels),
+                    "message diagnostics withheld for suspected credential material",
+                ]
+            errors.extend(f"{reported_path}: {finding}" for finding in file_errors)
 
     order_notices: list[str] = []
     ordered_claims = _current_claims(root, head, current, order_notices)
