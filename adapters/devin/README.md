@@ -120,6 +120,23 @@ This fixture proves the cloud instruction and skill substrate. Promotion still
 requires a separate lifecycle proposal/apply authorization fixture and a
 separately approved Review fixture; neither may inherit this result.
 
+## Review conformance fixture
+
+`adapters/devin/review-fixture/` is a separate inert control for the Review
+surface. Its scoped `REVIEW.md` requires one unique canary when a changed file
+adds the benign prohibited marker in `control.txt`. A pull request containing
+both files can therefore prove instruction ingestion without using a private
+repository or real defect. Merely shipping the fixture does not trigger Review.
+
+For a public GitHub pull request, Devin documents that replacing `github.com`
+with `devinreview.com` starts a free read-only review without an account, or the
+exact pinned `devin-review` CLI may be run from the local clone. Both paths send
+the diff and file contents to Devin servers. Require explicit external-data-
+transfer approval immediately before either path, bind evidence to the PR head
+SHA and Review version or result identity, and verify that the result contains
+`CONTEXTOS_DEVIN_REVIEW_CANARY_63F0A2D8`. Do not comment, approve, merge, apply
+changes, enable auto-review, or install the GitHub App as part of conformance.
+
 Promotion requires dated live-account fixtures that demonstrate instruction
 and skill discovery, explicit lifecycle behavior, proposal/apply authorization,
 repository access, and exact account/build identity. Account-dependent checks

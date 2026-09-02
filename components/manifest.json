@@ -1006,6 +1006,14 @@
                     "policy": "managed"
                 },
                 {
+                    "path": "adapters/devin/review-fixture/REVIEW.md",
+                    "policy": "development"
+                },
+                {
+                    "path": "adapters/devin/review-fixture/control.txt",
+                    "policy": "development"
+                },
+                {
                     "path": "runtimes/devin.json",
                     "policy": "managed"
                 },

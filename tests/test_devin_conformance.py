@@ -127,6 +127,14 @@ class DevinDescriptorTest(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertFalse((ROOT / path).exists())
 
+    def test_review_fixture_is_scoped_inert_and_unique(self) -> None:
+        fixture = ROOT / "adapters/devin/review-fixture"
+        instructions = (fixture / "REVIEW.md").read_text(encoding="utf-8")
+        control = (fixture / "control.txt").read_text(encoding="utf-8")
+        self.assertIn("Do not propose or apply fixes", instructions)
+        self.assertIn("CONTEXTOS_DEVIN_REVIEW_CANARY_63F0A2D8", instructions)
+        self.assertEqual("CONTEXTOS_DEVIN_REVIEW_PROHIBITED_MARKER\n", control)
+
 
 class DevinLiveAccountGateTest(unittest.TestCase):
     def test_live_account_harness_requires_explicit_credentials_and_opt_ins(self) -> None:
