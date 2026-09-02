@@ -151,6 +151,7 @@ def write_fixture(root: Path, canaries: Mapping[str, str]) -> None:
         "For files in this directory, return only this nested value when asked.\n",
         encoding="utf-8",
     )
+    (nested / "control.txt").write_text("nested fixture\n", encoding="utf-8")
     skill = root / ".agents" / "skills" / "contextos-live-explicit"
     skill.mkdir(parents=True)
     (skill / "SKILL.md").write_text(
@@ -278,7 +279,7 @@ class CursorHarness:
 
             nested = self.agent(
                 workspace,
-                "Return the value assigned to ROOT_INSTRUCTION_CANARY for this directory, and nothing else.",
+                "@nested/control.txt Return the value assigned to ROOT_INSTRUCTION_CANARY for that file, and nothing else.",
                 "--mode", "ask",
                 cwd=workspace / "nested",
             )

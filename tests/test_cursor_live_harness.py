@@ -51,6 +51,7 @@ class CursorLiveHarnessTest(unittest.TestCase):
             ["Write(*)", "Shell(*)"], config["permissions"]["deny"]
         )
         self.assertEqual("disposable\n", (workspace / live.DISPOSABLE_MARKER).read_text())
+        self.assertEqual("nested fixture\n", (workspace / "nested/control.txt").read_text())
 
     def test_snapshot_reports_only_real_mutations(self) -> None:
         workspace = self.root / "workspace"
@@ -80,9 +81,10 @@ class CursorLiveHarnessTest(unittest.TestCase):
             self.binary, "v1", "a" * 40,
             runner=lambda argv, cwd, *_: calls.append((list(argv), cwd)) or live.CommandResult([], 0, "", ""),
         )
-        harness.agent(workspace, "prompt", "--mode", "ask", cwd=nested)
+        harness.agent(workspace, "@nested/control.txt prompt", "--mode", "ask", cwd=nested)
         self.assertEqual(nested, calls[0][1])
         self.assertIn(str(workspace), " ".join(calls[0][0]))
+        self.assertIn("@nested/control.txt", " ".join(calls[0][0]))
 
     def test_preflight_rejects_unauthenticated_cli(self) -> None:
         responses = iter([
