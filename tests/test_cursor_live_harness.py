@@ -68,7 +68,7 @@ class CursorLiveHarnessTest(unittest.TestCase):
             self.binary, "2026.08.31-4057e58", "a" * 40,
             runner=lambda *_: next(responses),
         )
-        harness.preflight()
+        harness.preflight(self.root)
         self.assertTrue(harness.evidence.controls["authenticated"])
 
     def test_preflight_rejects_unauthenticated_cli(self) -> None:
@@ -82,7 +82,7 @@ class CursorLiveHarnessTest(unittest.TestCase):
             runner=lambda *_: next(responses),
         )
         with self.assertRaisesRegex(live.HarnessError, "not authenticated"):
-            harness.preflight()
+            harness.preflight(self.root)
 
     def test_preflight_requires_positive_authentication_marker(self) -> None:
         responses = iter([
@@ -95,7 +95,7 @@ class CursorLiveHarnessTest(unittest.TestCase):
             runner=lambda *_: next(responses),
         )
         with self.assertRaisesRegex(live.HarnessError, "positively confirm"):
-            harness.preflight()
+            harness.preflight(self.root)
 
     def test_require_canary_rejects_benign_success_without_evidence(self) -> None:
         with self.assertRaisesRegex(live.HarnessError, "did not return"):

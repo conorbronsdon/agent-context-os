@@ -323,7 +323,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             record(args)
             print(f"Devin UI conformance passed; evidence: {args.evidence}")
-    except (HarnessError, OSError, subprocess.SubprocessError, ValueError, KeyError, json.JSONDecodeError) as exc:
+    except (HarnessError, OSError, subprocess.SubprocessError, TypeError, ValueError, KeyError, json.JSONDecodeError) as exc:
         print(f"Devin UI conformance failed safely: {exc}", file=sys.stderr)
         return 1
     return 0

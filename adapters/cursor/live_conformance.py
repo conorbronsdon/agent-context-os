@@ -193,20 +193,21 @@ class CursorHarness:
             "--workspace", str(workspace), *arguments, prompt,
         )
 
-    def preflight(self) -> None:
-        version = self.run(REPOSITORY_ROOT, "--version")
+    def preflight(self, workspace: Path) -> None:
+        """Check the binary only from a disposable directory."""
+        version = self.run(workspace, "--version")
         output = require_success(version, "Cursor version").strip()
         if output != self.evidence.expected_version:
             raise HarnessError(
                 f"Cursor version mismatch: expected {self.evidence.expected_version!r}, got {output!r}"
             )
         self.evidence.binary_version = output
-        help_result = self.run(REPOSITORY_ROOT, "--help")
+        help_result = self.run(workspace, "--help")
         help_text = require_success(help_result, "Cursor help")
         missing = [flag for flag in REQUIRED_FLAGS if flag not in help_text]
         if missing:
             raise HarnessError(f"Cursor help omitted required controls: {missing}")
-        status = self.run(REPOSITORY_ROOT, "status")
+        status = self.run(workspace, "status")
         status_text = require_success(status, "Cursor authentication status")
         normalized_status = status_text.casefold()
         if "not logged in" in normalized_status or "logged in" not in normalized_status:
@@ -218,13 +219,14 @@ class CursorHarness:
         self.evidence.controls["authenticated"] = True
 
     def execute(self) -> Evidence:
-        self.preflight()
         canaries = {
             name: f"CONTEXTOS_CURSOR_{name.upper()}_{secrets.token_hex(8)}"
             for name in ("root", "nested", "skill")
         }
         with tempfile.TemporaryDirectory(prefix="contextos-cursor-live-") as temporary:
             workspace = Path(temporary).resolve() / "workspace"
+            workspace.mkdir()
+            self.preflight(workspace)
             write_fixture(workspace, canaries)
             baseline = snapshot(workspace)
 

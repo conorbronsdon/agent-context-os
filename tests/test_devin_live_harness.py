@@ -129,6 +129,8 @@ class DevinLiveHarnessTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn(live.ROOT_CANARY, agents)
         self.assertIn(live.SKILL_CANARY, skill)
+        self.assertIn("bare text", agents)
+        self.assertIn("bare text", skill)
         self.assertIn('triggers: ["user"]', skill)
 
     def test_client_rejects_legacy_or_missing_credentials(self) -> None:
@@ -150,6 +152,11 @@ class DevinLiveHarnessTest(unittest.TestCase):
         self.assertEqual("build-fixture", evidence.active_build_id)
         self.assertEqual("normal", evidence.devin_mode)
         self.assertNotEqual("", evidence.session_id_sha256)
+        self.assertEqual(
+            ["repository", "default_branch_ref", "repository", "default_branch_ref"],
+            [request["endpoint"] for request in evidence.github_requests],
+        )
+        self.assertTrue(all(len(request["response_sha256"]) == 64 for request in evidence.github_requests))
         self.assertEqual("POST", evidence.requests[-1]["method"])
         self.assertTrue(evidence.requests[-1]["path"].endswith("/archive"))
         self.assertNotIn("cog_fixture", json.dumps(evidence.requests))

@@ -104,10 +104,16 @@ def default_github_transport(url: str, timeout: float) -> Mapping[str, object]:
 
 
 def verify_public_fixture_head(
-    repository: str, fixture_sha: str, *, transport: GitHubTransport = default_github_transport
+    repository: str,
+    fixture_sha: str,
+    *,
+    transport: GitHubTransport = default_github_transport,
+    audit: list[dict[str, str]] | None = None,
 ) -> None:
     """Ensure the fixture's public default branch still names the exact commit."""
     repository_info = transport(f"{GITHUB_API_ROOT}/repos/{repository}", 30)
+    if audit is not None:
+        audit.append({"endpoint": "repository", "response_sha256": canonical_hash(repository_info)})
     default_branch = repository_info.get("default_branch")
     if not isinstance(default_branch, str) or not default_branch:
         raise HarnessError("GitHub fixture response omitted its default branch")
@@ -115,6 +121,8 @@ def verify_public_fixture_head(
     reference = transport(
         f"{GITHUB_API_ROOT}/repos/{repository}/git/ref/heads/{encoded_branch}", 30
     )
+    if audit is not None:
+        audit.append({"endpoint": "default_branch_ref", "response_sha256": canonical_hash(reference)})
     target = reference.get("object")
     if not isinstance(target, dict) or target.get("type") != "commit":
         raise HarnessError("GitHub fixture default branch did not resolve to a commit")
@@ -191,6 +199,7 @@ class Evidence:
     session_id_sha256: str = ""
     devin_mode: str | None = None
     requests: list[dict[str, object]] = field(default_factory=list)
+    github_requests: list[dict[str, str]] = field(default_factory=list)
     controls: dict[str, bool] = field(default_factory=dict)
 
 
@@ -284,7 +293,10 @@ class DevinHarness:
 
     def execute(self) -> Evidence:
         verify_public_fixture_head(
-            self.repository, self.fixture_sha, transport=self.github_transport
+            self.repository,
+            self.fixture_sha,
+            transport=self.github_transport,
+            audit=self.evidence.github_requests,
         )
         self.verify_repository_access()
         before_build = self.active_build()
@@ -340,7 +352,10 @@ class DevinHarness:
             if after_build.get("build_id") != before_build.get("build_id"):
                 raise HarnessError("the active Devin build changed during conformance")
             verify_public_fixture_head(
-                self.repository, self.fixture_sha, transport=self.github_transport
+                self.repository,
+                self.fixture_sha,
+                transport=self.github_transport,
+                audit=self.evidence.github_requests,
             )
 
             self.evidence.controls.update({
@@ -407,6 +422,7 @@ def write_evidence(path: Path, evidence: Evidence) -> None:
         "session_id_sha256": evidence.session_id_sha256,
         "devin_mode": evidence.devin_mode,
         "requests": evidence.requests,
+        "github_requests": evidence.github_requests,
         "controls": evidence.controls,
     }
     target = path.resolve(strict=False)

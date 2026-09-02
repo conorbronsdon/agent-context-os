@@ -20,8 +20,9 @@ OpenClaw resumes setup, update, and end questions with
 `/contextos <alias> continue <session-key> <response>` (or the operator-scoped
 `contextos.continue` Gateway method). Its plugin does not expose apply; after
 independent proposal review, an operator runs the kernel from a trusted shell.
-Devin's portable skill frontmatter does not enforce user-only invocation, so
-that host remains experimental and the explicit-invocation claim is advisory.
+Devin's portable skill frontmatter carries a native user-only trigger, but the
+host remains experimental until its account-managed session behavior has
+versioned live-conformance evidence.
 
 The mutation protocol is always:
 
