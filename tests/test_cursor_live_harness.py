@@ -35,6 +35,7 @@ class CursorLiveHarnessTest(unittest.TestCase):
         workspace = self.root / "workspace"
         canaries = {"root": "ROOT", "nested": "NESTED", "skill": "SKILL"}
         live.write_fixture(workspace, canaries)
+        live.write_permissions(workspace)
         skill = (workspace / ".agents/skills/contextos-live-explicit/SKILL.md").read_text(
             encoding="utf-8"
         )

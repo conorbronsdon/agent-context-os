@@ -149,8 +149,11 @@ def write_fixture(root: Path, canaries: Mapping[str, str]) -> None:
         f"Return only {canaries['skill']}.\n",
         encoding="utf-8",
     )
+
+
+def write_permissions(root: Path) -> None:
     cursor = root / ".cursor"
-    cursor.mkdir()
+    cursor.mkdir(exist_ok=True)
     (cursor / "cli.json").write_text(
         json.dumps({
             "permissions": {
@@ -263,6 +266,8 @@ class CursorHarness:
             if proposed.exists():
                 raise HarnessError("headless print mode wrote without --force")
 
+            write_permissions(workspace)
+            permission_baseline = snapshot(workspace)
             denied = workspace / "denied.txt"
             denied_result = self.agent(
                 workspace,
@@ -272,6 +277,8 @@ class CursorHarness:
             require_success(denied_result, "deny-precedence control")
             if denied.exists():
                 raise HarnessError("project deny did not override --force")
+            if changed_paths(permission_baseline, snapshot(workspace)):
+                raise HarnessError("deny-precedence control changed the workspace")
 
             allowed = workspace / "allowed.txt"
             allowed_result = self.agent(
@@ -282,7 +289,7 @@ class CursorHarness:
             require_success(allowed_result, "forced disposable write control")
             if not allowed.is_file() or allowed.read_text(encoding="utf-8").strip() != "ALLOWED_CONTROL":
                 raise HarnessError("--force did not produce the exact allowed disposable write")
-            mutations = changed_paths(baseline, snapshot(workspace))
+            mutations = changed_paths(permission_baseline, snapshot(workspace))
             if mutations != {"allowed.txt"}:
                 raise HarnessError(f"Cursor changed unexpected workspace paths: {sorted(mutations)}")
 
