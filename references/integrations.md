@@ -23,6 +23,7 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [Shortcut MCP](https://www.shortcut.com/help/integrations/mcp-server/) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-30 |
 | [Slack MCP](https://docs.slack.dev/ai/slack-mcp-server/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-09-02 |
 | [Substack MCP](https://github.com/conorbronsdon/substack-mcp) | `mcp_server` | verified | Yes | Yes | Yes | Yes | No | 2026-08-15 |
+| [Todoist CLI](https://github.com/Doist/todoist-cli) | `connector` | verified | Yes | Yes | No | Yes | Yes | 2026-09-03 |
 | [Tolaria MCP](https://github.com/refactoringhq/tolaria) | `local_workspace` | verified | Yes | No | No | Yes | Yes | 2026-08-15 |
 | [Trello MCP](https://support.atlassian.com/trello/docs/connect-trello-to-ai-assistants-with-trello-mcp/) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-30 |
 
@@ -474,6 +475,34 @@ Capabilities and limits:
 
 - Long-form tooling is draft-only; scheduling and public-post mutation are unavailable
 - Note creation publishes immediately and has no server-side undo
+
+## Todoist CLI
+
+Doist's official command-line interface for Todoist tasks, projects, comments, and labels; supports a dedicated --read-only OAuth login flow.
+
+- **Supported agents:** `claude_code`, `codex`, `gemini_cli`, `cursor`, `opencode`, `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** A Todoist account; A current todoist-cli release (e.g. td); OAuth or API token credentials; For app-management, backups, or billing commands, a login that requested those opt-in scopes with td auth login --additional-scopes
+- **Credentials:** OAuth token stored in the OS credential manager by the CLI (plaintext config-file storage only with an explicit --credential-store=plaintext), or an API token provided via the TODOIST\_API\_TOKEN environment variable, which takes precedence over stored credentials; td config view --show-token prints the stored token
+- **Reads:** Sensitive Todoist tasks, projects, sections, comments, attachments, reminders, and labels across personal and shared workspaces; Workspaces, folders, filters, and shared-label definitions; With the app-management scope, registered app metadata; td apps view --include-secrets additionally reveals the client secret, verification token, and test token; With the backups scope, a downloadable archive of account data; with the billing scope, subscription, plan, and price information; Local files named on the command line: td comment add --file and td template import-file read a local file and upload it
+- **Writes / external effects:** Creating, updating, completing, closing, and moving tasks, projects, sections, and comments; Workspace creation, update, and deletion (admin-only); project sharing, joining, and moving across workspaces, including invitation emails to the addresses named in td project share; Deletion of individual tasks, projects, sections, comments, folders, labels (including shared-label removal), filters, and reminders; With the app-management scope, editing webhooks and OAuth redirect URIs, and deleting a registered app -- documented as irreversible and immediately breaking that app for everyone who uses it; Local files: td backup download and td template export-file write to paths named on the command line; td skill install and td completion install write agent skill directories and shell configuration
+- **Typed safety signals:** sensitive read, remote write, overwrite, delete, oauth
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `overwrite`, `delete`, `oauth`, `destructive`
+- **Confirmation:** Confirm the target account and projects before reading sensitive task state; show proposed task or project changes and deletions before execution.
+- **Risk tags:** `credentials`, `personal-tasks`, `sensitive-read`, `remote-write`, `overwrite-capable`, `delete-capable`, `oauth`, `destructive-capable`, `local-data`, `prompt-injection`
+- **Evidence:** [1](https://github.com/Doist/todoist-cli); [2](https://github.com/Doist/todoist-cli/blob/2e32cb86954e11c093493d5f1fed76c002b358ea/skills/todoist-cli/SKILL.md)
+- **Health check:** Log in with td auth login --read-only, verify authenticated user identity, then fetch assigned tasks for today without writing or completing items.
+- **Uninstall:** Run td auth logout, remove any installed agent skill with td skill uninstall, remove the CLI binary or client configuration, and revoke the OAuth application or API token in Todoist settings; preserve all remote task and project data. (removes user data: No)
+
+Capabilities and limits:
+
+- Recommended: start with td auth login --read-only, which requests data:read and blocks mutations in the CLI
+- Write-capable tokens can create, edit, close, move, and delete tasks, projects, workspaces, folders, labels, filters, and reminders
+- Environment-provided API tokens are treated as unknown scope and assumed write-capable; the read-only guarantee comes from the --read-only login flow, not from the CLI generally
+- Mutating commands accept --dry-run to preview without executing, and destructive commands typically require an explicit --yes
+- app-management, backups, and billing are opt-in OAuth scopes requested via td auth login --additional-scopes; app deletion under app-management is irreversible for all users of that app
+- The billing scope grants billing:read\_write unless the login also used --read-only (then billing:read); the documented td billing commands only read
+- There is no bulk purge command: deletion is per resource
 
 ## Tolaria MCP
 
