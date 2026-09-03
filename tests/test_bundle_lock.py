@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import importlib.util
 import io
 import json
 import os
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -17,6 +19,7 @@ from contextos.bundle_schema import (
     bundle_schema_document,
     canonical_json,
     create_bundle_lock,
+    create_initial_structural_plan,
     create_structural_plan,
     validate_bundle_lock,
     verify_bundle,
@@ -35,6 +38,12 @@ from contextos.primitives import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
+MEASURE_SPEC = importlib.util.spec_from_file_location(
+    "bundle_measurement", ROOT / "scripts/measure-bundle-materialization.py"
+)
+assert MEASURE_SPEC is not None and MEASURE_SPEC.loader is not None
+bundle_measurement = importlib.util.module_from_spec(MEASURE_SPEC)
+MEASURE_SPEC.loader.exec_module(bundle_measurement)
 
 
 def digest(path: Path) -> str:
@@ -70,6 +79,7 @@ class BundleFixture:
         self, root: Path, *, version: str, managed: bytes, addon: bool,
         runtime_addon: bool | None = None, include_seed: bool = True,
         addon_policy: str = "managed", source_mode: str = "directory",
+        entry_surfaces: bool = False,
     ) -> None:
         self.root = root
         (root / "components").mkdir(parents=True)
@@ -80,6 +90,8 @@ class BundleFixture:
         if runtime_addon is None:
             runtime_addon = addon
         runtime_components = ["core", "addon"] if runtime_addon else ["core"]
+        if entry_surfaces:
+            runtime_components.append("agents-instructions")
         runtime_descriptor = json.loads(
             (ROOT / "runtimes/codex.json").read_text(encoding="utf-8")
         )
@@ -104,13 +116,42 @@ class BundleFixture:
         ]
         if include_seed:
             components[0]["paths"].append({"path": "seed.txt", "policy": "seed"})
+        if entry_surfaces:
+            (root / "README.md").write_text(
+                "# Full fixture\n\nCodex and Hermes are supported.\n", encoding="utf-8"
+            )
+            (root / "AGENTS.md").write_text(
+                "# Full fixture agents\n\nCodex and Hermes.\n", encoding="utf-8"
+            )
+            (root / "GUIDE.md").write_bytes(
+                b"Keep the [managed payload](managed.bin) while the "
+                b"[optional add-on](addon.txt) is omitted.\r\n"
+            )
+            components[0]["paths"].append(
+                {"path": "README.md", "policy": "managed"}
+            )
+            components[0]["paths"].append(
+                {"path": "GUIDE.md", "policy": "managed"}
+            )
+            components.append({
+                "id": "agents-instructions",
+                "description": "Generated shared instructions fixture.",
+                "depends_on": ["core"],
+                "paths": [{"path": "AGENTS.md", "policy": "managed"}],
+            })
         if addon:
             (root / "addon.txt").write_text(f"addon {version}\n", encoding="utf-8")
+            (root / "addon.md").write_text(
+                "# Optional add-on\n", encoding="utf-8"
+            )
             components.append({
                 "id": "addon",
                 "description": "Optional fixture.",
                 "depends_on": ["core"],
-                "paths": [{"path": "addon.txt", "policy": addon_policy}],
+                "paths": [
+                    {"path": "addon.txt", "policy": addon_policy},
+                    {"path": "addon.md", "policy": addon_policy},
+                ],
             })
         manifest = {
             "schema_version": 1,
@@ -305,7 +346,7 @@ class BundleLockTest(unittest.TestCase):
         git_source.mkdir()
         fixture = BundleFixture(
             git_source, version="1.0.0", managed=b"binary\x00v1\r\n", addon=True,
-            source_mode="git-index",
+            source_mode="git-index", entry_surfaces=True,
         )
         self.assertGreater(len(fixture.lock["bundle"]["files"]), 1)
 
@@ -382,6 +423,125 @@ class BundleLockTest(unittest.TestCase):
                 expected_sha256=rebound["bundle_sha256"],
                 source_mode="git-index", retain_paths=(),
             )
+
+    def test_selected_projection_reverifies_only_owned_markdown_inputs(self) -> None:
+        source = self.root / "selected-projection-source"
+        source.mkdir()
+        fixture = BundleFixture(
+            source,
+            version="2.0.0",
+            managed=b"selected\n",
+            addon=True,
+            runtime_addon=False,
+            entry_surfaces=True,
+        )
+        candidate = verify_bundle(
+            fixture.lock_path,
+            source,
+            expected_sha256=fixture.lock["bundle_sha256"],
+            retain_paths=(),
+        )
+        self.assertEqual({}, candidate.verified_bytes)
+        target = self.root / "selected-projection-target"
+        target.mkdir()
+        config = {
+            "schema_version": 2,
+            "agents": ["codex"],
+            "composition": {"profile": "selected", "extras": []},
+            "paths": {
+                "state_dir": "state",
+                "sessions_dir": "sessions",
+                "task_file": "TODO.md",
+            },
+            "template": {
+                "source": candidate.name,
+                "version": candidate.version,
+                "bundle_sha256": candidate.digest,
+            },
+        }
+        with mock.patch(
+            "contextos.bundle_schema.verify_bundle", wraps=verify_bundle
+        ) as reverification:
+            create_initial_structural_plan(
+                target_root=target,
+                workspace_config=config,
+                candidate=candidate,
+                desired_components=["core", "agents-instructions"],
+            )
+        retained_sets = [
+            set(call.kwargs["retain_paths"])
+            for call in reverification.call_args_list
+            if call.kwargs.get("retain_paths")
+        ]
+        self.assertEqual(
+            [{"AGENTS.md", "GUIDE.md", "README.md"}], retained_sets
+        )
+        self.assertNotIn("addon.md", retained_sets[0])
+
+    def test_selected_apply_metric_adds_outer_and_projection_buffers(self) -> None:
+        source = self.root / "concurrent-metric-source"
+        source.mkdir()
+        fixture = BundleFixture(
+            source,
+            version="2.0.0",
+            managed=b"selected\n",
+            addon=True,
+            runtime_addon=False,
+            entry_surfaces=True,
+        )
+        retained = {"managed.bin", "GUIDE.md"}
+        projection = {"AGENTS.md", "GUIDE.md", "README.md"}
+        sizes = {
+            item["path"]: item["size"]
+            for item in fixture.lock["bundle"]["files"]
+        }
+        current_lock = copy.deepcopy(fixture.lock)
+        current_guide = next(
+            item
+            for item in current_lock["bundle"]["files"]
+            if item["path"] == "GUIDE.md"
+        )
+        current_guide["size"] += 10_000
+        outer_bytes = sum(sizes[path] for path in retained)
+        candidate_projection_peak = bundle_measurement._logical_verification_peak(
+            fixture.lock, role="candidate", retain_paths=projection
+        )
+        current_projection_peak = bundle_measurement._logical_verification_peak(
+            current_lock, role="candidate", retain_paths=projection
+        )
+        candidate_projection_bound = bundle_measurement._logical_verification_bound(
+            fixture.lock, role="candidate", retain_paths=projection
+        )
+        current_projection_bound = bundle_measurement._logical_verification_bound(
+            current_lock, role="candidate", retain_paths=projection
+        )
+        self.assertGreater(current_projection_peak, candidate_projection_peak)
+        self.assertGreater(current_projection_bound, candidate_projection_bound)
+        expected_peak = outer_bytes + current_projection_peak
+        expected_bound = outer_bytes + current_projection_bound
+        metric = bundle_measurement._metric(
+            "selected_upgrade",
+            time.perf_counter(),
+            [],
+            fixture.lock,
+            retained,
+            observed_retained_payload_bytes=outer_bytes,
+            traced_python_peak_bytes=0,
+            projection_paths=projection,
+            current_projection_lock=current_lock,
+        )
+        union_peak = bundle_measurement._logical_verification_peak(
+            fixture.lock,
+            role="candidate",
+            retain_paths=retained | projection,
+        )
+        self.assertEqual(expected_peak, metric["logical_concurrent_apply_peak_bytes"])
+        self.assertEqual(
+            expected_bound, metric["logical_concurrent_apply_bound_bytes"]
+        )
+        self.assertEqual(expected_peak, metric["logical_peak_retained_payload_bytes"])
+        self.assertEqual(expected_bound, metric["logical_retained_payload_bound_bytes"])
+        self.assertGreater(expected_peak, union_peak)
 
     def test_git_batch_reader_rejects_malformed_and_truncated_records(self) -> None:
         class BatchProcess:

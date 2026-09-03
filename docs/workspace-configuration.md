@@ -11,28 +11,33 @@ an external application-repository binding. See
 
 | Layer | Location | Meaning |
 |---|---|---|
-| Tracked workspace intent | `contextos.workspace.json` | Selected runtime set, full-template mode, repository paths, and template source |
+| Tracked workspace intent | `contextos.workspace.json` | Selected runtimes, desired profile/extras, repository paths, and exact bundle pin |
 | Legacy tracked paths | `workspace.yaml` | Read-compatible input while migration is pending; never merged into JSON |
 | Local host state | `.context-os/hosts.json` | Runtime manifests configured on this machine; gitignored and never a source of tracked agent intent |
+| Installed bundle state | `.context-os/installed-bundle.json` | Actual local bundle identity and materialized component closure; compared with tracked intent by `doctor` |
 | Operation receipts | `.context-os/receipts/` | The runtime that executed one approved lifecycle transaction |
 
 ## Canonical tracked JSON
 
-Schema v1 has exact keys:
+Schema v2 has exact keys:
 
 ```json
 {
-  "schema_version": 1,
-  "mode": "full-template",
+  "schema_version": 2,
   "agents": ["claude", "codex"],
+  "composition": {
+    "profile": "selected",
+    "extras": ["example-project"]
+  },
   "paths": {
     "state_dir": "state",
     "sessions_dir": "sessions",
     "task_file": "TODO.md"
   },
   "template": {
-    "version": "0.12.0",
-    "source": "agent-context-os-template"
+    "version": "0.13.1",
+    "source": "agent-context-os-template",
+    "bundle_sha256": "<exact-64-character-lowercase-digest>"
   }
 }
 ```
@@ -43,18 +48,29 @@ means core-only. The CLI token `none` maps to that empty set but is never stored
 `auto` describes local launch detection only and can never become repository
 intent. `generic` is reserved for operation receipts and is not a runtime ID.
 
-Version 1 intentionally uses only `full-template`. Selecting agents records
-intent and controls bare `doctor` validation scope. Activation and disable never
-remove adapter files. A low-level detached-bundle materializer exists, but a
-durable desired slim closure and supported slim reconciliation require workspace
-schema v2.
+The `full-template` compatibility profile derives every released component and
+requires an empty `extras` array. The `selected` profile derives `core` plus the
+components required by `agents`, then adds optional component roots from
+`extras`. Runtime-required components must not be copied into `extras`.
+`template.bundle_sha256` pins the exact verified local release bundle; no
+workflow resolves or downloads `latest`.
 
-The public template ships `workspace/example.json` with `agents: []`, but no
+The tracked `workspace/example.json` uses an all-zero digest placeholder because
+the example is itself part of the release bundle and therefore cannot pin that
+bundle without creating a self-reference. Replace the placeholder with the
+verified lock digest when creating a real workspace; guided `workspace init`
+does this from the explicit local bundle input.
+
+Schema v1 remains readable only as a migration source. Its `mode:
+"full-template"`, agents, paths, template name, and version migrate to the v2
+`full-template` profile only when the caller also supplies the exact bundle
+digest. Legacy YAML path migration remains a separate compatibility step.
+
+The public template ships a schema-v2 `workspace/example.json` with `agents: []`, but no
 live root configuration. This avoids overriding an existing clone's legacy YAML
 before migration is reviewed. All adapter files remain present in `full-template`
-mode. The transaction-backed migration path can create the root JSON and record
-choices explicitly rather than inferring from installed binaries; setup-time
-selection and adapter composition remain separate work.
+profile. Guided composition records choices explicitly rather than inferring
+from installed binaries or host registrations.
 
 Canonical JSON paths use POSIX repository-relative syntax on every platform.
 Drives, UNC and absolute paths, backslashes, dot segments, Windows device
@@ -284,10 +300,81 @@ intent with these rules:
   copied skills, external plugin, or project aliases. Both retain separate
   host-local onboarding steps.
 
+## Guided composition and reconciliation
+
+All guided composition commands require an existing target directory plus an
+explicit local lock, source directory, and independently obtained exact bundle
+digest. They verify that bundle before calculating intent and display the
+derived closure in one structural proposal. Nothing installs a host runtime,
+changes authentication, downloads a release, or removes native host memory.
+
+Initialize a clean target:
+
+```bash
+bash scripts/contextos.sh workspace init \
+  --target /path/to/workspace \
+  --lock /path/to/contextos.bundle.lock.json \
+  --source /path/to/extracted-bundle \
+  --expect-sha256 <bundle-digest> \
+  --agents codex --profile selected --extras example-project
+```
+
+Converge a clone or moved workspace after gitignored installed state is absent:
+
+```bash
+bash scripts/contextos.sh workspace reconcile \
+  --target /path/to/workspace \
+  --lock /path/to/contextos.bundle.lock.json \
+  --source /path/to/extracted-bundle \
+  --expect-sha256 <digest-pinned-in-contextos.workspace.json>
+```
+
+Use `workspace update` with the complete desired `--agents`, `--profile`, and
+`--extras` values to add or remove components. For a bundle upgrade, also pass
+the pinned `--current-lock`, `--current-source`, and
+`--expect-current-sha256`. Update requires valid installed state so removals
+have an exact content/ownership base; reconcile restores that state first after
+a clean clone.
+
+A schema-v1 workspace first uses `workspace update --profile full-template`
+against its matching pinned bundle. This preserves its full closure while the
+transaction adds the digest and v2 composition. A safe legacy `workspace.yaml`
+can instead seed `workspace init`; its normalized paths are preserved and the
+legacy file is retired in that same transaction. Ambiguous or conflicting
+legacy input fails before proposal publication.
+
+Every path produces the same digest-bound proposal. Apply it only after review:
+
+```bash
+bash scripts/contextos.sh bundle apply \
+  --target /path/to/workspace \
+  --proposal .context-os/proposals/<proposal-id>.json \
+  --confirm <proposal-digest>
+```
+
+The apply transaction publishes tracked configuration, managed/seed files, and
+installed state together through the shared journal, rollback, receipt, and
+second pre-mutation source revalidation path. For `selected` profiles, README
+runtime support and shared `AGENTS.md` instructions are deterministically
+projected from the selected runtime descriptors; their component owner remains
+`core` and `agents-instructions`, respectively.
+
+After the receipt is durable, `bundle apply` runs bare `doctor` in the tracked
+profile scope and includes that validation report in its output. A post-commit
+warning or failure is reported without pretending the already committed
+transaction rolled back.
+
+`doctor` reports the desired and installed bundle identities, desired and
+installed closures, and exact missing/extra components. Missing local state is
+a reconcile warning; contradictory bundle or closure state is a failure.
+
 ## Root discovery
 
 In this section, `root` means the v0.12 colocated ContextRoot selected by the
-CLI. `--root` does not designate a separate application WorkingRoot.
+CLI. `--root` does not designate a separate application WorkingRoot. External
+attachment instead requires exact `--kernel-root`, `--context-root`, and
+`--working-root` roles plus a validated project binding; it does not revise or
+overload workspace schema v2.
 
 `contextos.workspace.json` is the provider-neutral root marker. A valid tracked
 configuration is sufficient even for a minimal marker-only workspace with no
@@ -302,9 +389,11 @@ workspace. Marker-only describes a bootstrap root that lacks product
 descriptors: it supports discovery, reports, diagnosis, direct provider-neutral
 hooks, and proposal publication, while apply and agent/runtime configuration
 fail until verified detached-bundle materialization installs the product
-closure. The marker's `template.source` and `template.version` must exactly
-match the candidate bundle. Use `bundle propose` without current-bundle inputs;
-`bundle compose` is only for a clean target where the marker does not exist.
+closure. Schema-v2 marker identity includes `template.source`,
+`template.version`, and `template.bundle_sha256`; all three must exactly match
+the candidate bundle. Use `workspace reconcile` for the supported path. The
+lower-level `bundle compose` command remains only for a clean target where the
+marker does not exist.
 
 Existing clones remain discoverable through the legacy compound marker:
 `AGENTS.md` plus either a `state/` directory or `workspace.yaml`. Discovery

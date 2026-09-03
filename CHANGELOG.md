@@ -2,14 +2,60 @@
 
 ## [Unreleased]
 
+### Added
+- `todoist-cli` integration catalog entry for Doist's official CLI with a read-only OAuth login mode, opt-in app-management, backups, and billing scopes, and multi-agent skill support (#51).
+
+---
+
+## [0.13.1] — 2026-09-02 — Release recovery and coordination safety
+
 ### Fixed
-- The enabled Claude worktree guard now counts exact Claude executable names and identifies linked worktrees from Git's common-directory structure, with must-fire and must-not-fire controls for primary, linked, guarded, unguarded, and single-session paths.
+- Release staging now recovers unpublished drafts through the authenticated
+  release-list API, walks all result pages before creating a release, and keeps
+  the existing exact-tag and duplicate-race checks fail-closed. The unreadable
+  v0.13.0 draft remains preserved; v0.13.1 is the replacement release target.
+- Coordination-board posting rejects the documented high-confidence credential
+  tripwires before any bootstrap or queue side effect. Validation redacts every
+  matching message field, identifier, path, and diagnostic instead of echoing
+  possible credential material in a report.
+
+---
+
+## [0.13.0] — 2026-09-02 — External-project and workspace evolution
 
 ### Added
-- `shortcut-mcp` integration catalog entry for Shortcut's hosted MCP server with
-  granular OAuth scopes and dedicated read-only mode (#49).
-- `todoist-cli` integration catalog entry for Doist's official CLI with
-  read-only OAuth mode and multi-agent skill support (#51).
+- External-project attachment now keeps Context OS in its own ContextRoot while
+  binding an ordinary application as a read-only WorkingRoot. `project attach`
+  and `project rebind` publish digest-bound proposals for a portable tracked Git
+  identity plus an ignored machine-local path binding; start, hooks, apply,
+  receipts, rollback, and recovery retain exact role boundaries.
+- Split-root start reports ContextRoot and WorkingRoot Git evidence separately,
+  including bounded application status and history. Claude and Codex lifecycle
+  skills use the same provider-neutral kernel contract, while the existing
+  colocated v0.12 command form remains compatible.
+- Workspace schema v2 records the selected component profile and detached bundle
+  digest. Guided `workspace reconcile` proposals make compatible migration,
+  composition, rollback, and recovery explicit rather than treating an installed
+  template as an opaque copy.
+- A coordination board gives concurrent agent runs bounded claims, lease expiry,
+  successor handoff, and degraded-reference handling without making a central
+  service the source of truth.
+- The generated integration catalog adds Shortcut, Slack, and GitLab MCP entries
+  with declared OAuth scopes, data access, side effects, and confirmation
+  boundaries.
+
+### Changed
+- Aligned integration proposal, contributor guidance, and PR templates with catalog schema v2 (documentation and template changes only).
+
+### Fixed
+- The pre-commit secret filename tripwire now checks nested basenames and reads
+  staged paths NUL-safely, including names with spaces and rename destinations,
+  while allowing deletions. It remains a limited tripwire, not content scanning.
+- README and launch copy now route readers to the generated integration catalog
+  and chooser as the current inventory instead of freezing incomplete lists in
+  hand-maintained prose.
+- The enabled Claude worktree guard now counts exact Claude executable names and identifies linked worktrees from Git's common-directory structure, with must-fire and must-not-fire controls for primary, linked, guarded, unguarded, and single-session paths.
+- Release draft staging now creates only after a classified HTTP 404, recovers duplicate-create races without re-uploading, and binds publication and recovery to an operator-supplied positive numeric release ID.
 
 ---
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import io
 import os
+import posixpath
 import re
 import subprocess
 import tempfile
@@ -21,12 +22,19 @@ from contextos.kernel import (
     workspace_resolution_report,
 )
 from contextos.cli import main as cli_main
+from contextos.component_schema import resolved_component_paths
+from contextos.workspace_composition import (
+    WorkspaceCompositionError,
+    desired_component_closure,
+)
+from contextos.workspace_projection import closure_aware_files
 from contextos.workspace_schema import (
     DEFAULT_PATHS,
     DEFAULT_TEMPLATE_VERSION,
     WorkspaceConfigError,
     analyze_legacy_workspace,
     load_workspace_config,
+    migrate_v1_workspace_config,
     parse_agent_selection,
     render_workspace_config,
     strict_json_loads,
@@ -37,6 +45,13 @@ from contextos.workspace_schema import (
 
 ROOT = Path(__file__).resolve().parents[1]
 KNOWN = set(runtime_ids(ROOT))
+KNOWN_COMPONENTS = {
+    item["id"]
+    for item in json.loads(
+        (ROOT / "components/manifest.json").read_text(encoding="utf-8")
+    )["components"]
+}
+FIXTURE_DIGEST = "a" * 64
 
 
 def make_directory_link(link: Path, target: Path) -> None:
@@ -62,6 +77,22 @@ def config(**overrides: object) -> dict[str, object]:
         "template": {
             "version": "0.12.0",
             "source": "agent-context-os-template",
+        },
+    }
+    value.update(overrides)
+    return value
+
+
+def v2_config(**overrides: object) -> dict[str, object]:
+    value: dict[str, object] = {
+        "schema_version": 2,
+        "agents": ["claude", "codex"],
+        "composition": {"profile": "selected", "extras": ["example-project"]},
+        "paths": dict(DEFAULT_PATHS),
+        "template": {
+            "version": "0.12.0",
+            "source": "agent-context-os-template",
+            "bundle_sha256": FIXTURE_DIGEST,
         },
     }
     value.update(overrides)
@@ -96,6 +127,7 @@ class WorkspaceConfigTest(unittest.TestCase):
             ROOT / "workspace/example.json",
             root=ROOT,
             known_runtime_ids=KNOWN,
+            known_component_ids=KNOWN_COMPONENTS,
         )
         self.assertTrue(canonical)
         self.assertEqual([], loaded["agents"])
@@ -105,7 +137,10 @@ class WorkspaceConfigTest(unittest.TestCase):
         if os.environ.get("CONTEXTOS_VALIDATION_PROFILE") == "workspace" \
                 and live_path.exists():
             live, _live_canonical = load_workspace_config(
-                live_path, root=ROOT, known_runtime_ids=KNOWN
+                live_path,
+                root=ROOT,
+                known_runtime_ids=KNOWN,
+                known_component_ids=KNOWN_COMPONENTS,
             )
             self.assertLessEqual(set(live["agents"]), KNOWN)
         else:
@@ -163,8 +198,8 @@ class WorkspaceConfigTest(unittest.TestCase):
         mutations.append((extra, "unknown unknown"))
         boolean = config(schema_version=True)
         mutations.append((boolean, "integer 1"))
-        future = config(schema_version=2)
-        mutations.append((future, "integer 1"))
+        malformed_v2 = config(schema_version=2)
+        mutations.append((malformed_v2, "missing composition"))
         mode = config(mode="composed")
         mutations.append((mode, "full-template"))
         missing_path = config(paths={"state_dir": "state", "sessions_dir": "sessions"})
@@ -200,6 +235,173 @@ class WorkspaceConfigTest(unittest.TestCase):
                 WorkspaceConfigError, "paths"
             ):
                 validate_workspace_config(config(paths=paths), known_runtime_ids=KNOWN)
+
+    def test_schema_v2_is_canonical_closed_and_bundle_pinned(self) -> None:
+        value = validate_workspace_config(
+            v2_config(
+                agents=["codex", "claude"],
+                composition={
+                    "profile": "selected",
+                    "extras": ["example-project", "agents-instructions"],
+                },
+            ),
+            known_runtime_ids=KNOWN,
+            known_component_ids=KNOWN_COMPONENTS,
+        )
+        self.assertEqual(["claude", "codex"], value["agents"])
+        self.assertEqual(
+            ["agents-instructions", "example-project"],
+            value["composition"]["extras"],
+        )
+        for mutation, message in (
+            (
+                v2_config(
+                    composition={"profile": "full-template", "extras": ["core"]}
+                ),
+                "must be empty",
+            ),
+            (
+                v2_config(
+                    composition={"profile": "selected", "extras": ["missing"]}
+                ),
+                "unknown id",
+            ),
+            (
+                v2_config(
+                    template={
+                        "version": "0.12.0",
+                        "source": "agent-context-os-template",
+                        "bundle_sha256": "A" * 64,
+                    }
+                ),
+                "lowercase SHA-256",
+            ),
+        ):
+            with self.subTest(message=message), self.assertRaisesRegex(
+                WorkspaceConfigError, message
+            ):
+                validate_workspace_config(
+                    mutation,
+                    known_runtime_ids=KNOWN,
+                    known_component_ids=KNOWN_COMPONENTS,
+                )
+
+    def test_v1_to_v2_migration_is_explicit_and_preserves_intent(self) -> None:
+        cases = json.loads(
+            (ROOT / "tests/fixtures/workspace-v2-migrations.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        for case in cases:
+            with self.subTest(case=case["id"]):
+                if "error" in case:
+                    with self.assertRaisesRegex(
+                        WorkspaceConfigError, case["error"]
+                    ):
+                        migrate_v1_workspace_config(
+                            case["source"],
+                            known_runtime_ids=KNOWN,
+                            known_component_ids=KNOWN_COMPONENTS,
+                            bundle_sha256=FIXTURE_DIGEST,
+                        )
+                else:
+                    first = migrate_v1_workspace_config(
+                        case["source"],
+                        known_runtime_ids=KNOWN,
+                        known_component_ids=KNOWN_COMPONENTS,
+                        bundle_sha256=FIXTURE_DIGEST,
+                    )
+                    second = migrate_v1_workspace_config(
+                        case["source"],
+                        known_runtime_ids=KNOWN,
+                        known_component_ids=KNOWN_COMPONENTS,
+                        bundle_sha256=FIXTURE_DIGEST,
+                    )
+                    self.assertEqual(case["expected"], first)
+                    self.assertEqual(first, second)
+
+    def test_selected_core_and_single_runtime_entry_surfaces_match_closure(self) -> None:
+        manifest = json.loads(
+            (ROOT / "components/manifest.json").read_text(encoding="utf-8")
+        )
+        runtimes = {
+            runtime_id: json.loads(
+                (ROOT / "runtimes" / f"{runtime_id}.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            for runtime_id in KNOWN
+        }
+        display_names = {
+            runtime_id: runtime["display_name"]
+            for runtime_id, runtime in runtimes.items()
+        }
+        for agents in ([], ["codex"]):
+            with self.subTest(agents=agents):
+                desired_config = v2_config(
+                    agents=agents,
+                    composition={"profile": "selected", "extras": []},
+                )
+                closure = desired_component_closure(
+                    desired_config, manifest, runtimes
+                )
+                selected_paths = {
+                    item["path"]
+                    for item in resolved_component_paths(manifest, closure)
+                }
+                source_texts = {
+                    path: (ROOT / path).read_text(encoding="utf-8")
+                    for path in selected_paths
+                    if path.endswith(".md")
+                }
+                available_paths = {
+                    item["path"]
+                    for item in resolved_component_paths(
+                        manifest,
+                        [item["id"] for item in manifest["components"]],
+                    )
+                }
+                generated = closure_aware_files(
+                    desired_config,
+                    runtimes,
+                    closure,
+                    source_texts=source_texts,
+                    selected_paths=tuple(selected_paths),
+                    available_paths=tuple(available_paths),
+                )
+                self.assertIn("README.md", generated)
+                self.assertEqual(bool(agents), "AGENTS.md" in generated)
+                entry_surfaces = [generated["README.md"]]
+                if agents:
+                    entry_surfaces.append(generated["AGENTS.md"])
+                combined = "\n".join(entry_surfaces)
+                for runtime_id, display_name in display_names.items():
+                    if runtime_id in agents:
+                        self.assertIn(display_name, combined)
+                    else:
+                        self.assertNotIn(display_name, combined)
+                for source, original in source_texts.items():
+                    text = generated.get(source, original)
+                    for link in re.findall(
+                        r"\[[^\]]+\]\((?!https?://|#|mailto:)([^)#]+)", text
+                    ):
+                        target = posixpath.normpath(
+                            posixpath.join(posixpath.dirname(source), link)
+                        )
+                        if target in available_paths:
+                            self.assertIn(target, selected_paths)
+
+        with self.assertRaisesRegex(
+            WorkspaceCompositionError, "duplicates runtime-required"
+        ):
+            desired_component_closure(
+                v2_config(
+                    agents=["codex"],
+                    composition={"profile": "selected", "extras": ["core"]},
+                ),
+                manifest,
+                runtimes,
+            )
 
     def test_generated_path_pattern_rejects_dot_segments_not_dotfiles(self) -> None:
         pattern = workspace_schema_document()["properties"]["paths"]["properties"][
@@ -264,6 +466,17 @@ class WorkspaceConfigTest(unittest.TestCase):
         )
         with self.assertRaisesRegex(ContextOSError, "duplicate JSON"):
             resolve_workspace(self.root)
+
+    def test_schema_v2_marker_only_root_remains_discoverable(self) -> None:
+        marker = v2_config(
+            agents=[],
+            composition={"profile": "selected", "extras": []},
+        )
+        self.write_json(marker)
+        resolution = resolve_workspace(self.root)
+        self.assertEqual("json", resolution.source)
+        self.assertEqual(2, resolution.config["schema_version"])
+        self.assertEqual([], list(resolution.agents or ()))
 
     def test_valid_json_ignores_but_reports_malformed_shadowed_yaml(self) -> None:
         self.write_json(config())

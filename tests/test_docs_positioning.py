@@ -87,7 +87,8 @@ class DocumentationPositioningTests(unittest.TestCase):
         )
         workspace_contract = self.text("docs/workspace-configuration.md")
         self.assertIn("marker-only root is not the same as a core-only profile", workspace_contract)
-        self.assertIn("`bundle propose` without current-bundle inputs", workspace_contract)
+        self.assertIn("Use `workspace reconcile` for the supported path", workspace_contract)
+        self.assertIn("`template.bundle_sha256`", workspace_contract)
         for root in SETUP_ROOTS:
             self.assertIn(f"`{root}/`", contract)
         for filename in SETUP_FILES:
@@ -117,7 +118,8 @@ class DocumentationPositioningTests(unittest.TestCase):
             self.assertIn("KernelRoot", skill, workflow)
             self.assertIn("ContextRoot", skill, workflow)
             self.assertIn("WorkingRoot", skill, workflow)
-            self.assertIn("not a supported lifecycle execution root", skill, workflow)
+            self.assertIn("--context-root", skill, workflow)
+            self.assertIn("WorkingRoot is read-only evidence", skill, workflow)
 
     def test_getting_started_keeps_mutations_opt_in(self) -> None:
         guide = self.text("docs/getting-started.md")
@@ -143,6 +145,33 @@ class DocumentationPositioningTests(unittest.TestCase):
             self.assertIn(item["name"], guide)
         self.assertIn("Nothing in this guide installs", guide)
         self.assertIn("not live authentication", guide)
+
+    def test_integration_prose_routes_to_the_generated_current_inventory(self) -> None:
+        catalog = json.loads(self.text("integrations/catalog.json"))
+        sections = {
+            "README.md": self.text("README.md")
+            .split("## Optional integrations", 1)[1]
+            .split("\n## ", 1)[0],
+            "docs/launch-copy.md": self.text("docs/launch-copy.md")
+            .split("## Changelog post", 1)[1]
+            .split("\n## ", 1)[0],
+        }
+        for path, prose in sections.items():
+            normalized = re.sub(r"\s+", " ", prose.casefold())
+            self.assertIn("generated catalog", normalized, path)
+            self.assertIn("current inventory", normalized, path)
+            enumerated = [
+                item["name"]
+                for item in catalog["integrations"]
+                if item["name"].casefold() in normalized
+            ]
+            self.assertEqual(
+                [], enumerated, f"{path} must not enumerate catalog entries"
+            )
+        self.assertIn("references/integrations.md", self.text("README.md"))
+        launch = self.text("docs/launch-copy.md")
+        self.assertIn("../references/integrations.md", launch)
+        self.assertIn("../integrations/catalog.json", launch)
 
     def test_uncataloged_integrations_are_not_live(self) -> None:
         tracked_mcp = subprocess.run(

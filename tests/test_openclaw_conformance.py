@@ -79,13 +79,15 @@ class OpenClawDescriptorTest(unittest.TestCase):
             with self.subTest(required=required):
                 self.assertIn(required, guide)
 
-    def test_canonical_lifecycle_skills_enforce_the_host_execution_root(self) -> None:
+    def test_canonical_lifecycle_skills_enforce_exact_root_roles(self) -> None:
         required = (
-            "exact repository working directory supplied by the host",
-            "Do not substitute the\nprocess or tool working directory, an agent/private workspace",
-            "any parent or ancestor discovered by searching upward",
-            "stop and\nreport the problem without creating a payload or running the kernel",
-            "working directory\nexplicitly set to that root",
+            "exact roots supplied by the host attachment",
+            "require all three exact absolute paths",
+            "Do not search upward or infer a root from cwd or the skill installation",
+            "missing, moved, stale, linked, nested, or mismatched binding stops",
+            "ContextRoot\nowns all lifecycle writes",
+            "WorkingRoot is read-only evidence",
+            "colocated\n`bash scripts/contextos.sh <command>` compatibility form remains valid",
         )
         for name in ("context-setup", "context-start", "context-update", "context-end"):
             skill = (ROOT / ".agents/skills" / name / "SKILL.md").read_text(

@@ -1,0 +1,59 @@
+[
+  {
+    "id": "v1-full-template-preserves-paths-and-runtime-intent",
+    "source": {
+      "schema_version": 1,
+      "mode": "full-template",
+      "agents": ["codex", "claude"],
+      "paths": {
+        "state_dir": "memory",
+        "sessions_dir": "work/sessions",
+        "task_file": "TASKS.md"
+      },
+      "template": {
+        "version": "9.9.9",
+        "source": "private-bundle"
+      }
+    },
+    "expected": {
+      "schema_version": 2,
+      "agents": ["claude", "codex"],
+      "composition": {
+        "profile": "full-template",
+        "extras": []
+      },
+      "paths": {
+        "state_dir": "memory",
+        "sessions_dir": "work/sessions",
+        "task_file": "TASKS.md"
+      },
+      "template": {
+        "version": "9.9.9",
+        "source": "private-bundle",
+        "bundle_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  },
+  {
+    "id": "v2-is-not-a-migration-source",
+    "source": {
+      "schema_version": 2,
+      "agents": [],
+      "composition": {
+        "profile": "full-template",
+        "extras": []
+      },
+      "paths": {
+        "state_dir": "state",
+        "sessions_dir": "sessions",
+        "task_file": "TODO.md"
+      },
+      "template": {
+        "version": "0.12.0",
+        "source": "agent-context-os-template",
+        "bundle_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "error": "migration source must use schema version 1"
+  }
+]

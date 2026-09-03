@@ -10,6 +10,7 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [AI Tools for Creators](https://github.com/conorbronsdon/ai-tools-for-creators) | `resource_catalog` | listed | No | No | No | No | No | 2026-08-15 |
 | [Beads for Gemini CLI](https://beads.gascity.com/integrations/gemini) | `agent_extension` | verified | Yes | Yes | No | No | Yes | 2026-08-15 |
 | [GitHub MCP](https://github.com/github/github-mcp-server) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-18 |
+| [GitLab MCP](https://docs.gitlab.com/user/model_context_protocol/mcp_server/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-09-02 |
 | [Google Workspace CLI](https://github.com/googleworkspace/cli) | `connector` | verified | Yes | Yes | No | Yes | Yes | 2026-08-15 |
 | [Granola MCP](https://docs.granola.ai/help-center/sharing/integrations/mcp) | `mcp_server` | verified | No | No | No | Yes | No | 2026-08-15 |
 | [Linear MCP](https://linear.app/docs/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-18 |
@@ -19,6 +20,7 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [Pandoc](https://github.com/jgm/pandoc) | `connector` | verified | Yes | No | No | Yes | Yes | 2026-08-25 |
 | [Readwise MCP](https://docs.readwise.io/tools/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-18 |
 | [Shortcut MCP](https://www.shortcut.com/help/integrations/mcp-server/) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-30 |
+| [Slack MCP](https://docs.slack.dev/ai/slack-mcp-server/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-09-02 |
 | [Substack MCP](https://github.com/conorbronsdon/substack-mcp) | `mcp_server` | verified | Yes | Yes | Yes | Yes | No | 2026-08-15 |
 | [Todoist CLI](https://github.com/Doist/todoist-cli) | `connector` | verified | Yes | Yes | No | Yes | Yes | 2026-09-03 |
 | [Tolaria MCP](https://github.com/refactoringhq/tolaria) | `local_workspace` | verified | Yes | No | No | Yes | Yes | 2026-08-15 |
@@ -141,6 +143,31 @@ Capabilities and limits:
 - Start with --read-only and only the context, repos, issues, and pull\_requests toolsets; read-only mode takes priority even if a write tool is requested explicitly
 - Toolsets and individual tools are allowlisted independently, so enabling all or the default surface can expose materially more data and actions than a bounded project workflow needs
 - Treat workflow dispatch, branch or file mutation, repository administration, and public comments as separate high-impact remote actions
+
+## GitLab MCP
+
+GitLab's official Beta MCP server exposes repository, issue, work item, merge request, discussion, and pipeline tools over OAuth 2.0 with the mcp scope.
+
+- **Supported agents:** `claude_code`, `codex`, `cursor`, `gemini_cli`, `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** An MCP-compatible client; A GitLab SaaS or self-managed account; GitLab Duo availability set to Always on or On by default; Beta and experimental features turned on; Access to the MCP server allowed; Activation settings configured for the top-level group on GitLab.com, or for the instance on GitLab Self-Managed and Dedicated; OAuth 2.0 Dynamic Client Registration available, or a pre-registered OAuth application with the mcp scope and Confidential checkbox cleared where an administrator turns Dynamic Client Registration off
+- **Credentials:** Per-user OAuth 2.0 access token with the mcp scope, obtained through Dynamic Client Registration or a pre-registered OAuth application, kept outside repository files
+- **Reads:** Private or public GitLab repository contents, commits, issues, work items, merge requests, diffs, comments, wiki page lists, project members, pipelines, and job logs allowed by the authenticated user
+- **Writes / external effects:** Remote GitLab writes including creating and updating issues, work items, merge requests, comments, branches, and merge request reviews; File actions committed to a branch through add\_commit, covering file creation, update, deletion, and move; Merging or scheduling the automatic merge of a merge request through accept\_merge\_request; CI/CD pipeline runs, retries, cancellations, and renames through save\_pipeline, and pipeline metadata updates or pipeline deletion through manage\_pipeline; Publicly visible posts, overwrite-capable branch and file updates, and security scan profile attachment to projects or groups
+- **Typed safety signals:** sensitive read, remote write, overwrite, delete, oauth
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `publish`, `overwrite`, `delete`, `oauth`, `destructive`
+- **Confirmation:** Confirm the exact GitLab instance, project scope, and token permissions; show exact target and payload before comments, branch writes, publication, overwrite, deletion, or CI/CD pipeline actions.
+- **Risk tags:** `credentials`, `private-repositories`, `sensitive-read`, `remote-write`, `publish-capable`, `public-publish`, `overwrite-capable`, `delete-capable`, `oauth`, `destructive-capable`, `ci-cd`, `prompt-injection`
+- **Evidence:** [1](https://docs.gitlab.com/user/model_context_protocol/mcp_server/); [2](https://docs.gitlab.com/user/model_context_protocol/mcp_server_tools/)
+- **Health check:** Connect to the GitLab MCP server, verify authenticated user identity and GitLab instance, then read one explicitly named project and issue without performing a write or pipeline action.
+- **Uninstall:** Remove the MCP client entry and revoke the authorized OAuth application for the MCP client in GitLab user settings; an administrator can also withdraw access by disallowing MCP server access for the top-level group or instance. Repositories and GitLab content are left unchanged. (removes user data: No)
+
+Capabilities and limits:
+
+- Start with read-only repository, issue, merge request, and pipeline inspection allowlists
+- No enforced server-side read-only mode is provided; restrict toolsets client-side
+- Treat pipeline triggering, retry, cancellation, and deletion as high-impact CI/CD actions requiring separate confirmation
+- This boundary describes the tool surface documented for GitLab 19.4; re-check the tools reference when the instance runs a different version
 
 ## Google Workspace CLI
 
@@ -371,6 +398,31 @@ Capabilities and limits:
 - The open-source repository is archived but the hosted https://mcp.shortcut.com/mcp service remains actively documented
 - The documented surface is overwrite-capable but includes no permanently destructive operations; archiving remains within standard Shortcut workflows
 
+## Slack MCP
+
+Slack's official first-party MCP server for searching conversations, channels, canvases, files, and lists, and for posting messages, restricted to Marketplace-published or internal Slack apps using confidential OAuth 2.0 with workspace admin approval.
+
+- **Supported agents:** `claude_code`, `cursor`, `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** A Slack workspace account; An MCP client backed by a registered Slack app with a fixed, hardcoded app ID; An app published in the Slack Marketplace or an internal app; unlisted apps are prohibited from using MCP; Workspace admin approval through the standard Slack app approval process; The app's client\_id and client\_secret for confidential OAuth; Dynamic Client Registration is not supported; An MCP client supporting JSON-RPC 2.0 over Streamable HTTP at https://mcp.slack.com/mcp; SSE-based connections are not supported
+- **Credentials:** Confidential OAuth 2.0 client credentials, the registered Slack app's client\_id and client\_secret, kept outside repository files; Per-user OAuth 2.0 access token managed by the MCP client for the authorized Slack workspace
+- **Reads:** Sensitive public or private channel conversations, threads, DMs, canvases, files, user profiles, and emails depending on granted scopes; Slack list contents and schemas
+- **Writes / external effects:** Remote creation and updates of Slack channel messages, thread replies, reactions, drafts, canvases, and conversations; File uploads through the two-step flow of slack\_get\_file\_upload\_url then slack\_complete\_file\_upload, optionally sharing the uploaded file to a channel with a message; Slack Lists writes including creating lists with custom schemas, updating list metadata and columns, and adding or updating individual records; Publicly visible message sends in shared channels and overwrite-capable updates to canvas, list, and record content
+- **Typed safety signals:** sensitive read, remote write, overwrite, oauth
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `publish`, `overwrite`, `oauth`, `destructive`
+- **Confirmation:** Confirm the target Slack workspace, channels, and granted OAuth scopes before reading conversations; show exact message text, target channel, and thread before posting messages, show the exact file and destination before completing an upload, and keep DM, canvas, and list writes disabled by default.
+- **Risk tags:** `credentials`, `hosted`, `team-chat`, `sensitive-read`, `remote-write`, `publish-capable`, `public-publish`, `overwrite-capable`, `oauth`, `destructive-capable`, `prompt-injection`
+- **Evidence:** [1](https://docs.slack.dev/ai/slack-mcp-server/); [2](https://docs.slack.dev/ai/slack-mcp-server/connect-to-claude)
+- **Health check:** Connect to the Slack MCP endpoint, verify authorized workspace and user identity, then read history from one explicitly named test channel without posting messages.
+- **Uninstall:** Remove the Slack MCP entry from the client and revoke the authorized application connection in Slack workspace settings; preserve all messages and conversation history. (removes user data: No)
+
+Capabilities and limits:
+
+- Start with read-only search and history tools for explicitly named public channels
+- Exclude DMs, user email addresses, files, canvas mutations, list writes, and write scopes by default
+- Posting messages, uploading files, or updating canvases and lists creates immediate visible team communication and requires separate approval
+- The server focuses on messaging, search, files, canvases, and lists; the documented tool surface is create-and-update only, and message retraction remains within the Slack UI
+
 ## Substack MCP
 
 An MCP server for reading Substack publication data, managing private drafts, and publishing short-form Notes.
@@ -401,24 +453,25 @@ Doist's official command-line interface for Todoist tasks, projects, comments, a
 - **Supported agents:** `claude_code`, `codex`, `gemini_cli`, `cursor`, `opencode`, `generic`
 - **Install scope:** `project_or_user`; never automatic
 - **Prerequisites:** A Todoist account; A current todoist-cli release (e.g. td); OAuth or API token credentials; For app-management, backups, or billing commands, a login that requested those opt-in scopes with td auth login --additional-scopes
-- **Credentials:** OAuth token stored by the CLI or an optional API token provided via environment variable
-- **Reads:** Sensitive Todoist tasks, projects, sections, comments, reminders, and labels across personal and shared workspaces; Workspaces, folders, filters, and shared-label definitions; With the app-management scope, registered app metadata; td apps view --include-secrets additionally reveals the client secret, verification token, and test token; With the backups scope, a downloadable archive of account data; with the billing scope, subscription, plan, and price information
-- **Writes / external effects:** Creating, updating, completing, closing, and moving tasks, projects, sections, and comments; Workspace creation, update, and deletion; project sharing, joining, and moving across workspaces; Deletion of individual tasks, folders, labels (including shared-label removal), filters, and reminders; With the app-management scope, editing webhooks, rotating secrets, and deleting a registered app -- documented as irreversible and immediately breaking that app for everyone who uses it
+- **Credentials:** OAuth token stored in the OS credential manager by the CLI (plaintext config-file storage only with an explicit --credential-store=plaintext), or an API token provided via the TODOIST\_API\_TOKEN environment variable, which takes precedence over stored credentials; td config view --show-token prints the stored token
+- **Reads:** Sensitive Todoist tasks, projects, sections, comments, attachments, reminders, and labels across personal and shared workspaces; Workspaces, folders, filters, and shared-label definitions; With the app-management scope, registered app metadata; td apps view --include-secrets additionally reveals the client secret, verification token, and test token; With the backups scope, a downloadable archive of account data; with the billing scope, subscription, plan, and price information; Local files named on the command line: td comment add --file and td template import-file read a local file and upload it
+- **Writes / external effects:** Creating, updating, completing, closing, and moving tasks, projects, sections, and comments; Workspace creation, update, and deletion (admin-only); project sharing, joining, and moving across workspaces, including invitation emails to the addresses named in td project share; Deletion of individual tasks, projects, sections, comments, folders, labels (including shared-label removal), filters, and reminders; With the app-management scope, editing webhooks and OAuth redirect URIs, and deleting a registered app -- documented as irreversible and immediately breaking that app for everyone who uses it; Local files: td backup download and td template export-file write to paths named on the command line; td skill install and td completion install write agent skill directories and shell configuration
 - **Typed safety signals:** sensitive read, remote write, overwrite, delete, oauth
 - **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `overwrite`, `delete`, `oauth`, `destructive`
 - **Confirmation:** Confirm the target account and projects before reading sensitive task state; show proposed task or project changes and deletions before execution.
-- **Risk tags:** `credentials`, `personal-tasks`, `sensitive-read`, `remote-write`, `overwrite-capable`, `delete-capable`, `oauth`, `destructive-capable`, `prompt-injection`
+- **Risk tags:** `credentials`, `personal-tasks`, `sensitive-read`, `remote-write`, `overwrite-capable`, `delete-capable`, `oauth`, `destructive-capable`, `local-data`, `prompt-injection`
 - **Evidence:** [1](https://github.com/Doist/todoist-cli); [2](https://github.com/Doist/todoist-cli/blob/2e32cb86954e11c093493d5f1fed76c002b358ea/skills/todoist-cli/SKILL.md)
 - **Health check:** Log in with td auth login --read-only, verify authenticated user identity, then fetch assigned tasks for today without writing or completing items.
-- **Uninstall:** Remove the CLI binary or client configuration and revoke the OAuth application or API token in Todoist settings; preserve all remote task and project data. (removes user data: No)
+- **Uninstall:** Run td auth logout, remove any installed agent skill with td skill uninstall, remove the CLI binary or client configuration, and revoke the OAuth application or API token in Todoist settings; preserve all remote task and project data. (removes user data: No)
 
 Capabilities and limits:
 
 - Recommended: start with td auth login --read-only, which requests data:read and blocks mutations in the CLI
 - Write-capable tokens can create, edit, close, move, and delete tasks, projects, workspaces, folders, labels, filters, and reminders
-- Environment-provided API tokens are write-capable unless manually scoped
-- Mutating commands accept --dry-run to preview without executing, and every documented destructive command requires an explicit --yes
+- Environment-provided API tokens are treated as unknown scope and assumed write-capable; the read-only guarantee comes from the --read-only login flow, not from the CLI generally
+- Mutating commands accept --dry-run to preview without executing, and destructive commands typically require an explicit --yes
 - app-management, backups, and billing are opt-in OAuth scopes requested via td auth login --additional-scopes; app deletion under app-management is irreversible for all users of that app
+- The billing scope grants billing:read\_write unless the login also used --read-only (then billing:read); the documented td billing commands only read
 - There is no bulk purge command: deletion is per resource
 
 ## Tolaria MCP
