@@ -8,6 +8,7 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [Agent Skills](https://github.com/conorbronsdon/agent-skills) | `skill_catalog` | verified | Yes | No | No | No | Yes | 2026-08-15 |
 | [Agent Workspace](https://github.com/conorbronsdon/agent-workspace) | `workspace_template` | verified | Yes | No | No | No | Yes | 2026-08-15 |
 | [AI Tools for Creators](https://github.com/conorbronsdon/ai-tools-for-creators) | `resource_catalog` | listed | No | No | No | No | No | 2026-08-15 |
+| [Atlassian Rovo MCP](https://support.atlassian.com/atlassian-ai-gateway/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-09-03 |
 | [Beads for Gemini CLI](https://beads.gascity.com/integrations/gemini) | `agent_extension` | verified | Yes | Yes | No | No | Yes | 2026-08-15 |
 | [GitHub MCP](https://github.com/github/github-mcp-server) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-18 |
 | [GitLab MCP](https://docs.gitlab.com/user/model_context_protocol/mcp_server/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-09-02 |
@@ -94,6 +95,35 @@ A discovery catalog for creator skills, MCP servers, benchmarks, and publishing 
 Capabilities and limits:
 
 - Discovery links only; every linked tool needs separate review
+
+## Atlassian Rovo MCP
+
+Atlassian's official hosted MCP server (Rovo MCP v2). One authorization can reach Jira, Confluence, Jira Service Management, Bitbucket Cloud, Loom, Goals, Projects, Teams, Focus, Talent, Teamwork Graph, Rovo search, and connected source-code search, each as its own admin-managed permission group.
+
+- **Supported agents:** `claude_code`, `codex`, `gemini_cli`, `cursor`, `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** An Atlassian Cloud account on the site to be authorized; An MCP client supporting remote Streamable HTTP and browser OAuth, pointed at https://mcp.atlassian.com/v2/mcp; An authorized Atlassian site; For Bitbucket tools, a Bitbucket workspace linked to an Atlassian organization; For API-token authentication, an organization admin who has enabled it
+- **Credentials:** OAuth 2.1 authorization managed by the MCP client, consented for a specific Atlassian site (cloudId) and product set, with redirect-domain allowlist checks; When enabled by an organization admin, API-token authentication: a personal API token (Basic auth, email:token) or a service-account API key (Bearer); such tokens are not bound to a cloudId, so cross-site calls are possible, and no redirect-domain allowlist check applies; Jira Service Management tools are available only through API-token authentication
+- **Reads:** Sensitive Jira issues, epics, sprints, boards, filters, dashboards, comments, worklogs, change history, user lookups by name or email, and attachment downloads across the authorized site; Confluence spaces, content of every type (pages, blog posts, live docs, whiteboards, databases, folders), version history and diffs, comments, attachment downloads, PDF or Word exports, content permissions and public-link status, and CQL search; Jira Service Management operations alerts, on-call schedules, and teams; Bitbucket Cloud workspaces, repositories, file and directory contents, branches, commits, pull requests and diffs, pipelines and step logs, deployments, and environments; Loom videos with transcripts, comments, AI meeting action items, and signed MP4 download URLs; Goals, Projects, Teams, Focus areas, and Talent data (positions, managers, headcount by country, level, or job family, and skill assignments); Teamwork Graph context across all of the above plus third-party data connected to Jira (GitHub, Azure DevOps, GitLab, Jenkins, and Spinnaker pull requests, builds, and deployments); Rovo semantic search across Jira, Confluence, and connected apps; source-code search and full file reads across connected source-control providers
+- **Writes / external effects:** Jira: create, edit, transition, link, watch, and comment on work items, log time, upload attachments, set entity properties, and manage sprints, versions (including release and archive), and boards; with the admin-enabled manage\_jira group, create and update projects; Confluence: create pages, blog posts, live docs, whiteboards, databases, embeds, smart links, and folders through a single content tool; full-body or granular updates; copy, move, archive, restore versions, convert modes, and set content status; comments, attachments, labels, spaces, and space instructions; Confluence access control: add, remove, or replace content permission grants (replace removes any grant absent from the request), set restriction state, and enable or disable the anonymous public link for a page; Bitbucket Cloud: create, update, comment on, approve, request changes on, and merge pull requests; create branches and commits; run pipelines; Jira Service Management: acknowledge, close, or escalate operations alerts; Loom: upload and publish videos, rename, set visibility to OWNER, WORKSPACE, or PUBLIC, share, comment, and move; Goals, Projects, Focus areas, and Teams: create and update; Talent: create skills, assign or decline worker skills, and allocate positions to focus areas; Teamwork Graph: add relationships between objects; Permanent deletion through the admin-enabled delete\_jira group: Jira issues, comments, and issue attachments
+- **Typed safety signals:** sensitive read, remote write, overwrite, delete, oauth
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `publish`, `overwrite`, `delete`, `oauth`, `destructive`
+- **Confirmation:** Confirm the target Atlassian site, permission groups, and project or space before reading sensitive organizational state; show proposed Jira, Confluence, or Bitbucket changes before execution; gate the three delete tools, public-link and permission changes, pull-request merges, and pipeline runs separately from other writes; and keep Teamwork Graph and Rovo search disabled by default.
+- **Risk tags:** `credentials`, `hosted`, `project-management`, `private-repositories`, `sensitive-read`, `remote-write`, `publish-capable`, `public-publish`, `overwrite-capable`, `delete-capable`, `oauth`, `destructive-capable`, `ci-cd`, `dynamic-api-surface`, `prompt-injection`
+- **Evidence:** [1](https://support.atlassian.com/atlassian-ai-gateway/docs/supported-tools/); [2](https://support.atlassian.com/atlassian-ai-gateway/docs/get-started-with-the-atlassian-remote-mcp-server/); [3](https://support.atlassian.com/atlassian-ai-gateway/docs/configure-authentication-via-api-token/); [4](https://support.atlassian.com/atlassian-ai-gateway/docs/configure-oauth-2-1/)
+- **Health check:** Connect to the Rovo MCP endpoint, verify authorized Atlassian site identity and the granted permission groups, then run a bounded read query for one known issue or page without creating or modifying content.
+- **Uninstall:** Remove the Atlassian Rovo MCP entry from the client and revoke the authorized application connection in Atlassian account settings, or revoke the API token or service-account key; preserve all Jira, Confluence, Jira Service Management, Bitbucket, and Loom data. (removes user data: No)
+
+Capabilities and limits:
+
+- Recommended narrow profile, not the declared boundary: enable only the Jira and Confluence read and search groups, and widen deliberately
+- Recommended: exclude Teamwork Graph and Rovo search; both widen visibility to organization-wide and third-party connected data, and each call may consume up to 10 Rovo credits
+- Organization admins grant or revoke access per permission group; delete\_jira and manage\_jira are disabled by default and must be enabled by an admin
+- Three tools delete permanently and cannot be undone: deleteJiraIssue, deleteJiraComment, and deleteJiraIssueAttachment
+- Confluence writes are content-level tools, so one write tool reaches blog posts, whiteboards, databases, and folders as well as pages; enableConfluencePublicLink and updateLoomVideoPermissions can make content anonymously or publicly reachable
+- Bitbucket writes include merging pull requests and running pipelines; a commit that changes pipeline configuration followed by a pipeline run executes code on Bitbucket runners under the user's permissions
+- The server exposes a small primary tool set and defers the rest behind discover plus executeRead, executeWrite, and executeDestructive, so new tools become reachable without reconnecting; the ?tools=all endpoint variant exposes the full flat list
+- Creating, updating, publishing, or deleting anything requires explicit outbound confirmation
 
 ## Beads for Gemini CLI
 
