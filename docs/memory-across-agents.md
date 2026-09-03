@@ -34,6 +34,15 @@ repository proposal. Do not run multiple writers against one Hermes home, and
 do not duplicate the same fact in native memory and repository state without a
 declared canonical home.
 
+## OpenCode
+
+Context OS claims no OpenCode-native memory surface. OpenCode session history,
+provider state, and machine-local configuration remain outside the shared
+contract and are not synchronized. `AGENTS.md`, `state/`, `sessions/`, and
+kernel receipts provide portable continuity. Promote any durable fact only
+through a reviewed proposal; see `adapters/opencode/README.md` for the model
+data boundary.
+
 ## OpenClaw
 
 OpenClaw's workspace is private memory, not a sandbox. Keep its `SOUL.md`,

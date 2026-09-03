@@ -2,13 +2,13 @@
 
 Context OS can begin with a blank interview or selected context from another
 assistant. The result is a small, reviewable repository that Claude Code,
-Codex, and OpenClaw, plus the experimental Hermes, Cursor, and Devin adapters,
+Codex, OpenClaw, and OpenCode, plus the experimental Hermes, Cursor, and Devin adapters,
 can use as shared state.
 
 ## Before you clone
 
 You need Git, Bash, and Python 3.10 or newer. Local hosts include Claude Code,
-Codex, OpenClaw, and the experimental Hermes and Cursor adapters; verify Devin's
+Codex, OpenClaw, OpenCode, and the experimental Hermes and Cursor adapters; verify Devin's
 managed cloud path separately in its account UI. claude.ai cannot maintain a
 local checkout directly.
 
@@ -49,6 +49,8 @@ bash scripts/setup.sh --agents claude,codex
 bash scripts/setup.sh --agents hermes
 # or
 bash scripts/setup.sh --agents openclaw
+# or
+bash scripts/setup.sh --agents opencode
 # or
 bash scripts/setup.sh --agents cursor
 # or
@@ -102,6 +104,8 @@ claude
 # or
 codex
 # or
+opencode
+# or
 hermes
 # or, after installing and configuring adapters/openclaw/plugin
 openclaw gateway run
@@ -109,13 +113,20 @@ openclaw gateway run
 agent
 ```
 
-Run `/setup` in Claude Code or Hermes, `/context-setup` in Cursor, `$setup` in
+Run `/setup` in Claude Code or Hermes, `/context-setup` in Cursor or OpenCode, `$setup` in
 Codex, or `/contextos <alias> setup` through an authorized OpenClaw messaging
 surface. OpenClaw first requires the separate private-workspace, verified skill
 synchronization, plugin installation, and configured project-alias binding
 steps in its [adapter guide](../adapters/openclaw/README.md). The guided
 interview asks one question at a time, builds a deterministic proposal, and
 waits before applying the exact reviewed diff.
+
+OpenCode discovers `AGENTS.md`, `.agents/skills/`, and the checked-in typed
+commands directly from the repository root. Before using private context,
+choose a model route with acceptable data handling; free or contributor routes
+may log or train on prompts. Setup changes no OpenCode model, provider, plugin,
+MCP, sharing, or permission setting and never launches `opencode`. See the
+[first-class adapter guide](../adapters/opencode/README.md).
 For OpenClaw, continue each owned interview with
 `/contextos <alias> continue <session-key> <response>`. Independently review the
 proposal file and apply it with the documented trusted-shell kernel command;
@@ -169,11 +180,11 @@ Commit and push only after the diff matches what you intend to preserve.
 
 ## Run the daily loop
 
-| Moment | Claude Code | Codex | Hermes | OpenClaw | Cursor IDE/CLI (experimental) | Devin session (experimental) |
-|---|---|---|---|---|---|---|
-| Start work | `/start` | `$start` | `/start` | `/contextos <alias> start` | `/context-start` | `@skills:context-start` |
-| Save progress without closing | `/update` | `$update` | `/update` | `/contextos <alias> update` | `/context-update` | `@skills:context-update` |
-| End with a reviewed handoff | `/end` | `$end` | `/end` | `/contextos <alias> end` | `/context-end` | `@skills:context-end` |
+| Moment | Claude Code | Codex | OpenCode | Hermes | OpenClaw | Cursor IDE/CLI (experimental) | Devin session (experimental) |
+|---|---|---|---|---|---|---|---|
+| Start work | `/start` | `$start` | `/context-start` | `/start` | `/contextos <alias> start` | `/context-start` | `@skills:context-start` |
+| Save progress without closing | `/update` | `$update` | `/context-update` | `/update` | `/contextos <alias> update` | `/context-update` | `@skills:context-update` |
+| End with a reviewed handoff | `/end` | `$end` | `/context-end` | `/end` | `/contextos <alias> end` | `/context-end` | `@skills:context-end` |
 
 The lifecycle kernel writes shared continuity to `state/` and `sessions/` only
 after exact-proposal approval, then emits a local receipt. Each host retains

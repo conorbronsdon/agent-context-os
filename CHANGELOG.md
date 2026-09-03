@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Added
+- First-class OpenCode support now ships repository-native `AGENTS.md` and Agent
+  Skills discovery, typed `/context-*` adapters, setup and doctor registration,
+  explicit permission/privacy/memory boundaries, deterministic conformance, and
+  an opt-in exact-client live harness validated against OpenCode 1.18.27 (#169).
 - Coordination `board sync` receipts now report content-free scan counts,
   bytes, amplification, and elapsed time. The board contract records a
   measured threshold for reconsidering physical inbox sharding while retaining

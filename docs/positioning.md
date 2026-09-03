@@ -7,7 +7,7 @@ The product name and the repository slug are both **Context OS** (`agent-context
 ## One-line description
 
 Context OS is a Git-backed context and workflow layer shared across Claude Code,
-Codex, and OpenClaw, with experimental Hermes Agent, Cursor, and Devin adapters.
+Codex, OpenClaw, and OpenCode, with experimental Hermes Agent, Cursor, and Devin adapters.
 
 ## The problem
 

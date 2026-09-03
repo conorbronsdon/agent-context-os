@@ -226,7 +226,7 @@ targets whose first path component is a product-authority namespace. Config
 readability therefore cannot widen lifecycle mutation authority.
 
 The v0.12 protected namespaces are `.agents/`, `.claude/`, `.codex/`,
-`.cursor/`, `.github/`, `adapters/`, `bundles/`, `components/`, `contextos/`,
+`.cursor/`, `.github/`, `.opencode/`, `adapters/`, `bundles/`, `components/`, `contextos/`,
 `integrations/`, `runtimes/`, `scripts/`, and `workspace/`. This update/end
 guard includes extensible host instruction surfaces; it does not make those
 paths KernelRoot-owned or remove setup's narrower `.agents/skills/` authority.
