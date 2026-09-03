@@ -25,7 +25,7 @@ SPEC.loader.exec_module(release_artifacts)
 
 
 class ReleaseFixture:
-    version = "0.13.0"
+    version = "0.13.1"
 
     def __init__(self, root: Path) -> None:
         self.root = root
@@ -62,7 +62,7 @@ class ReleaseFixture:
         (root / "seed.txt").write_text("seed\n", encoding="utf-8")
         (root / "dev/test.txt").write_text("never release\n", encoding="utf-8")
         (root / "CHANGELOG.md").write_text(
-            "# Changelog\n\n## [Unreleased]\n\n## [0.13.0] — 2026-09-02\n",
+            "# Changelog\n\n## [Unreleased]\n\n## [0.13.1] — 2026-09-02\n",
             encoding="utf-8",
         )
         paths = [
@@ -109,7 +109,7 @@ class ReleaseFixture:
             self.root,
             output,
             version=self.version,
-            tag="v0.13.0",
+            tag="v0.13.1",
             commit=self.commit,
         )
 
@@ -135,15 +135,15 @@ class ReleaseArtifactTest(unittest.TestCase):
         report = release_artifacts.verify_artifacts(
             first,
             self.root / "extracted",
-            version="0.13.0",
-            tag="v0.13.0",
+            version="0.13.1",
+            tag="v0.13.1",
             commit=self.fixture.commit,
         )
         self.assertEqual(report["bundle_sha256"], provenance["bundle_lock"]["bundle_sha256"])
         self.assertEqual(report["source_mode"], "directory")
         self.assertTrue(report["unlocked_files_ignored"])
         self.assertFalse(report["writes"])
-        extracted = self.root / "extracted/agent-context-os-template-v0.13.0"
+        extracted = self.root / "extracted/agent-context-os-template-v0.13.1"
         self.assertTrue((extracted / "managed.txt").is_file())
         self.assertTrue((extracted / "seed.txt").is_file())
         self.assertFalse((extracted / "dev/test.txt").exists())
@@ -152,7 +152,7 @@ class ReleaseArtifactTest(unittest.TestCase):
     def test_generated_offline_command_works_in_documented_colocated_layout(self) -> None:
         output = self.root / "offline-verification"
         provenance = self.fixture.build(output)
-        names = release_artifacts.artifact_names("0.13.0")
+        names = release_artifacts.artifact_names("0.13.1")
         instructions = (output / names["instructions"]).read_text(encoding="utf-8")
         self.assertIn("obtain all five release assets in\n   that directory", instructions)
         self.assertIn("do not select a separate extraction destination", instructions)
@@ -170,7 +170,7 @@ class ReleaseArtifactTest(unittest.TestCase):
                 if os.name != "nt":
                     destination.chmod(member.mode)
 
-        extracted = output / "agent-context-os-template-v0.13.0"
+        extracted = output / "agent-context-os-template-v0.13.1"
         environment = git_environment()
         environment.pop("PYTHONPATH", None)
         completed = subprocess.run(
@@ -207,26 +207,26 @@ class ReleaseArtifactTest(unittest.TestCase):
     def test_tampered_archive_and_unexpected_asset_fail(self) -> None:
         output = self.root / "release"
         self.fixture.build(output)
-        archive = output / "agent-context-os-template-v0.13.0.tar"
+        archive = output / "agent-context-os-template-v0.13.1.tar"
         archive.write_bytes(archive.read_bytes() + b"tamper")
         with self.assertRaisesRegex(release_artifacts.ReleaseArtifactError, "SHA-256 mismatch"):
             release_artifacts.verify_artifacts(
-                output, self.root / "extract-one", version="0.13.0",
-                tag="v0.13.0", commit=self.fixture.commit,
+                output, self.root / "extract-one", version="0.13.1",
+                tag="v0.13.1", commit=self.fixture.commit,
             )
         shutil.rmtree(output)
         self.fixture.build(output)
         (output / "unexpected.txt").write_text("extra\n", encoding="utf-8")
         with self.assertRaisesRegex(release_artifacts.ReleaseArtifactError, "artifact set"):
             release_artifacts.verify_artifacts(
-                output, self.root / "extract-two", version="0.13.0",
-                tag="v0.13.0", commit=self.fixture.commit,
+                output, self.root / "extract-two", version="0.13.1",
+                tag="v0.13.1", commit=self.fixture.commit,
             )
 
     def test_provenance_mismatch_fails_even_with_updated_checksum(self) -> None:
         output = self.root / "release"
         self.fixture.build(output)
-        name = "agent-context-os-template-v0.13.0.provenance.json"
+        name = "agent-context-os-template-v0.13.1.provenance.json"
         path = output / name
         provenance = json.loads(path.read_text(encoding="utf-8"))
         provenance["release"]["commit"] = "0" * 40
@@ -240,8 +240,8 @@ class ReleaseArtifactTest(unittest.TestCase):
         )
         with self.assertRaisesRegex(release_artifacts.ReleaseArtifactError, "release identity"):
             release_artifacts.verify_artifacts(
-                output, self.root / "extract", version="0.13.0",
-                tag="v0.13.0", commit=self.fixture.commit,
+                output, self.root / "extract", version="0.13.1",
+                tag="v0.13.1", commit=self.fixture.commit,
             )
 
     def test_dirty_source_and_wrong_identity_fail_before_artifacts_exist(self) -> None:
@@ -251,8 +251,8 @@ class ReleaseArtifactTest(unittest.TestCase):
         self.fixture.git("restore", "managed.txt")
         with self.assertRaisesRegex(release_artifacts.ReleaseArtifactError, "tag must equal"):
             release_artifacts.build_artifacts(
-                self.source, self.root / "wrong-output", version="0.13.0",
-                tag="v0.13.1", commit=self.fixture.commit,
+                self.source, self.root / "wrong-output", version="0.13.1",
+                tag="v0.13.2", commit=self.fixture.commit,
             )
 
     def test_workflow_requires_both_platforms_before_tag_and_verified_draft(self) -> None:

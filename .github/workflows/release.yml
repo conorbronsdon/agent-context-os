@@ -1,4 +1,4 @@
-name: Qualify and stage v0.13.0
+name: Qualify and stage v0.13.1
 
 on:
   workflow_dispatch:
@@ -9,17 +9,17 @@ on:
         type: string
 
 concurrency:
-  group: release-v0.13.0
+  group: release-v0.13.1
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 env:
-  VERSION: 0.13.0
-  TAG: v0.13.0
+  VERSION: 0.13.1
+  TAG: v0.13.1
   RELEASE_COMMIT: ${{ inputs.commit }}
-  ASSET_STEM: agent-context-os-template-v0.13.0
+  ASSET_STEM: agent-context-os-template-v0.13.1
 
 jobs:
   build-linux:
@@ -77,7 +77,7 @@ jobs:
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: v0.13.0-candidate-${{ inputs.commit }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: v0.13.1-candidate-${{ inputs.commit }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/release-one/*
           compression-level: 0
           if-no-files-found: error
@@ -98,7 +98,7 @@ jobs:
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: v0.13.0-candidate-${{ inputs.commit }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: v0.13.1-candidate-${{ inputs.commit }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/assets
 
       - name: Verify the candidate and execute its extracted verifier
@@ -110,7 +110,7 @@ jobs:
             --tag "$TAG" \
             --commit "$RELEASE_COMMIT" \
             > "$RUNNER_TEMP/candidate-linux.json"
-          BUNDLE_SHA=$(python -c 'import json, os, pathlib; print(json.loads(pathlib.Path(os.environ["RUNNER_TEMP"] + "/assets/agent-context-os-template-v0.13.0.provenance.json").read_text())["bundle_lock"]["bundle_sha256"])')
+          BUNDLE_SHA=$(python -c 'import json, os, pathlib; print(json.loads(pathlib.Path(os.environ["RUNNER_TEMP"] + "/assets/agent-context-os-template-v0.13.1.provenance.json").read_text())["bundle_lock"]["bundle_sha256"])')
           cd "$RUNNER_TEMP/extracted-linux/$ASSET_STEM"
           python -m contextos bundle check \
             --lock "$RUNNER_TEMP/assets/$ASSET_STEM.bundle.lock.json" \
@@ -135,7 +135,7 @@ jobs:
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: v0.13.0-candidate-${{ inputs.commit }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: v0.13.1-candidate-${{ inputs.commit }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/assets
 
       - name: Verify the candidate and execute its extracted verifier
@@ -182,7 +182,7 @@ jobs:
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: v0.13.0-candidate-${{ inputs.commit }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: v0.13.1-candidate-${{ inputs.commit }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/assets
 
       - name: Recheck and verify the candidate before staging
@@ -215,8 +215,8 @@ jobs:
           python scripts/stage-release.py \
             --repository "$GITHUB_REPOSITORY" \
             --tag "$TAG" \
-            --title "Context OS v0.13.0" \
-            --notes-file docs/releases/v0.13.0.md \
+            --title "Context OS v0.13.1" \
+            --notes-file docs/releases/v0.13.1.md \
             --artifact "$RUNNER_TEMP/assets/$ASSET_STEM.tar" \
             --artifact "$RUNNER_TEMP/assets/$ASSET_STEM.bundle.lock.json" \
             --artifact "$RUNNER_TEMP/assets/$ASSET_STEM.provenance.json" \
@@ -321,7 +321,7 @@ jobs:
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: v0.13.0-candidate-${{ inputs.commit }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: v0.13.1-candidate-${{ inputs.commit }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/candidate-assets
 
       - name: Re-download and bind the verified draft to the exact-run candidate
@@ -345,7 +345,7 @@ jobs:
             "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
             --jq '{id, tag_name, name, body, draft, prerelease, assets: [.assets[] | {id, name, size, digest}]}' \
             > "$RUNNER_TEMP/draft-state.json"
-          python -c 'import hashlib, json, os, pathlib; temp=pathlib.Path(os.environ["RUNNER_TEMP"]); root=temp / "draft-assets"; value=json.loads((temp / "draft-state.json").read_text()); expected_body=(pathlib.Path("docs/releases/v0.13.0.md").read_text()).replace("\r\n", "\n").rstrip("\n"); remote={item["name"]: item for item in value["assets"]}; local={path.name: path for path in root.iterdir() if path.is_file()}; assert value["id"] == int(os.environ["RELEASE_ID"]) and value["tag_name"] == os.environ["TAG"] and value["name"] == "Context OS v0.13.0" and (value["body"] or "").replace("\r\n", "\n").rstrip("\n") == expected_body and value["draft"] is True and value["prerelease"] is False and set(remote) == set(local); assert all(type(item["id"]) is int and item["id"] > 0 and item["size"] == local[name].stat().st_size and item["digest"] == "sha256:" + hashlib.sha256(local[name].read_bytes()).hexdigest() for name, item in remote.items())'
+          python -c 'import hashlib, json, os, pathlib; temp=pathlib.Path(os.environ["RUNNER_TEMP"]); root=temp / "draft-assets"; value=json.loads((temp / "draft-state.json").read_text()); expected_body=(pathlib.Path("docs/releases/v0.13.1.md").read_text()).replace("\r\n", "\n").rstrip("\n"); remote={item["name"]: item for item in value["assets"]}; local={path.name: path for path in root.iterdir() if path.is_file()}; assert value["id"] == int(os.environ["RELEASE_ID"]) and value["tag_name"] == os.environ["TAG"] and value["name"] == "Context OS v0.13.1" and (value["body"] or "").replace("\r\n", "\n").rstrip("\n") == expected_body and value["draft"] is True and value["prerelease"] is False and set(remote) == set(local); assert all(type(item["id"]) is int and item["id"] > 0 and item["size"] == local[name].stat().st_size and item["digest"] == "sha256:" + hashlib.sha256(local[name].read_bytes()).hexdigest() for name, item in remote.items())'
           {
             echo "## Verified draft ready for local admin publication"
             echo "- Commit: \`$RELEASE_COMMIT\`"

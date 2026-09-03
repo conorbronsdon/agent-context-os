@@ -29,7 +29,7 @@ Generation refuses staged differences from `HEAD`:
 bash scripts/contextos.sh bundle generate \
   --source . \
   --name agent-context-os-template \
-  --bundle-version 0.13.0
+  --bundle-version 0.13.1
 ```
 
 Generation prints JSON and does not write a lock. It rejects unclassified or
