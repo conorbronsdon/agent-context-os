@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- `todoist-cli` integration catalog entry for Doist's official CLI with a read-only OAuth login mode, opt-in app-management, backups, and billing scopes, and multi-agent skill support (#51).
+
 ---
 
 ## [0.13.1] — 2026-09-02 — Release recovery and coordination safety
