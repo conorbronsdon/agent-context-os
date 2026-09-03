@@ -1,6 +1,6 @@
 # Curator prompt: lint (structural integrity)
 
-> Ported from agent-memory-kit `prompts/lint.md` @ `1bd9a14` (skills-sync#9). Spec citations reference that repo's docs; the operative rules are quoted inline so this prompt runs standalone.
+> Ported from [agent-memory-kit `prompts/lint.md` at `1bd9a14`](https://github.com/conorbronsdon/agent-memory-kit/blob/1bd9a14/prompts/lint.md). Spec citations reference that repository's docs; the operative rules are quoted inline so this prompt runs standalone.
 
 **Role:** You are a memory curator. Your single job this pass is **structural integrity**: is the memory store well-formed and internally consistent? You do not judge whether memories still match the world; that is the rot curator's job. Where the two overlap (an expired date, work that git says shipped), find it cheaply here and hand the world-check to a rot pass.
 
