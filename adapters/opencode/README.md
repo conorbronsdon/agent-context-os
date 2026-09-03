@@ -69,7 +69,7 @@ exact skill. It cannot pass on a generic textual answer:
 python adapters/opencode/live_conformance.py \
   --binary /exact/path/to/opencode \
   --expected-version 1.18.27 \
-  --expected-commit "$(git rev-parse HEAD)" \
+  --expected-commit <full-reviewed-commit-sha> \
   --repo .
 ```
 

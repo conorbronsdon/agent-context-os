@@ -8,7 +8,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import stat
 import subprocess
 import tempfile
@@ -34,8 +33,8 @@ def run(
     environment = os.environ.copy()
     for name in CONFIG_OVERRIDE_ENV:
         environment.pop(name, None)
-    environment["OPENCODE_PURE"] = "1"
     environment.update(extra_env or {})
+    environment["OPENCODE_PURE"] = "1"
     return subprocess.run(
         [str(binary), *args], cwd=cwd, env=environment, text=True,
         encoding="utf-8", errors="replace", capture_output=True,
@@ -100,26 +99,39 @@ def verify_exact_clean_checkout(repo: Path, expected_commit: str) -> str:
     return actual
 
 
-def copy_tracked_fixture(repo: Path, fixture: Path) -> None:
+def copy_tracked_fixture(repo: Path, fixture: Path, commit: str) -> None:
     listed = subprocess.run(
-        ["git", "ls-files", "-z"], cwd=repo, capture_output=True, check=False
+        ["git", "ls-tree", "-rz", "--full-tree", commit],
+        cwd=repo, capture_output=True, check=False,
     )
     if listed.returncode != 0:
-        raise RuntimeError("--repo must be a Git checkout with a readable tracked-file index")
+        raise RuntimeError("could not enumerate the verified commit tree")
     fixture.mkdir(parents=True)
-    for raw_name in listed.stdout.split(b"\0"):
-        if not raw_name:
+    for record in listed.stdout.split(b"\0"):
+        if not record:
             continue
+        try:
+            metadata, raw_name = record.split(b"\t", 1)
+            mode, object_type, object_id = metadata.decode("ascii").split(" ", 2)
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise RuntimeError("git returned a malformed tree entry") from exc
         name = os.fsdecode(raw_name)
         relative = Path(name)
         if relative.is_absolute() or ".." in relative.parts:
             raise RuntimeError(f"unsafe tracked path: {name!r}")
-        source = repo / relative
-        if source.is_symlink() or not source.is_file():
+        if object_type != "blob" or mode not in {"100644", "100755"}:
             raise RuntimeError(f"tracked fixture source must be a regular file: {name!r}")
+        blob = subprocess.run(
+            ["git", "cat-file", "blob", object_id], cwd=repo,
+            capture_output=True, check=False,
+        )
+        if blob.returncode != 0:
+            raise RuntimeError(f"could not read verified blob for {name!r}")
         target = fixture / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, target)
+        target.write_bytes(blob.stdout)
+        if os.name != "nt":
+            target.chmod(0o755 if mode == "100755" else 0o644)
 
 
 def tool_loaded_exact_skill(output: str, root: Path, skill_name: str) -> bool:
@@ -200,9 +212,16 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="contextos-opencode-") as temporary:
         fixture = Path(temporary) / "public-fixture"
-        copy_tracked_fixture(repo, fixture)
+        copy_tracked_fixture(repo, fixture, verified_commit)
         skills = parse_json_document(run(binary, fixture, "debug", "skill"), "debug skill")
-        by_name = {item["name"]: item for item in skills if isinstance(item, dict)}
+        by_name: dict[str, dict[str, object]] = {}
+        for skill in skills:
+            if not isinstance(skill, dict) or not isinstance(skill.get("name"), str):
+                continue
+            name = skill["name"]
+            if name in by_name:
+                raise RuntimeError(f"duplicate discovered skill name: {name}")
+            by_name[name] = skill
         for name in (f"context-{item}" for item in LIFECYCLE):
             discovered = Path(by_name[name]["location"]).resolve()
             expected = (fixture / ".agents" / "skills" / name / "SKILL.md").resolve()

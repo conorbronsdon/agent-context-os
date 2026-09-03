@@ -142,6 +142,35 @@ class OpenCodeAdapterTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "must be clean"):
                 live.verify_exact_clean_checkout(repo, commit)
 
+    def test_fixture_materializes_verified_commit_not_worktree_bytes(self) -> None:
+        live = load_live_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            repo = root / "repo"
+            fixture = root / "fixture"
+            repo.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+            target = repo / "AGENTS.md"
+            target.write_text("# Committed fixture\n", encoding="utf-8")
+            subprocess.run(["git", "add", "AGENTS.md"], cwd=repo, check=True)
+            subprocess.run(
+                [
+                    "git", "-c", "user.name=Context OS", "-c",
+                    "user.email=context-os@example.invalid", "commit", "-qm", "fixture",
+                ],
+                cwd=repo, check=True,
+            )
+            commit = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=repo, check=True,
+                text=True, capture_output=True,
+            ).stdout.strip()
+            target.write_text("# Uncommitted replacement\n", encoding="utf-8")
+            live.copy_tracked_fixture(repo, fixture, commit)
+            self.assertEqual(
+                "# Committed fixture\n",
+                (fixture / "AGENTS.md").read_text(encoding="utf-8"),
+            )
+
     def test_run_scrubs_inherited_configuration_overrides(self) -> None:
         live = load_live_module()
         inherited = {name: "host-value" for name in live.CONFIG_OVERRIDE_ENV}
