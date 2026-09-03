@@ -25,7 +25,7 @@ Nothing in this guide installs, activates, authenticates, or grants permissions 
 | Convert an explicitly selected document or URI to Markdown | [MarkItDown MCP](../references/integrations.md#markitdown-mcp) | Local-file and network reads through an unauthenticated server process |
 | Export reviewed Markdown to DOCX, PDF, EPUB, or HTML | [Pandoc](../references/integrations.md#pandoc) | Sensitive local or network reads, output overwrite, and PDF-engine execution |
 | Plan or update Shortcut stories, epics, and iterations | [Shortcut MCP](../references/integrations.md#shortcut-mcp) | Workspace-wide sensitive reads and overwrite-capable story or doc updates |
-| Manage Todoist tasks and projects from the command line | [Todoist CLI](../references/integrations.md#todoist-cli) | Sensitive personal-task reads, deletion and purge methods, and a write-capable CLI surface |
+| Manage Todoist tasks and projects from the command line | [Todoist CLI](../references/integrations.md#todoist-cli) | Sensitive personal-task reads, per-resource deletion, and a write-capable CLI whose opt-in scopes reach app secrets, backups and billing |
 
 The obsolete checked-in `gws mcp` configuration was removed. The current Google Workspace path uses the reviewed CLI setup in [`references/google-workspace-cli-setup.md`](../references/google-workspace-cli-setup.md); it is still opt-in and is not pre-approved by the command adapters.
 
