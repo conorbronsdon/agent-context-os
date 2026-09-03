@@ -321,6 +321,43 @@ if "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py --command "$duplica
   fail "duplicate false invocation gate passed command validation"
 fi
 
+private_source="$portability_tmp/private-source-dream.md"
+sed 's#maintainer-core/#skills-sync/#' "$normalized_dream" > "$private_source"
+if "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py --command "$private_source" dream >/dev/null 2>&1; then
+  fail "private repository name passed public command provenance validation"
+fi
+
+missing_source_version="$portability_tmp/missing-source-version-dream.md"
+sed '/^x-source-version:/d' "$normalized_dream" > "$missing_source_version"
+if "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py --command "$missing_source_version" dream >/dev/null 2>&1; then
+  fail "unpaired public command provenance passed validation"
+fi
+
+missing_source="$portability_tmp/missing-source-dream.md"
+sed '/^x-source:/d' "$normalized_dream" > "$missing_source"
+if "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py --command "$missing_source" dream >/dev/null 2>&1; then
+  fail "reverse-unpaired public command provenance passed validation"
+fi
+
+for bad_source in \
+  'maintainer-core/commands/' \
+  'maintainer-core/commands/../dream.md'; do
+  invalid_source="$portability_tmp/invalid-source-$(printf '%s' "$bad_source" | tr '/.' '__').md"
+  sed "s#^x-source:.*#x-source: \"$bad_source\"#" "$normalized_dream" > "$invalid_source"
+  if "$CONTEXTOS_PYTHON_CMD" tests/validate-openai-metadata.py --command "$invalid_source" dream >/dev/null 2>&1; then
+    fail "malformed logical provenance source passed validation: $bad_source"
+  fi
+done
+while IFS= read -r provenance_file; do
+  grep -Eq '^x-source: "maintainer-core/(commands|skills)/[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*(/[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*)*"$' "$provenance_file" \
+    || fail "$provenance_file has an invalid public provenance source"
+  grep -Eq '^x-source-version: "[0-9a-f]{7,64}"$' "$provenance_file" \
+    || fail "$provenance_file has an invalid public provenance version"
+done < <(git grep -l '^x-source:' -- .claude)
+if git grep -n -F 'skills-sync' -- .claude docs scripts; then
+  fail "current adapter or operative documentation names a private synchronization repository"
+fi
+
 help_output=$(bash scripts/setup.sh --help)
 grep -Fq -- '--agents claude,codex,cursor,devin,hermes,openclaw|auto|none' <<<"$help_output" || fail "setup help does not describe multi-agent selection"
 grep -Fq -- '--agent auto|RUNTIME|none' <<<"$help_output" || fail "setup help omits the singleton compatibility alias"

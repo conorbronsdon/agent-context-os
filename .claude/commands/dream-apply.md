@@ -3,7 +3,7 @@ name: dream-apply
 description: "Validate a dream artifact, review each proposal, and apply only individually accepted changes."
 allowed-tools: "Read, Write, Edit, Bash, AskUserQuestion"
 disable-model-invocation: true
-x-source: "skills-sync/commands/dream-apply.md"
+x-source: "maintainer-core/commands/dream-apply.md"
 x-source-version: "8ede26c"
 ---
 

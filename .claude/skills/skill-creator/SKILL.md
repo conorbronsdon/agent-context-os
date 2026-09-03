@@ -1,10 +1,10 @@
 ---
 name: skill-creator
 description: Generate a new skill from a plain-language description — decides invocation control, arguments, and context cost, then scaffolds, validates, and tests it
-x-source: skills-sync/skills/skill-creator/SKILL.md
-x-source-version: d66f695
+x-source: "maintainer-core/skills/skill-creator/SKILL.md"
+x-source-version: "d66f695"
 ---
-<!-- x-source: agent-skill-builder/SKILL.md @ dfe7aa2 -->
+<!-- Public upstream: https://github.com/conorbronsdon/agent-skill-builder/blob/dfe7aa2/SKILL.md -->
 
 # skill-builder — Skills That Don't Rot
 

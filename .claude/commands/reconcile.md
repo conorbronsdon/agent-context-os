@@ -3,7 +3,7 @@ name: reconcile
 description: "Scan multi-session drift and offer individually reviewed fixes only after explicit approval."
 allowed-tools: "Read, Bash, Glob, Grep"
 disable-model-invocation: true
-x-source: "skills-sync/commands/reconcile.md"
+x-source: "maintainer-core/commands/reconcile.md"
 x-source-version: "7ae9852"
 ---
 

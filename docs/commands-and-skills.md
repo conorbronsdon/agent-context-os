@@ -83,6 +83,26 @@ import safe. Their Claude adapters appear in the command index below.
 Uploading these files to claude.ai does not activate commands, hooks, tool
 permissions, or skill metadata. See `docs/claude-projects-sync.md`.
 
+### Published adapter provenance
+
+Some Claude adapter files carry optional `x-source` and `x-source-version`
+frontmatter. A `maintainer-core/...` value is a stable logical synchronization
+ID, not a repository path or public link. It says that the public adapter was
+reviewed and published from the maintainer's generic command core. The paired
+hexadecimal version is the synchronization checkpoint used to detect lag; it
+is provenance metadata, not a release tag or a claim that readers can fetch a
+private source revision.
+
+The checked-in adapter is the complete public artifact for that release.
+Operative rules must be present in the file itself, and any separately
+published upstream is linked directly in the file body at a pinned public
+revision. Current adapter metadata and operative documentation never name
+private repositories or private issue IDs; historical changelog entries remain
+an audit record.
+Removing these fields is safe for runtime discovery but discards useful
+maintainer drift evidence; changing their logical IDs requires updating the
+publication mapping as well.
+
 Run `bash scripts/contextos.sh doctor` for runtime and state diagnostics, then
 `bash scripts/validate-all.sh --workspace` after personalized repository
 changes. Product contributors use the strict form without `--workspace`.
