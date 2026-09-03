@@ -18,9 +18,14 @@ from .bundle_schema import (
     verify_bundle,
 )
 from .component_schema import portable_path_identity
+from .installed_state import (
+    InstalledStateError,
+    validate_installed_state as validate_installed_state_document,
+)
 from .primitives import canonical_json, read_regular_file_snapshot, sha256_bytes
 from .workspace_schema import (
     WorkspaceConfigError,
+    analyze_legacy_workspace,
     render_workspace_config,
     strict_json_loads,
     validate_workspace_config,
@@ -207,12 +212,11 @@ def _validate_installed_state(
         raw, _metadata = read_regular_file_snapshot(
             path, subject="installed bundle state"
         )
-        value = strict_json_loads(raw.decode("utf-8"), source=INSTALLED_STATE_PATH)
-    except (OSError, UnicodeError, WorkspaceConfigError) as exc:
+        value = validate_installed_state_document(
+            strict_json_loads(raw.decode("utf-8"), source=INSTALLED_STATE_PATH)
+        )
+    except (OSError, UnicodeError, WorkspaceConfigError, InstalledStateError) as exc:
         raise BundleError(str(exc)) from exc
-    expected_keys = {"schema_version", "bundle", "components", "plan_digest"}
-    if not isinstance(value, dict) or set(value) != expected_keys:
-        raise BundleError("installed bundle state has an invalid shape")
     bundle = value.get("bundle")
     expected_bundle = {
         "name": current.name,
@@ -224,12 +228,6 @@ def _validate_installed_state(
         raise BundleError("installed bundle state contradicts the current bundle")
     if value.get("components") != plan["current_components"]:
         raise BundleError("installed bundle state contradicts current_components")
-    if (
-        value.get("schema_version") != 1
-        or not isinstance(value.get("plan_digest"), str)
-        or not SHA256_RE.fullmatch(value["plan_digest"])
-    ):
-        raise BundleError("installed bundle state is invalid")
 
 
 def _expected_changes(
@@ -248,9 +246,15 @@ def _expected_changes(
         relative = item["path"]
         record = candidate.records.get(relative)
         if action in {"add", "replace"}:
+            generated_text = plan.get("generated_files", {}).get(relative)
             if record is None:
                 raise BundleError(f"plan.{relative}: candidate record is missing")
             target = kernel.safe_repo_path(root, relative)
+            after_hash = (
+                sha256_bytes(generated_text.encode("utf-8"))
+                if generated_text is not None
+                else record["sha256_raw"]
+            )
             changes.append(
                 _change(
                     root,
@@ -259,9 +263,16 @@ def _expected_changes(
                     owner=item["owner"],
                     policy=item["policy"],
                     kind="component",
-                    after_hash=record["sha256_raw"],
-                    after_mode=_mode_for_write(target, executable=record["executable"]),
-                    content_ref=_bundle_ref(relative),
+                    after_hash=after_hash,
+                    after_mode=_mode_for_write(
+                        target,
+                        executable=False if generated_text is not None else record["executable"],
+                    ),
+                    content_ref=(
+                        _inline_ref(generated_text)
+                        if generated_text is not None
+                        else _bundle_ref(relative)
+                    ),
                     reason=item["reason"],
                 )
             )
@@ -315,6 +326,46 @@ def _expected_changes(
             reason="record the exact installed bundle and component closure",
         )
     )
+    legacy_path = kernel.safe_repo_path(root, "workspace.yaml")
+    if legacy_path.exists():
+        try:
+            legacy_bytes, _metadata = read_regular_file_snapshot(
+                legacy_path, subject="legacy workspace configuration"
+            )
+            legacy = analyze_legacy_workspace(
+                legacy_bytes.decode("utf-8-sig")
+            )
+        except (OSError, UnicodeError, WorkspaceConfigError) as exc:
+            raise BundleError(str(exc)) from exc
+        if legacy.issues:
+            raise BundleError(
+                "workspace.yaml cannot be retired losslessly: "
+                + "; ".join(legacy.issues)
+            )
+        conflicts = [
+            key
+            for key, value in legacy.values.items()
+            if plan["intended_workspace"]["paths"][key] != value
+        ]
+        if conflicts:
+            raise BundleError(
+                "workspace.yaml conflicts with intended paths: "
+                + ", ".join(conflicts)
+            )
+        changes.append(
+            _change(
+                root,
+                relative="workspace.yaml",
+                action="delete",
+                owner="legacy-workspace-config",
+                policy="migration-only",
+                kind="workspace-config",
+                after_hash=None,
+                after_mode=None,
+                content_ref=None,
+                reason="retire losslessly migrated legacy workspace configuration",
+            )
+        )
     return sorted(changes, key=lambda item: portable_path_identity(item["path"]))
 
 
@@ -328,6 +379,7 @@ def create_materialization_proposal(
     now: datetime,
     current: VerifiedBundle | None = None,
     current_components: Sequence[str] = (),
+    intended_workspace: dict[str, Any] | None = None,
 ) -> tuple[Path, dict[str, Any]]:
     kernel = _kernel()
     root = target_root.absolute()
@@ -339,6 +391,7 @@ def create_materialization_proposal(
         desired_components=desired_components,
         current=current,
         current_components=current_components,
+        intended_workspace=intended_workspace,
     )
     _validate_installed_state(root, current, plan)
     config_relative = _workspace_config_relative(root, workspace_config_path)
@@ -365,6 +418,11 @@ def create_materialization_proposal(
         "workspace_config": {
             "path": config_relative,
             "expected_sha256": expected_config_sha256,
+            **(
+                {"intended": intended_workspace}
+                if intended_workspace is not None
+                else {}
+            ),
         },
         "recovery_policy": recovery_policy,
     }
@@ -401,6 +459,119 @@ def create_materialization_proposal(
     return path, document
 
 
+def _create_composition_document(
+    *,
+    root: Path,
+    workspace_config_path: Path,
+    intended: dict[str, Any],
+    config_digest: str,
+    candidate: VerifiedBundle,
+    desired_components: Sequence[str],
+    now: datetime,
+    input_path: Path | None,
+) -> tuple[Path, dict[str, Any]]:
+    kernel = _kernel()
+    plan = create_initial_structural_plan(
+        target_root=root,
+        workspace_config=intended,
+        candidate=candidate,
+        desired_components=desired_components,
+    )
+    config_relative = _workspace_config_relative(root, workspace_config_path)
+    if kernel.raw_file_digest(kernel.safe_repo_path(root, config_relative)) is not None:
+        raise BundleError("workspace_config_path: clean composition target already exists")
+    _validate_installed_state(root, None, plan)
+    changes = _expected_changes(
+        root,
+        candidate=candidate,
+        plan=plan,
+        workspace_config_relative=config_relative,
+    )
+    recovery_policy = {
+        change["path"]: {
+            "action": change["action"],
+            "owner": change["authorization"]["owner"],
+            "policy": change["authorization"]["policy"],
+        }
+        for change in changes
+    }
+    workspace_authorization = {
+        "path": config_relative,
+        "expected_sha256": config_digest,
+        "intended": intended,
+    }
+    source_hashes = {
+        str(candidate.lock_path.absolute()): sha256_bytes(candidate.lock_path.read_bytes())
+    }
+    if input_path is not None:
+        workspace_authorization["input_path"] = str(input_path)
+        source_hashes[str(input_path)] = config_digest
+    authorization = {
+        "policy": "component-materialization-v1",
+        "mode": "compose",
+        "plan": plan,
+        "candidate": _bundle_spec(candidate),
+        "current": None,
+        "workspace_config": workspace_authorization,
+        "recovery_policy": recovery_policy,
+    }
+    document: dict[str, Any] = {
+        "schema_version": kernel.SCHEMA_VERSION,
+        "workflow": kernel.AGENT_LIFECYCLE_WORKFLOW,
+        "operation": MATERIALIZE_OPERATION,
+        "created_at": now.isoformat(),
+        "proposal_id": kernel.proposal_id(
+            kernel.AGENT_LIFECYCLE_WORKFLOW, now, changes
+        ),
+        "changes": changes,
+        "authorization": authorization,
+        "source_hashes": dict(sorted(source_hashes.items())),
+        "source_git_head": kernel.git_head(root),
+        "invariants": list(MATERIALIZE_INVARIANTS),
+    }
+    document["proposal_digest"] = sha256_bytes(
+        canonical_json(document).encode("utf-8")
+    )
+    path = root / ".context-os" / "proposals" / f"{document['proposal_id']}.json"
+    kernel._write_exclusive_text(
+        path, json.dumps(document, indent=2, ensure_ascii=False) + "\n", root=root
+    )
+    return path, document
+
+
+def create_guided_composition_proposal(
+    *,
+    target_root: Path,
+    workspace_config: dict[str, Any],
+    candidate: VerifiedBundle,
+    desired_components: Sequence[str],
+    now: datetime,
+) -> tuple[Path, dict[str, Any]]:
+    """Create one proposal from schema-v2 intent embedded in the digest-bound document."""
+    root = target_root.absolute()
+    try:
+        intended = validate_workspace_config(
+            workspace_config,
+            known_runtime_ids=sorted(candidate.runtimes),
+            known_component_ids=sorted(
+                item["id"] for item in candidate.manifest["components"]
+            ),
+        )
+    except WorkspaceConfigError as exc:
+        raise BundleError(str(exc)) from exc
+    config_digest = sha256_bytes(render_workspace_config(intended).encode("utf-8"))
+    return _create_composition_document(
+        root=root,
+        workspace_config_path=root / "contextos.workspace.json",
+        intended=intended,
+        config_digest=config_digest,
+        candidate=candidate,
+        desired_components=desired_components,
+        now=now,
+        input_path=None,
+    )
+
+
 def create_composition_proposal(
     *,
     target_root: Path,
@@ -426,74 +597,24 @@ def create_composition_proposal(
             input_bytes.decode("utf-8"), source=str(input_path)
         )
         intended = validate_workspace_config(
-            input_value, known_runtime_ids=sorted(candidate.runtimes)
+            input_value,
+            known_runtime_ids=sorted(candidate.runtimes),
+            known_component_ids=sorted(
+                item["id"] for item in candidate.manifest["components"]
+            ),
         )
     except (OSError, UnicodeError, WorkspaceConfigError) as exc:
         raise BundleError(str(exc)) from exc
-    plan = create_initial_structural_plan(
-        target_root=root,
-        workspace_config=intended,
+    return _create_composition_document(
+        root=root,
+        workspace_config_path=workspace_config_path,
+        intended=intended,
+        config_digest=input_digest,
         candidate=candidate,
         desired_components=desired_components,
+        now=now,
+        input_path=input_path,
     )
-    config_relative = _workspace_config_relative(root, workspace_config_path)
-    if kernel.raw_file_digest(kernel.safe_repo_path(root, config_relative)) is not None:
-        raise BundleError("workspace_config_path: clean composition target already exists")
-    _validate_installed_state(root, None, plan)
-    changes = _expected_changes(
-        root,
-        candidate=candidate,
-        plan=plan,
-        workspace_config_relative=config_relative,
-    )
-    recovery_policy = {
-        change["path"]: {
-            "action": change["action"],
-            "owner": change["authorization"]["owner"],
-            "policy": change["authorization"]["policy"],
-        }
-        for change in changes
-    }
-    authorization = {
-        "policy": "component-materialization-v1",
-        "mode": "compose",
-        "plan": plan,
-        "candidate": _bundle_spec(candidate),
-        "current": None,
-        "workspace_config": {
-            "path": config_relative,
-            "expected_sha256": expected_config_input_sha256,
-            "input_path": str(input_path),
-            "intended": intended,
-        },
-        "recovery_policy": recovery_policy,
-    }
-    source_hashes = dict(sorted({
-        str(candidate.lock_path.absolute()): sha256_bytes(candidate.lock_path.read_bytes()),
-        str(input_path): input_digest,
-    }.items()))
-    document: dict[str, Any] = {
-        "schema_version": kernel.SCHEMA_VERSION,
-        "workflow": kernel.AGENT_LIFECYCLE_WORKFLOW,
-        "operation": MATERIALIZE_OPERATION,
-        "created_at": now.isoformat(),
-        "proposal_id": kernel.proposal_id(
-            kernel.AGENT_LIFECYCLE_WORKFLOW, now, changes
-        ),
-        "changes": changes,
-        "authorization": authorization,
-        "source_hashes": source_hashes,
-        "source_git_head": kernel.git_head(root),
-        "invariants": list(MATERIALIZE_INVARIANTS),
-    }
-    document["proposal_digest"] = sha256_bytes(
-        canonical_json(document).encode("utf-8")
-    )
-    path = root / ".context-os" / "proposals" / f"{document['proposal_id']}.json"
-    kernel._write_exclusive_text(
-        path, json.dumps(document, indent=2, ensure_ascii=False) + "\n", root=root
-    )
-    return path, document
 
 
 def _materialization_context(
@@ -527,8 +648,15 @@ def _materialization_context(
         raise BundleError("materialization workspace config path is not canonical")
     if mode == "upgrade":
         if (
-            set(config) != {"path", "expected_sha256"}
+            set(config) not in (
+                {"path", "expected_sha256"},
+                {"path", "expected_sha256", "intended"},
+            )
             or not SHA256_RE.fullmatch(str(config.get("expected_sha256")))
+            or (
+                "intended" in config
+                and not isinstance(config.get("intended"), dict)
+            )
         ):
             raise BundleError("authorization.workspace_config is invalid")
         recomputed = create_structural_plan(
@@ -539,26 +667,52 @@ def _materialization_context(
             desired_components=plan.get("desired_components", []),
             current=current,
             current_components=plan.get("current_components", []),
+            intended_workspace=config.get("intended"),
         )
     else:
+        external_input = "input_path" in config
         if (
-            set(config) != {"path", "expected_sha256", "input_path", "intended"}
+            set(config) not in (
+                {"path", "expected_sha256", "intended"},
+                {"path", "expected_sha256", "input_path", "intended"},
+            )
             or not SHA256_RE.fullmatch(str(config.get("expected_sha256")))
-            or not isinstance(config.get("input_path"), str)
-            or not Path(config["input_path"]).is_absolute()
+            or not isinstance(config.get("intended"), dict)
+            or (
+                external_input
+                and (
+                    not isinstance(config.get("input_path"), str)
+                    or not Path(config["input_path"]).is_absolute()
+                )
+            )
         ):
             raise BundleError("authorization.workspace_config is invalid")
-        input_path = Path(config["input_path"])
         try:
-            input_bytes, _metadata = read_regular_file_snapshot(
-                input_path, subject="workspace configuration input"
-            )
-            if sha256_bytes(input_bytes) != config["expected_sha256"]:
-                raise BundleError("workspace configuration input became stale")
+            if external_input:
+                input_path = Path(config["input_path"])
+                input_bytes, _metadata = read_regular_file_snapshot(
+                    input_path, subject="workspace configuration input"
+                )
+                if sha256_bytes(input_bytes) != config["expected_sha256"]:
+                    raise BundleError("workspace configuration input became stale")
+                input_value = strict_json_loads(
+                    input_bytes.decode("utf-8"), source=str(input_path)
+                )
+            else:
+                input_value = config["intended"]
             parsed = validate_workspace_config(
-                strict_json_loads(input_bytes.decode("utf-8"), source=str(input_path)),
+                input_value,
                 known_runtime_ids=sorted(candidate.runtimes),
+                known_component_ids=sorted(
+                    item["id"] for item in candidate.manifest["components"]
+                ),
             )
+            if (
+                not external_input
+                and sha256_bytes(render_workspace_config(parsed).encode("utf-8"))
+                != config["expected_sha256"]
+            ):
+                raise BundleError("embedded workspace configuration digest is invalid")
         except (OSError, UnicodeError, WorkspaceConfigError) as exc:
             raise BundleError(str(exc)) from exc
         if parsed != config["intended"]:
@@ -643,15 +797,15 @@ def _validate_materialization_document(
     if document["authorization"].get("recovery_policy") != expected_recovery:
         raise BundleError("materialization recovery policy is invalid")
     config = document["authorization"]["workspace_config"]
-    config_source = (
-        config["input_path"]
-        if document["authorization"]["mode"] == "compose"
-        else str(_kernel().safe_repo_path(root, config["path"]))
-    )
     expected_sources = {
         str(candidate.lock_path.absolute()): sha256_bytes(candidate.lock_path.read_bytes()),
-        config_source: config["expected_sha256"],
     }
+    if document["authorization"]["mode"] != "compose":
+        expected_sources[
+            str(_kernel().safe_repo_path(root, config["path"]))
+        ] = config["expected_sha256"]
+    elif "input_path" in config:
+        expected_sources[config["input_path"]] = config["expected_sha256"]
     current_spec = document["authorization"].get("current")
     if current_spec is not None:
         expected_sources[current_spec["lock"]] = sha256_bytes(Path(current_spec["lock"]).read_bytes())

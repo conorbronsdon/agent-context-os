@@ -11,7 +11,9 @@ wrapper path. A marker-only root may use already-loaded code for discovery,
 reports, diagnosis, direct provider-neutral hooks, and proposal publication,
 but named runtime execution and mutation require the colocated trusted product
 closure. Verified detached-bundle materialization is the separate bootstrap boundary.
-External project attachment requires a later versioned binding contract.
+External project attachment uses exact distinct roots, a portable tracked Git
+identity, and an ignored machine-local binding. Claude and Codex use that same
+kernel contract while WorkingRoot remains read-only lifecycle evidence.
 
 ## Layers
 

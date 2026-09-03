@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from contextos.kernel import (  # noqa: E402
     runtime_manifest,
     runtime_surface,
 )
+from contextos.attachment import AttachmentError, resolve_root_roles  # noqa: E402
 
 
 def main() -> int:
@@ -28,13 +30,31 @@ def main() -> int:
     surface_id = sys.argv[3] if len(sys.argv) == 4 else None
     hook_output: str | None = "system-message"
     try:
+        context_value = os.environ.get("CONTEXTOS_CONTEXT_ROOT")
+        working_value = os.environ.get("CONTEXTOS_WORKING_ROOT")
+        if (context_value is None) != (working_value is None):
+            raise ContextOSError(
+                "CONTEXTOS_CONTEXT_ROOT and CONTEXTOS_WORKING_ROOT must be set together"
+            )
+        roles = None
+        context_root = ROOT
+        if context_value is not None and working_value is not None:
+            try:
+                roles = resolve_root_roles(
+                    kernel_root=ROOT,
+                    context_root=Path(context_value),
+                    working_root=Path(working_value),
+                )
+            except AttachmentError as exc:
+                raise ContextOSError(str(exc)) from exc
+            context_root = roles.context_root
         manifest = runtime_manifest(ROOT, runtime, check_paths=False)
         hook_output = runtime_surface(manifest, surface_id).get("hook_output")
         raw = sys.stdin.read().strip()
         payload = json.loads(raw) if raw else {}
         if not isinstance(payload, dict):
             raise ContextOSError("hook input must be an object")
-        report = hook_report(ROOT, event, payload)
+        report = hook_report(context_root, event, payload, roles=roles)
         messages = [item["message"] for item in report["findings"]]
         rendered = runtime_hook_payload(manifest, messages, surface_id)
         if rendered is not None:

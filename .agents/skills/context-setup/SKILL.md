@@ -5,25 +5,29 @@ description: Build, import, or refresh this workspace's identity, project, reusa
 
 # Set up workspace context
 
-## Execution root (required)
+## Execution roots (required)
 
-Before reading or writing repository content or running a lifecycle command,
-establish the exact repository working directory supplied by the host for this
-invocation. Accept that directory as the lifecycle execution root only when it
-contains both `AGENTS.md` and `scripts/contextos.sh`. Do not substitute the
-process or tool working directory, an agent/private workspace, the skill install
-location, or any parent or ancestor discovered by searching upward. If the
-host-supplied directory is unavailable or either marker is absent, stop and
-report the problem without creating a payload or running the kernel.
+Use the exact roots supplied by the host attachment: `KernelRoot` is the trusted
+Context OS product containing `scripts/contextos.sh`; `ContextRoot` owns tracked
+identity and lifecycle state; and `WorkingRoot` is the ordinary application.
+For an external attachment, require all three exact absolute paths and run:
 
-Under the v0.12 full-template wrapper path this is the colocated `KernelRoot`,
-`ContextRoot`, and nominal `WorkingRoot`.
-A separate application repository is not a supported lifecycle execution root.
+```text
+bash <KernelRoot>/scripts/contextos.sh --context-root <ContextRoot> --working-root <WorkingRoot> <command>
+```
 
-Anchor every repository read and write under that exact root. Run
-`scripts/contextos.sh` and repository validation with their working directory
-explicitly set to that root (or use absolute paths beneath it); this includes
-all `.context-os/inputs/`, proposal, receipt, state, session, and routing paths.
+Do not search upward or infer a root from cwd or the skill installation. The
+kernel must validate the ignored local binding before strict lifecycle work. A
+missing, moved, stale, linked, nested, or mismatched binding stops the workflow;
+use the explicit `project rebind` proposal after a legitimate move. ContextRoot
+owns all lifecycle writes. WorkingRoot is read-only evidence. The colocated
+`bash scripts/contextos.sh <command>` compatibility form remains valid.
+
+Throughout this procedure, resolve every context path beneath `ContextRoot`. In
+split mode, spell local paths as absolute `<ContextRoot>/...` paths and invoke
+every lifecycle command through the absolute KernelRoot wrapper with both exact
+role options. In colocated mode, run the relative compatibility commands from
+the colocated root, where ContextRoot and WorkingRoot are the same directory.
 
 Build useful context without silently overwriting user data.
 
@@ -47,9 +51,11 @@ personal information unless the user explicitly confirms the audience.
 ### 2. Choose and inspect the starting point
 
 Ask whether to start from answers, selected existing material, or both. For
-existing material, follow `docs/migration-guide.md` and accept only a reviewed,
-narrow packet. Read the existing identity, project index, current state, weekly
-priorities, and routing files. Classify each as missing, placeholder, or populated.
+existing material, follow `<KernelRoot>/docs/migration-guide.md` and accept only
+a reviewed, narrow packet. Read the existing identity, project index, current
+state, weekly priorities, and routing files beneath ContextRoot. Classify each
+as missing, placeholder, or populated. Do not read similarly named files from
+WorkingRoot as shared context.
 
 ### 3. Gather reviewed context
 
@@ -60,27 +66,44 @@ project: purpose, audience, current focus, non-goals, prior decisions, and
 repeated workflows. Finally gather weekly outcomes, non-goals, success criteria,
 and blockers. Draft the smallest coherent file map and routing additions.
 
-Portable repeated workflows belong under `.agents/skills/`; facts stay in their
-identity, project, or state source and are referenced rather than copied.
+Portable repeated workflows belong under `<ContextRoot>/.agents/skills/`; facts
+stay in their ContextRoot identity, project, or state source and are referenced
+rather than copied.
 
 ### 4. Propose and apply deterministically
 
-Encode the reviewed file map as JSON under `.context-os/inputs/`, with `files`
-mapping repository-relative paths to complete desired content. Add a path to
-`replace_populated` only after explicit approval to replace that populated file.
-Use `{{TODAY}}` where the deterministic local date belongs.
+Encode the reviewed file map as JSON under
+`<ContextRoot>/.context-os/inputs/`, with `files` mapping ContextRoot-relative
+paths to complete desired content. Add a path to `replace_populated` only after
+explicit approval to replace that populated file. Use `{{TODAY}}` where the
+deterministic local date belongs.
 
-Run `bash scripts/contextos.sh propose setup --input <payload.json>`. Present every
-returned diff and its proposal digest. The digest binds the exact content but
-does not authenticate a human approver; rely on the host permission boundary.
-After explicit approval of that exact proposal, run:
+Run exactly one of these forms:
 
 ```text
-bash scripts/contextos.sh apply <proposal> --confirm <digest> --runtime <active-runtime>
+split:     bash <KernelRoot>/scripts/contextos.sh --context-root <ContextRoot> --working-root <WorkingRoot> propose setup --input <ContextRoot>/.context-os/inputs/<payload.json>
+colocated: bash scripts/contextos.sh propose setup --input .context-os/inputs/<payload.json>
+```
+
+Present every returned diff and its proposal digest. The digest binds the exact
+content but does not authenticate a human approver; rely on the host permission
+boundary. After explicit approval of that exact proposal, run the matching form:
+
+```text
+split:     bash <KernelRoot>/scripts/contextos.sh --context-root <ContextRoot> --working-root <WorkingRoot> apply <ContextRoot>/<proposal> --confirm <digest> --runtime <active-runtime>
+colocated: bash scripts/contextos.sh apply <proposal> --confirm <digest> --runtime <active-runtime>
 ```
 
 The kernel must refuse path escapes, writes outside context paths, unapproved
 populated replacements, changed targets, or concurrent applies.
 
-Run `bash scripts/validate-all.sh --workspace`, report the receipt and result, and offer a
-commit only after final diff review. Suggest `$start` next and `$end` to close.
+Validate with the matching mode:
+
+```text
+split:     bash <KernelRoot>/scripts/contextos.sh --context-root <ContextRoot> --working-root <WorkingRoot> doctor
+colocated: bash scripts/validate-all.sh --workspace
+```
+
+Do not run a ContextRoot-relative product validator from WorkingRoot. Report the
+receipt and result, and offer a ContextRoot commit only after final diff review.
+Suggest `$start` next and `$end` to close.

@@ -8,9 +8,10 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [Agent Skills](https://github.com/conorbronsdon/agent-skills) | `skill_catalog` | verified | Yes | No | No | No | Yes | 2026-08-15 |
 | [Agent Workspace](https://github.com/conorbronsdon/agent-workspace) | `workspace_template` | verified | Yes | No | No | No | Yes | 2026-08-15 |
 | [AI Tools for Creators](https://github.com/conorbronsdon/ai-tools-for-creators) | `resource_catalog` | listed | No | No | No | No | No | 2026-08-15 |
-| [Atlassian Rovo MCP](https://support.atlassian.com/atlassian-rovo-mcp-server/) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-09-03 |
+| [Atlassian Rovo MCP](https://support.atlassian.com/atlassian-ai-gateway/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-09-03 |
 | [Beads for Gemini CLI](https://beads.gascity.com/integrations/gemini) | `agent_extension` | verified | Yes | Yes | No | No | Yes | 2026-08-15 |
 | [GitHub MCP](https://github.com/github/github-mcp-server) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-18 |
+| [GitLab MCP](https://docs.gitlab.com/user/model_context_protocol/mcp_server/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-09-02 |
 | [Google Workspace CLI](https://github.com/googleworkspace/cli) | `connector` | verified | Yes | Yes | No | Yes | Yes | 2026-08-15 |
 | [Granola MCP](https://docs.granola.ai/help-center/sharing/integrations/mcp) | `mcp_server` | verified | No | No | No | Yes | No | 2026-08-15 |
 | [Linear MCP](https://linear.app/docs/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-18 |
@@ -20,6 +21,7 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [Pandoc](https://github.com/jgm/pandoc) | `connector` | verified | Yes | No | No | Yes | Yes | 2026-08-25 |
 | [Readwise MCP](https://docs.readwise.io/tools/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-18 |
 | [Shortcut MCP](https://www.shortcut.com/help/integrations/mcp-server/) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-30 |
+| [Slack MCP](https://docs.slack.dev/ai/slack-mcp-server/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-09-02 |
 | [Substack MCP](https://github.com/conorbronsdon/substack-mcp) | `mcp_server` | verified | Yes | Yes | Yes | Yes | No | 2026-08-15 |
 | [Tolaria MCP](https://github.com/refactoringhq/tolaria) | `local_workspace` | verified | Yes | No | No | Yes | Yes | 2026-08-15 |
 | [Trello MCP](https://support.atlassian.com/trello/docs/connect-trello-to-ai-assistants-with-trello-mcp/) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-30 |
@@ -95,29 +97,32 @@ Capabilities and limits:
 
 ## Atlassian Rovo MCP
 
-Atlassian's official hosted MCP server. One authorization reaches Jira, Confluence, Jira Service Management, Bitbucket Cloud, and Teamwork Graph, whose context tool spans Compass, Loom, Goals, Projects, Teams, Focus, and Talent.
+Atlassian's official hosted MCP server (Rovo MCP v2). One authorization can reach Jira, Confluence, Jira Service Management, Bitbucket Cloud, Loom, Goals, Projects, Teams, Focus, Talent, Teamwork Graph, Rovo search, and connected source-code search, each as its own admin-managed permission group.
 
-- **Supported agents:** `claude_code`, `gemini_cli`, `cursor`, `generic`
+- **Supported agents:** `claude_code`, `codex`, `gemini_cli`, `cursor`, `generic`
 - **Install scope:** `project_or_user`; never automatic
-- **Prerequisites:** An Atlassian Cloud account on the site to be authorized; An MCP client supporting remote Streamable HTTP and browser OAuth; An authorized Atlassian site
-- **Credentials:** OAuth 2.1 authorization managed by the MCP client for the authorized Atlassian site; API token authentication, which Atlassian documents as an optional alternative to the OAuth flow
-- **Reads:** Sensitive Jira issues, epics, sprints, comments, worklogs, and Confluence spaces, content, and search indexes across the authorized Atlassian site; Jira Service Management requests and queues, Bitbucket Cloud repositories, pull requests, and deployment environments; Teamwork Graph context, which reaches Compass components, Loom, Goals, Projects, Teams, Focus, and Talent
-- **Writes / external effects:** Remote creation and updates of Jira issues, comments, and worklogs, and of Confluence content, comments, spaces, and attachments in the authorized site; Confluence content creation covers pages, blog posts, live docs, whiteboards, databases, embeds, smart links, and folders through a single content tool; Overwrite-capable updates to existing content bodies, issue descriptions, fields, and statuses, plus move, copy, archive, and status changes on existing Confluence content; Permanent deletion of a Jira issue, a Jira comment, or a Jira issue attachment
+- **Prerequisites:** An Atlassian Cloud account on the site to be authorized; An MCP client supporting remote Streamable HTTP and browser OAuth, pointed at https://mcp.atlassian.com/v2/mcp; An authorized Atlassian site; For Bitbucket tools, a Bitbucket workspace linked to an Atlassian organization; For API-token authentication, an organization admin who has enabled it
+- **Credentials:** OAuth 2.1 authorization managed by the MCP client, consented for a specific Atlassian site (cloudId) and product set, with redirect-domain allowlist checks; When enabled by an organization admin, API-token authentication: a personal API token (Basic auth, email:token) or a service-account API key (Bearer); such tokens are not bound to a cloudId, so cross-site calls are possible, and no redirect-domain allowlist check applies; Jira Service Management tools are available only through API-token authentication
+- **Reads:** Sensitive Jira issues, epics, sprints, boards, filters, dashboards, comments, worklogs, change history, user lookups by name or email, and attachment downloads across the authorized site; Confluence spaces, content of every type (pages, blog posts, live docs, whiteboards, databases, folders), version history and diffs, comments, attachment downloads, PDF or Word exports, content permissions and public-link status, and CQL search; Jira Service Management operations alerts, on-call schedules, and teams; Bitbucket Cloud workspaces, repositories, file and directory contents, branches, commits, pull requests and diffs, pipelines and step logs, deployments, and environments; Loom videos with transcripts, comments, AI meeting action items, and signed MP4 download URLs; Goals, Projects, Teams, Focus areas, and Talent data (positions, managers, headcount by country, level, or job family, and skill assignments); Teamwork Graph context across all of the above plus third-party data connected to Jira (GitHub, Azure DevOps, GitLab, Jenkins, and Spinnaker pull requests, builds, and deployments); Rovo semantic search across Jira, Confluence, and connected apps; source-code search and full file reads across connected source-control providers
+- **Writes / external effects:** Jira: create, edit, transition, link, watch, and comment on work items, log time, upload attachments, set entity properties, and manage sprints, versions (including release and archive), and boards; with the admin-enabled manage\_jira group, create and update projects; Confluence: create pages, blog posts, live docs, whiteboards, databases, embeds, smart links, and folders through a single content tool; full-body or granular updates; copy, move, archive, restore versions, convert modes, and set content status; comments, attachments, labels, spaces, and space instructions; Confluence access control: add, remove, or replace content permission grants (replace removes any grant absent from the request), set restriction state, and enable or disable the anonymous public link for a page; Bitbucket Cloud: create, update, comment on, approve, request changes on, and merge pull requests; create branches and commits; run pipelines; Jira Service Management: acknowledge, close, or escalate operations alerts; Loom: upload and publish videos, rename, set visibility to OWNER, WORKSPACE, or PUBLIC, share, comment, and move; Goals, Projects, Focus areas, and Teams: create and update; Talent: create skills, assign or decline worker skills, and allocate positions to focus areas; Teamwork Graph: add relationships between objects; Permanent deletion through the admin-enabled delete\_jira group: Jira issues, comments, and issue attachments
 - **Typed safety signals:** sensitive read, remote write, overwrite, delete, oauth
-- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `overwrite`, `delete`, `oauth`, `destructive`
-- **Confirmation:** Confirm the target Atlassian site and project or space before reading sensitive organizational state; show proposed Jira issue or Confluence content changes before execution; gate the three delete tools separately from other writes, since they are not recoverable through the server; and keep Teamwork Graph disabled by default.
-- **Risk tags:** `credentials`, `hosted`, `project-management`, `sensitive-read`, `remote-write`, `overwrite-capable`, `delete-capable`, `oauth`, `destructive-capable`, `prompt-injection`
-- **Evidence:** [1](https://support.atlassian.com/atlassian-rovo-mcp-server/); [2](https://support.atlassian.com/atlassian-rovo-mcp-server/docs/supported-tools/); [3](https://support.atlassian.com/atlassian-rovo-mcp-server/docs/getting-started-with-the-atlassian-remote-mcp-server/)
-- **Health check:** Connect to the Rovo MCP endpoint, verify authorized Atlassian site identity, then run a bounded read query for one known issue or page without creating or modifying content.
-- **Uninstall:** Remove the Atlassian Rovo MCP entry from the client and revoke the authorized application connection in Atlassian account settings; preserve all Jira, Confluence, Jira Service Management, and Bitbucket data. (removes user data: No)
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `publish`, `overwrite`, `delete`, `oauth`, `destructive`
+- **Confirmation:** Confirm the target Atlassian site, permission groups, and project or space before reading sensitive organizational state; show proposed Jira, Confluence, or Bitbucket changes before execution; gate the three delete tools, public-link and permission changes, pull-request merges, and pipeline runs separately from other writes; and keep Teamwork Graph and Rovo search disabled by default.
+- **Risk tags:** `credentials`, `hosted`, `project-management`, `private-repositories`, `sensitive-read`, `remote-write`, `publish-capable`, `public-publish`, `overwrite-capable`, `delete-capable`, `oauth`, `destructive-capable`, `ci-cd`, `dynamic-api-surface`, `prompt-injection`
+- **Evidence:** [1](https://support.atlassian.com/atlassian-ai-gateway/docs/supported-tools/); [2](https://support.atlassian.com/atlassian-ai-gateway/docs/get-started-with-the-atlassian-remote-mcp-server/); [3](https://support.atlassian.com/atlassian-ai-gateway/docs/configure-authentication-via-api-token/); [4](https://support.atlassian.com/atlassian-ai-gateway/docs/configure-oauth-2-1/)
+- **Health check:** Connect to the Rovo MCP endpoint, verify authorized Atlassian site identity and the granted permission groups, then run a bounded read query for one known issue or page without creating or modifying content.
+- **Uninstall:** Remove the Atlassian Rovo MCP entry from the client and revoke the authorized application connection in Atlassian account settings, or revoke the API token or service-account key; preserve all Jira, Confluence, Jira Service Management, Bitbucket, and Loom data. (removes user data: No)
 
 Capabilities and limits:
 
-- Recommended narrow profile, not the declared boundary: enable only the Jira and Confluence read and search tools, and widen deliberately
-- Recommended: exclude Teamwork Graph, as its context tool substantially widens organizational data visibility beyond Jira and Confluence
-- Three tools delete permanently: deleteJiraIssue, deleteJiraComment, and deleteJiraIssueAttachment
-- Confluence writes go through content-level tools rather than page-specific ones, so a single write tool reaches blog posts, whiteboards, databases, and folders as well as pages
-- Creating, updating, or deleting anything requires explicit outbound confirmation
+- Recommended narrow profile, not the declared boundary: enable only the Jira and Confluence read and search groups, and widen deliberately
+- Recommended: exclude Teamwork Graph and Rovo search; both widen visibility to organization-wide and third-party connected data, and each call may consume up to 10 Rovo credits
+- Organization admins grant or revoke access per permission group; delete\_jira and manage\_jira are disabled by default and must be enabled by an admin
+- Three tools delete permanently and cannot be undone: deleteJiraIssue, deleteJiraComment, and deleteJiraIssueAttachment
+- Confluence writes are content-level tools, so one write tool reaches blog posts, whiteboards, databases, and folders as well as pages; enableConfluencePublicLink and updateLoomVideoPermissions can make content anonymously or publicly reachable
+- Bitbucket writes include merging pull requests and running pipelines; a commit that changes pipeline configuration followed by a pipeline run executes code on Bitbucket runners under the user's permissions
+- The server exposes a small primary tool set and defers the rest behind discover plus executeRead, executeWrite, and executeDestructive, so new tools become reachable without reconnecting; the ?tools=all endpoint variant exposes the full flat list
+- Creating, updating, publishing, or deleting anything requires explicit outbound confirmation
 
 ## Beads for Gemini CLI
 
@@ -167,6 +172,31 @@ Capabilities and limits:
 - Start with --read-only and only the context, repos, issues, and pull\_requests toolsets; read-only mode takes priority even if a write tool is requested explicitly
 - Toolsets and individual tools are allowlisted independently, so enabling all or the default surface can expose materially more data and actions than a bounded project workflow needs
 - Treat workflow dispatch, branch or file mutation, repository administration, and public comments as separate high-impact remote actions
+
+## GitLab MCP
+
+GitLab's official Beta MCP server exposes repository, issue, work item, merge request, discussion, and pipeline tools over OAuth 2.0 with the mcp scope.
+
+- **Supported agents:** `claude_code`, `codex`, `cursor`, `gemini_cli`, `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** An MCP-compatible client; A GitLab SaaS or self-managed account; GitLab Duo availability set to Always on or On by default; Beta and experimental features turned on; Access to the MCP server allowed; Activation settings configured for the top-level group on GitLab.com, or for the instance on GitLab Self-Managed and Dedicated; OAuth 2.0 Dynamic Client Registration available, or a pre-registered OAuth application with the mcp scope and Confidential checkbox cleared where an administrator turns Dynamic Client Registration off
+- **Credentials:** Per-user OAuth 2.0 access token with the mcp scope, obtained through Dynamic Client Registration or a pre-registered OAuth application, kept outside repository files
+- **Reads:** Private or public GitLab repository contents, commits, issues, work items, merge requests, diffs, comments, wiki page lists, project members, pipelines, and job logs allowed by the authenticated user
+- **Writes / external effects:** Remote GitLab writes including creating and updating issues, work items, merge requests, comments, branches, and merge request reviews; File actions committed to a branch through add\_commit, covering file creation, update, deletion, and move; Merging or scheduling the automatic merge of a merge request through accept\_merge\_request; CI/CD pipeline runs, retries, cancellations, and renames through save\_pipeline, and pipeline metadata updates or pipeline deletion through manage\_pipeline; Publicly visible posts, overwrite-capable branch and file updates, and security scan profile attachment to projects or groups
+- **Typed safety signals:** sensitive read, remote write, overwrite, delete, oauth
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `publish`, `overwrite`, `delete`, `oauth`, `destructive`
+- **Confirmation:** Confirm the exact GitLab instance, project scope, and token permissions; show exact target and payload before comments, branch writes, publication, overwrite, deletion, or CI/CD pipeline actions.
+- **Risk tags:** `credentials`, `private-repositories`, `sensitive-read`, `remote-write`, `publish-capable`, `public-publish`, `overwrite-capable`, `delete-capable`, `oauth`, `destructive-capable`, `ci-cd`, `prompt-injection`
+- **Evidence:** [1](https://docs.gitlab.com/user/model_context_protocol/mcp_server/); [2](https://docs.gitlab.com/user/model_context_protocol/mcp_server_tools/)
+- **Health check:** Connect to the GitLab MCP server, verify authenticated user identity and GitLab instance, then read one explicitly named project and issue without performing a write or pipeline action.
+- **Uninstall:** Remove the MCP client entry and revoke the authorized OAuth application for the MCP client in GitLab user settings; an administrator can also withdraw access by disallowing MCP server access for the top-level group or instance. Repositories and GitLab content are left unchanged. (removes user data: No)
+
+Capabilities and limits:
+
+- Start with read-only repository, issue, merge request, and pipeline inspection allowlists
+- No enforced server-side read-only mode is provided; restrict toolsets client-side
+- Treat pipeline triggering, retry, cancellation, and deletion as high-impact CI/CD actions requiring separate confirmation
+- This boundary describes the tool surface documented for GitLab 19.4; re-check the tools reference when the instance runs a different version
 
 ## Google Workspace CLI
 
@@ -396,6 +426,31 @@ Capabilities and limits:
 - The hosted service supports granular write, story-write, and comment-write OAuth scopes for explicit creation and update workflows
 - The open-source repository is archived but the hosted https://mcp.shortcut.com/mcp service remains actively documented
 - The documented surface is overwrite-capable but includes no permanently destructive operations; archiving remains within standard Shortcut workflows
+
+## Slack MCP
+
+Slack's official first-party MCP server for searching conversations, channels, canvases, files, and lists, and for posting messages, restricted to Marketplace-published or internal Slack apps using confidential OAuth 2.0 with workspace admin approval.
+
+- **Supported agents:** `claude_code`, `cursor`, `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** A Slack workspace account; An MCP client backed by a registered Slack app with a fixed, hardcoded app ID; An app published in the Slack Marketplace or an internal app; unlisted apps are prohibited from using MCP; Workspace admin approval through the standard Slack app approval process; The app's client\_id and client\_secret for confidential OAuth; Dynamic Client Registration is not supported; An MCP client supporting JSON-RPC 2.0 over Streamable HTTP at https://mcp.slack.com/mcp; SSE-based connections are not supported
+- **Credentials:** Confidential OAuth 2.0 client credentials, the registered Slack app's client\_id and client\_secret, kept outside repository files; Per-user OAuth 2.0 access token managed by the MCP client for the authorized Slack workspace
+- **Reads:** Sensitive public or private channel conversations, threads, DMs, canvases, files, user profiles, and emails depending on granted scopes; Slack list contents and schemas
+- **Writes / external effects:** Remote creation and updates of Slack channel messages, thread replies, reactions, drafts, canvases, and conversations; File uploads through the two-step flow of slack\_get\_file\_upload\_url then slack\_complete\_file\_upload, optionally sharing the uploaded file to a channel with a message; Slack Lists writes including creating lists with custom schemas, updating list metadata and columns, and adding or updating individual records; Publicly visible message sends in shared channels and overwrite-capable updates to canvas, list, and record content
+- **Typed safety signals:** sensitive read, remote write, overwrite, oauth
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `publish`, `overwrite`, `oauth`, `destructive`
+- **Confirmation:** Confirm the target Slack workspace, channels, and granted OAuth scopes before reading conversations; show exact message text, target channel, and thread before posting messages, show the exact file and destination before completing an upload, and keep DM, canvas, and list writes disabled by default.
+- **Risk tags:** `credentials`, `hosted`, `team-chat`, `sensitive-read`, `remote-write`, `publish-capable`, `public-publish`, `overwrite-capable`, `oauth`, `destructive-capable`, `prompt-injection`
+- **Evidence:** [1](https://docs.slack.dev/ai/slack-mcp-server/); [2](https://docs.slack.dev/ai/slack-mcp-server/connect-to-claude)
+- **Health check:** Connect to the Slack MCP endpoint, verify authorized workspace and user identity, then read history from one explicitly named test channel without posting messages.
+- **Uninstall:** Remove the Slack MCP entry from the client and revoke the authorized application connection in Slack workspace settings; preserve all messages and conversation history. (removes user data: No)
+
+Capabilities and limits:
+
+- Start with read-only search and history tools for explicitly named public channels
+- Exclude DMs, user email addresses, files, canvas mutations, list writes, and write scopes by default
+- Posting messages, uploading files, or updating canvases and lists creates immediate visible team communication and requires separate approval
+- The server focuses on messaging, search, files, canvases, and lists; the documented tool surface is create-and-update only, and message retraction remains within the Slack UI
 
 ## Substack MCP
 

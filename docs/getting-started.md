@@ -89,12 +89,13 @@ digest-confirmed `apply`; disabling never deletes the bundled adapter.
 
 Launch repository-discovery hosts from the repository root. In v0.12 that root
 is the colocated KernelRoot, ContextRoot, and nominal WorkingRoot for this
-full-template wrapper path.
-Operating in a separate application repository is not yet a supported lifecycle
-path; see the [root contract](root-contract.md). OpenClaw is the exception only
-for process location: its external plugin resolves an operator-configured alias
-to that same colocated root, so its Gateway and private workspace do not need to
-start in the repository:
+full-template wrapper path. For a separate application, create a reviewed
+`project attach --id <id>` proposal using exact `--context-root` and
+`--working-root` options through the KernelRoot wrapper. The application stays
+read-only to lifecycle operations; see the [root contract](root-contract.md).
+OpenClaw's plugin continues to resolve an operator-configured alias to a
+colocated Context OS root in this first attachment slice, so its Gateway and
+private workspace do not need to start in the repository:
 
 ```bash
 claude

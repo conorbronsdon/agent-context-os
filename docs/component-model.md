@@ -87,7 +87,7 @@ stay current.
 
 ## Materialization guarantees
 
-The shipped low-level materializer:
+The shipped materializer:
 
 1. record the selected runtimes and components in workspace-local
    configuration;
@@ -96,12 +96,12 @@ The shipped low-level materializer:
 4. produce an exact add/change/remove plan with immutable source hashes;
 5. require digest-bound approval and use the transaction lock and receipts;
 6. preserve existing `seed` paths and arbitrary files below extensible roots;
-7. keeps generated whole-file artifacts and maintainer-only conformance evidence
-   outside the released component closure; and
+7. projects selected-profile `README.md` support and shared `AGENTS.md`
+   instructions deterministically while retaining their single manifest owner;
 8. validates the selected runtime closure without treating the development test
    tree as a workspace output.
 
-The v0.12 release supports the full-template, full-component closure. Durable
-slim-profile intent, reconciliation, and closure-aware documentation require
-workspace schema v2; the lower-level component-selection interfaces are shipped
-substrate, not a v0.12 slim-workspace support claim.
+Workspace schema v2 supports both the explicit full-template closure and a
+durable selected profile. Guided init/update/reconcile derive that closure from
+runtimes and optional extras, pin the exact bundle digest, and reuse the same
+proposal, journal, rollback, and receipt path as low-level materialization.

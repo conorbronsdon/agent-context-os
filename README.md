@@ -2,7 +2,7 @@
 
 # Context OS
 
-A portable Git-backed context and workflow layer for agents like Claude Code, Codex, Hermes, OpenClaw, Cursor, and Devin. Evolves alongside you and your agents.
+A portable, evolving Git-backed context and workflow layer for coding agents. Claude Code, Codex, and OpenClaw are first-class; Hermes Agent, Cursor, and Devin adapters are experimental.
 
 [![GitHub stars](https://img.shields.io/github/stars/conorbronsdon/agent-context-os?style=social)](https://github.com/conorbronsdon/agent-context-os/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
@@ -69,9 +69,24 @@ active work share one root. A marker-only JSON workspace may use an already-load
 executable package for discovery and reports, but a marker-only root cannot
 apply content or configure runtimes until the trusted product closure is
 materialized there. A containing Git worktree may supply read-only commit
-evidence without gaining context mutation authority. A separate
-application-repository attachment is not yet a supported lifecycle path; see
-the [root contract](docs/root-contract.md).
+evidence without gaining context mutation authority.
+
+For a separate application repository, pass exact distinct roots and create a
+reviewable attachment proposal (global role options precede the command):
+
+```bash
+bash /path/to/context-os/scripts/contextos.sh \
+  --context-root /path/to/context-repo \
+  --working-root /path/to/application \
+  project attach --id my-app
+```
+
+Apply the returned digest with the same root options and `--runtime generic`.
+Later start/setup/update/end invocations use those exact roots. Context OS writes
+only ContextRoot; WorkingRoot contributes bounded Git identity, status, and
+history evidence and receives no marker or lifecycle file. A moved application
+requires a reviewed `project rebind --id my-app` proposal. See the [root
+contract](docs/root-contract.md).
 
 | Starting point | Next action |
 |---|---|
@@ -171,7 +186,11 @@ The [optional integrations catalog](references/integrations.md) is generated fro
 
 Start with the task-based [integration chooser](docs/integrations-guide.md), add at most one new trust boundary at a time, then read the selected generated entry in full.
 
-The current catalog includes portable skill collections and creator tools, plus reviewed paths for MarkItDown MCP, Tolaria MCP, Obsidian CLI, Beads for Gemini CLI, Granola MCP, Google Workspace CLI, Notion MCP, and Substack MCP. `listed` and `experimental` entries are leads, not endorsements. Setup never installs, authenticates, or activates them.
+The catalog spans portable skill collections, creator tools, CLIs, and MCP
+servers. Treat the generated catalog and task-based chooser as the current
+inventory rather than relying on a hand-maintained summary. `listed` and
+`experimental` entries are leads, not endorsements. Setup never installs,
+authenticates, or activates them.
 
 ## Repository layout
 
@@ -184,6 +203,8 @@ identity/                  Stable personal and professional context
 projects/                  Project context and project-specific workflows
 state/                     Current focus, priorities, blockers, and decisions
 sessions/                  Reviewed session handoffs
+coordination/              Multi-run message board contract; the board itself
+                           lives on a dedicated coordination branch
 .agents/skills/            Provider-neutral workflow cores
 contextos/                 Deterministic lifecycle kernel
                            and offline bundle materializer
@@ -264,7 +285,7 @@ behavior of an installed agent version or an external service.
 | See every command and portable skill | [Commands and skills](docs/commands-and-skills.md) |
 | Understand component ownership and the composition/materialization substrate | [Component model](docs/component-model.md) |
 | Verify an offline bundle or inspect a structural plan | [Bundle locks and plans](docs/bundle-locks.md) |
-| Read the v0.12 release scope and evidence limits | [v0.12.0 release notes](docs/releases/v0.12.0.md) |
+| Read release scope and evidence limits | [v0.13.1 release notes](docs/releases/v0.13.1.md); [v0.12.0 archive](docs/releases/v0.12.0.md) |
 | Understand KernelRoot, ContextRoot, WorkingRoot, and the v0.12 compatibility boundary | [Root contract](docs/root-contract.md) |
 | Choose an optional add-on | [Integration chooser](docs/integrations-guide.md) and [catalog](references/integrations.md) |
 | Understand product language and boundaries | [Positioning](docs/positioning.md) |

@@ -271,10 +271,16 @@ def _require_same_files(left: Path, right: Path, expected_names: set[str]) -> No
 
 
 def _release_by_id(runner: CommandRunner, repository: str, release_id: int) -> Any:
-    return runner.json([
+    value = runner.json([
         "gh", "api", "-H", "X-GitHub-Api-Version: 2026-03-10",
         f"repos/{repository}/releases/{release_id}",
     ])
+    _require(
+        isinstance(value, dict) and type(value.get("id")) is int
+        and value["id"] == release_id,
+        "release response does not match the selected numeric ID",
+    )
+    return value
 
 
 def _require_no_competing_runs(
@@ -340,7 +346,7 @@ def _recheck_run_attempt(
 
 
 def publish_release(
-    *, root: Path, repository: str, run_id: int, commit: str,
+    *, root: Path, repository: str, run_id: int, release_id: int, commit: str,
     version: str, tag: str, wait_attempts: int, wait_seconds: float,
     verify_published: bool = False,
     runner: CommandRunner | None = None,
@@ -350,6 +356,8 @@ def publish_release(
     _require(COMMIT_RE.fullmatch(commit) is not None, "commit must be exact lowercase 40-hex")
     _require(tag == f"v{version}", "tag must equal v<version>")
     _require(type(run_id) is int and run_id > 0, "run ID must be a positive integer")
+    _require(type(release_id) is int and release_id > 0,
+             "release ID must be a positive integer")
     _require(wait_attempts > 0 and wait_seconds >= 0, "attestation wait settings are invalid")
 
     _require(_git_text(runner, root, "rev-parse", "HEAD") == commit, "local HEAD is not the release commit")
@@ -375,12 +383,6 @@ def publish_release(
         runner, repository, run_id, version=version, commit=commit, attempt=attempt,
     )
 
-    release_id_text = runner.run([
-        "gh", "release", "view", tag, "--repo", repository,
-        "--json", "databaseId", "--jq", ".databaseId",
-    ]).stdout.strip()
-    _require(release_id_text.isdigit(), "draft release numeric ID is invalid")
-    release_id = int(release_id_text)
     expected_title = f"Context OS v{version}"
     expected_body = (root / f"docs/releases/v{version}.md").read_text(encoding="utf-8")
 
@@ -392,6 +394,13 @@ def publish_release(
         candidate.mkdir()
         release_assets.mkdir()
         published.mkdir()
+        expected_draft = not verify_published
+        first_state = _release_by_id(runner, repository, release_id)
+        first_snapshot = _asset_snapshot(
+            first_state, expected_names=expected_names, expected_tag=tag,
+            expected_title=expected_title, expected_body=expected_body,
+            draft=expected_draft,
+        )
         runner.download_artifact(repository, candidate_record, candidate, expected_names)
         _recheck_artifact(
             runner, repository, artifact=candidate_record, expected_name=candidate_name,
@@ -410,12 +419,6 @@ def publish_release(
         )
         _require_same_files(candidate, release_assets, expected_names)
 
-        expected_draft = not verify_published
-        first_state = _release_by_id(runner, repository, release_id)
-        first_snapshot = _asset_snapshot(
-            first_state, expected_names=expected_names, expected_tag=tag,
-            expected_title=expected_title, expected_body=expected_body, draft=expected_draft,
-        )
         _require_server_bytes(first_snapshot, release_assets)
         second_state = _release_by_id(runner, repository, release_id)
         second_snapshot = _asset_snapshot(
@@ -564,6 +567,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", required=True)
     parser.add_argument("--run-id", type=int, required=True)
+    parser.add_argument("--release-id", type=int, required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--tag", required=True)
@@ -577,6 +581,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         result = publish_release(
             root=ROOT, repository=args.repository, run_id=args.run_id,
+            release_id=args.release_id,
             commit=args.commit, version=args.version, tag=args.tag,
             wait_attempts=args.wait_attempts, wait_seconds=args.wait_seconds,
             verify_published=args.verify_published,
