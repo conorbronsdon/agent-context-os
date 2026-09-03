@@ -34,8 +34,8 @@ from .workspace_schema import (
     DEFAULT_PATHS,
     DEFAULT_TEMPLATE_SOURCE,
     DEFAULT_TEMPLATE_VERSION,
+    LEGACY_WORKSPACE_SCHEMA_VERSION,
     WORKSPACE_MODE,
-    WORKSPACE_SCHEMA_VERSION,
     WorkspaceConfigError,
     analyze_legacy_workspace,
     legacy_workspace_values,
@@ -47,13 +47,32 @@ from .workspace_schema import (
     validate_workspace_config,
     validate_workspace_path,
 )
+from .installed_state import InstalledStateError, validate_installed_state
+from .workspace_composition import (
+    WorkspaceCompositionError,
+    desired_component_closure,
+)
 from .primitives import (
     SnapshotError,
     canonical_json,
+    git_command,
+    git_environment,
     git_repository_identity,
     is_link_like,
     read_regular_file_snapshot,
     sha256_bytes,
+)
+from .attachment import (
+    AttachmentError,
+    RootRoles,
+    create_local_binding,
+    create_tracked_manifest,
+    git_evidence,
+    resolve_root_roles,
+    tracked_manifest_relative_path,
+    validate_local_binding,
+    validate_project_id,
+    validate_tracked_manifest,
 )
 
 
@@ -67,15 +86,22 @@ WORKSPACE_SETUP_OPERATION = "workspace-setup"
 AGENT_ENABLE_OPERATION = "agent-enable"
 AGENT_DISABLE_OPERATION = "agent-disable"
 MATERIALIZE_OPERATION = "component-materialize"
+PROJECT_ATTACH_OPERATION = "project-attach"
+PROJECT_REBIND_OPERATION = "project-rebind"
+PROJECT_BINDING_PATH = ".context-os/project-bindings.json"
+PROJECT_OPERATIONS = {PROJECT_ATTACH_OPERATION, PROJECT_REBIND_OPERATION}
 AGENT_SET_OPERATIONS = {
     WORKSPACE_MIGRATION_OPERATION,
     WORKSPACE_SETUP_OPERATION,
     AGENT_ENABLE_OPERATION,
     AGENT_DISABLE_OPERATION,
     MATERIALIZE_OPERATION,
+    PROJECT_ATTACH_OPERATION,
+    PROJECT_REBIND_OPERATION,
 }
 LOCAL_ARTIFACT_MODE = 0o600
 NEW_CONTENT_MODE = 0o666 if os.name == "nt" else 0o644
+LOCAL_BINDING_MODE = NEW_CONTENT_MODE if os.name == "nt" else LOCAL_ARTIFACT_MODE
 PROPOSAL_ID_RE = re.compile(
     r"^\d{8}T\d{6}-(?:setup|update|end|agent-config)-[0-9a-f]{10}$"
 )
@@ -85,6 +111,15 @@ AGENT_MIGRATION_INVARIANTS = [
     "portable-path-collisions",
     "exact-raw-file-hashes",
     "source-hash-revalidation",
+    "exact-proposal-integrity",
+    "atomic-replacement-and-rollback",
+]
+PROJECT_ATTACHMENT_INVARIANTS = [
+    "exact-root-roles",
+    "tracked-stable-project-identity",
+    "ignored-machine-local-binding",
+    "working-root-read-only",
+    "exact-raw-file-hashes",
     "exact-proposal-integrity",
     "atomic-replacement-and-rollback",
 ]
@@ -297,6 +332,7 @@ def discover_root(start: Path | None = None) -> Path:
                     marker,
                     root=path,
                     known_runtime_ids=runtime_ids(path),
+                    known_component_ids=_workspace_component_ids(path),
                 )
             except WorkspaceConfigError as exc:
                 raise ContextOSError(
@@ -400,6 +436,7 @@ def resolve_workspace(root: Path) -> WorkspaceResolution:
                 json_path,
                 root=root,
                 known_runtime_ids=runtime_ids(root),
+                known_component_ids=_workspace_component_ids(root),
             )
         except WorkspaceConfigError as exc:
             raise ContextOSError(f"invalid tracked workspace configuration: {exc}") from exc
@@ -545,8 +582,13 @@ def safe_repo_path(root: Path, raw: str) -> Path:
 
 
 def _transaction_target(root: Path, raw: str, operation: str | None) -> Path:
-    if operation == MATERIALIZE_OPERATION and raw == ".context-os/installed-bundle.json":
-        candidate = root / ".context-os" / "installed-bundle.json"
+    local_targets = {
+        MATERIALIZE_OPERATION: ".context-os/installed-bundle.json",
+        PROJECT_ATTACH_OPERATION: PROJECT_BINDING_PATH,
+        PROJECT_REBIND_OPERATION: PROJECT_BINDING_PATH,
+    }
+    if operation in local_targets and raw == local_targets[operation]:
+        candidate = root.joinpath(*PurePosixPath(raw).parts)
         _guard_local_artifact_path(root, candidate)
         return candidate
     return safe_repo_path(root, raw)
@@ -637,7 +679,7 @@ def plan_workspace_migration(
         source = "legacy-yaml"
 
     candidate = {
-        "schema_version": WORKSPACE_SCHEMA_VERSION,
+        "schema_version": LEGACY_WORKSPACE_SCHEMA_VERSION,
         "mode": WORKSPACE_MODE,
         "agents": list(agents),
         "paths": paths,
@@ -702,6 +744,26 @@ def _agent_lifecycle_authorization(
 ) -> dict[str, str]:
     if operation not in AGENT_SET_OPERATIONS:
         raise ContextOSError(f"unsupported agent lifecycle operation: {operation}")
+    if operation in PROJECT_OPERATIONS:
+        if relative == PROJECT_BINDING_PATH:
+            return {
+                "kind": "project-binding",
+                "owner": "context-root-local-state",
+                "policy": "ignored-machine-local",
+            }
+        match = re.fullmatch(
+            r"projects/([a-z][a-z0-9-]{0,63})/contextos\.project\.json",
+            relative,
+        )
+        if match is not None and operation == PROJECT_ATTACH_OPERATION:
+            validate_project_id(match.group(1))
+            safe_repo_path(root, relative)
+            return {
+                "kind": "project-identity",
+                "owner": "context-root-tracked-state",
+                "policy": "tracked-portable",
+            }
+        raise ContextOSError(f"{operation} cannot mutate attachment path: {relative}")
     expected = {
         "contextos.workspace.json": {
             "kind": "workspace-config",
@@ -783,6 +845,21 @@ def _selection_components(root: Path, agents: Sequence[str]) -> list[str]:
         ) from exc
 
 
+def _workspace_component_ids(root: Path) -> list[str] | None:
+    component_path = safe_repo_path(root, "components/manifest.json")
+    if not component_path.exists():
+        return None
+    try:
+        manifest = load_component_manifest(
+            component_path, root=root, check_paths=False
+        )
+    except (ComponentManifestError, OSError, UnicodeError) as exc:
+        raise ContextOSError(
+            f"invalid component manifest: {component_path} ({exc})"
+        ) from exc
+    return sorted(item["id"] for item in manifest["components"])
+
+
 def _agent_change(
     root: Path,
     operation: str,
@@ -792,7 +869,7 @@ def _agent_change(
     after_text: str | None,
 ) -> dict[str, Any]:
     authorization = _agent_lifecycle_authorization(root, operation, relative)
-    path = safe_repo_path(root, relative)
+    path = _transaction_target(root, relative, operation)
     if path.exists() and not path.is_file():
         raise ContextOSError(f"transaction target must be a regular file: {relative}")
     before_bytes = path.read_bytes() if path.exists() else None
@@ -801,7 +878,13 @@ def _agent_change(
         if not isinstance(after_text, str):
             raise ContextOSError(f"write action requires text content: {relative}")
         after_bytes = after_text.encode("utf-8")
-        after_mode = before_mode if before_mode is not None else NEW_CONTENT_MODE
+        after_mode = (
+            LOCAL_BINDING_MODE
+            if relative == PROJECT_BINDING_PATH
+            else before_mode
+            if before_mode is not None
+            else NEW_CONTENT_MODE
+        )
     elif action == "delete":
         if after_text is not None or before_bytes is None:
             raise ContextOSError(f"delete action requires an existing file: {relative}")
@@ -960,7 +1043,7 @@ def create_workspace_setup_proposal(
     """Create an additive setup proposal without inferring tracked intent."""
     requested_config = validate_workspace_config(
         {
-            "schema_version": WORKSPACE_SCHEMA_VERSION,
+            "schema_version": LEGACY_WORKSPACE_SCHEMA_VERSION,
             "mode": WORKSPACE_MODE,
             "agents": list(requested_agents),
             "paths": dict(DEFAULT_PATHS),
@@ -1566,6 +1649,242 @@ def validate_proposal(document: dict[str, Any]) -> str:
     return digest
 
 
+def _render_attachment_json(value: dict[str, Any]) -> str:
+    return json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+
+
+def _validate_project_binding_ignored(root: Path) -> None:
+    command = git_command(root, safe_root=root)
+    try:
+        tracked = subprocess.run(
+            [*command, "ls-files", "--stage", "--", PROJECT_BINDING_PATH],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=git_environment(),
+        )
+        ignored = subprocess.run(
+            [
+                *command,
+                "check-ignore",
+                "--quiet",
+                "--no-index",
+                "--",
+                PROJECT_BINDING_PATH,
+            ],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=git_environment(),
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        detail = (
+            exc.stderr.decode("utf-8", errors="replace").strip()
+            if isinstance(exc, subprocess.CalledProcessError)
+            else str(exc)
+        )
+        raise ContextOSError(
+            f"cannot verify local project binding ignore rule: {detail}"
+        ) from exc
+    if tracked.stdout:
+        raise ContextOSError(
+            f"local project binding must not be tracked: {PROJECT_BINDING_PATH}"
+        )
+    if ignored.returncode == 1:
+        raise ContextOSError(
+            f"local project binding must be ignored by ContextRoot Git: {PROJECT_BINDING_PATH}"
+        )
+    if ignored.returncode != 0:
+        detail = ignored.stderr.decode("utf-8", errors="replace").strip()
+        raise ContextOSError(
+            f"cannot verify local project binding ignore rule: {detail or 'git check-ignore failed'}"
+        )
+
+
+def load_project_attachment(
+    roles: RootRoles,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Load and strictly validate the one active ContextRoot-local binding."""
+    if roles.colocated:
+        raise ContextOSError("external project attachment requires split root roles")
+    _validate_project_binding_ignored(roles.context_root)
+    resolution = resolve_workspace(roles.context_root)
+    if resolution.source != "json" or not resolution.canonical:
+        raise ContextOSError(
+            "external project attachment requires canonical contextos.workspace.json"
+        )
+    binding_path = roles.context_root / PROJECT_BINDING_PATH
+    try:
+        _guard_local_artifact_path(roles.context_root, binding_path)
+        binding = read_json(binding_path)
+        bindings = binding.get("bindings")
+        if not isinstance(bindings, dict) or len(bindings) != 1:
+            raise AttachmentError(
+                "local binding registry must contain exactly one active project"
+            )
+        project_id = next(iter(bindings))
+        manifest_path = safe_repo_path(
+            roles.context_root, tracked_manifest_relative_path(project_id)
+        )
+        manifest = validate_tracked_manifest(read_json(manifest_path))
+        bound_roles = validate_local_binding(binding, manifest)
+    except (AttachmentError, OSError, UnicodeError) as exc:
+        raise ContextOSError(f"invalid external-project attachment: {exc}") from exc
+    if bound_roles != roles:
+        raise ContextOSError(
+            "explicit root roles do not match the ContextRoot-local project binding"
+        )
+    return manifest, binding
+
+
+def project_attachment_doctor(
+    roles: RootRoles,
+    runtime: str | None = None,
+    *,
+    all_runtimes: bool = False,
+) -> dict[str, Any]:
+    """Diagnose split roles independently without mutating any role root."""
+    checks: list[dict[str, Any]] = []
+    for role, path in (
+        ("kernel_root", roles.kernel_root),
+        ("context_root", roles.context_root),
+        ("working_root", roles.working_root),
+    ):
+        checks.append({"check": role, "status": "pass", "path": str(path)})
+    try:
+        manifest, _ = load_project_attachment(roles)
+        checks.append({
+            "check": "project_binding",
+            "status": "pass",
+            "project_id": manifest["project_id"],
+        })
+    except (ContextOSError, OSError, UnicodeError) as exc:
+        manifest = None
+        checks.append({"check": "project_binding", "status": "fail", "message": str(exc)})
+    for label, path, identity in (
+        ("context_repository", roles.context_root, None),
+        (
+            "working_repository",
+            roles.working_root,
+            manifest["repository_identity"] if manifest is not None else None,
+        ),
+    ):
+        try:
+            evidence = git_evidence(path, identity=identity, max_commits=5)
+            checks.append({"check": label, "status": "pass", "evidence": evidence})
+        except AttachmentError as exc:
+            checks.append({"check": label, "status": "fail", "message": str(exc)})
+    selected = runtime_ids(roles.kernel_root) if all_runtimes else [runtime] if runtime else []
+    for runtime_id in selected:
+        try:
+            runtime_manifest(roles.kernel_root, runtime_id, check_paths=False)
+            checks.append({"check": f"runtime:{runtime_id}", "status": "pass"})
+        except ContextOSError as exc:
+            checks.append({"check": f"runtime:{runtime_id}", "status": "fail", "message": str(exc)})
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "mode": "external-project-attachment",
+        "status": "fail" if any(item["status"] == "fail" for item in checks) else "pass",
+        "checks": checks,
+        "writes": False,
+    }
+
+
+def create_project_attachment_proposal(
+    roles: RootRoles,
+    project_id: str,
+    now: datetime,
+    *,
+    rebind: bool = False,
+) -> tuple[Path, dict[str, Any]]:
+    """Publish a digest-bound attach/rebind proposal beneath ContextRoot."""
+    if roles.colocated:
+        raise ContextOSError("project attachment requires three distinct root roles")
+    root = roles.context_root
+    try:
+        resolution = resolve_workspace(root)
+        if resolution.source != "json" or not resolution.canonical:
+            raise AttachmentError(
+                "project attachment requires canonical contextos.workspace.json"
+            )
+        # Split ContextRoot is exact rather than a nested compatibility root.
+        git_evidence(root, max_commits=0)
+        _validate_project_binding_ignored(root)
+        project_id = validate_project_id(project_id)
+        manifest_relative = tracked_manifest_relative_path(project_id)
+        manifest_path = safe_repo_path(root, manifest_relative)
+        binding_path = root / PROJECT_BINDING_PATH
+        if rebind:
+            manifest = validate_tracked_manifest(read_json(manifest_path))
+            if manifest["project_id"] != project_id:
+                raise AttachmentError("tracked project id does not match --id")
+        else:
+            if manifest_path.exists() or manifest_path.is_symlink():
+                raise AttachmentError("tracked project identity already exists; use project rebind")
+            if binding_path.exists() or binding_path.is_symlink():
+                raise AttachmentError("local project binding already exists; use project rebind")
+            manifest = create_tracked_manifest(project_id, roles.working_root)
+        binding = create_local_binding(roles, manifest, bound_at=now.isoformat())
+    except (AttachmentError, OSError, UnicodeError) as exc:
+        raise ContextOSError(str(exc)) from exc
+    operation = PROJECT_REBIND_OPERATION if rebind else PROJECT_ATTACH_OPERATION
+    changes: list[dict[str, Any]] = []
+    if not rebind:
+        changes.append(
+            _agent_change(
+                root,
+                operation,
+                manifest_relative,
+                action="write",
+                after_text=_render_attachment_json(manifest),
+            )
+        )
+    changes.append(
+        _agent_change(
+            root,
+            operation,
+            PROJECT_BINDING_PATH,
+            action="write",
+            after_text=_render_attachment_json(binding),
+        )
+    )
+    authorization = {
+        "policy": "project-attachment-v1",
+        "project_id": project_id,
+        "root_roles": {
+            "kernel_root": str(roles.kernel_root),
+            "context_root": str(roles.context_root),
+            "working_root": str(roles.working_root),
+        },
+        "repository_identity": manifest["repository_identity"],
+        "nonexclusive_claim": True,
+        "working_root_access": "read-only",
+    }
+    source_hashes = (
+        {manifest_relative: raw_file_digest(manifest_path)} if rebind else {}
+    )
+    document: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "workflow": AGENT_LIFECYCLE_WORKFLOW,
+        "operation": operation,
+        "created_at": now.isoformat(),
+        "proposal_id": proposal_id(AGENT_LIFECYCLE_WORKFLOW, now, changes),
+        "changes": changes,
+        "authorization": authorization,
+        "source_hashes": source_hashes,
+        "source_git_head": git_head(root),
+        "invariants": list(PROJECT_ATTACHMENT_INVARIANTS),
+    }
+    document["proposal_digest"] = sha256_text(canonical_json(document))
+    proposal_path = root / ".context-os" / "proposals" / f"{document['proposal_id']}.json"
+    _write_exclusive_text(
+        proposal_path,
+        json.dumps(document, indent=2, ensure_ascii=False) + "\n",
+        root=root,
+    )
+    return proposal_path, document
+
+
 def _validate_change_path(workspace: Workspace, workflow: str, created_at: datetime, relative: str) -> None:
     parts = Path(relative).parts
     if not parts or parts[0] in {".git", ".context-os"}:
@@ -1602,6 +1921,139 @@ def _validate_change_path(workspace: Workspace, workflow: str, created_at: datet
         raise ContextOSError(f"{workflow} proposal cannot write path: {relative}")
 
 
+def _validate_project_proposal_shape(
+    root: Path, document: dict[str, Any]
+) -> tuple[str, datetime]:
+    operation = document.get("operation")
+    if operation not in PROJECT_OPERATIONS:
+        raise ContextOSError(f"unsupported project operation: {operation}")
+    resolution = resolve_workspace(root)
+    if resolution.source != "json" or not resolution.canonical:
+        raise ContextOSError(
+            "project attachment requires canonical contextos.workspace.json"
+        )
+    created_at = parse_now(ensure_text(document.get("created_at"), "created_at"))
+    authorization = document.get("authorization")
+    if not isinstance(authorization, dict):
+        raise ContextOSError("project attachment authorization must be an object")
+    try:
+        project_id = validate_project_id(authorization.get("project_id"))
+        manifest_relative = tracked_manifest_relative_path(project_id)
+    except AttachmentError as exc:
+        raise ContextOSError(f"invalid project identity: {exc}") from exc
+    expected_paths = (
+        [manifest_relative, PROJECT_BINDING_PATH]
+        if operation == PROJECT_ATTACH_OPERATION
+        else [PROJECT_BINDING_PATH]
+    )
+    changes = document.get("changes")
+    if not isinstance(changes, list) or [
+        change.get("path") if isinstance(change, dict) else None for change in changes
+    ] != expected_paths:
+        raise ContextOSError(f"{operation} has an invalid ordered path set")
+    expected_change_keys = {
+        "path", "action", "authorization", "before_raw_sha256", "before_mode",
+        "after_raw_sha256", "after_mode", "after_text", "diff",
+    }
+    parsed: dict[str, dict[str, Any]] = {}
+    for index, change in enumerate(changes):
+        if not isinstance(change, dict) or set(change) != expected_change_keys:
+            raise ContextOSError(f"project attachment changes[{index}] has an invalid shape")
+        relative = ensure_text(change.get("path"), f"changes[{index}].path")
+        if change.get("action") != "write":
+            raise ContextOSError(f"project attachment must write: {relative}")
+        expected_auth = _agent_lifecycle_authorization(root, operation, relative)
+        if change.get("authorization") != expected_auth:
+            raise ContextOSError(f"project attachment authorization mismatch: {relative}")
+        if (
+            operation == PROJECT_ATTACH_OPERATION
+            and relative in {manifest_relative, PROJECT_BINDING_PATH}
+            and (
+                change.get("before_raw_sha256") is not None
+                or change.get("before_mode") is not None
+            )
+        ):
+            target = (
+                "tracked project manifest"
+                if relative == manifest_relative
+                else "local binding"
+            )
+            raise ContextOSError(
+                f"project-attach must create a new {target}"
+            )
+        after_text = ensure_text(change.get("after_text"), f"changes[{index}].after_text")
+        if change.get("after_raw_sha256") != sha256_bytes(after_text.encode("utf-8")):
+            raise ContextOSError(f"invalid raw after hash: {relative}")
+        expected_mode = (
+            LOCAL_BINDING_MODE
+            if relative == PROJECT_BINDING_PATH
+            else change.get("before_mode")
+            if change.get("before_mode") is not None
+            else NEW_CONTENT_MODE
+        )
+        if change.get("after_mode") != expected_mode:
+            raise ContextOSError(f"invalid after mode: {relative}")
+        try:
+            value = strict_json_loads(after_text, source=relative)
+        except WorkspaceConfigError as exc:
+            raise ContextOSError(f"invalid attachment JSON: {exc}") from exc
+        if not isinstance(value, dict) or after_text != _render_attachment_json(value):
+            raise ContextOSError(f"attachment JSON must be canonical: {relative}")
+        parsed[relative] = value
+    try:
+        if operation == PROJECT_ATTACH_OPERATION:
+            manifest = validate_tracked_manifest(parsed[manifest_relative])
+        else:
+            manifest = validate_tracked_manifest(
+                read_json(safe_repo_path(root, manifest_relative))
+            )
+        roots_value = authorization.get("root_roles")
+        if not isinstance(roots_value, dict) or set(roots_value) != {
+            "kernel_root", "context_root", "working_root"
+        }:
+            raise AttachmentError("authorization.root_roles has an invalid shape")
+        roles = resolve_root_roles(
+            kernel_root=roots_value["kernel_root"],
+            context_root=roots_value["context_root"],
+            working_root=roots_value["working_root"],
+        )
+        expected_binding = create_local_binding(
+            roles, manifest, bound_at=created_at.isoformat()
+        )
+    except (AttachmentError, OSError, UnicodeError) as exc:
+        raise ContextOSError(f"invalid project attachment: {exc}") from exc
+    expected_authorization = {
+        "policy": "project-attachment-v1",
+        "project_id": project_id,
+        "root_roles": roots_value,
+        "repository_identity": manifest["repository_identity"],
+        "nonexclusive_claim": True,
+        "working_root_access": "read-only",
+    }
+    if authorization != expected_authorization:
+        raise ContextOSError("project attachment authorization evidence is invalid")
+    if parsed[PROJECT_BINDING_PATH] != expected_binding:
+        raise ContextOSError("project attachment binding content is invalid")
+    source_hashes = document.get("source_hashes")
+    expected_sources = (
+        {}
+        if operation == PROJECT_ATTACH_OPERATION
+        else {
+            manifest_relative: raw_file_digest(
+                safe_repo_path(root, manifest_relative)
+            )
+        }
+    )
+    if source_hashes != expected_sources:
+        raise ContextOSError("project attachment source hashes are stale or invalid")
+    source_git_head = document.get("source_git_head")
+    if source_git_head is not None and not isinstance(source_git_head, str):
+        raise ContextOSError("source_git_head must be a string or null")
+    if document.get("invariants") != PROJECT_ATTACHMENT_INVARIANTS:
+        raise ContextOSError("project attachment invariants are invalid")
+    return operation, created_at
+
+
 def _validate_agent_proposal_shape(
     root: Path, document: dict[str, Any]
 ) -> tuple[str, datetime]:
@@ -1625,6 +2077,8 @@ def _validate_agent_proposal_shape(
         from .materializer import validate_materialization_proposal_shape
 
         return validate_materialization_proposal_shape(root, document)
+    if operation in PROJECT_OPERATIONS:
+        return _validate_project_proposal_shape(root, document)
     if operation not in AGENT_SET_OPERATIONS:
         raise ContextOSError(f"unsupported agent lifecycle operation: {operation}")
     created_at = parse_now(ensure_text(document.get("created_at"), "created_at"))
@@ -1895,11 +2349,56 @@ def _validate_proposal_shape(
     return workflow_value, created_at
 
 
-def _validate_agent_preflight(root: Path, document: dict[str, Any]) -> None:
+def _validate_agent_preflight(
+    root: Path,
+    document: dict[str, Any],
+    *,
+    expected_roles: RootRoles | None = None,
+) -> None:
     if document.get("operation") == MATERIALIZE_OPERATION:
         from .materializer import validate_materialization_preflight
 
         validate_materialization_preflight(root, document)
+        return
+    if document.get("operation") in PROJECT_OPERATIONS:
+        _validate_project_binding_ignored(root)
+        if document.get("source_git_head") != git_head(root):
+            raise ContextOSError("refusing stale project proposal; ContextRoot Git HEAD changed")
+        authorization = document["authorization"]
+        root_values = authorization["root_roles"]
+        try:
+            proposed_roles = resolve_root_roles(
+                kernel_root=root_values["kernel_root"],
+                context_root=root_values["context_root"],
+                working_root=root_values["working_root"],
+            )
+        except AttachmentError as exc:
+            raise ContextOSError(f"invalid project root roles: {exc}") from exc
+        if proposed_roles.context_root != root.resolve():
+            raise ContextOSError("project proposal ContextRoot does not match apply root")
+        if expected_roles is not None and proposed_roles != expected_roles:
+            raise ContextOSError("project proposal root roles do not match explicit apply roles")
+        for change in document["changes"]:
+            relative = change["path"]
+            path = _transaction_target(root, relative, document["operation"])
+            if raw_file_digest(path) != change["before_raw_sha256"]:
+                raise ContextOSError(f"refusing stale project proposal; target changed: {relative}")
+            current_mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else None
+            if current_mode != change["before_mode"]:
+                raise ContextOSError(f"refusing stale project proposal; target mode changed: {relative}")
+            expected = _agent_change(
+                root,
+                document["operation"],
+                relative,
+                action="write",
+                after_text=change["after_text"],
+            )
+            for field in ("after_raw_sha256", "after_mode", "diff"):
+                if change[field] != expected[field]:
+                    raise ContextOSError(f"project proposal {field} is invalid: {relative}")
+        for relative, expected_digest in document["source_hashes"].items():
+            if raw_file_digest(safe_repo_path(root, relative)) != expected_digest:
+                raise ContextOSError(f"refusing stale project proposal; source changed: {relative}")
         return
     if document.get("source_git_head") != git_head(root):
         raise ContextOSError("refusing stale agent-config proposal; git HEAD changed")
@@ -2384,6 +2883,17 @@ def _recover_agent_journal(
                 raise ContextOSError(
                     f"invalid materialization transaction evidence: {journal}"
                 )
+        elif manifest.get("operation") in PROJECT_OPERATIONS:
+            authorization = evidence["authorization"]
+            if (
+                manifest.get("invariants") != PROJECT_ATTACHMENT_INVARIANTS
+                or authorization.get("policy") != "project-attachment-v1"
+                or authorization.get("working_root_access") != "read-only"
+                or authorization.get("nonexclusive_claim") is not True
+            ):
+                raise ContextOSError(
+                    f"invalid project attachment transaction evidence: {journal}"
+                )
         elif manifest.get("invariants") != AGENT_MIGRATION_INVARIANTS:
             raise ContextOSError(f"invalid agent transaction evidence: {journal}")
     else:
@@ -2470,6 +2980,25 @@ def _recover_agent_journal(
                 if len(recovery_policy) != len(raw_policy):
                     raise ContextOSError(
                         f"invalid materialization recovery policy: {journal}"
+                    )
+            elif manifest.get("operation") in PROJECT_OPERATIONS:
+                project_id = manifest["agent_evidence"]["authorization"].get(
+                    "project_id"
+                )
+                try:
+                    project_path = tracked_manifest_relative_path(project_id)
+                except AttachmentError as exc:
+                    raise ContextOSError(
+                        f"invalid project attachment recovery identity: {journal}"
+                    ) from exc
+                recovery_policy = {
+                    PROJECT_BINDING_PATH: (
+                        "write", "context-root-local-state", "ignored-machine-local"
+                    ),
+                }
+                if manifest.get("operation") == PROJECT_ATTACH_OPERATION:
+                    recovery_policy[project_path] = (
+                        "write", "context-root-tracked-state", "tracked-portable"
                     )
             else:
                 recovery_policy = {
@@ -3264,10 +3793,23 @@ def _restore_transaction_target(
     )
 
 
-def apply_proposal(root: Path, proposal: Path, confirmation: str, runtime: str) -> tuple[Path, dict[str, Any]]:
+def apply_proposal(
+    root: Path,
+    proposal: Path,
+    confirmation: str,
+    runtime: str,
+    *,
+    roles: RootRoles | None = None,
+) -> tuple[Path, dict[str, Any]]:
     _guard_local_artifact_path(root, proposal)
     document = read_json(proposal)
     is_agent_workflow = document.get("workflow") == AGENT_LIFECYCLE_WORKFLOW
+    if document.get("operation") in PROJECT_OPERATIONS and (
+        roles is None or roles.colocated
+    ):
+        raise ContextOSError(
+            "project attachment apply requires explicit split root roles"
+        )
     if is_agent_workflow:
         workflow = AGENT_LIFECYCLE_WORKFLOW
     else:
@@ -3279,7 +3821,8 @@ def apply_proposal(root: Path, proposal: Path, confirmation: str, runtime: str) 
         raise ContextOSError(
             "generic runtime is reserved for agent-config and materialization proposals"
         )
-    validate_execution_runtime(root, runtime)
+    product_root = roles.kernel_root if roles is not None else root
+    validate_execution_runtime(product_root, runtime)
     prepared_materialization_payloads: dict[str, bytes] | None = None
     with transaction_lock(root):
         # A completed crash journal has priority over every later lifecycle
@@ -3305,7 +3848,7 @@ def apply_proposal(root: Path, proposal: Path, confirmation: str, runtime: str) 
                 workflow = AGENT_LIFECYCLE_WORKFLOW
             else:
                 workflow, _ = _validate_proposal_shape(root, proposal, document)
-                _validate_agent_preflight(root, document)
+                _validate_agent_preflight(root, document, expected_roles=roles)
         else:
             workflow, created_at = _validate_proposal_shape(root, proposal, document)
             for change in document.get("changes", []):
@@ -3538,6 +4081,19 @@ def apply_proposal(root: Path, proposal: Path, confirmation: str, runtime: str) 
                     else _content_invariants(workflow, document["changes"])
                 ),
             }
+            if roles is not None and not roles.colocated:
+                manifest, _ = load_project_attachment(roles)
+                receipt["root_roles"] = {
+                    "kernel_root": str(roles.kernel_root),
+                    "context_root": str(roles.context_root),
+                    "working_root": str(roles.working_root),
+                }
+                receipt["context_git_head_before"] = head_before
+                receipt["context_git_head_after"] = git_head(root)
+                receipt["working_repository"] = git_evidence(
+                    roles.working_root,
+                    identity=manifest["repository_identity"],
+                )
             if workflow == AGENT_LIFECYCLE_WORKFLOW:
                 receipt.update({
                     "workflow": workflow,
@@ -3879,12 +4435,14 @@ def _initialization_next_action(
     return SETUP_NEXT_ACTION
 
 
-def start_report(root: Path, now: datetime) -> dict[str, Any]:
+def start_report(
+    root: Path, now: datetime, *, roles: RootRoles | None = None
+) -> dict[str, Any]:
     root = root.resolve()
     workspace = load_workspace(root)
     initialized, files = _initialization_state(workspace, now.date())
     sessions = sorted(workspace.sessions_dir.glob("????-??-??.md"), reverse=True) if workspace.sessions_dir.exists() else []
-    return {
+    report = {
         "schema_version": SCHEMA_VERSION,
         "generated_at": now.isoformat(),
         "initialized": initialized,
@@ -3896,6 +4454,27 @@ def start_report(root: Path, now: datetime) -> dict[str, Any]:
         "task_file": relative_path(root, workspace.task_file),
         "git_head": git_head(root),
     }
+    if roles is not None and not roles.colocated:
+        manifest, _ = load_project_attachment(roles)
+        try:
+            context_repository = git_evidence(root)
+            working_repository = git_evidence(
+                roles.working_root,
+                identity=manifest["repository_identity"],
+            )
+        except AttachmentError as exc:
+            raise ContextOSError(f"cannot collect split-root Git evidence: {exc}") from exc
+        report.update({
+            "root_roles": {
+                "kernel_root": str(roles.kernel_root),
+                "context_root": str(roles.context_root),
+                "working_root": str(roles.working_root),
+            },
+            "project": manifest,
+            "context_repository": context_repository,
+            "working_repository": working_repository,
+        })
+    return report
 
 
 def _guard_local_state_path(root: Path, path: Path) -> Path:
@@ -4198,6 +4777,14 @@ def doctor(
     workspace_source = "invalid"
     configured_agents: tuple[str, ...] | None = None
     workspace_valid = False
+    workspace_resolution: WorkspaceResolution | None = None
+    composition_report: dict[str, Any] = {
+        "status": "unknown",
+        "desired_components": [],
+        "installed_components": None,
+        "missing_components": [],
+        "extra_components": [],
+    }
     try:
         workspace_resolution = resolve_workspace(root)
         workspace = workspace_resolution.workspace
@@ -4448,6 +5035,100 @@ def doctor(
         add("component-inventory", "pass", "structurally valid")
     except (ContextOSError, ComponentManifestError, OSError, UnicodeError) as exc:
         add("component-inventory", "fail", str(exc))
+
+    if (
+        workspace_valid
+        and workspace_resolution is not None
+        and workspace_resolution.config is not None
+        and component_inventory is not None
+    ):
+        workspace_config = workspace_resolution.config
+        if workspace_config["schema_version"] == LEGACY_WORKSPACE_SCHEMA_VERSION:
+            composition_report["status"] = "legacy-undeclared"
+            add(
+                "desired-installed-components",
+                "warn",
+                "schema v1 does not declare reconstructable desired component closure",
+            )
+        else:
+            try:
+                selected_runtimes = {
+                    runtime_id: runtime_manifest(root, runtime_id, check_paths=False)
+                    for runtime_id in workspace_config["agents"]
+                }
+                desired = desired_component_closure(
+                    workspace_config, component_inventory, selected_runtimes
+                )
+                composition_report["desired_components"] = desired
+                installed_path = root / ".context-os" / "installed-bundle.json"
+                _guard_local_artifact_path(root, installed_path)
+                if not installed_path.exists():
+                    composition_report["status"] = "not-installed"
+                    composition_report["missing_components"] = desired
+                    add(
+                        "desired-installed-components",
+                        "warn",
+                        f"installed state absent; {len(desired)} desired component(s) require reconcile",
+                    )
+                else:
+                    installed_bytes, _metadata = read_regular_file_snapshot(
+                        installed_path, subject="installed bundle state"
+                    )
+                    installed = validate_installed_state(
+                        strict_json_loads(
+                            installed_bytes.decode("utf-8"),
+                            source=".context-os/installed-bundle.json",
+                        )
+                    )
+                    actual = installed["components"]
+                    missing = [item for item in desired if item not in set(actual)]
+                    extra = [item for item in actual if item not in set(desired)]
+                    expected_bundle = {
+                        "name": workspace_config["template"]["source"],
+                        "version": workspace_config["template"]["version"],
+                        "sha256": workspace_config["template"]["bundle_sha256"],
+                    }
+                    actual_bundle = {
+                        key: installed["bundle"][key]
+                        for key in ("name", "version", "sha256")
+                    }
+                    bundle_matches = actual_bundle == expected_bundle
+                    matches = not missing and not extra and bundle_matches
+                    composition_report.update(
+                        {
+                            "status": "current" if matches else "drifted",
+                            "installed_components": actual,
+                            "missing_components": missing,
+                            "extra_components": extra,
+                            "desired_bundle": expected_bundle,
+                            "installed_bundle": actual_bundle,
+                        }
+                    )
+                    detail_parts = []
+                    if missing:
+                        detail_parts.append("missing: " + ", ".join(missing))
+                    if extra:
+                        detail_parts.append("extra: " + ", ".join(extra))
+                    if not bundle_matches:
+                        detail_parts.append("installed bundle identity differs from desired pin")
+                    add(
+                        "desired-installed-components",
+                        "pass" if matches else "fail",
+                        "desired closure is installed" if matches else "; ".join(detail_parts),
+                    )
+            except (
+                ComponentManifestError,
+                ContextOSError,
+                InstalledStateError,
+                OSError,
+                SnapshotError,
+                UnicodeError,
+                WorkspaceCompositionError,
+                WorkspaceConfigError,
+            ) as exc:
+                composition_report["status"] = "invalid"
+                composition_report["detail"] = str(exc)
+                add("desired-installed-components", "fail", str(exc))
 
     if scope == "profile" and not validation_ids and component_inventory is not None:
         try:
@@ -5035,6 +5716,7 @@ def doctor(
             "configured_agents": (
                 list(configured_agents) if configured_agents is not None else None
             ),
+            "composition": composition_report,
         },
         "runtimes": runtime_reports,
         "checks": checks,
@@ -5068,8 +5750,12 @@ def hook_report(
     payload: dict[str, Any],
     *,
     today: date | None = None,
+    roles: RootRoles | None = None,
 ) -> dict[str, Any]:
     root = root.resolve()
+    split = roles is not None and not roles.colocated
+    if split:
+        load_project_attachment(roles)
     findings: list[dict[str, str]] = []
     workspace = load_workspace(root)
     if event == "session-start":
@@ -5104,7 +5790,10 @@ def hook_report(
                 except ValueError:
                     continue
             else:
-                normalized_targets.add(Path(target.removeprefix("./")).as_posix())
+                # Relative tool paths belong to WorkingRoot in split mode.  They
+                # are not aliases for protected ContextRoot lifecycle paths.
+                if not split:
+                    normalized_targets.add(Path(target.removeprefix("./")).as_posix())
         for path, message in protected.items():
             if path in normalized_targets:
                 findings.append({"severity": "advisory", "message": message})

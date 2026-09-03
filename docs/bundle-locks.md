@@ -29,20 +29,20 @@ Generation refuses staged differences from `HEAD`:
 bash scripts/contextos.sh bundle generate \
   --source . \
   --name agent-context-os-template \
-  --bundle-version 0.12.0
+  --bundle-version 0.13.1
 ```
 
 Generation prints JSON and does not write a lock. It rejects unclassified or
 owned-but-untracked index paths. Release automation can publish the printed lock
 beside an archive of the recorded commit.
 
-## v0.12 release artifact contract
+## Release artifact and composition contract
 
-The supported v0.12 distribution is the full-template, full-component closure.
-Although the low-level planner accepts explicit component closures for
-conformance and future composition work, workspace schema v1 cannot persist a
-desired slim closure. Guided slim installation and reconciliation wait for
-workspace schema v2.
+One detached release bundle can materialize either the explicit
+`full-template` compatibility profile or a schema-v2 selected closure. The
+tracked workspace document, rather than a second component CLI list, is the
+authority for v2 desired composition. Runtime-required components are derived;
+only optional roots are stored in `composition.extras`.
 
 The maintainer procedure is [`release-process.md`](release-process.md). Its
 canonical Linux build reads exact bytes from a clean Git index at the reviewed
@@ -154,31 +154,41 @@ loop payload, which remains live until the next generator result is unpacked;
 it may double-count requested or schema payloads. Text decoding and LF
 normalization, directory-source snapshot assembly, parsed JSON objects, lock
 and plan metadata, filesystem snapshots, and interpreter overhead are outside
-this raw-buffer metric. Proposal planning requests no bundle payload retention.
-Apply retains only candidate bundle payloads referenced by write changes; those
-verified bytes are released when transaction staging completes.
+this raw-buffer metric. Full-template proposal planning requests no bundle
+payload retention. Selected-profile planning performs a separate streaming
+verification that retains only Markdown paths in the selected component closure
+while it computes closure-aware projections. Its bound uses the same formula
+with those selected Markdown paths as the requested set. During selected apply,
+the outer verified candidate still holds bundle-backed write payloads while the
+separate projection verification runs. The concurrent logical peak and bound
+therefore add those outer retained bytes to the larger candidate/current
+projection verification metric; overlapping paths may occupy both buffers.
+Candidate write payloads are released when transaction staging completes.
 
-Maintainers can report the current full-component compose and upgrade bounds on
-Linux or Windows with:
+Maintainers can report the current full-template and selected-profile compose
+and upgrade bounds on Linux or Windows with:
 
 ```bash
 python scripts/measure-bundle-materialization.py --check
 ```
 
 The JSON report includes Git subprocess counts, elapsed wall time, the logical
-payload peak and bound, observed staging-payload retention, and Python's traced
-allocation peak. The upgrade measurement changes one managed bundle path so
-its retained-payload observation is nonzero. CI checks process batching and
-exact subprocess counts on
-both platforms, but records time and memory without platform-sensitive
+payload peak and bound, observed staging-payload retention, projection Markdown
+path counts, and Python's traced allocation peak. The upgrade measurements
+change one managed bundle path so their retained-payload observations are
+nonzero. CI checks process batching and exact subprocess counts for all four
+flows on both platforms, but records time and memory without platform-sensitive
 thresholds because shared-runner measurements are not stable correctness
-signals. Exact subset-retention tests enforce the payload policy separately.
+signals. Selected metrics also report the concurrent apply peak and bound.
+Exact subset-retention tests enforce the payload policy separately, including
+exclusion of omitted-component Markdown.
 
-## Developer substrate: materializing a clean workspace
+## Low-level materializer interface
 
-The following component-subset interfaces exercise the materializer and future
-composition boundary. They do not create a supported v0.12 slim-workspace
-profile; release-grade v0.12 installs use the full component closure.
+The explicit component-subset interfaces remain available for conformance and
+schema-v1 migration compatibility. Normal schema-v2 users should use the
+guided `workspace init`, `workspace update`, and `workspace reconcile`
+commands, which derive and display the closure from tracked intent.
 
 Prepare a canonical workspace JSON file whose template name and version match
 the pinned candidate. The target directory must already exist, but its tracked
@@ -262,8 +272,8 @@ and plan digest without making local installation state tracked content.
 Protocol version 1 also fixes three boundaries for that materializer:
 
 - after any interrupted write, journal recovery must restore the pre-plan state
-  before another plan is requested; the planner does not adopt ahead-of-lock
-  files;
+  before another plan is requested; a clean clone may adopt only files whose
+  exact bytes and modes already match the pinned candidate bundle;
 - component ownership and managed/seed policy are immutable between ordinary
   upgrades; changing either requires a future signed migration contract and
   protocol version; and

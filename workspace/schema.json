@@ -1,22 +1,19 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Generated structural subset. contextos.workspace_schema is authoritative for runtime-registry membership, portable path safety, semantic set uniqueness, role collisions, and canonical rendering.",
+  "$comment": "Generated structural subset. contextos.workspace_schema is authoritative for runtime/component-registry membership, portable path safety, semantic set uniqueness, role collisions, and canonical rendering. Schema-v1 documents are accepted only as migration inputs.",
   "title": "Context OS tracked workspace configuration",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
-    "mode",
     "agents",
+    "composition",
     "paths",
     "template"
   ],
   "properties": {
     "schema_version": {
-      "const": 1
-    },
-    "mode": {
-      "const": "full-template"
+      "const": 2
     },
     "agents": {
       "type": "array",
@@ -25,6 +22,48 @@
         "type": "string",
         "pattern": "^[a-z][a-z0-9-]*$"
       }
+    },
+    "composition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "extras"
+      ],
+      "properties": {
+        "profile": {
+          "enum": [
+            "full-template",
+            "selected"
+          ]
+        },
+        "extras": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "profile": {
+                "const": "full-template"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "extras": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
     },
     "paths": {
       "type": "object",
@@ -57,7 +96,8 @@
       "additionalProperties": false,
       "required": [
         "version",
-        "source"
+        "source",
+        "bundle_sha256"
       ],
       "properties": {
         "version": {
@@ -69,6 +109,10 @@
           "type": "string",
           "minLength": 1,
           "pattern": "^(?!\\s)(?:[^\\u0000-\\u001f\\u007f]*\\S)$"
+        },
+        "bundle_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
         }
       }
     }
