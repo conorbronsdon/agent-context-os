@@ -8,7 +8,7 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [Agent Skills](https://github.com/conorbronsdon/agent-skills) | `skill_catalog` | verified | Yes | No | No | No | Yes | 2026-08-15 |
 | [Agent Workspace](https://github.com/conorbronsdon/agent-workspace) | `workspace_template` | verified | Yes | No | No | No | Yes | 2026-08-15 |
 | [AI Tools for Creators](https://github.com/conorbronsdon/ai-tools-for-creators) | `resource_catalog` | listed | No | No | No | No | No | 2026-08-15 |
-| [Asana MCP](https://developers.asana.com/docs/mcp-server) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-30 |
+| [Asana MCP](https://developers.asana.com/docs/mcp-server) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-09-03 |
 | [Beads for Gemini CLI](https://beads.gascity.com/integrations/gemini) | `agent_extension` | verified | Yes | Yes | No | No | Yes | 2026-08-15 |
 | [GitHub MCP](https://github.com/github/github-mcp-server) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-18 |
 | [Google Workspace CLI](https://github.com/googleworkspace/cli) | `connector` | verified | Yes | Yes | No | Yes | Yes | 2026-08-15 |
@@ -99,22 +99,24 @@ Asana's official hosted V2 MCP server for tasks, projects, portfolios, and statu
 
 - **Supported agents:** `claude_code`, `codex`, `cursor`, `generic`
 - **Install scope:** `project_or_user`; never automatic
-- **Prerequisites:** An Asana account and workspace; An MCP client supporting remote Streamable HTTP and browser OAuth; An authorized Asana workspace
+- **Prerequisites:** An Asana account and workspace; An MCP client supporting remote Streamable HTTP and browser OAuth; A pre-registered Asana MCP app with a client ID and client secret; A redirect URL matching exactly between the Asana app settings and the client configuration; dynamic client registration is not supported; An authorized Asana workspace
 - **Credentials:** OAuth 2.0 token managed by the MCP client for the authorized Asana workspace
 - **Reads:** Sensitive Asana workspace identity, teams, projects, tasks, subtasks, custom fields, comments, stories, portfolios, and status updates
-- **Writes / external effects:** Remote creation and updates of tasks, subtasks, projects, comments, and project status updates in the authorized workspace; Overwrite-capable updates to existing task descriptions, assignees, due dates, custom fields, and project statuses; Permanent task and resource deletion methods exposed by the write-capable server
+- **Writes / external effects:** Remote creation of tasks, subtasks, projects, comments, and project status updates in the authorized workspace; Updates are limited to tasks: the tool list has update\_tasks but no project-update counterpart, add\_comment has no edit tool, and a status update is a creation (create\_project\_status\_update) rather than an edit; Overwrite-capable updates to existing task descriptions, assignees, due dates, and custom fields; Permanent deletion is delete\_task only, documented as deleting a task and any of its subtasks that are not also members of another project -- subtasks shared with another project survive
 - **Typed safety signals:** sensitive read, remote write, overwrite, delete, oauth
 - **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `overwrite`, `delete`, `oauth`, `destructive`
 - **Confirmation:** Confirm the target Asana workspace before reading sensitive project state; show exact task title, fields, and proposed changes or deletions before executing writes.
 - **Risk tags:** `credentials`, `hosted`, `project-management`, `sensitive-read`, `remote-write`, `overwrite-capable`, `delete-capable`, `oauth`, `destructive-capable`, `prompt-injection`
-- **Evidence:** [1](https://developers.asana.com/docs/mcp-server); [2](https://developers.asana.com/docs/connecting-mcp-clients-to-asanas-v2-server)
+- **Evidence:** [1](https://developers.asana.com/docs/mcp-server); [2](https://developers.asana.com/docs/connecting-mcp-clients-to-asanas-v2-server); [3](https://developers.asana.com/docs/mcp-tools-reference)
 - **Health check:** Connect to the Asana V2 MCP endpoint, verify authorized workspace and user identity, then fetch one explicitly named project or task without writing or modifying fields.
 - **Uninstall:** Remove the Asana MCP entry from the client and revoke the authorized application connection in Asana account settings; preserve all workspace, project, and task data. (removes user data: No)
 
 Capabilities and limits:
 
-- Start with read-only task and project inspection; no server-side read-only OAuth scope is currently provided by Asana
-- The server exposes full task and project creation, updates, and permanent deletion tools
+- Recommended: start with read-only task and project inspection; no server-side read-only OAuth scope is currently provided by Asana
+- MCP apps do not take scopes: one authorization may access any available tool, including tools added to the server in the future, with no tool-level narrowing
+- The effective controls are therefore client-side confirmation plus the authenticated user's own Asana permissions -- access is limited to the workspaces, projects, and tasks that user already has
+- The server exposes task and project creation, task updates, and permanent task deletion
 - Require exact payload and target confirmation client-side before any write, status update, or deletion
 
 ## Beads for Gemini CLI
