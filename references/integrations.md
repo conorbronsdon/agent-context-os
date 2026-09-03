@@ -8,6 +8,7 @@ These add-ons are **references, not bundled dependencies**. Setup does not insta
 | [Agent Skills](https://github.com/conorbronsdon/agent-skills) | `skill_catalog` | verified | Yes | No | No | No | Yes | 2026-08-15 |
 | [Agent Workspace](https://github.com/conorbronsdon/agent-workspace) | `workspace_template` | verified | Yes | No | No | No | Yes | 2026-08-15 |
 | [AI Tools for Creators](https://github.com/conorbronsdon/ai-tools-for-creators) | `resource_catalog` | listed | No | No | No | No | No | 2026-08-15 |
+| [Asana MCP](https://developers.asana.com/docs/mcp-server) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-09-03 |
 | [Atlassian Rovo MCP](https://support.atlassian.com/atlassian-ai-gateway/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-09-03 |
 | [Beads for Gemini CLI](https://beads.gascity.com/integrations/gemini) | `agent_extension` | verified | Yes | Yes | No | No | Yes | 2026-08-15 |
 | [GitHub MCP](https://github.com/github/github-mcp-server) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-18 |
@@ -95,6 +96,34 @@ A discovery catalog for creator skills, MCP servers, benchmarks, and publishing 
 Capabilities and limits:
 
 - Discovery links only; every linked tool needs separate review
+
+## Asana MCP
+
+Asana's official hosted V2 MCP server for tasks, projects, portfolios, and status updates with OAuth 2.0 and write/delete capabilities.
+
+- **Supported agents:** `claude_code`, `codex`, `cursor`, `generic`
+- **Install scope:** `project_or_user`; never automatic
+- **Prerequisites:** An Asana account and workspace; An MCP client supporting remote Streamable HTTP and browser OAuth; A pre-registered Asana MCP app with a client ID and client secret; A redirect URL matching exactly between the Asana app settings and the client configuration; dynamic client registration is not supported; An authorized Asana workspace
+- **Credentials:** OAuth 2.0 token managed by the MCP client for the authorized Asana workspace; tokens issued for MCP apps are valid only for the MCP server, not the Asana REST API; The registered app's client secret, which coding clients store locally (keychain or a credentials file) and must be kept out of repositories
+- **Reads:** Sensitive Asana workspace identity, teams, projects, sections, tasks, subtasks, dependencies, custom fields, comments, portfolios, goals, and status updates; The workspace user directory: get\_users and get\_user return names, email addresses, and workspace memberships; Attachment metadata with download and view URLs for tasks, projects, and project briefs; AI Teammate agent records, including behavior guidance; Full-text task search across names, descriptions, and comments (Premium workspaces)
+- **Writes / external effects:** Remote creation of tasks, subtasks, projects, comments, and project or portfolio status updates in the authorized workspace; create\_tasks and create\_project create immediately, without a confirmation step, up to 50 tasks per call; Updates are limited to tasks: update\_tasks (up to 50 per call) has no project-update counterpart, add\_comment has no edit tool, and a status update is a creation (create\_project\_status\_update) rather than an edit; Overwrite-capable task updates to name, description, assignee, due and start dates, completion status, parent, dependencies and dependents, project membership, followers, and custom fields; Permanent deletion is delete\_task only, documented as deleting a task and any of its subtasks that are not also members of another project -- subtasks shared with another project survive
+- **Typed safety signals:** sensitive read, remote write, overwrite, delete, oauth
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `overwrite`, `delete`, `oauth`, `destructive`
+- **Confirmation:** Confirm the target Asana workspace before reading sensitive project state; show exact task title, fields, and proposed changes or deletions before executing writes.
+- **Risk tags:** `credentials`, `hosted`, `project-management`, `sensitive-read`, `remote-write`, `overwrite-capable`, `delete-capable`, `oauth`, `destructive-capable`, `dynamic-api-surface`, `prompt-injection`
+- **Evidence:** [1](https://developers.asana.com/docs/mcp-server); [2](https://developers.asana.com/docs/connecting-mcp-clients-to-asanas-v2-server); [3](https://developers.asana.com/docs/integrating-with-asanas-mcp-server); [4](https://developers.asana.com/docs/mcp-tools-reference)
+- **Health check:** Connect to the Asana V2 MCP endpoint, verify authorized workspace and user identity, then fetch one explicitly named project or task without writing or modifying fields.
+- **Uninstall:** Remove the Asana MCP entry from the client, delete the locally stored client secret, and revoke the authorized application connection in Asana account settings; preserve all workspace, project, and task data. (removes user data: No)
+
+Capabilities and limits:
+
+- Recommended: start with read-only task and project inspection; no server-side read-only OAuth scope is currently provided by Asana
+- MCP apps do not take scopes: one authorization may access any available tool, including tools added to the server in the future, with no tool-level narrowing
+- The effective controls are therefore client-side confirmation plus the authenticated user's own Asana permissions -- access is limited to the workspaces, projects, and tasks that user already has
+- Tokens are workspace-scoped: each session is bound to the workspace chosen at authorization, and other workspaces need separate sessions
+- The preview tools that render a confirmation UI (create\_task\_preview, create\_project\_preview, search\_tasks\_preview) are available only in Claude and ChatGPT; other clients call the standard write tools directly
+- The server exposes task and project creation, task updates, and permanent task deletion
+- Require exact payload and target confirmation client-side before any write, status update, or deletion
 
 ## Atlassian Rovo MCP
 
