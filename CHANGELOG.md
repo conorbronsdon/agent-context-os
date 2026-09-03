@@ -4,6 +4,8 @@
 
 ### Added
 - `asana-mcp` integration catalog entry for Asana's official hosted V2 MCP server with pre-registered OAuth 2.0 clients, an all-tools authorization model, and explicit write/delete confirmation boundaries (#48).
+- `atlassian-rovo-mcp` integration catalog entry for Atlassian's official hosted Rovo MCP v2 server, covering every documented permission group from Jira and Confluence through Bitbucket Cloud, Loom, and Talent, with OAuth 2.1 and API-token credential boundaries (#47).
+- `todoist-cli` integration catalog entry for Doist's official CLI with a read-only OAuth login mode, opt-in app-management, backups, and billing scopes, and multi-agent skill support (#51).
 
 ---
 

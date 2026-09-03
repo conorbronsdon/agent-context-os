@@ -27,6 +27,8 @@ Nothing in this guide installs, activates, authenticates, or grants permissions 
 | Plan or update Shortcut stories, epics, and iterations | [Shortcut MCP](../references/integrations.md#shortcut-mcp) | Workspace-wide sensitive reads and overwrite-capable story or doc updates |
 | Search Slack conversations or post messages | [Slack MCP](../references/integrations.md#slack-mcp) | Sensitive conversation reads and publicly visible message sends |
 | Inspect GitLab repositories, merge requests, or pipelines | [GitLab MCP](../references/integrations.md#gitlab-mcp) | Private-repository reads, public comments, branch writes, and CI/CD pipeline actions |
+| Manage Todoist tasks and projects from the command line | [Todoist CLI](../references/integrations.md#todoist-cli) | Sensitive personal-task reads, per-resource deletion, and a write-capable CLI whose opt-in scopes reach app secrets, backups and billing |
+| Work with Jira, Confluence, Jira Service Management, Bitbucket Cloud, or other Atlassian apps | [Atlassian Rovo MCP](../references/integrations.md#atlassian-rovo-mcp) | Organization-wide sensitive reads, overwrite-capable content updates, public-link and permission changes, pull-request merges and pipeline runs, and permanent Jira deletion |
 | Read or update Asana tasks, projects, and portfolios | [Asana MCP](../references/integrations.md#asana-mcp) | Workspace-wide sensitive reads, overwrite-capable task updates, and deletion |
 
 The obsolete checked-in `gws mcp` configuration was removed. The current Google Workspace path uses the reviewed CLI setup in [`references/google-workspace-cli-setup.md`](../references/google-workspace-cli-setup.md); it is still opt-in and is not pre-approved by the command adapters.
