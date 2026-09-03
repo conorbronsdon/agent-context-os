@@ -675,15 +675,28 @@ class CoordinationTests(unittest.TestCase):
         )
 
         cursor = self.base / "cursors" / "codex.json"
-        first = sync_board(
-            self.repo_a,
-            runtime="codex",
-            role="publisher",
-            run_id="run-7",
-            cursor_file=cursor,
-            roles=["researcher", "publisher"],
-            now=NOW + timedelta(minutes=1),
-        )
+        with mock.patch.object(
+            coordination.time,
+            "perf_counter",
+            side_effect=[
+                100.0,
+                100.010,
+                100.020,
+                100.040,
+                100.050,
+                100.055,
+                100.125,
+            ],
+        ):
+            first = sync_board(
+                self.repo_a,
+                runtime="codex",
+                role="publisher",
+                run_id="run-7",
+                cursor_file=cursor,
+                roles=["researcher", "publisher"],
+                now=NOW + timedelta(minutes=1),
+            )
         self.assertEqual(
             [message["body"] for message in first["messages"]],
             ["All body", "Role body", "Run body"],
@@ -704,6 +717,57 @@ class CoordinationTests(unittest.TestCase):
             json.loads(cursor.read_text(encoding="utf-8")),
             {"last_seen": first["commit"]},
         )
+        self.assertEqual(
+            {
+                key: first["scan"][key]
+                for key in (
+                    "message_commits_after_cursor_scanned",
+                    "active_message_files",
+                    "candidate_message_files",
+                    "message_files_read",
+                    "active_claim_files",
+                    "claim_files_read",
+                    "messages_surfaced",
+                    "claims_surfaced",
+                )
+            },
+            {
+                "message_commits_after_cursor_scanned": 7,
+                "active_message_files": 6,
+                "candidate_message_files": 6,
+                "message_files_read": 6,
+                "active_claim_files": 0,
+                "claim_files_read": 0,
+                "messages_surfaced": 3,
+                "claims_surfaced": 0,
+            },
+        )
+        self.assertEqual(first["scan"]["cursor_mode"], "cold")
+        self.assertEqual(first["scan"]["fetch_elapsed_ms"], 10.0)
+        self.assertEqual(first["scan"]["message_scan_elapsed_ms"], 20.0)
+        self.assertEqual(first["scan"]["claim_scan_elapsed_ms"], 5.0)
+        self.assertEqual(first["scan"]["elapsed_ms"], 125.0)
+        self.assertGreater(first["scan"]["message_bytes_read"], 0)
+        self.assertEqual(
+            first["scan"]["bytes_read"],
+            first["scan"]["message_bytes_read"],
+        )
+        self.assertGreater(first["scan"]["surfaced_bytes"], 0)
+        self.assertEqual(
+            first["scan"]["surfaced_bytes"],
+            first["scan"]["message_surfaced_bytes"]
+            + first["scan"]["claim_surfaced_bytes"],
+        )
+        self.assertIsInstance(first["scan"]["read_amplification_ratio"], float)
+        metrics_text = json.dumps(first["scan"], sort_keys=True)
+        for private_value in (
+            "All body",
+            "Role body",
+            "Run body",
+            "Other role body",
+            "Typo audience body",
+        ):
+            self.assertNotIn(private_value, metrics_text)
 
         post_message(
             self.repo_a,
@@ -728,6 +792,87 @@ class CoordinationTests(unittest.TestCase):
             ["Newer body"],
         )
         self.assertEqual(second["previous_cursor"], first["commit"])
+        self.assertEqual(second["scan"]["cursor_mode"], "incremental")
+        self.assertEqual(second["scan"]["message_commits_after_cursor_scanned"], 1)
+        self.assertEqual(second["scan"]["active_message_files"], 7)
+        self.assertEqual(second["scan"]["candidate_message_files"], 1)
+        self.assertEqual(second["scan"]["message_files_read"], 1)
+        self.assertEqual(second["scan"]["messages_surfaced"], 1)
+        self.assertEqual(second["scan"]["claim_history_commits_scanned"], 0)
+
+        current = sync_board(
+            self.repo_a,
+            runtime="codex",
+            role="publisher",
+            run_id="run-7",
+            cursor_file=cursor,
+            roles=["researcher", "publisher"],
+            now=NOW + timedelta(minutes=4),
+        )
+        self.assertEqual(current["previous_cursor"], second["commit"])
+        self.assertEqual(current["scan"]["cursor_mode"], "current")
+        self.assertEqual(current["scan"]["message_commits_after_cursor_scanned"], 0)
+        self.assertEqual(current["scan"]["candidate_message_files"], 0)
+        self.assertEqual(current["scan"]["message_files_read"], 0)
+        self.assertEqual(current["messages"], [])
+
+    def test_sync_metrics_cover_unavailable_recovery_and_malformed_data(self) -> None:
+        cursor = self.base / "metrics-cursor.json"
+        with mock.patch.object(
+            coordination.time,
+            "perf_counter",
+            side_effect=[1.0, 1.010, 1.020],
+        ):
+            unavailable = sync_board(
+                self.repo_a,
+                runtime="codex",
+                role="publisher",
+                run_id="run-7",
+                cursor_file=cursor,
+                roles=["publisher"],
+                now=NOW,
+            )
+        self.assertEqual(unavailable["scan"]["cursor_mode"], "unavailable")
+        self.assertEqual(unavailable["scan"]["files_read"], 0)
+        self.assertEqual(unavailable["scan"]["fetch_elapsed_ms"], 10.0)
+        self.assertEqual(unavailable["scan"]["elapsed_ms"], 20.0)
+
+        bootstrap_board(self.repo_a, now=NOW)
+        malformed_path = (
+            "coordination/board/"
+            "20260831T143001Z-acde-claude-malformed.md"
+        )
+        self._plant_files(
+            {malformed_path: "not frontmatter\nCONTEXTOS_PRIVATE_METRIC_CANARY\n"},
+            "Plant malformed sync fixture",
+        )
+        unrelated_main_commit = git(self.repo_a, "rev-parse", "HEAD").stdout.strip()
+        cursor.write_text(
+            json.dumps({"last_seen": unrelated_main_commit}) + "\n",
+            encoding="utf-8",
+        )
+        recovered = sync_board(
+            self.repo_a,
+            runtime="codex",
+            role="publisher",
+            run_id="run-7",
+            cursor_file=cursor,
+            roles=["publisher"],
+            now=NOW,
+        )
+        self.assertEqual(recovered["scan"]["cursor_mode"], "recovery")
+        self.assertEqual(recovered["scan"]["active_message_files"], 1)
+        self.assertEqual(recovered["scan"]["candidate_message_files"], 1)
+        self.assertEqual(recovered["scan"]["message_files_read"], 1)
+        self.assertEqual(recovered["scan"]["messages_surfaced"], 0)
+        self.assertIn(
+            "missing opening frontmatter fence",
+            "\n".join(recovered["notices"]),
+        )
+        self.assertNotIn(
+            "CONTEXTOS_PRIVATE_METRIC_CANARY",
+            json.dumps(recovered["scan"], sort_keys=True),
+        )
 
     def test_compact_dry_run_and_apply(self) -> None:
         bootstrap_board(self.repo_a, now=NOW)
@@ -805,6 +950,16 @@ class CoordinationTests(unittest.TestCase):
         self.assertNotIn(
             "Expired operational note",
             [message["body"] for message in synced["messages"]],
+        )
+        self.assertEqual(synced["scan"]["active_message_files"], 1)
+        self.assertEqual(synced["scan"]["message_files_read"], 1)
+        self.assertEqual(synced["scan"]["active_claim_files"], 1)
+        self.assertEqual(synced["scan"]["claim_files_read"], 1)
+        self.assertGreater(synced["scan"]["claim_history_commits_scanned"], 0)
+        self.assertEqual(
+            synced["scan"]["bytes_read"],
+            synced["scan"]["message_bytes_read"]
+            + synced["scan"]["claim_bytes_read"],
         )
 
     def test_validate_clean_and_reports_malformed_and_imperative_files(self) -> None:

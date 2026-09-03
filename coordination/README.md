@@ -89,6 +89,48 @@ run-id audiences are surfaced but not validated — run ids are ephemeral.
   undelivered receipt; a post is delivered only when its commit is confirmed
   on the remote. Fetch-only runs cannot acquire claims.
 
+### Read-amplification telemetry and inbox threshold
+
+Every `board sync` receipt includes a `scan` object with counts only: history
+commits scanned, active and candidate files, files and UTF-8 bytes read,
+messages and claims surfaced, compact-JSON surfaced bytes, the read-to-surfaced
+byte ratio, cursor mode (`cold`, `incremental`, `current`, `recovery`, or
+`unavailable`), and fetch, message-scan, claim-scan, and total elapsed
+milliseconds. Message commit counts cover only commits after the cursor;
+claim-history counts cover the full coordination history when live claims exist
+because publish-order arbitration requires it. With no live claims, that
+history walk is skipped. The telemetry never includes message content,
+frontmatter values, paths, or identifiers.
+
+Keep the flat board layout unless **three consecutive representative cold or
+cursor-recovery syncs on the same host** each read at least 256 KiB and also
+cross either threshold:
+
+- at least 2,000 ms in `message_scan_elapsed_ms`; or
+- at least 20:1 `message_read_amplification_ratio`.
+
+A cold/recovery sample has no usable cursor and scans the current board. The
+byte floor prevents host startup noise from triggering a layout migration for
+a small board; the repeated-sample rule prevents one slow process launch from
+doing the same. Apply the 256 KiB floor to `message_bytes_read`, not combined
+message-and-claim work: inbox directories do not change claim arbitration. If
+`message_surfaced_bytes` itself exceeds 64 KiB, improve addressing, expiry, or
+compaction first: physical inboxes cannot reduce content genuinely addressed
+to the recipient.
+
+Calibration on 2026-09-03 used a Windows local bare remote and near-limit
+synthetic messages, seeded in one fixture commit, with `all`, role, run-id, and
+unrelated audiences. A
+16-message cold sync read 55,943 message bytes in 647 ms at 7.583:1; an
+80-message cold sync read 279,783 message bytes in 2,414 ms at 37.926:1. Both surfaced two
+messages. The larger fixture crossed every gate; the smaller fixture crossed
+none after the byte floor. This evidence supports retaining the flat layout at
+template scale and revisiting physical inboxes only when observed receipts
+meet the gate above.
+
+`scan` is additive receipt metadata. Consumers must ignore unknown receipt and
+report keys; adding this object does not change the board-file schema version.
+
 ## Commands
 
 ```text

@@ -6,6 +6,7 @@ import re
 import secrets
 import subprocess
 import tempfile
+import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
@@ -1115,11 +1116,18 @@ def _current_claims(
     head: str,
     now: datetime,
     notices: list[str],
+    scan_metrics: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     current_paths = set(_tree_paths(root, head, _CLAIMS_PREFIX))
     current_paths.discard(f"{_CLAIMS_PREFIX}.gitkeep")
+    if scan_metrics is not None:
+        scan_metrics["active_claim_files"] = len(current_paths)
+    if not current_paths:
+        return []
     latest_addition: dict[str, tuple[int, str]] = {}
     commits = _commit_sequence(root, head)
+    if scan_metrics is not None:
+        scan_metrics["claim_history_commits_scanned"] = len(commits)
     for index, (commit, path) in enumerate(
         _added_paths_for_commits(root, commits, _CLAIMS_PREFIX)
     ):
@@ -1136,7 +1144,11 @@ def _current_claims(
     claims: list[dict[str, Any]] = []
     for path in ordered_paths:
         try:
-            fields, body = _parse_frontmatter(_read_tree_text(root, head, path))
+            text = _read_tree_text(root, head, path)
+            if scan_metrics is not None:
+                scan_metrics["claim_files_read"] += 1
+                scan_metrics["claim_bytes_read"] += len(text.encode("utf-8"))
+            fields, body = _parse_frontmatter(text)
             for required in ("task", "owner", "lease-expires"):
                 if required not in fields:
                     raise ContextOSError(f"missing required key '{required}'")
@@ -1189,11 +1201,11 @@ def _commits_after_cursor(
     head: str,
     cursor: str | None,
     notices: list[str],
-) -> list[str]:
+) -> tuple[list[str], str]:
     if cursor is None:
-        return _commit_sequence(root, head)
+        return _commit_sequence(root, head), "cold"
     if cursor == head:
-        return []
+        return [], "current"
     ancestor = _git(
         root,
         ["merge-base", "--is-ancestor", cursor, head],
@@ -1204,9 +1216,9 @@ def _commits_after_cursor(
             "The coordination cursor is not an ancestor of the current ref; "
             "scanning the current board"
         )
-        return _commit_sequence(root, head)
+        return _commit_sequence(root, head), "recovery"
     result = _git(root, ["rev-list", "--reverse", f"{cursor}..{head}"])
-    return result.stdout.splitlines()
+    return result.stdout.splitlines(), "incremental"
 
 
 def _audience_notice(
@@ -1250,6 +1262,7 @@ def sync_board(
     roles: list[str] | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
+    started_at = time.perf_counter()
     root = Path(root)
     current = _coerce_now(now)
     runtime_value = _scalar(runtime, "runtime")
@@ -1257,23 +1270,102 @@ def sync_board(
     run_value = _scalar(run_id, "run_id")
     full_run_id = run_value if "/" in run_value else f"{runtime_value}/{run_value}"
     notices: list[str] = []
+    scan_metrics: dict[str, Any] = {
+        "cursor_mode": "unavailable",
+        "message_commits_after_cursor_scanned": 0,
+        "claim_history_commits_scanned": 0,
+        "active_message_files": 0,
+        "active_claim_files": 0,
+        "candidate_message_files": 0,
+        "message_files_read": 0,
+        "claim_files_read": 0,
+        "message_bytes_read": 0,
+        "claim_bytes_read": 0,
+        "fetch_elapsed_ms": 0.0,
+        "message_scan_elapsed_ms": 0.0,
+        "claim_scan_elapsed_ms": 0.0,
+    }
+
+    def finish_metrics(
+        messages: list[dict[str, Any]],
+        claims: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        bytes_read = (
+            scan_metrics["message_bytes_read"]
+            + scan_metrics["claim_bytes_read"]
+        )
+        message_surfaced_bytes = len(
+            json.dumps(
+                messages,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+        claim_surfaced_bytes = len(
+            json.dumps(
+                claims,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+        surfaced_bytes = message_surfaced_bytes + claim_surfaced_bytes
+        ratio = round(bytes_read / surfaced_bytes, 3)
+        message_ratio = round(
+            scan_metrics["message_bytes_read"] / message_surfaced_bytes,
+            3,
+        )
+        claim_ratio = round(
+            scan_metrics["claim_bytes_read"] / claim_surfaced_bytes,
+            3,
+        )
+        return {
+            **scan_metrics,
+            "files_read": (
+                scan_metrics["message_files_read"]
+                + scan_metrics["claim_files_read"]
+            ),
+            "bytes_read": bytes_read,
+            "messages_surfaced": len(messages),
+            "claims_surfaced": len(claims),
+            "message_surfaced_bytes": message_surfaced_bytes,
+            "claim_surfaced_bytes": claim_surfaced_bytes,
+            "surfaced_bytes": surfaced_bytes,
+            "message_read_amplification_ratio": message_ratio,
+            "claim_read_amplification_ratio": claim_ratio,
+            "read_amplification_ratio": ratio,
+            "elapsed_ms": round(
+                max(0.0, time.perf_counter() - started_at) * 1000,
+                3,
+            ),
+        }
 
     head = _fetch_coordination(root)
+    scan_metrics["fetch_elapsed_ms"] = round(
+        max(0.0, time.perf_counter() - started_at) * 1000,
+        3,
+    )
     if head is None:
+        messages: list[dict[str, Any]] = []
+        claims: list[dict[str, Any]] = []
         return {
             "commit": None,
             "previous_cursor": None,
-            "messages": [],
-            "claims": [],
+            "messages": messages,
+            "claims": claims,
             "claim_order": {},
+            "scan": finish_metrics(messages, claims),
             "notices": ["The coordination board has not been bootstrapped"],
         }
 
     cursor_path = Path(cursor_file)
     previous = _cursor_value(cursor_path, notices)
-    commits = _commits_after_cursor(root, head, previous, notices)
+    message_scan_started = time.perf_counter()
+    commits, cursor_mode = _commits_after_cursor(root, head, previous, notices)
+    scan_metrics["cursor_mode"] = cursor_mode
+    scan_metrics["message_commits_after_cursor_scanned"] = len(commits)
     current_paths = set(_tree_paths(root, head, _BOARD_PREFIX))
     current_paths.discard(f"{_BOARD_PREFIX}.gitkeep")
+    scan_metrics["active_message_files"] = len(current_paths)
 
     messages: list[dict[str, Any]] = []
     seen_paths: set[str] = set()
@@ -1281,8 +1373,12 @@ def sync_board(
         if path in seen_paths or path not in current_paths:
             continue
         seen_paths.add(path)
+        scan_metrics["candidate_message_files"] += 1
         try:
-            fields, body = _parse_frontmatter(_read_tree_text(root, head, path))
+            text = _read_tree_text(root, head, path)
+            scan_metrics["message_files_read"] += 1
+            scan_metrics["message_bytes_read"] += len(text.encode("utf-8"))
+            fields, body = _parse_frontmatter(text)
             for required in ("from", "audience", "kind", "expires"):
                 if required not in fields:
                     raise ContextOSError(f"missing required key '{required}'")
@@ -1314,7 +1410,23 @@ def sync_board(
             }
         )
 
-    claims = _current_claims(root, head, current, notices)
+    scan_metrics["message_scan_elapsed_ms"] = round(
+        max(0.0, time.perf_counter() - message_scan_started) * 1000,
+        3,
+    )
+
+    claim_scan_started = time.perf_counter()
+    claims = _current_claims(
+        root,
+        head,
+        current,
+        notices,
+        scan_metrics=scan_metrics,
+    )
+    scan_metrics["claim_scan_elapsed_ms"] = round(
+        max(0.0, time.perf_counter() - claim_scan_started) * 1000,
+        3,
+    )
     _write_cursor(cursor_path, head)
     return {
         "commit": head,
@@ -1322,6 +1434,7 @@ def sync_board(
         "messages": messages,
         "claims": claims,
         "claim_order": _claim_order(claims),
+        "scan": finish_metrics(messages, claims),
         "notices": notices,
     }
 
