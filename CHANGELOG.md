@@ -4,6 +4,20 @@
 
 ---
 
+## [0.13.1] — 2026-09-02 — Release recovery and coordination safety
+
+### Fixed
+- Release staging now recovers unpublished drafts through the authenticated
+  release-list API, walks all result pages before creating a release, and keeps
+  the existing exact-tag and duplicate-race checks fail-closed. The unreadable
+  v0.13.0 draft remains preserved; v0.13.1 is the replacement release target.
+- Coordination-board posting rejects the documented high-confidence credential
+  tripwires before any bootstrap or queue side effect. Validation redacts every
+  matching message field, identifier, path, and diagnostic instead of echoing
+  possible credential material in a report.
+
+---
+
 ## [0.13.0] — 2026-09-02 — External-project and workspace evolution
 
 ### Added

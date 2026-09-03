@@ -427,7 +427,7 @@ class PublishReleaseTest(unittest.TestCase):
     def test_workflow_artifact_name_binds_run_and_attempt_without_overwrite(self) -> None:
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         qualified = (
-            "v0.13.0-candidate-${{ inputs.commit }}-"
+            "v0.13.1-candidate-${{ inputs.commit }}-"
             "${{ github.run_id }}-${{ github.run_attempt }}"
         )
         self.assertGreaterEqual(source.count(qualified), 5)
