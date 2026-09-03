@@ -69,13 +69,15 @@ exact skill. It cannot pass on a generic textual answer:
 python adapters/opencode/live_conformance.py \
   --binary /exact/path/to/opencode \
   --expected-version 1.18.27 \
+  --expected-commit "$(git rev-parse HEAD)" \
   --repo .
 ```
 
 Add `--model <provider/model>` plus all acknowledgement flags printed by
 `--help` to run the model-backed command checks in a disposable copy. Never use
 a logged or training-enabled route for private repository material. The live
-run is release evidence for the exact reviewed commit, not a required CI step.
+run rejects dirty checkouts and is release evidence for the exact reviewed
+commit, not a required CI step.
 See the [first-class promotion note](../../docs/releases/opencode-first-class.md)
 for the shipped claim boundary.
 

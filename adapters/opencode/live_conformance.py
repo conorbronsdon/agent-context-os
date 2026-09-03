@@ -7,13 +7,24 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
+import stat
 import subprocess
 import tempfile
 from pathlib import Path
 
 
 LIFECYCLE = ("setup", "start", "update", "end")
+CONFIG_OVERRIDE_ENV = (
+    "OPENCODE_CONFIG",
+    "OPENCODE_CONFIG_DIR",
+    "OPENCODE_CONFIG_CONTENT",
+    "OPENCODE_DISABLE_PROJECT_CONFIG",
+    "OPENCODE_DISABLE_EXTERNAL_SKILLS",
+    "OPENCODE_DISABLE_CLAUDE_CODE_SKILLS",
+    "OPENCODE_DISABLE_CLAUDE_CODE_PROMPT",
+)
 
 
 def run(
@@ -21,6 +32,8 @@ def run(
     extra_env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
+    for name in CONFIG_OVERRIDE_ENV:
+        environment.pop(name, None)
     environment["OPENCODE_PURE"] = "1"
     environment.update(extra_env or {})
     return subprocess.run(
@@ -41,12 +54,50 @@ def parse_json_document(result: subprocess.CompletedProcess[str], label: str) ->
 
 def tree_digest(root: Path) -> str:
     digest = hashlib.sha256()
-    for path in sorted(item for item in root.rglob("*") if item.is_file()):
+    paths = [root, *root.rglob("*")]
+    for path in sorted(paths, key=lambda item: item.relative_to(root).as_posix()):
         relative = path.relative_to(root).as_posix()
+        metadata = path.lstat()
+        mode = stat.S_IMODE(metadata.st_mode)
+        if stat.S_ISREG(metadata.st_mode):
+            kind = "file"
+        elif stat.S_ISDIR(metadata.st_mode):
+            kind = "directory"
+        elif stat.S_ISLNK(metadata.st_mode):
+            kind = "symlink"
+        else:
+            kind = "other"
         digest.update(relative.encode("utf-8"))
         digest.update(b"\0")
-        digest.update(path.read_bytes())
+        digest.update(f"{kind}\0{mode:o}\0{metadata.st_nlink}\0".encode("ascii"))
+        if kind == "file":
+            digest.update(path.read_bytes())
+        elif kind == "symlink":
+            digest.update(os.fsencode(os.readlink(path)))
     return digest.hexdigest()
+
+
+def verify_exact_clean_checkout(repo: Path, expected_commit: str) -> str:
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", expected_commit):
+        raise RuntimeError("--expected-commit must be a full 40-character commit SHA")
+    resolved = subprocess.run(
+        ["git", "rev-parse", "--verify", "HEAD^{commit}"], cwd=repo,
+        text=True, encoding="utf-8", errors="replace", capture_output=True, check=False,
+    )
+    if resolved.returncode != 0:
+        raise RuntimeError("--repo must be a Git checkout with a readable HEAD commit")
+    actual = resolved.stdout.strip().lower()
+    if actual != expected_commit.lower():
+        raise RuntimeError(f"expected commit {expected_commit.lower()}, got {actual}")
+    status = subprocess.run(
+        ["git", "status", "--porcelain=v1", "-z", "--untracked-files=all"],
+        cwd=repo, capture_output=True, check=False,
+    )
+    if status.returncode != 0:
+        raise RuntimeError("could not verify that --repo is clean")
+    if status.stdout:
+        raise RuntimeError("--repo must be clean so fixture bytes match --expected-commit")
+    return actual
 
 
 def copy_tracked_fixture(repo: Path, fixture: Path) -> None:
@@ -88,7 +139,10 @@ def tool_loaded_exact_skill(output: str, root: Path, skill_name: str) -> bool:
             return True
         if tool == "read" and inputs.get("filePath"):
             try:
-                if Path(inputs["filePath"]).resolve() == wanted_path:
+                candidate = Path(inputs["filePath"])
+                if not candidate.is_absolute():
+                    candidate = root / candidate
+                if candidate.resolve() == wanted_path:
                     return True
             except OSError:
                 pass
@@ -111,6 +165,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", required=True)
     parser.add_argument("--expected-version", required=True)
+    parser.add_argument("--expected-commit", required=True)
     parser.add_argument("--repo", required=True)
     parser.add_argument("--model")
     parser.add_argument("--acknowledge-external-model-egress", action="store_true")
@@ -122,6 +177,7 @@ def main() -> int:
     repo = Path(args.repo).resolve(strict=True)
     if not binary.is_file():
         parser.error("--binary must resolve to an exact file")
+    verified_commit = verify_exact_clean_checkout(repo, args.expected_commit)
     if args.model and not all((
         args.acknowledge_external_model_egress,
         args.acknowledge_disposable_repo,
@@ -218,7 +274,8 @@ def main() -> int:
                 raise RuntimeError("read-only live command routing changed the disposable fixture")
 
     print(
-        f"OpenCode conformance passed for exact version {args.expected_version}"
+        f"OpenCode conformance passed for exact version {args.expected_version} "
+        f"at commit {verified_commit}"
         + (f" with model {args.model}" if args.model else " (native discovery only)")
     )
     return 0

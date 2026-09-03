@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import importlib.util
+import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -95,6 +98,82 @@ class OpenCodeAdapterTest(unittest.TestCase):
             proposal.parent.mkdir(parents=True)
             proposal.write_text("{}\n", encoding="utf-8")
             self.assertNotEqual(before, live.tree_digest(root))
+
+    def test_read_only_digest_covers_empty_directories(self) -> None:
+        live = load_live_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            before = live.tree_digest(root)
+            (root / "unexpected-empty-directory").mkdir()
+            self.assertNotEqual(before, live.tree_digest(root))
+
+    @unittest.skipIf(os.name == "nt", "Windows does not preserve POSIX mode changes")
+    def test_read_only_digest_covers_mode_changes(self) -> None:
+        live = load_live_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "AGENTS.md"
+            target.write_text("# Fixture\n", encoding="utf-8")
+            before = live.tree_digest(root)
+            target.chmod(0o755)
+            self.assertNotEqual(before, live.tree_digest(root))
+
+    def test_exact_checkout_binding_rejects_dirty_fixture_source(self) -> None:
+        live = load_live_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            repo = Path(temporary)
+            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+            target = repo / "AGENTS.md"
+            target.write_text("# Fixture\n", encoding="utf-8")
+            subprocess.run(["git", "add", "AGENTS.md"], cwd=repo, check=True)
+            subprocess.run(
+                [
+                    "git", "-c", "user.name=Context OS", "-c",
+                    "user.email=context-os@example.invalid", "commit", "-qm", "fixture",
+                ],
+                cwd=repo, check=True,
+            )
+            commit = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=repo, check=True,
+                text=True, capture_output=True,
+            ).stdout.strip()
+            self.assertEqual(commit, live.verify_exact_clean_checkout(repo, commit))
+            target.write_text("# Dirty fixture\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "must be clean"):
+                live.verify_exact_clean_checkout(repo, commit)
+
+    def test_run_scrubs_inherited_configuration_overrides(self) -> None:
+        live = load_live_module()
+        inherited = {name: "host-value" for name in live.CONFIG_OVERRIDE_ENV}
+        completed = subprocess.CompletedProcess([], 0, "", "")
+        with patch.dict(os.environ, inherited), patch.object(
+            live.subprocess, "run", return_value=completed
+        ) as mocked:
+            live.run(Path("opencode"), ROOT, "--version")
+        environment = mocked.call_args.kwargs["env"]
+        self.assertEqual("1", environment["OPENCODE_PURE"])
+        for name in live.CONFIG_OVERRIDE_ENV:
+            self.assertNotIn(name, environment)
+
+    def test_exact_skill_read_resolves_relative_to_fixture(self) -> None:
+        live = load_live_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            skill_name = "context-start"
+            event = json.dumps(
+                {
+                    "type": "tool_use",
+                    "part": {
+                        "tool": "read",
+                        "state": {
+                            "input": {
+                                "filePath": f".agents/skills/{skill_name}/SKILL.md"
+                            }
+                        },
+                    },
+                }
+            )
+            self.assertTrue(live.tool_loaded_exact_skill(event, root, skill_name))
 
 
 if __name__ == "__main__":
