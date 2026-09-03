@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import importlib.util
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -8,6 +10,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DESCRIPTOR = json.loads((ROOT / "runtimes/opencode.json").read_text(encoding="utf-8"))
 LIFECYCLE = ("setup", "start", "update", "end")
+
+
+def load_live_module():
+    path = ROOT / "adapters/opencode/live_conformance.py"
+    spec = importlib.util.spec_from_file_location("opencode_live_conformance", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("could not load OpenCode live conformance module")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class OpenCodeAdapterTest(unittest.TestCase):
@@ -72,6 +84,17 @@ class OpenCodeAdapterTest(unittest.TestCase):
         ):
             with self.subTest(required=required):
                 self.assertIn(required, guide)
+
+    def test_read_only_digest_covers_local_lifecycle_artifacts(self) -> None:
+        live = load_live_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "AGENTS.md").write_text("# Fixture\n", encoding="utf-8")
+            before = live.tree_digest(root)
+            proposal = root / ".context-os/proposals/unapproved.json"
+            proposal.parent.mkdir(parents=True)
+            proposal.write_text("{}\n", encoding="utf-8")
+            self.assertNotEqual(before, live.tree_digest(root))
 
 
 if __name__ == "__main__":

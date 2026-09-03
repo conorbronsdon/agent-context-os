@@ -43,8 +43,6 @@ def tree_digest(root: Path) -> str:
     digest = hashlib.sha256()
     for path in sorted(item for item in root.rglob("*") if item.is_file()):
         relative = path.relative_to(root).as_posix()
-        if relative.startswith(".git/") or relative.startswith(".context-os/"):
-            continue
         digest.update(relative.encode("utf-8"))
         digest.update(b"\0")
         digest.update(path.read_bytes())
@@ -168,14 +166,22 @@ def main() -> int:
                 binary, fixture, "debug", "config",
                 extra_env={
                     "OPENCODE_CONFIG_CONTENT": json.dumps(
-                        {"permission": {"bash": "deny", "edit": "deny"}}
+                        {
+                            "permission": {
+                                "bash": "deny", "edit": "deny", "skill": {"*": "deny"}
+                            }
+                        }
                     )
                 },
             ),
             "permission debug config",
         )
         denied_permissions = denied_config.get("permission", {})
-        if denied_permissions.get("bash") != "deny" or denied_permissions.get("edit") != "deny":
+        if (
+            denied_permissions.get("bash") != "deny"
+            or denied_permissions.get("edit") != "deny"
+            or denied_permissions.get("skill") != {"*": "deny"}
+        ):
             raise RuntimeError("installed client did not resolve the permission-denial control")
 
         if args.model:
@@ -204,8 +210,9 @@ def main() -> int:
             )
             if denial.returncode != 0:
                 raise RuntimeError(f"permission denial control failed: {denial.stderr.strip()}")
-            if "bash" in tool_names(denial.stdout):
-                raise RuntimeError("denied bash tool was exposed to model intent")
+            exposed = {"bash", "edit"} & set(tool_names(denial.stdout))
+            if exposed:
+                raise RuntimeError(f"denied tools were exposed to model intent: {sorted(exposed)}")
             after = tree_digest(fixture)
             if after != before:
                 raise RuntimeError("read-only live command routing changed the disposable fixture")
