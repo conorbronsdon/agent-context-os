@@ -447,7 +447,12 @@ def freshness_report(catalog: dict[str, Any], as_of: dt.date) -> dict[str, Any]:
     entries = []
     summary = {state: 0 for state in FRESHNESS_STATES}
     for item in sorted(catalog["integrations"], key=lambda value: value["id"]):
-        verified_on = dt.date.fromisoformat(item["last_verified"])
+        try:
+            verified_on = dt.date.fromisoformat(item["last_verified"])
+        except (TypeError, ValueError):
+            raise CatalogError(
+                f"{item['id']}.last_verified: expected YYYY-MM-DD"
+            ) from None
         if verified_on > as_of:
             raise CatalogError(
                 f"{item['id']}.last_verified: {verified_on.isoformat()} is after "
@@ -476,7 +481,7 @@ def freshness_report(catalog: dict[str, Any], as_of: dt.date) -> dict[str, Any]:
         entries.append(
             {
                 "id": item["id"],
-                "evidence_urls": item["evidence"],
+                "evidence_urls": list(item["evidence"]),
                 "last_verified": verified_on.isoformat(),
                 "freshness_state": state,
                 "suggested_next_review": suggested_next_review.isoformat(),
@@ -595,7 +600,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         catalog = load_catalog()
         if args.command == "freshness":
-            as_of = parse_report_date(args.as_of) if args.as_of else dt.date.today()
+            as_of = (
+                parse_report_date(args.as_of)
+                if args.as_of is not None
+                else dt.date.today()
+            )
             report = freshness_report(catalog, as_of)
             if args.format == "markdown":
                 sys.stdout.write(render_freshness_markdown(report))

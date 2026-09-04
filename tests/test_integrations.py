@@ -564,22 +564,32 @@ class IntegrationCatalogTests(unittest.TestCase):
 
     def test_stale_freshness_output_is_actionable_and_read_only(self) -> None:
         before = copy.deepcopy(self.catalog)
-        as_of = MODULE.parse_report_date("2026-12-02")
+        latest_verified = max(
+            MODULE.parse_report_date(item["last_verified"])
+            for item in self.catalog["integrations"]
+        )
+        as_of = latest_verified + MODULE.dt.timedelta(
+            days=MODULE.FRESHNESS_REVIEW_DAYS
+        )
         report = MODULE.freshness_report(self.catalog, as_of)
         markdown = MODULE.render_freshness_markdown(report)
-        self.assertEqual(self.catalog, before)
         self.assertTrue(report["entries"])
         self.assertTrue(all(item["freshness_state"] == "stale" for item in report["entries"]))
         first = report["entries"][0]
         self.assertIn(first["id"], markdown)
         self.assertIn(first["evidence_urls"][0], markdown)
         self.assertIn("human first-party-evidence review", first["suggested_action"])
+        first["evidence_urls"].append("https://example.com/report-only")
+        self.assertEqual(self.catalog, before)
 
     def test_freshness_cli_uses_generated_entry_aggregation(self) -> None:
+        as_of = max(
+            item["last_verified"] for item in self.catalog["integrations"]
+        )
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             self.assertEqual(
-                MODULE.main(["freshness", "--as-of", "2026-09-03"]), 0
+                MODULE.main(["freshness", "--as-of", as_of]), 0
             )
         report = json.loads(output.getvalue())
         source_ids = sorted(path.stem for path in MODULE.ENTRY_DIR.glob("*.json"))
@@ -593,6 +603,23 @@ class IntegrationCatalogTests(unittest.TestCase):
     def test_freshness_rejects_invalid_or_preverification_report_dates(self) -> None:
         with self.assertRaises(MODULE.CatalogError):
             MODULE.parse_report_date("20260903")
+        errors = io.StringIO()
+        with contextlib.redirect_stderr(errors):
+            self.assertEqual(MODULE.main(["freshness", "--as-of", ""]), 1)
+        self.assertIn("--as-of: expected YYYY-MM-DD", errors.getvalue())
+        with self.assertRaisesRegex(MODULE.CatalogError, "expected YYYY-MM-DD"):
+            MODULE.freshness_report(
+                {
+                    "integrations": [
+                        {
+                            "id": "malformed-date",
+                            "evidence": ["https://example.com/evidence"],
+                            "last_verified": "not-a-date",
+                        }
+                    ]
+                },
+                MODULE.parse_report_date("2026-09-02"),
+            )
         with self.assertRaisesRegex(MODULE.CatalogError, "is after report date"):
             MODULE.freshness_report(
                 {
