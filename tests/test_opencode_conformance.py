@@ -222,6 +222,25 @@ class OpenCodeAdapterTest(unittest.TestCase):
             )
             self.assertTrue(live.tool_loaded_exact_skill(event, root, skill_name))
 
+    def test_positive_control_requires_exact_bash_command(self) -> None:
+        live = load_live_module()
+        exact = json.dumps(
+            {
+                "type": "tool_use",
+                "part": {
+                    "tool": "bash",
+                    "state": {
+                        "input": {"command": "echo CONTEXTOS_POSITIVE_SENTINEL"}
+                    },
+                },
+            }
+        )
+        extra = exact + "\n" + exact.replace("echo ", "echo extra && ", 1)
+        self.assertEqual(
+            ["echo CONTEXTOS_POSITIVE_SENTINEL"], live.bash_commands(exact)
+        )
+        self.assertEqual(2, len(live.bash_commands(extra)))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -193,6 +193,26 @@ def tool_names(output: str) -> list[str]:
     return names
 
 
+def bash_commands(output: str) -> list[str]:
+    commands: list[str] = []
+    for line in output.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        part = event.get("part", {})
+        state = part.get("state", {}) if isinstance(part, dict) else {}
+        inputs = state.get("input", {}) if isinstance(state, dict) else {}
+        if (
+            event.get("type") == "tool_use"
+            and part.get("tool") == "bash"
+            and isinstance(inputs, dict)
+            and isinstance(inputs.get("command"), str)
+        ):
+            commands.append(inputs["command"])
+    return commands
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", required=True)
@@ -289,6 +309,26 @@ def main() -> int:
             raise RuntimeError("installed client did not resolve the permission-denial control")
 
         if args.model:
+            # OpenCode may initialize project-local host dependencies on the first
+            # model run. Establish that known client baseline with an exact,
+            # non-mutating positive control before attesting lifecycle read-only.
+            positive = run(
+                binary, fixture, "run", "--pure", "--format", "json", "-m", args.model,
+                "Conformance control: use the bash tool to run echo "
+                "CONTEXTOS_POSITIVE_SENTINEL. Do not use another tool.",
+                timeout=300,
+            )
+            if positive.returncode != 0:
+                raise RuntimeError(
+                    f"permission positive control failed: {positive.stderr.strip()}"
+                )
+            if (
+                tool_names(positive.stdout) != ["bash"]
+                or bash_commands(positive.stdout) != ["echo CONTEXTOS_POSITIVE_SENTINEL"]
+            ):
+                raise RuntimeError(
+                    "permission positive control did not execute only the exact bash sentinel"
+                )
             before = tree_digest(fixture)
             for item in LIFECYCLE:
                 name = f"context-{item}"
@@ -301,18 +341,6 @@ def main() -> int:
                     raise RuntimeError(f"live {name} failed: {result.stderr.strip()}")
                 if not tool_loaded_exact_skill(result.stdout, fixture, name):
                     raise RuntimeError(f"live {name} produced no exact-skill tool event")
-            positive = run(
-                binary, fixture, "run", "--pure", "--format", "json", "-m", args.model,
-                "Conformance control: use the bash tool to run echo "
-                "CONTEXTOS_POSITIVE_SENTINEL. Do not use another tool.",
-                timeout=300,
-            )
-            if positive.returncode != 0:
-                raise RuntimeError(
-                    f"permission positive control failed: {positive.stderr.strip()}"
-                )
-            if "bash" not in tool_names(positive.stdout):
-                raise RuntimeError("permission positive control produced no bash tool event")
             denial = run(
                 binary, fixture, "run", "--pure", "--format", "json", "-m", args.model,
                 "Conformance control: use the bash tool to run echo "
