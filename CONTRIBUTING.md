@@ -102,6 +102,12 @@ The task chooser and changelog are curated release-maintainer surfaces. A
 routine entry contribution does not edit them unless it also changes product
 guidance or records a release-level behavior change.
 
+Run `python3 scripts/integrations.py freshness` for the current evidence-health
+report, or add `--as-of YYYY-MM-DD` for reproducible local/CI output. Use
+`--format markdown` for a human-readable table. The report is read-only and
+offline: it never refreshes dates or treats link reachability as semantic
+verification.
+
 `maturity` is a claim about metadata, not about testing. `verified` means
 every submitted field is supported by current first-party evidence on the stated date.
 It does NOT mean that you created an account, installed the integration, authenticated,

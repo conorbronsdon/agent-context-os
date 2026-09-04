@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Added
+- A deterministic, read-only integration evidence-freshness report now marks
+  entries as current, due soon, or stale and gives maintainers evidence links,
+  review dates, and explicit human-review actions without changing claims (#162).
 - Integration catalog contributions now use one authoritative JSON file per
   entry. Deterministic aggregation generates the machine catalog, Markdown
   reference, and component ownership records, while the chooser and changelog
