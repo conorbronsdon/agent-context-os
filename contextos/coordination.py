@@ -1494,6 +1494,8 @@ def _promotion_source_snapshot(
             raise ContextOSError(
                 f"coordination source message is missing required key '{required}'"
             )
+    if fields["kind"] not in _KINDS:
+        raise ContextOSError("coordination source message has an unsupported kind")
     expires_at = _parse_utc(fields["expires"], "expires")
     if expires_at <= current:
         raise ContextOSError(f"coordination source message has expired: {message_id}")

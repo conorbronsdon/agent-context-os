@@ -130,6 +130,10 @@ CONTENT_BASE_INVARIANTS = [
 ]
 CONTENT_FRESHNESS_INVARIANTS = ["single-last-updated", "same-day-history"]
 PROMOTION_INVARIANT = "coordination-source-id-content-expiry-target"
+PROMOTION_SOURCE_KEYS = {
+    "type", "id", "path", "content_sha256", "expires",
+    "from", "kind", "observed_commit", "target_path",
+}
 PLACEHOLDER_DATE = "[DATE]"
 LAST_UPDATED_RE = re.compile(r"^\*\*Last Updated:\*\*\s*(.+?)\s*$", re.MULTILINE)
 REAL_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -2427,11 +2431,7 @@ def _validate_proposal_shape(
         raise ContextOSError("proposal changes must be a non-empty list")
     if workflow == "promotion":
         source = document.get("source")
-        source_keys = {
-            "type", "id", "path", "content_sha256", "expires",
-            "from", "kind", "observed_commit", "target_path",
-        }
-        if not isinstance(source, dict) or set(source) != source_keys:
+        if not isinstance(source, dict) or set(source) != PROMOTION_SOURCE_KEYS:
             raise ContextOSError("promotion source binding has an invalid shape")
         if source.get("type") != "coordination-message":
             raise ContextOSError("promotion source has an invalid type")
@@ -2948,6 +2948,8 @@ def _create_agent_journal(
                 "source_hashes": document["source_hashes"],
             }
             if workflow == AGENT_LIFECYCLE_WORKFLOW
+            else document["source"]
+            if workflow == "promotion"
             else None
         ),
     }
@@ -2995,7 +2997,9 @@ def _recover_agent_journal(
         or manifest.get("journal_version") != TRANSACTION_JOURNAL_VERSION
         or type(manifest.get("schema_version")) is not int
         or manifest.get("schema_version") != SCHEMA_VERSION
-        or workflow not in {"setup", "update", "end", AGENT_LIFECYCLE_WORKFLOW}
+        or workflow not in {
+            "setup", "update", "end", "promotion", AGENT_LIFECYCLE_WORKFLOW
+        }
         or manifest.get("proposal_id") != journal.name
         or not isinstance(manifest.get("proposal_id"), str)
         or PROPOSAL_ID_RE.fullmatch(manifest["proposal_id"]) is None
@@ -3040,6 +3044,23 @@ def _recover_agent_journal(
                 )
         elif manifest.get("invariants") != AGENT_MIGRATION_INVARIANTS:
             raise ContextOSError(f"invalid agent transaction evidence: {journal}")
+    elif workflow == "promotion":
+        evidence = manifest.get("agent_evidence")
+        if (
+            manifest.get("operation") != "content-lifecycle"
+            or not isinstance(evidence, dict)
+            or set(evidence) != PROMOTION_SOURCE_KEYS
+            or evidence.get("type") != "coordination-message"
+        ):
+            raise ContextOSError(f"invalid promotion transaction evidence: {journal}")
+        for field in (
+            "id", "path", "expires", "from", "kind", "observed_commit", "target_path"
+        ):
+            ensure_text(evidence.get(field), f"promotion source {field}")
+        if not isinstance(evidence.get("content_sha256"), str) or not re.fullmatch(
+            r"[0-9a-f]{64}", evidence["content_sha256"]
+        ):
+            raise ContextOSError(f"invalid promotion transaction evidence: {journal}")
     else:
         if (
             manifest.get("operation") != "content-lifecycle"
@@ -3064,6 +3085,11 @@ def _recover_agent_journal(
     }
     if not isinstance(entries, list) or not entries:
         raise ContextOSError(f"transaction journal has no entries: {journal}")
+    if workflow == "promotion" and (
+        len(entries) != 1
+        or manifest["agent_evidence"]["target_path"] != entries[0].get("path")
+    ):
+        raise ContextOSError(f"promotion journal target binding is invalid: {journal}")
     workspace = load_workspace(root) if workflow != AGENT_LIFECYCLE_WORKFLOW else None
     seen_paths: set[str] = set()
     seen_slots: set[str] = set()
@@ -3328,6 +3354,8 @@ def _recover_agent_journal(
             expected_receipt_keys.update(
                 {"workflow", "operation", "confirmation", "authorization"}
             )
+        elif workflow == "promotion":
+            expected_receipt_keys.update({"workflow", "source", "confirmation"})
         expected_files = [entry["receipt_entry"] for entry in entries]
         if (
             set(value) != expected_receipt_keys
@@ -3368,6 +3396,16 @@ def _recover_agent_journal(
             ):
                 raise ContextOSError(
                     f"journal receipt is not a valid agent commit marker: {receipt}"
+                )
+        elif workflow == "promotion":
+            if (
+                value.get("workflow") != "promotion"
+                or value.get("source") != manifest.get("agent_evidence")
+                or value.get("confirmation")
+                != {"method": "exact-digest-echo", "human_authenticated": False}
+            ):
+                raise ContextOSError(
+                    f"journal receipt is not a valid promotion commit marker: {receipt}"
                 )
         for entry, target, _content, _mode in recovered:
             if entry["action"] == "delete":

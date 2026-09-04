@@ -26,6 +26,7 @@ from contextos.coordination import (
 )
 from contextos.kernel import (
     ContextOSError,
+    _recover_pending_agent_journals,
     apply_proposal,
     create_coordination_promotion_proposal,
 )
@@ -1088,6 +1089,84 @@ class CoordinationTests(unittest.TestCase):
                 self.repo_a, proposal_path, proposal["proposal_digest"], "codex"
             )
         self.assertEqual(before, decisions.read_text(encoding="utf-8"))
+
+    def test_promotion_rolls_back_second_source_validation_failure(self) -> None:
+        self._prepare_workspace()
+        message = post_message(
+            self.repo_a,
+            sender="claude/researcher",
+            audience="all",
+            kind="note",
+            body="Candidate whose second validation fails.",
+            runtime="claude",
+            now=NOW,
+        )
+        proposal_path, proposal = propose_promotion(
+            self.repo_a,
+            message_id=message["id"],
+            target="state/decisions.md",
+            payload={"decision": "Do not wedge transaction recovery"},
+            now=NOW + timedelta(hours=1),
+        )
+        decisions = self.repo_a / "state" / "decisions.md"
+        before = decisions.read_bytes()
+        original_validate = coordination.validate_promotion_source
+        calls = 0
+
+        def fail_second_validation(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise ContextOSError("injected promotion revalidation failure")
+            return original_validate(*args, **kwargs)
+
+        with mock.patch.object(
+            coordination,
+            "validate_promotion_source",
+            side_effect=fail_second_validation,
+        ), self.assertRaisesRegex(ContextOSError, "injected promotion revalidation failure"):
+            apply_proposal(
+                self.repo_a, proposal_path, proposal["proposal_digest"], "codex"
+            )
+        self.assertEqual(2, calls)
+        self.assertEqual(before, decisions.read_bytes())
+        journals = self.repo_a / ".context-os" / "journals"
+        self.assertEqual([], list(journals.iterdir()))
+
+    def test_promotion_retires_committed_journal_during_recovery(self) -> None:
+        self._prepare_workspace()
+        message = post_message(
+            self.repo_a,
+            sender="claude/researcher",
+            audience="all",
+            kind="note",
+            body="Candidate with a retained committed journal.",
+            runtime="claude",
+            now=NOW,
+        )
+        proposal_path, proposal = propose_promotion(
+            self.repo_a,
+            message_id=message["id"],
+            target="state/decisions.md",
+            payload={"decision": "Recover the committed promotion"},
+            now=NOW + timedelta(hours=1),
+        )
+        with mock.patch("contextos.kernel._discard_agent_journal", return_value=None):
+            receipt_path, _ = apply_proposal(
+                self.repo_a, proposal_path, proposal["proposal_digest"], "codex"
+            )
+        journal = self.repo_a / ".context-os" / "journals" / proposal["proposal_id"]
+        self.assertTrue(journal.is_dir())
+        self.assertTrue(receipt_path.is_file())
+
+        _recover_pending_agent_journals(self.repo_a)
+
+        self.assertFalse(journal.exists())
+        self.assertTrue(receipt_path.is_file())
+        self.assertIn(
+            "Recover the committed promotion",
+            (self.repo_a / "state" / "decisions.md").read_text(encoding="utf-8"),
+        )
 
     def test_promotion_tolerates_unrelated_update_and_writes_handoff(self) -> None:
         self._prepare_workspace()
