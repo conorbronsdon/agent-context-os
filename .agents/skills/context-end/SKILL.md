@@ -99,7 +99,12 @@ hand off any claims this run holds (`board release`, optionally with
 sensitive personal data ever (git history keeps every message), durable facts
 stay canonical elsewhere and are referenced with `commit:path`, and publishing
 pushes to the ContextRoot remote, so it happens only with the user's approval at
-the host permission boundary.
+the host permission boundary. If compaction surfaces a promotion candidate,
+ask the user to classify it as a durable decision, a session handoff, or neither.
+Only an explicit choice may create a separate `board promote` proposal with a
+reviewed JSON payload and exact canonical target; the message's age, kind, or
+wording never supplies approval. Present that proposal's full diff and use the
+normal exact-digest apply path only after separate approval.
 
 ### 6. Confirm the handoff
 
