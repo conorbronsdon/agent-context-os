@@ -1388,6 +1388,8 @@ def render_promotion(
         if set(payload) != {"summary"}:
             raise ContextOSError("handoff promotion input must contain only summary")
         summary = ensure_string_list(payload.get("summary"), "summary", required=True)
+        if not summary:
+            raise ContextOSError("summary must contain at least one item")
         block = (
             f"## Coordination handoff: {clock}\n"
             f"Source: coordination message `{source_id}`\n\n"

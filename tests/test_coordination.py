@@ -1180,6 +1180,14 @@ class CoordinationTests(unittest.TestCase):
             now=NOW,
         )
         target = "sessions/2026-08-31.md"
+        with self.assertRaisesRegex(ContextOSError, "at least one item"):
+            propose_promotion(
+                self.repo_a,
+                message_id=source["id"],
+                target=target,
+                payload={"summary": []},
+                now=NOW + timedelta(hours=1),
+            )
         proposal_path, proposal = propose_promotion(
             self.repo_a,
             message_id=source["id"],
