@@ -30,19 +30,32 @@ class IntegrationCatalogTests(unittest.TestCase):
         rendered = MODULE.render_reference(self.catalog)
         self.assertEqual(self.catalog["schema_version"], 2)
         self.assertGreater(len(self.catalog["integrations"]), 0)
-        self.assertTrue(
-            {
-                "github-mcp",
-                "google-workspace-cli",
-                "linear-mcp",
-                "markitdown-mcp",
-                "notion-mcp",
-                "pandoc",
-                "readwise-mcp",
-            }.issubset(
-                {item["id"] for item in self.catalog["integrations"]}
-            )
-        )
+        migrated_ids = {
+            "agent-skills",
+            "agent-workspace",
+            "ai-tools-for-creators",
+            "asana-mcp",
+            "atlassian-rovo-mcp",
+            "beads-gemini",
+            "github-mcp",
+            "gitlab-mcp",
+            "google-workspace-cli",
+            "granola-mcp",
+            "linear-mcp",
+            "markitdown-mcp",
+            "notion-mcp",
+            "obsidian",
+            "pandoc",
+            "readwise-mcp",
+            "shortcut-mcp",
+            "slack-mcp",
+            "substack-mcp",
+            "todoist-cli",
+            "tolaria",
+            "trello-mcp",
+        }
+        catalog_ids = {item["id"] for item in self.catalog["integrations"]}
+        self.assertLessEqual(migrated_ids, catalog_ids)
         self.assertIn("Remote writes", rendered)
         self.assertIn("Sensitive reads", rendered)
         self.assertIn("Typed safety signals", rendered)

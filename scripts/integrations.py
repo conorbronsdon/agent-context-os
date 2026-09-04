@@ -112,7 +112,10 @@ def load_entry_catalog(directory: Path = ENTRY_DIR) -> dict[str, Any]:
             with path.open(encoding="utf-8") as handle:
                 entry = json.load(handle)
         except json.JSONDecodeError as exc:
-            raise CatalogError(f"{path.name}: invalid JSON: {exc.msg}") from exc
+            raise CatalogError(
+                f"{path.name}: invalid JSON at line {exc.lineno}, "
+                f"column {exc.colno}: {exc.msg}"
+            ) from exc
         if not isinstance(entry, dict):
             raise CatalogError(f"{path.name}: expected an object")
         if entry.get("id") != path.stem:
@@ -513,7 +516,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         for path, expected in expected_outputs:
             try:
-                current = path.read_text(encoding="utf-8")
+                current = path.read_bytes().decode("utf-8")
             except OSError as error:
                 print(f"integration catalog error: {error}", file=sys.stderr)
                 return 1
