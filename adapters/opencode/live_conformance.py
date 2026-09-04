@@ -223,7 +223,13 @@ def main() -> int:
                 raise RuntimeError(f"duplicate discovered skill name: {name}")
             by_name[name] = skill
         for name in (f"context-{item}" for item in LIFECYCLE):
-            discovered = Path(by_name[name]["location"]).resolve()
+            skill = by_name.get(name)
+            if skill is None:
+                raise RuntimeError(f"required skill not discovered: {name}")
+            location = skill.get("location")
+            if not isinstance(location, str):
+                raise RuntimeError(f"discovered skill has no location: {name}")
+            discovered = Path(location).resolve()
             expected = (fixture / ".agents" / "skills" / name / "SKILL.md").resolve()
             if discovered != expected:
                 raise RuntimeError(f"{name} resolved to {discovered}, expected {expected}")
