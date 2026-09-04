@@ -107,6 +107,22 @@ class OpenCodeAdapterTest(unittest.TestCase):
             (root / "unexpected-empty-directory").mkdir()
             self.assertNotEqual(before, live.tree_digest(root))
 
+    def test_read_only_digest_excludes_only_opencode_generated_dependencies(self) -> None:
+        live = load_live_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / ".opencode").mkdir()
+            before = live.tree_digest(root)
+            (root / ".opencode" / ".gitignore").write_text(
+                "node_modules\n", encoding="utf-8"
+            )
+            dependency = root / ".opencode" / "node_modules" / "host-package"
+            dependency.mkdir(parents=True)
+            (dependency / "index.js").write_text("export {};\n", encoding="utf-8")
+            self.assertEqual(before, live.tree_digest(root))
+            (root / ".context-os").mkdir()
+            self.assertNotEqual(before, live.tree_digest(root))
+
     @unittest.skipIf(os.name == "nt", "Windows does not preserve POSIX mode changes")
     def test_read_only_digest_covers_mode_changes(self) -> None:
         live = load_live_module()

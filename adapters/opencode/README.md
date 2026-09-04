@@ -66,7 +66,9 @@ read-only live command route that must produce a concrete tool event for the
 exact skill. It isolates host-level configuration directories for each client
 invocation, and its permission-denial check first requires the same model to
 produce a positive bash-tool event. These checks cannot pass on a generic
-textual answer:
+textual answer. The read-only digest excludes only OpenCode's generated
+`.opencode/.gitignore` and `.opencode/node_modules` dependency bootstrap; it
+continues covering every adapter source and `.context-os` lifecycle artifact:
 
 ```bash
 python adapters/opencode/live_conformance.py \

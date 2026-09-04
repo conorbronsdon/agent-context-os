@@ -33,6 +33,8 @@ ISOLATED_HOST_PATH_ENV = {
     "APPDATA": "appdata",
     "LOCALAPPDATA": "localappdata",
 }
+OPENCODE_GENERATED_PATHS = {".opencode/.gitignore"}
+OPENCODE_GENERATED_PREFIXES = (".opencode/node_modules",)
 
 
 def run(
@@ -68,7 +70,15 @@ def parse_json_document(result: subprocess.CompletedProcess[str], label: str) ->
 
 def tree_digest(root: Path) -> str:
     digest = hashlib.sha256()
-    paths = [root, *root.rglob("*")]
+    paths = [root]
+    for path in root.rglob("*"):
+        relative = path.relative_to(root).as_posix()
+        if relative in OPENCODE_GENERATED_PATHS or any(
+            relative == prefix or relative.startswith(prefix + "/")
+            for prefix in OPENCODE_GENERATED_PREFIXES
+        ):
+            continue
+        paths.append(path)
     for path in sorted(paths, key=lambda item: item.relative_to(root).as_posix()):
         relative = path.relative_to(root).as_posix()
         metadata = path.lstat()
