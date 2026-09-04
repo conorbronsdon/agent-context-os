@@ -10,6 +10,10 @@
   entry. Deterministic aggregation generates the machine catalog, Markdown
   reference, and component ownership records, while the chooser and changelog
   remain explicit curated surfaces (#161).
+- Coordination messages can now become source-bound kernel proposals for an
+  explicit decision-log or session-handoff target. Apply requires the normal
+  exact digest and rejects changed, missing, or expired source messages while
+  tolerating unrelated board updates (#171).
 - Coordination `board sync` receipts now report content-free scan counts,
   bytes, amplification, and elapsed time. The board contract records a
   measured threshold for reconsidering physical inbox sharding while retaining

@@ -1471,6 +1471,111 @@ def _message_documents(
     return documents
 
 
+def _promotion_source_snapshot(
+    root: Path,
+    message_id: str,
+    *,
+    now: datetime | None = None,
+) -> dict[str, str]:
+    current = _coerce_now(now)
+    filename = f"{message_id}.md"
+    if not _FILE_RE.fullmatch(filename):
+        raise ContextOSError("message id has an invalid coordination format")
+    path = f"{_BOARD_PREFIX}{filename}"
+    head = _fetch_coordination(root)
+    if head is None:
+        raise ContextOSError("The coordination board has not been bootstrapped")
+    if path not in set(_tree_paths(root, head, _BOARD_PREFIX)):
+        raise ContextOSError(f"coordination source message does not exist: {message_id}")
+    text = _read_tree_text(root, head, path)
+    fields, _ = _parse_frontmatter(text)
+    for required in ("from", "kind", "expires"):
+        if required not in fields:
+            raise ContextOSError(
+                f"coordination source message is missing required key '{required}'"
+            )
+    if fields["kind"] not in _KINDS:
+        raise ContextOSError("coordination source message has an unsupported kind")
+    expires_at = _parse_utc(fields["expires"], "expires")
+    if expires_at <= current:
+        raise ContextOSError(f"coordination source message has expired: {message_id}")
+    return {
+        "type": "coordination-message",
+        "id": message_id,
+        "path": path,
+        "content_sha256": sha256_text(text),
+        "expires": _iso(expires_at),
+        "from": fields["from"],
+        "kind": fields["kind"],
+        "observed_commit": head,
+    }
+
+
+def validate_promotion_source(
+    root: Path,
+    source: dict[str, Any],
+    *,
+    now: datetime | None = None,
+) -> None:
+    message_id = source.get("id")
+    if not isinstance(message_id, str):
+        raise ContextOSError("promotion source id must be a string")
+    current = _promotion_source_snapshot(root, message_id, now=now)
+    observed = source.get("observed_commit")
+    if not isinstance(observed, str) or not re.fullmatch(r"[0-9a-f]{40,64}", observed):
+        raise ContextOSError("promotion source observed_commit is invalid")
+    ancestry = _git(
+        root,
+        ["merge-base", "--is-ancestor", observed, current["observed_commit"]],
+        check=False,
+    )
+    if ancestry.returncode != 0:
+        raise ContextOSError(
+            "refusing promotion proposal; observed coordination commit is not "
+            "an ancestor of the current board"
+        )
+    try:
+        observed_text = _read_tree_text(root, observed, source.get("path", ""))
+    except ContextOSError as exc:
+        raise ContextOSError(
+            "refusing promotion proposal; source is absent from its observed commit"
+        ) from exc
+    if sha256_text(observed_text) != source.get("content_sha256"):
+        raise ContextOSError(
+            "refusing promotion proposal; observed source content does not match"
+        )
+    for field in ("type", "id", "path", "content_sha256", "expires", "from", "kind"):
+        if source.get(field) != current[field]:
+            raise ContextOSError(
+                f"refusing stale promotion proposal; source changed: {message_id}"
+            )
+
+
+def propose_promotion(
+    root: Path,
+    *,
+    message_id: str,
+    target: str,
+    payload: dict[str, Any],
+    now: datetime | None = None,
+) -> tuple[Path, dict[str, Any]]:
+    proposal_now: Any = utc_now() if now is None else now
+    if not isinstance(proposal_now, datetime):
+        proposal_now = parse_now(str(proposal_now))
+    if proposal_now.tzinfo is None:
+        raise ContextOSError("Promotion timestamps must be timezone-aware")
+    source = _promotion_source_snapshot(root, message_id, now=proposal_now)
+    from .kernel import create_coordination_promotion_proposal
+
+    return create_coordination_promotion_proposal(
+        root,
+        target=target,
+        payload=payload,
+        source=source,
+        now=proposal_now,
+    )
+
+
 def compact_board(
     root: Path,
     *,
