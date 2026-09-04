@@ -19,15 +19,22 @@ from contextos.coordination import (
     compact_board,
     create_claim,
     post_message,
+    propose_promotion,
     release_claim,
     sync_board,
     validate_board,
 )
-from contextos.kernel import ContextOSError
+from contextos.kernel import (
+    ContextOSError,
+    _recover_pending_agent_journals,
+    apply_proposal,
+    create_coordination_promotion_proposal,
+)
 from contextos.cli import main as cli_main
 
 
 NOW = datetime.fromisoformat("2026-08-31T14:30:00+00:00")
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def git(
@@ -169,6 +176,25 @@ class CoordinationTests(unittest.TestCase):
         with mock.patch.object(sys, "stdin", io.StringIO(stdin)), redirect_stdout(stdout), redirect_stderr(stderr):
             status = cli_main(["--root", str(self.repo_a), *args])
         return status, stdout.getvalue(), stderr.getvalue()
+
+    def _prepare_workspace(self) -> None:
+        (self.repo_a / "AGENTS.md").write_text("# Fixture\n", encoding="utf-8")
+        (self.repo_a / "state").mkdir(exist_ok=True)
+        (self.repo_a / "sessions").mkdir(exist_ok=True)
+        (self.repo_a / "runtimes").mkdir(exist_ok=True)
+        (self.repo_a / "components").mkdir(exist_ok=True)
+        (self.repo_a / "state" / "decisions.md").write_text(
+            "# Decisions Log\n\n"
+            "| Date | Decision | Context / rationale | Rejected alternatives |\n"
+            "|---|---|---|---|\n",
+            encoding="utf-8",
+        )
+        (self.repo_a / "runtimes" / "codex.json").write_bytes(
+            (ROOT / "runtimes" / "codex.json").read_bytes()
+        )
+        (self.repo_a / "components" / "manifest.json").write_bytes(
+            (ROOT / "components" / "manifest.json").read_bytes()
+        )
 
     def test_bootstrap_creates_ref_and_second_bootstrap_is_noop(self) -> None:
         before_branch = git(
@@ -961,6 +987,281 @@ class CoordinationTests(unittest.TestCase):
             synced["scan"]["message_bytes_read"]
             + synced["scan"]["claim_bytes_read"],
         )
+
+    def test_promotion_requires_exact_digest_and_preserves_source(self) -> None:
+        self._prepare_workspace()
+        message = post_message(
+            self.repo_a,
+            sender="claude/researcher",
+            audience="all",
+            kind="note",
+            body="A candidate outcome for human review.",
+            runtime="claude",
+            now=NOW,
+        )
+        decisions = self.repo_a / "state" / "decisions.md"
+        before = decisions.read_text(encoding="utf-8")
+        proposal_path, proposal = propose_promotion(
+            self.repo_a,
+            message_id=message["id"],
+            target="state/decisions.md",
+            payload={
+                "decision": "Adopt the reviewed outcome",
+                "rationale": "The maintainer ratified it",
+                "rejected_alternatives": "Leave it ephemeral",
+            },
+            now=NOW + timedelta(hours=1),
+        )
+        self.assertEqual(before, decisions.read_text(encoding="utf-8"))
+        self.assertEqual(message["id"], proposal["source"]["id"])
+        self.assertEqual("state/decisions.md", proposal["source"]["target_path"])
+        with self.assertRaisesRegex(ContextOSError, "--confirm must exactly match"):
+            apply_proposal(self.repo_a, proposal_path, "0" * 64, "codex")
+        self.assertEqual(before, decisions.read_text(encoding="utf-8"))
+
+        receipt_path, receipt = apply_proposal(
+            self.repo_a, proposal_path, proposal["proposal_digest"], "codex"
+        )
+        self.assertTrue(receipt_path.is_file())
+        self.assertEqual(proposal["source"], receipt["source"])
+        self.assertIn("Adopt the reviewed outcome", decisions.read_text(encoding="utf-8"))
+        self.assertIn(message["path"], self._paths("coordination/board"))
+
+    def test_promotion_rejects_changed_source_without_mutating_target(self) -> None:
+        self._prepare_workspace()
+        message = post_message(
+            self.repo_a,
+            sender="claude/researcher",
+            audience="all",
+            kind="alert",
+            body="Candidate that will change.",
+            expires=iso(NOW + timedelta(days=2)),
+            runtime="claude",
+            now=NOW,
+        )
+        proposal_path, proposal = propose_promotion(
+            self.repo_a,
+            message_id=message["id"],
+            target="state/decisions.md",
+            payload={"decision": "Never apply a changed source"},
+            now=NOW + timedelta(hours=1),
+        )
+        decisions = self.repo_a / "state" / "decisions.md"
+        before = decisions.read_text(encoding="utf-8")
+        original = self._show(message["path"])
+        self._plant_files(
+            {message["path"]: original.replace("Candidate", "Altered")},
+            "Alter promotion source",
+        )
+        with mock.patch.object(
+            coordination, "utc_now", return_value=NOW + timedelta(hours=1)
+        ), self.assertRaisesRegex(ContextOSError, "source changed"):
+            apply_proposal(
+                self.repo_a, proposal_path, proposal["proposal_digest"], "codex"
+            )
+        self.assertEqual(before, decisions.read_text(encoding="utf-8"))
+
+    def test_promotion_rejects_source_that_expired_after_proposal(self) -> None:
+        self._prepare_workspace()
+        message = post_message(
+            self.repo_a,
+            sender="claude/researcher",
+            audience="all",
+            kind="alert",
+            body="Candidate that will expire.",
+            expires=iso(NOW + timedelta(days=2)),
+            runtime="claude",
+            now=NOW,
+        )
+        proposal_path, proposal = propose_promotion(
+            self.repo_a,
+            message_id=message["id"],
+            target="state/decisions.md",
+            payload={"decision": "Never apply an expired source"},
+            now=NOW + timedelta(hours=1),
+        )
+        decisions = self.repo_a / "state" / "decisions.md"
+        before = decisions.read_text(encoding="utf-8")
+        with mock.patch.object(
+            coordination, "utc_now", return_value=NOW + timedelta(days=3)
+        ), self.assertRaisesRegex(ContextOSError, "has expired"):
+            apply_proposal(
+                self.repo_a, proposal_path, proposal["proposal_digest"], "codex"
+            )
+        self.assertEqual(before, decisions.read_text(encoding="utf-8"))
+
+    def test_promotion_rolls_back_second_source_validation_failure(self) -> None:
+        self._prepare_workspace()
+        message = post_message(
+            self.repo_a,
+            sender="claude/researcher",
+            audience="all",
+            kind="note",
+            body="Candidate whose second validation fails.",
+            runtime="claude",
+            now=NOW,
+        )
+        proposal_path, proposal = propose_promotion(
+            self.repo_a,
+            message_id=message["id"],
+            target="state/decisions.md",
+            payload={"decision": "Do not wedge transaction recovery"},
+            now=NOW + timedelta(hours=1),
+        )
+        decisions = self.repo_a / "state" / "decisions.md"
+        before = decisions.read_bytes()
+        original_validate = coordination.validate_promotion_source
+        calls = 0
+
+        def fail_second_validation(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise ContextOSError("injected promotion revalidation failure")
+            return original_validate(*args, **kwargs)
+
+        with mock.patch.object(
+            coordination,
+            "validate_promotion_source",
+            side_effect=fail_second_validation,
+        ), self.assertRaisesRegex(ContextOSError, "injected promotion revalidation failure"):
+            apply_proposal(
+                self.repo_a, proposal_path, proposal["proposal_digest"], "codex"
+            )
+        self.assertEqual(2, calls)
+        self.assertEqual(before, decisions.read_bytes())
+        journals = self.repo_a / ".context-os" / "journals"
+        self.assertEqual([], list(journals.iterdir()))
+
+    def test_promotion_retires_committed_journal_during_recovery(self) -> None:
+        self._prepare_workspace()
+        message = post_message(
+            self.repo_a,
+            sender="claude/researcher",
+            audience="all",
+            kind="note",
+            body="Candidate with a retained committed journal.",
+            runtime="claude",
+            now=NOW,
+        )
+        proposal_path, proposal = propose_promotion(
+            self.repo_a,
+            message_id=message["id"],
+            target="state/decisions.md",
+            payload={"decision": "Recover the committed promotion"},
+            now=NOW + timedelta(hours=1),
+        )
+        with mock.patch("contextos.kernel._discard_agent_journal", return_value=None):
+            receipt_path, _ = apply_proposal(
+                self.repo_a, proposal_path, proposal["proposal_digest"], "codex"
+            )
+        journal = self.repo_a / ".context-os" / "journals" / proposal["proposal_id"]
+        self.assertTrue(journal.is_dir())
+        self.assertTrue(receipt_path.is_file())
+
+        _recover_pending_agent_journals(self.repo_a)
+
+        self.assertFalse(journal.exists())
+        self.assertTrue(receipt_path.is_file())
+        self.assertIn(
+            "Recover the committed promotion",
+            (self.repo_a / "state" / "decisions.md").read_text(encoding="utf-8"),
+        )
+
+    def test_promotion_tolerates_unrelated_update_and_writes_handoff(self) -> None:
+        self._prepare_workspace()
+        source = post_message(
+            self.repo_a,
+            sender="claude/researcher",
+            audience="all",
+            kind="handoff",
+            body="Candidate handoff.",
+            runtime="claude",
+            now=NOW,
+        )
+        target = "sessions/2026-08-31.md"
+        with self.assertRaisesRegex(ContextOSError, "at least one item"):
+            propose_promotion(
+                self.repo_a,
+                message_id=source["id"],
+                target=target,
+                payload={"summary": []},
+                now=NOW + timedelta(hours=1),
+            )
+        proposal_path, proposal = propose_promotion(
+            self.repo_a,
+            message_id=source["id"],
+            target=target,
+            payload={"summary": ["Continue from the reviewed checkpoint"]},
+            now=NOW + timedelta(hours=1),
+        )
+        post_message(
+            self.repo_b,
+            sender="codex/researcher",
+            audience="all",
+            kind="note",
+            body="An unrelated board update.",
+            runtime="codex",
+            now=NOW + timedelta(minutes=30),
+        )
+        _, receipt = apply_proposal(
+            self.repo_a, proposal_path, proposal["proposal_digest"], "codex"
+        )
+        self.assertEqual(source["id"], receipt["source"]["id"])
+        handoff = (self.repo_a / target).read_text(encoding="utf-8")
+        self.assertIn("Continue from the reviewed checkpoint", handoff)
+        self.assertIn(source["id"], handoff)
+
+    def test_promotion_cli_requires_explicit_allowed_target(self) -> None:
+        self._prepare_workspace()
+        source = post_message(
+            self.repo_a,
+            sender="claude/researcher",
+            audience="all",
+            kind="note",
+            body="Candidate for explicit selection.",
+            runtime="claude",
+            now=NOW,
+        )
+        payload = self.base / "promotion.json"
+        payload.write_text(
+            json.dumps({"decision": "A reviewed CLI decision"}),
+            encoding="utf-8",
+        )
+        status, stdout, stderr = self._run_cli(
+            "board", "promote",
+            "--message", source["id"],
+            "--target", "state/decisions.md",
+            "--input", str(payload),
+            "--now", iso(NOW + timedelta(hours=1)),
+        )
+        self.assertEqual(0, status, stderr)
+        report = json.loads(stdout)
+        self.assertEqual(source["id"], report["source"]["id"])
+        self.assertFalse(
+            "A reviewed CLI decision"
+            in (self.repo_a / "state" / "decisions.md").read_text(encoding="utf-8")
+        )
+
+        status, _, stderr = self._run_cli(
+            "board", "promote",
+            "--message", source["id"],
+            "--target", "state/current.md",
+            "--input", str(payload),
+            "--now", iso(NOW + timedelta(hours=1)),
+        )
+        self.assertEqual(2, status)
+        self.assertIn("promotion target must be", stderr)
+
+    def test_promotion_kernel_rejects_naive_creation_time(self) -> None:
+        with self.assertRaisesRegex(ContextOSError, "timezone-aware"):
+            create_coordination_promotion_proposal(
+                self.repo_a,
+                target="state/decisions.md",
+                payload={"decision": "Must not be proposed"},
+                source={},
+                now=NOW.replace(tzinfo=None),
+            )
 
     def test_validate_clean_and_reports_malformed_and_imperative_files(self) -> None:
         bootstrap_board(self.repo_a, now=NOW)
