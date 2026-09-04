@@ -408,6 +408,10 @@ def validate_catalog(catalog: Any) -> None:
             raise CatalogError(f"{location}.uninstall: user-data removal requires delete and destructive capabilities")
         if not isinstance(item["maturity"], str) or item["maturity"] not in MATURITY:
             raise CatalogError(f"{location}.maturity: unsupported maturity")
+        if not isinstance(item["last_verified"], str) or not re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}", item["last_verified"]
+        ):
+            raise CatalogError(f"{location}.last_verified: expected YYYY-MM-DD")
         try:
             verified_on = dt.date.fromisoformat(item["last_verified"])
         except (TypeError, ValueError):
@@ -447,6 +451,12 @@ def freshness_report(catalog: dict[str, Any], as_of: dt.date) -> dict[str, Any]:
     entries = []
     summary = {state: 0 for state in FRESHNESS_STATES}
     for item in sorted(catalog["integrations"], key=lambda value: value["id"]):
+        if not isinstance(item["last_verified"], str) or not re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}", item["last_verified"]
+        ):
+            raise CatalogError(
+                f"{item['id']}.last_verified: expected YYYY-MM-DD"
+            )
         try:
             verified_on = dt.date.fromisoformat(item["last_verified"])
         except (TypeError, ValueError):

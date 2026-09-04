@@ -519,6 +519,11 @@ class IntegrationCatalogTests(unittest.TestCase):
 
     def test_future_verification_dates_are_rejected(self) -> None:
         self.assert_invalid(
+            lambda catalog: catalog["integrations"][0].update(
+                {"last_verified": "20260903"}
+            )
+        )
+        self.assert_invalid(
             lambda catalog: catalog["integrations"][0].update({"last_verified": "9999-12-31"})
         )
 
