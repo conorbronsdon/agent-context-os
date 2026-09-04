@@ -1493,6 +1493,8 @@ def create_coordination_promotion_proposal(
     source: dict[str, Any],
     now: datetime,
 ) -> tuple[Path, dict[str, Any]]:
+    if now.tzinfo is None:
+        raise ContextOSError("Promotion timestamps must be timezone-aware")
     workspace = load_workspace(root)
     changes = build_changes(
         root, render_promotion(workspace, target, payload, source, now)

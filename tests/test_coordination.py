@@ -24,7 +24,11 @@ from contextos.coordination import (
     sync_board,
     validate_board,
 )
-from contextos.kernel import ContextOSError, apply_proposal
+from contextos.kernel import (
+    ContextOSError,
+    apply_proposal,
+    create_coordination_promotion_proposal,
+)
 from contextos.cli import main as cli_main
 
 
@@ -1161,6 +1165,16 @@ class CoordinationTests(unittest.TestCase):
         )
         self.assertEqual(2, status)
         self.assertIn("promotion target must be", stderr)
+
+    def test_promotion_kernel_rejects_naive_creation_time(self) -> None:
+        with self.assertRaisesRegex(ContextOSError, "timezone-aware"):
+            create_coordination_promotion_proposal(
+                self.repo_a,
+                target="state/decisions.md",
+                payload={"decision": "Must not be proposed"},
+                source={},
+                now=NOW.replace(tzinfo=None),
+            )
 
     def test_validate_clean_and_reports_malformed_and_imperative_files(self) -> None:
         bootstrap_board(self.repo_a, now=NOW)

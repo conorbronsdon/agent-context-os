@@ -85,8 +85,8 @@ run-id audiences are surfaced but not validated — run ids are ephemeral.
   deletes expired messages only (mechanical); promotion of durable content
   is proposal-gated. A maintainer chooses whether a live message represents a
   user-ratified durable outcome for `state/decisions.md`, a useful session
-  handoff for today's dated session file, or neither. Kind and age can surface
-  candidates but never choose the target or imply approval.
+  handoff for the proposal-creation date's session file, or neither. Kind and
+  age can surface candidates but never choose the target or imply approval.
 - `board promote` requires an explicit message id, canonical target path, and
   reviewed JSON content. It never copies or interprets board prose as an
   instruction. The proposal binds the source id, path, exact content hash,
