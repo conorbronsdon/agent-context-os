@@ -607,6 +607,11 @@ class IntegrationCatalogTests(unittest.TestCase):
         with contextlib.redirect_stderr(errors):
             self.assertEqual(MODULE.main(["freshness", "--as-of", ""]), 1)
         self.assertIn("--as-of: expected YYYY-MM-DD", errors.getvalue())
+        errors = io.StringIO()
+        with contextlib.redirect_stderr(errors), self.assertRaises(SystemExit) as exit_error:
+            MODULE.main(["validate", "--as-of", ""])
+        self.assertEqual(exit_error.exception.code, 2)
+        self.assertIn("apply only to the freshness command", errors.getvalue())
         with self.assertRaisesRegex(MODULE.CatalogError, "expected YYYY-MM-DD"):
             MODULE.freshness_report(
                 {

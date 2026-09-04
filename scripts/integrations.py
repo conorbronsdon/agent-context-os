@@ -595,7 +595,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--as-of", help="freshness report date in YYYY-MM-DD")
     parser.add_argument("--format", choices=("json", "markdown"))
     args = parser.parse_args(argv)
-    if args.command != "freshness" and (args.as_of or args.format):
+    if args.command != "freshness" and (
+        args.as_of is not None or args.format is not None
+    ):
         parser.error("--as-of and --format apply only to the freshness command")
     try:
         catalog = load_catalog()
