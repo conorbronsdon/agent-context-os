@@ -45,6 +45,7 @@ from .coordination import (
     compact_board,
     create_claim,
     post_message,
+    propose_promotion,
     release_claim,
     sync_board,
     validate_board,
@@ -303,6 +304,18 @@ def parser() -> argparse.ArgumentParser:
     )
     board_compact.add_argument("--apply", action="store_true")
     board_compact.add_argument("--now")
+    board_promote = board_commands.add_parser(
+        "promote", help="Create a source-bound proposal for one live message"
+    )
+    board_promote.add_argument("--message", required=True, help="exact message id")
+    board_promote.add_argument(
+        "--target", required=True,
+        help="explicit decisions.md or today's session path",
+    )
+    board_promote.add_argument(
+        "--input", type=Path, required=True, help="reviewed promotion JSON payload"
+    )
+    board_promote.add_argument("--now")
     board_validate = board_commands.add_parser("validate", help="Validate the fetched coordination tree")
     board_validate.add_argument("--now")
 
@@ -1053,6 +1066,24 @@ def main(argv: list[str] | None = None) -> int:
                 ))
             elif args.board_command == "compact":
                 emit(compact_board(root, apply=args.apply, now=now))
+            elif args.board_command == "promote":
+                path, document = propose_promotion(
+                    root,
+                    message_id=args.message,
+                    target=args.target,
+                    payload=read_json(args.input),
+                    now=now,
+                )
+                emit({
+                    "proposal": path.relative_to(root).as_posix(),
+                    "proposal_id": document["proposal_id"],
+                    "proposal_digest": document["proposal_digest"],
+                    "source": document["source"],
+                    "changes": [
+                        {"path": item["path"], "diff": item["diff"]}
+                        for item in document["changes"]
+                    ],
+                })
             elif args.board_command == "validate":
                 emit(validate_board(root, roles=_board_roles(root), now=now))
         elif args.command == "hook":
