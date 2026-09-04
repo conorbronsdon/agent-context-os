@@ -68,7 +68,10 @@ invocation, and its permission-denial check first requires the same model to
 produce a positive bash-tool event. These checks cannot pass on a generic
 textual answer. The read-only digest excludes only OpenCode's generated
 `.opencode/.gitignore` and `.opencode/node_modules` dependency bootstrap; it
-continues covering every adapter source and `.context-os` lifecycle artifact:
+continues covering every adapter source and `.context-os` lifecycle artifact.
+It hashes each in-tree path, type, mode, and content or symlink target, while
+deliberately ignoring filesystem link counts so excluded child directories do
+not perturb their parents differently on POSIX and Windows:
 
 ```bash
 python adapters/opencode/live_conformance.py \

@@ -107,6 +107,16 @@ class OpenCodeAdapterTest(unittest.TestCase):
             (root / "unexpected-empty-directory").mkdir()
             self.assertNotEqual(before, live.tree_digest(root))
 
+    def test_read_only_digest_covers_in_tree_hard_links_by_path(self) -> None:
+        live = load_live_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source.txt"
+            source.write_text("fixture\n", encoding="utf-8")
+            before = live.tree_digest(root)
+            os.link(source, root / "alias.txt")
+            self.assertNotEqual(before, live.tree_digest(root))
+
     def test_read_only_digest_excludes_only_opencode_generated_dependencies(self) -> None:
         live = load_live_module()
         with tempfile.TemporaryDirectory() as temporary:

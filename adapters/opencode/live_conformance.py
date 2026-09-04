@@ -93,7 +93,11 @@ def tree_digest(root: Path) -> str:
             kind = "other"
         digest.update(relative.encode("utf-8"))
         digest.update(b"\0")
-        digest.update(f"{kind}\0{mode:o}\0{metadata.st_nlink}\0".encode("ascii"))
+        # Link counts are filesystem metadata, not tree content. In particular,
+        # adding an excluded child directory increments its parent's st_nlink on
+        # POSIX but not Windows. Every in-tree path is already hashed separately,
+        # so omitting st_nlink keeps the digest portable without hiding links.
+        digest.update(f"{kind}\0{mode:o}\0".encode("ascii"))
         if kind == "file":
             digest.update(path.read_bytes())
         elif kind == "symlink":
