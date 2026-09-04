@@ -37,18 +37,23 @@ Run it locally rather than discovering a failure in CI. It takes about a minute.
 
 ## Generated files — do not hand-edit
 
-Seven artifacts are produced by scripts. Editing them directly means your change is
+Eight artifacts, plus one ownership slice, are produced by scripts. Editing them directly means your change is
 silently reverted on the next regeneration.
 
 | File | Source of truth | Regenerate with |
 |---|---|---|
-| `references/integrations.md` | `integrations/catalog.json` | `scripts/integrations.py render` |
+| `integrations/catalog.json` | `integrations/entries/*.json` | `scripts/integrations.py render` |
+| `references/integrations.md` | `integrations/entries/*.json` | `scripts/integrations.py render` |
 | `REPO_MAP.md` | the repository itself | `scripts/generate-repo-map.sh` (gitignored — never commit it) |
 | `runtimes/schema.json` | `contextos/runtime_schema.py` | `scripts/runtime-manifests.py generate` |
 | README registered-host table | validated `runtimes/*.json` descriptors | `scripts/runtime-manifests.py generate` |
 | `components/schema.json` | `contextos/component_schema.py` | `scripts/component-manifests.py generate` |
 | `bundles/schema.json` | `contextos/bundle_schema.py` | `scripts/bundle-locks.py generate` |
 | `workspace/schema.json` | `contextos/workspace_schema.py` | `scripts/workspace-config.py generate` |
+
+`scripts/integrations.py render` also owns only the
+`integrations/entries/*.json` path records in `components/manifest.json`; the
+rest of that manifest remains curated component inventory.
 
 ## Adding a runtime descriptor
 
@@ -77,7 +82,7 @@ The most commonly requested contribution. Use the
 [integration proposal issue template](.github/ISSUE_TEMPLATE/integration-proposal.md)
 to check the entry is wanted before writing it.
 
-1. Add an entry to `integrations/catalog.json`. Copy an existing entry and fill
+1. Add one `integrations/entries/<id>.json` file. Copy an existing entry and fill
    every field — the validator enforces the required set.
 2. Set `last_verified` to the date **you** checked the source. Do not copy a
    date from an issue or another entry; upstream tools move quickly.
@@ -90,7 +95,12 @@ to check the entry is wanted before writing it.
    functionality, or enforce default profiles. Place client-side scope and
    tool recommendations, along with the full reachable surface area, in
    `capabilities.details`. Provide confirmation guidance in `confirmation.notes`.
-6. Regenerate `references/integrations.md` and run the validator.
+6. Run `scripts/integrations.py render` to regenerate the sorted aggregate,
+   reference, and component-ownership records, then run the validator.
+
+The task chooser and changelog are curated release-maintainer surfaces. A
+routine entry contribution does not edit them unless it also changes product
+guidance or records a release-level behavior change.
 
 `maturity` is a claim about metadata, not about testing. `verified` means
 every submitted field is supported by current first-party evidence on the stated date.

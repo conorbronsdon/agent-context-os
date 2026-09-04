@@ -18,7 +18,8 @@
 - [ ] Every verified field is supported by first-party evidence, and unverified fields are explicitly disclosed (no live installation or testing used)
 - [ ] `last_verified` is the personally checked date
 - [ ] Confirmation gates are derived from capabilities, installation scope, and credential boundaries; risk tags are derived from capabilities
-- [ ] `references/integrations.md` was regenerated via script
+- [ ] The integration has one `integrations/entries/<id>.json` source file
+- [ ] Aggregate catalog, reference, and component ownership were regenerated via script
 - [ ] `CHANGELOG.md` updated
 - [ ] Full validation (`bash scripts/validate-all.sh`) passes locally
 

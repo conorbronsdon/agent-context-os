@@ -63,7 +63,7 @@ and Devin are separate experimental adapters with their own documented limits.
 
 The optional integration catalog covers portable skill collections, creator
 tools, CLIs, and MCP servers. The [generated catalog](../references/integrations.md)
-and its source, [`integrations/catalog.json`](../integrations/catalog.json), are
+and its entry-local sources, [`integrations/entries/`](../integrations/entries/), are
 the current inventory rather than this launch summary. Each entry declares data
 access, side effects, confirmation gates, evidence, health checks, and uninstall
 behavior.

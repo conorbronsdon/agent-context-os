@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Added
+- Integration catalog contributions now use one authoritative JSON file per
+  entry. Deterministic aggregation generates the machine catalog, Markdown
+  reference, and component ownership records, while the chooser and changelog
+  remain explicit curated surfaces (#161).
 - Coordination `board sync` receipts now report content-free scan counts,
   bytes, amplification, and elapsed time. The board contract records a
   measured threshold for reconsidering physical inbox sharding while retaining

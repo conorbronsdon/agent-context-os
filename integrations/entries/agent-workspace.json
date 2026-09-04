@@ -1,0 +1,73 @@
+{
+    "id":  "agent-workspace",
+    "name":  "Agent Workspace",
+    "summary":  "A slim standalone package for agent lifecycle, state, reconciliation, and recovery workflows.",
+    "source_url":  "https://github.com/conorbronsdon/agent-workspace",
+    "kind":  "workspace_template",
+    "supported_agents":  [
+                             "claude_code"
+                         ],
+    "installation":  {
+                         "automatic":  false,
+                         "scope":  "project_or_user",
+                         "prerequisites":  [
+                                               "Git",
+                                               "A repository where workspace state may be stored"
+                                           ]
+                     },
+    "data_boundary":  {
+                          "credentials":  [
+
+                                          ],
+                          "reads":  [
+                                        "Local workspace state, sessions, branches, and worktrees"
+                                    ],
+                          "writes":  [
+                                         "Local workspace state and session files after workflow approval",
+                                         "Optional removal of explicitly approved stale worktrees or branches"
+                                     ]
+                      },
+    "capabilities":  {
+                         "read":  true,
+                         "sensitive_read":  false,
+                         "write":  true,
+                         "remote_write":  false,
+                         "publish":  false,
+                         "overwrite":  false,
+                         "delete":  true,
+                         "arbitrary_execution":  false,
+                         "oauth":  false,
+                         "destructive":  true,
+                         "details":  [
+                                         "Session lifecycle",
+                                         "State reconciliation",
+                                         "Optional stale worktree cleanup and removal"
+                                     ]
+                     },
+    "confirmation":  {
+                         "required_for":  [
+                                              "external_install",
+                                              "write",
+                                              "delete",
+                                              "destructive"
+                                          ],
+                         "notes":  "Recovery is read-only by default; require approval before cleanup or state mutation."
+                     },
+    "risk_tags":  [
+                      "local-state",
+                      "git",
+                      "cleanup",
+                      "delete-capable",
+                      "destructive-capable"
+                  ],
+    "maturity":  "verified",
+    "last_verified":  "2026-08-15",
+    "evidence":  [
+                     "https://github.com/conorbronsdon/agent-workspace"
+                 ],
+    "health_check":  "Run the package\u0027s documented validation and a read-only start or reconcile workflow.",
+    "uninstall":  {
+                      "instructions":  "Remove the installed adapters only after preserving any workspace state the user wants to keep.",
+                      "removes_user_data":  false
+                  }
+}

@@ -1,0 +1,95 @@
+{
+    "id":  "github-mcp",
+    "name":  "GitHub MCP",
+    "summary":  "GitHub\u0027s official MCP server exposes repository, issue, pull-request, Actions, security, and administration toolsets with granular allowlists and an enforced read-only mode.",
+    "source_url":  "https://github.com/github/github-mcp-server",
+    "kind":  "mcp_server",
+    "supported_agents":  [
+                             "claude_code",
+                             "codex",
+                             "gemini_cli",
+                             "cursor",
+                             "opencode",
+                             "generic"
+                         ],
+    "installation":  {
+                         "automatic":  false,
+                         "scope":  "project_or_user",
+                         "prerequisites":  [
+                                               "An MCP-compatible client",
+                                               "A GitHub account",
+                                               "Docker or a current native release for the local server; hosted-server availability depends on the client"
+                                           ]
+                     },
+    "data_boundary":  {
+                          "credentials":  [
+                                              "Browser OAuth token held by the client, or a fine-grained personal access token or GitHub App credentials kept outside repository files"
+                                          ],
+                          "reads":  [
+                                        "Private or public repository contents and metadata, issues, pull requests, users, Actions, security findings, notifications, and other explicitly enabled toolsets allowed by the authenticated account"
+                                    ],
+                          "writes":  [
+                                         "Remote GitHub writes exposed by enabled toolsets, including issue and pull-request comments, branch or file changes, workflow operations, labels, notifications, and repository administration where the credential permits",
+                                         "Publicly visible posts, overwrite-capable file or branch changes, and resource deletion when the corresponding write tools are enabled"
+                                     ]
+                      },
+    "capabilities":  {
+                         "read":  true,
+                         "sensitive_read":  true,
+                         "write":  true,
+                         "remote_write":  true,
+                         "publish":  true,
+                         "overwrite":  true,
+                         "delete":  true,
+                         "arbitrary_execution":  false,
+                         "oauth":  true,
+                         "destructive":  true,
+                         "details":  [
+                                         "Start with --read-only and only the context, repos, issues, and pull_requests toolsets; read-only mode takes priority even if a write tool is requested explicitly",
+                                         "Toolsets and individual tools are allowlisted independently, so enabling all or the default surface can expose materially more data and actions than a bounded project workflow needs",
+                                         "Treat workflow dispatch, branch or file mutation, repository administration, and public comments as separate high-impact remote actions"
+                                     ]
+                     },
+    "confirmation":  {
+                         "required_for":  [
+                                              "credential_setup",
+                                              "external_install",
+                                              "read_sensitive",
+                                              "write",
+                                              "write_remote",
+                                              "publish",
+                                              "overwrite",
+                                              "delete",
+                                              "oauth",
+                                              "destructive"
+                                          ],
+                         "notes":  "Confirm the exact GitHub identity, host, repositories, credential scopes, and enabled toolsets; ask before private-repository reads, and separately show the exact target and payload before comments, branch or file writes, workflow actions, publication, overwrite, deletion, or administration."
+                     },
+    "risk_tags":  [
+                      "credentials",
+                      "private-repositories",
+                      "sensitive-read",
+                      "remote-write",
+                      "publish-capable",
+                      "public-publish",
+                      "overwrite-capable",
+                      "delete-capable",
+                      "oauth",
+                      "destructive-capable",
+                      "broad-api-surface",
+                      "ci-cd",
+                      "prompt-injection"
+                  ],
+    "maturity":  "verified",
+    "last_verified":  "2026-08-18",
+    "evidence":  [
+                     "https://github.com/github/github-mcp-server",
+                     "https://github.com/github/github-mcp-server/blob/bf47e3eca9aeda1e3826916a57c0f9fb0f9d2bc7/docs/server-configuration.md",
+                     "https://github.com/github/github-mcp-server/blob/bf47e3eca9aeda1e3826916a57c0f9fb0f9d2bc7/docs/remote-server.md"
+                 ],
+    "health_check":  "Start the server in read-only mode with only context, repos, issues, and pull_requests enabled, verify the authenticated identity and host, then read one explicitly named repository and issue without performing a write.",
+    "uninstall":  {
+                      "instructions":  "Remove the MCP client entry, stop or uninstall the local server if used, and revoke the OAuth grant, personal access token, or GitHub App installation used for the connection; leave repositories and GitHub content unchanged.",
+                      "removes_user_data":  false
+                  }
+}

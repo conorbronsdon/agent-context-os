@@ -1,0 +1,82 @@
+{
+    "id":  "granola-mcp",
+    "name":  "Granola MCP",
+    "summary":  "Granola\u0027s official hosted, read-only MCP for sensitive meeting notes and plan-dependent transcripts.",
+    "source_url":  "https://docs.granola.ai/help-center/sharing/integrations/mcp",
+    "kind":  "mcp_server",
+    "supported_agents":  [
+                             "claude_code",
+                             "generic"
+                         ],
+    "installation":  {
+                         "automatic":  false,
+                         "scope":  "user",
+                         "prerequisites":  [
+                                               "A Granola account with notes",
+                                               "An MCP client supporting Streamable HTTP and browser OAuth"
+                                           ]
+                     },
+    "data_boundary":  {
+                          "credentials":  [
+                                              "Per-user browser OAuth bearer token stays outside repository configuration and logs"
+                                          ],
+                          "reads":  [
+                                        "Owned, directly shared, private-folder-shared, or workspace-public notes allowed by the active account and plan",
+                                        "Account information, meeting folders, meeting notes, searches, and plan-dependent transcripts that enter the connected model context"
+                                    ],
+                          "writes":  [
+
+                                     ]
+                      },
+    "capabilities":  {
+                         "read":  true,
+                         "sensitive_read":  true,
+                         "write":  false,
+                         "remote_write":  false,
+                         "publish":  false,
+                         "overwrite":  false,
+                         "delete":  false,
+                         "arbitrary_execution":  false,
+                         "oauth":  true,
+                         "destructive":  false,
+                         "details":  [
+                                         "Do not ingest meeting data automatically at startup; ask before raw transcript retrieval or broad multi-meeting search",
+                                         "Notes and transcripts are retained indefinitely by default and stored in AWS in the United States",
+                                         "Granola states it is not currently HIPAA or FERPA compliant, and meeting-participant consent remains the user\u0027s responsibility",
+                                         "Basic access is limited to personal notes from the last 30 days; folder, search, and transcript tools can require a paid plan",
+                                         "Free and Business plans may use anonymized data for model improvement by default, with an account opt-out documented",
+                                         "Granola can transcribe voice memos, but current MCP documentation guarantees meeting-note and transcript tools rather than voice-memo coverage"
+                                     ]
+                     },
+    "confirmation":  {
+                         "required_for":  [
+                                              "credential_setup",
+                                              "external_install",
+                                              "read_sensitive",
+                                              "oauth"
+                                          ],
+                         "notes":  "Require explicit OAuth, verify the active account and workspace, and ask before transcript retrieval, broad searches, or moving meeting content elsewhere; confirm participant-consent obligations before use."
+                     },
+    "risk_tags":  [
+                      "sensitive-read",
+                      "oauth",
+                      "hosted",
+                      "transcripts",
+                      "plan-limited",
+                      "us-data-residency",
+                      "indefinite-retention",
+                      "consent-required"
+                  ],
+    "maturity":  "verified",
+    "last_verified":  "2026-08-15",
+    "evidence":  [
+                     "https://docs.granola.ai/help-center/sharing/integrations/mcp",
+                     "https://docs.granola.ai/help-center/consent-security-privacy/security-privacy-data-faqs",
+                     "https://docs.granola.ai/help-center/getting-started/setting-up-granola-for-the-first-time"
+                 ],
+    "health_check":  "After OAuth, call get_account_info to verify the exact account and workspace, then run a narrowly bounded list_meetings request.",
+    "uninstall":  {
+                      "instructions":  "Disconnect Granola in the client and remove the MCP entry; do not claim token revocation unless the current client documents it.",
+                      "removes_user_data":  false
+                  }
+}
