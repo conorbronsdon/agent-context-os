@@ -11,7 +11,7 @@ import re
 import stat
 import subprocess
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 LIFECYCLE = ("setup", "start", "update", "end")
@@ -24,6 +24,15 @@ CONFIG_OVERRIDE_ENV = (
     "OPENCODE_DISABLE_CLAUDE_CODE_SKILLS",
     "OPENCODE_DISABLE_CLAUDE_CODE_PROMPT",
 )
+ISOLATED_HOST_PATH_ENV = {
+    "HOME": "home",
+    "USERPROFILE": "home",
+    "XDG_CONFIG_HOME": "config",
+    "XDG_DATA_HOME": "data",
+    "XDG_CACHE_HOME": "cache",
+    "APPDATA": "appdata",
+    "LOCALAPPDATA": "localappdata",
+}
 
 
 def run(
@@ -35,11 +44,17 @@ def run(
         environment.pop(name, None)
     environment.update(extra_env or {})
     environment["OPENCODE_PURE"] = "1"
-    return subprocess.run(
-        [str(binary), *args], cwd=cwd, env=environment, text=True,
-        encoding="utf-8", errors="replace", capture_output=True,
-        check=False, timeout=timeout,
-    )
+    with tempfile.TemporaryDirectory(prefix="contextos-opencode-env-") as temporary:
+        isolation_root = Path(temporary)
+        for name, relative in ISOLATED_HOST_PATH_ENV.items():
+            target = isolation_root / relative
+            target.mkdir(exist_ok=True)
+            environment[name] = str(target)
+        return subprocess.run(
+            [str(binary), *args], cwd=cwd, env=environment, text=True,
+            encoding="utf-8", errors="replace", capture_output=True,
+            check=False, timeout=timeout,
+        )
 
 
 def parse_json_document(result: subprocess.CompletedProcess[str], label: str) -> object:
@@ -116,8 +131,13 @@ def copy_tracked_fixture(repo: Path, fixture: Path, commit: str) -> None:
         except (ValueError, UnicodeDecodeError) as exc:
             raise RuntimeError("git returned a malformed tree entry") from exc
         name = os.fsdecode(raw_name)
-        relative = Path(name)
-        if relative.is_absolute() or ".." in relative.parts:
+        relative = PurePosixPath(name)
+        if (
+            relative.is_absolute()
+            or ".." in relative.parts
+            or not relative.parts
+            or re.match(r"^[A-Za-z]:", relative.parts[0])
+        ):
             raise RuntimeError(f"unsafe tracked path: {name!r}")
         if object_type != "blob" or mode not in {"100644", "100755"}:
             raise RuntimeError(f"tracked fixture source must be a regular file: {name!r}")
@@ -127,7 +147,7 @@ def copy_tracked_fixture(repo: Path, fixture: Path, commit: str) -> None:
         )
         if blob.returncode != 0:
             raise RuntimeError(f"could not read verified blob for {name!r}")
-        target = fixture / relative
+        target = fixture.joinpath(*relative.parts)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(blob.stdout)
         if os.name != "nt":
@@ -238,7 +258,10 @@ def main() -> int:
         commands = config.get("command", {}) if isinstance(config, dict) else {}
         for item in LIFECYCLE:
             name = f"context-{item}"
-            template = commands.get(name, {}).get("template", "")
+            command = commands.get(name, {})
+            if not isinstance(command, dict):
+                raise RuntimeError(f"resolved command {name} has an invalid shape")
+            template = command.get("template", "")
             if f"`{name}`" not in template or "Use the `skill` tool" not in template:
                 raise RuntimeError(f"resolved command {name} does not route to its exact skill")
 
@@ -278,6 +301,18 @@ def main() -> int:
                     raise RuntimeError(f"live {name} failed: {result.stderr.strip()}")
                 if not tool_loaded_exact_skill(result.stdout, fixture, name):
                     raise RuntimeError(f"live {name} produced no exact-skill tool event")
+            positive = run(
+                binary, fixture, "run", "--pure", "--format", "json", "-m", args.model,
+                "Conformance control: use the bash tool to run echo "
+                "CONTEXTOS_POSITIVE_SENTINEL. Do not use another tool.",
+                timeout=300,
+            )
+            if positive.returncode != 0:
+                raise RuntimeError(
+                    f"permission positive control failed: {positive.stderr.strip()}"
+                )
+            if "bash" not in tool_names(positive.stdout):
+                raise RuntimeError("permission positive control produced no bash tool event")
             denial = run(
                 binary, fixture, "run", "--pure", "--format", "json", "-m", args.model,
                 "Conformance control: use the bash tool to run echo "

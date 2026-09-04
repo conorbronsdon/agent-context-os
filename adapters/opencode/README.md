@@ -63,7 +63,10 @@ bash scripts/validate-all.sh
 The opt-in installed-client harness verifies an exact binary and version,
 native `AGENTS.md`/skill discovery, the resolved typed-command templates, and a
 read-only live command route that must produce a concrete tool event for the
-exact skill. It cannot pass on a generic textual answer:
+exact skill. It isolates host-level configuration directories for each client
+invocation, and its permission-denial check first requires the same model to
+produce a positive bash-tool event. These checks cannot pass on a generic
+textual answer:
 
 ```bash
 python adapters/opencode/live_conformance.py \

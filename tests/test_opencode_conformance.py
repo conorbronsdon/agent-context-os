@@ -173,7 +173,10 @@ class OpenCodeAdapterTest(unittest.TestCase):
 
     def test_run_scrubs_inherited_configuration_overrides(self) -> None:
         live = load_live_module()
-        inherited = {name: "host-value" for name in live.CONFIG_OVERRIDE_ENV}
+        inherited = {
+            name: "host-value"
+            for name in (*live.CONFIG_OVERRIDE_ENV, *live.ISOLATED_HOST_PATH_ENV)
+        }
         completed = subprocess.CompletedProcess([], 0, "", "")
         with patch.dict(os.environ, inherited), patch.object(
             live.subprocess, "run", return_value=completed
@@ -183,6 +186,21 @@ class OpenCodeAdapterTest(unittest.TestCase):
         self.assertEqual("1", environment["OPENCODE_PURE"])
         for name in live.CONFIG_OVERRIDE_ENV:
             self.assertNotIn(name, environment)
+        for name in live.ISOLATED_HOST_PATH_ENV:
+            self.assertIn(name, environment)
+            self.assertNotEqual("host-value", environment[name])
+
+    def test_fixture_path_rejects_windows_drive_relative_names(self) -> None:
+        live = load_live_module()
+        completed = subprocess.CompletedProcess(
+            [], 0, b"100644 blob " + b"0" * 40 + b"\tC:escape\0", b""
+        )
+        with tempfile.TemporaryDirectory() as temporary, patch.object(
+            live.subprocess, "run", return_value=completed
+        ):
+            root = Path(temporary)
+            with self.assertRaisesRegex(RuntimeError, "unsafe tracked path"):
+                live.copy_tracked_fixture(root, root / "fixture", "0" * 40)
 
     def test_exact_skill_read_resolves_relative_to_fixture(self) -> None:
         live = load_live_module()
