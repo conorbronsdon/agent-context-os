@@ -1,0 +1,88 @@
+{
+    "id":  "readwise-mcp",
+    "name":  "Readwise MCP",
+    "summary":  "Readwise\u0027s official hosted MCP searches highlights, notes, and Reader documents across an indexed personal library and can optionally organize documents or change highlights.",
+    "source_url":  "https://docs.readwise.io/tools/mcp",
+    "kind":  "mcp_server",
+    "supported_agents":  [
+                             "claude_code",
+                             "codex",
+                             "cursor",
+                             "generic"
+                         ],
+    "installation":  {
+                         "automatic":  false,
+                         "scope":  "user",
+                         "prerequisites":  [
+                                               "A Readwise account",
+                                               "An MCP client supporting remote Streamable HTTP and browser OAuth"
+                                           ]
+                     },
+    "data_boundary":  {
+                          "credentials":  [
+                                              "Per-user browser OAuth token managed by the MCP client and hosted service"
+                                          ],
+                          "reads":  [
+                                        "Sensitive indexed Readwise highlights, notes, Daily Review content, Reader documents, document metadata, tags, and reading history available to the connected account"
+                                    ],
+                          "writes":  [
+                                         "Remote creation, update, and deletion of highlights; creation of Reader documents; bulk document-metadata edits; moves between inbox, archive, and shortlist; and tag or note changes",
+                                         "Overwrite-capable highlight and metadata updates plus permanent highlight deletion"
+                                     ]
+                      },
+    "capabilities":  {
+                         "read":  true,
+                         "sensitive_read":  true,
+                         "write":  true,
+                         "remote_write":  true,
+                         "publish":  false,
+                         "overwrite":  true,
+                         "delete":  true,
+                         "arbitrary_execution":  false,
+                         "oauth":  true,
+                         "destructive":  true,
+                         "details":  [
+                                         "Use the current https://mcp2.readwise.io/mcp endpoint; the older Readwise-only MCP is deprecated",
+                                         "The server indexes both Readwise highlights and Reader documents, so connecting it exposes a broader personal knowledge boundary than a single selected document",
+                                         "No separate read-only endpoint is documented; treat organizing, bulk editing, updating, and deleting tools as disabled by policy until the user requests a specific change"
+                                     ]
+                     },
+    "confirmation":  {
+                         "required_for":  [
+                                              "credential_setup",
+                                              "external_install",
+                                              "read_sensitive",
+                                              "write",
+                                              "write_remote",
+                                              "overwrite",
+                                              "delete",
+                                              "oauth",
+                                              "destructive"
+                                          ],
+                         "notes":  "Confirm the exact Readwise account and the full-library indexing boundary; ask before broad searches or exporting content elsewhere, and show the exact document, highlight, tags, metadata, destination, or deletion before every remote change."
+                     },
+    "risk_tags":  [
+                      "credentials",
+                      "hosted",
+                      "personal-library",
+                      "semantic-index",
+                      "sensitive-read",
+                      "remote-write",
+                      "overwrite-capable",
+                      "delete-capable",
+                      "oauth",
+                      "destructive-capable",
+                      "prompt-injection"
+                  ],
+    "maturity":  "verified",
+    "last_verified":  "2026-08-18",
+    "evidence":  [
+                     "https://docs.readwise.io/tools/mcp",
+                     "https://docs.readwise.io/tools"
+                 ],
+    "health_check":  "After OAuth, run one narrowly scoped search for a known title or highlight and inspect a single result without moving, tagging, creating, updating, or deleting content.",
+    "uninstall":  {
+                      "instructions":  "Disconnect Readwise in the MCP client and revoke the authorization in Readwise if available; leave all Reader documents, highlights, notes, and tags unchanged.",
+                      "removes_user_data":  false
+                  }
+}

@@ -1,6 +1,9 @@
 # Choose an optional integration
 
-Integrations are opt-in extensions, not part of the core session loop. Start with a concrete outcome, choose at most one new trust boundary at a time, and read its full generated entry in [`references/integrations.md`](../references/integrations.md).
+Integrations are opt-in extensions, not part of the core session loop. This is
+a curated task chooser, not an exhaustive inventory. Start with a concrete
+outcome, choose at most one new trust boundary at a time, and read its full
+generated entry in [`references/integrations.md`](../references/integrations.md).
 
 Nothing in this guide installs, activates, authenticates, or grants permissions to an integration.
 

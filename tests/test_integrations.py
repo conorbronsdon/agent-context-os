@@ -1,5 +1,7 @@
 import copy
 import importlib.util
+import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -27,20 +29,33 @@ class IntegrationCatalogTests(unittest.TestCase):
     def test_catalog_has_expected_entries_and_visible_safety_columns(self) -> None:
         rendered = MODULE.render_reference(self.catalog)
         self.assertEqual(self.catalog["schema_version"], 2)
-        self.assertEqual(len(self.catalog["integrations"]), 22)
-        self.assertTrue(
-            {
-                "github-mcp",
-                "google-workspace-cli",
-                "linear-mcp",
-                "markitdown-mcp",
-                "notion-mcp",
-                "pandoc",
-                "readwise-mcp",
-            }.issubset(
-                {item["id"] for item in self.catalog["integrations"]}
-            )
-        )
+        self.assertGreater(len(self.catalog["integrations"]), 0)
+        migrated_ids = {
+            "agent-skills",
+            "agent-workspace",
+            "ai-tools-for-creators",
+            "asana-mcp",
+            "atlassian-rovo-mcp",
+            "beads-gemini",
+            "github-mcp",
+            "gitlab-mcp",
+            "google-workspace-cli",
+            "granola-mcp",
+            "linear-mcp",
+            "markitdown-mcp",
+            "notion-mcp",
+            "obsidian",
+            "pandoc",
+            "readwise-mcp",
+            "shortcut-mcp",
+            "slack-mcp",
+            "substack-mcp",
+            "todoist-cli",
+            "tolaria",
+            "trello-mcp",
+        }
+        catalog_ids = {item["id"] for item in self.catalog["integrations"]}
+        self.assertLessEqual(migrated_ids, catalog_ids)
         self.assertIn("Remote writes", rendered)
         self.assertIn("Sensitive reads", rendered)
         self.assertIn("Typed safety signals", rendered)
@@ -162,6 +177,53 @@ class IntegrationCatalogTests(unittest.TestCase):
     def test_generated_reference_matches_catalog(self) -> None:
         expected = MODULE.render_reference(self.catalog)
         self.assertEqual((ROOT / "references" / "integrations.md").read_text(), expected)
+
+    def test_entry_sources_match_generated_aggregate_and_component_ownership(self) -> None:
+        source_ids = sorted(path.stem for path in MODULE.ENTRY_DIR.glob("*.json"))
+        aggregate_ids = [item["id"] for item in self.catalog["integrations"]]
+        self.assertEqual(source_ids, aggregate_ids)
+        self.assertEqual(aggregate_ids, sorted(aggregate_ids))
+        self.assertEqual(
+            (ROOT / "integrations" / "catalog.json").read_text(encoding="utf-8"),
+            MODULE.render_catalog(self.catalog),
+        )
+        self.assertEqual(
+            (ROOT / "components" / "manifest.json").read_text(encoding="utf-8"),
+            MODULE.render_component_manifest(self.catalog),
+        )
+
+    def test_entry_aggregation_rejects_filename_mismatch_and_unsupported_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            entry = copy.deepcopy(self.catalog["integrations"][0])
+            (directory / "wrong-name.json").write_text(
+                json.dumps(entry), encoding="utf-8"
+            )
+            with self.assertRaisesRegex(MODULE.CatalogError, "filename must exactly match"):
+                MODULE.load_entry_catalog(directory)
+            (directory / "wrong-name.json").unlink()
+            (directory / f"{entry['id']}.json").write_text(
+                json.dumps(entry), encoding="utf-8"
+            )
+            (directory / "README.md").write_text("unsupported\n", encoding="utf-8")
+            with self.assertRaisesRegex(MODULE.CatalogError, "unsupported path"):
+                MODULE.load_entry_catalog(directory)
+
+    def test_entry_aggregation_rejects_duplicate_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            first = copy.deepcopy(self.catalog["integrations"][0])
+            second = copy.deepcopy(first)
+            second["id"] = "second-entry"
+            second["source_url"] = "https://example.com/second-entry"
+            (directory / f"{first['id']}.json").write_text(
+                json.dumps(first), encoding="utf-8"
+            )
+            (directory / "second-entry.json").write_text(
+                json.dumps(second), encoding="utf-8"
+            )
+            with self.assertRaises(MODULE.CatalogError):
+                MODULE.load_entry_catalog(directory)
 
     def test_empty_catalog_and_old_schema_are_rejected(self) -> None:
         self.assert_invalid(lambda catalog: catalog.update({"integrations": []}))

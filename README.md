@@ -185,7 +185,12 @@ The shared layer is intentionally plain files. Provider-specific tool names, hoo
 
 ## Optional integrations
 
-The [optional integrations catalog](references/integrations.md) is generated from [`integrations/catalog.json`](integrations/catalog.json). Each entry declares supported hosts, credentials, reads, writes, publish or destructive capabilities, confirmation gates, evidence, a health check, and uninstall behavior.
+The [optional integrations catalog](references/integrations.md) and its
+[machine-readable aggregate](integrations/catalog.json) are generated from
+entry-local sources in [`integrations/entries/`](integrations/entries/). Each
+entry declares supported hosts, credentials, reads, writes, publish or
+destructive capabilities, confirmation gates, evidence, a health check, and
+uninstall behavior.
 
 Start with the task-based [integration chooser](docs/integrations-guide.md), add at most one new trust boundary at a time, then read the selected generated entry in full.
 

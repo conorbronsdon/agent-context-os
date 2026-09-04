@@ -136,7 +136,7 @@ Curators fall into two **classes**:
 
 **Output actions:** `modify`, `archive`, `flag` (content-curator proposal shape plus a `check` field naming which of its ten checks fired: index drift, unresolved links, pattern-level staleness, duplicates, contradictions, unverifiable references, type misfiles, index-only content, duplicate archive rows, build-log bloat).
 
-**Why third:** rot compares memory against the world; lint catches the store drifting against *itself* — the class rot structurally cannot see. Sharpest case: a type misfile, where a project status filed as `feedback` escapes every rot pass because rot audits `project`/`reference` hardest. Ported from agent-memory-kit (`prompts/lint.md` @ `1bd9a14`, skills-sync#9), where it was capability the publication node had and the core lacked.
+**Why third:** rot compares memory against the world; lint catches the store drifting against *itself* — the class rot structurally cannot see. Sharpest case: a type misfile, where a project status filed as `feedback` escapes every rot pass because rot audits `project`/`reference` hardest. Ported from [agent-memory-kit `prompts/lint.md` at `1bd9a14`](https://github.com/conorbronsdon/agent-memory-kit/blob/1bd9a14/prompts/lint.md), where it was capability the publication node had and the core lacked.
 
 ### v0.4: pattern (content, later)
 

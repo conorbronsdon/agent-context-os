@@ -86,7 +86,9 @@ Before enabling or renewing one:
 - run the documented health check; and
 - know how to revoke access and uninstall without deleting user data.
 
-If upstream behavior changed since `last_verified`, update `integrations/catalog.json`, regenerate `references/integrations.md`, add regression coverage when needed, and review the diff.
+If upstream behavior changed since `last_verified`, update its
+`integrations/entries/<id>.json` source, run `scripts/integrations.py render`,
+add regression coverage when needed, and review every generated diff.
 
 ## Changelog
 

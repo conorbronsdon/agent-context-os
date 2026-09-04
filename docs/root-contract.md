@@ -199,7 +199,7 @@ instead scoped to one exact ContextRoot and project identity.
 
 ## Write and evidence boundaries
 
-Lifecycle setup/update/end obey these invariants:
+Journal-backed lifecycle and promotion workflows obey these invariants:
 
 1. Proposal, lock, staging, journal, receipt, and every target path are owned by
    ContextRoot. Host skills conventionally place reviewed input beneath

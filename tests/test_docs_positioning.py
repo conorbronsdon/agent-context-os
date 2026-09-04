@@ -138,11 +138,19 @@ class DocumentationPositioningTests(unittest.TestCase):
         self.assertIn("up to 50 recent chats from the last 30 days", codex)
         self.assertIn("cannot prove the behavior of every installed Codex version", codex)
 
-    def test_integration_chooser_covers_the_catalog(self) -> None:
+    def test_integration_chooser_links_only_cataloged_entries(self) -> None:
         guide = self.text("docs/integrations-guide.md")
         catalog = json.loads(self.text("integrations/catalog.json"))
-        for item in catalog["integrations"]:
-            self.assertIn(item["name"], guide)
+        catalog_anchors = {
+            re.sub(r"[^a-z0-9]+", "-", item["name"].casefold()).strip("-")
+            for item in catalog["integrations"]
+        }
+        linked_ids = re.findall(r"references/integrations\.md#([a-z0-9-]+)", guide)
+        self.assertTrue(linked_ids)
+        self.assertEqual(len(linked_ids), len(set(linked_ids)))
+        self.assertLessEqual(set(linked_ids), catalog_anchors)
+        self.assertIn("curated", guide)
+        self.assertIn("not an exhaustive inventory", guide)
         self.assertIn("Nothing in this guide installs", guide)
         self.assertIn("not live authentication", guide)
 
@@ -171,7 +179,7 @@ class DocumentationPositioningTests(unittest.TestCase):
         self.assertIn("references/integrations.md", self.text("README.md"))
         launch = self.text("docs/launch-copy.md")
         self.assertIn("../references/integrations.md", launch)
-        self.assertIn("../integrations/catalog.json", launch)
+        self.assertIn("../integrations/entries/", launch)
 
     def test_uncataloged_integrations_are_not_live(self) -> None:
         tracked_mcp = subprocess.run(

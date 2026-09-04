@@ -1,0 +1,85 @@
+{
+    "id":  "tolaria",
+    "name":  "Tolaria MCP",
+    "summary":  "Tolaria\u0027s bundled stdio MCP for bounded Markdown-vault reads and note mutations; this entry excludes Tolaria\u0027s embedded agents, direct provider models, and AutoGit.",
+    "source_url":  "https://github.com/refactoringhq/tolaria",
+    "kind":  "local_workspace",
+    "supported_agents":  [
+                             "claude_code",
+                             "cursor",
+                             "opencode",
+                             "generic"
+                         ],
+    "installation":  {
+                         "automatic":  false,
+                         "scope":  "project_or_user",
+                         "prerequisites":  [
+                                               "Tolaria for macOS, Windows, or Linux",
+                                               "A mounted local vault",
+                                               "A supported external MCP client configured manually"
+                                           ]
+                     },
+    "data_boundary":  {
+                          "credentials":  [
+                                              "Optional Git credentials for cloning an additional vault remain with system Git"
+                                          ],
+                          "reads":  [
+                                        "Markdown and YAML frontmatter in explicitly mounted local vaults"
+                                    ],
+                          "writes":  [
+                                         "Create, append, or full-content update of notes in mounted vaults",
+                                         "Attach an existing vault or clone one into a local directory through system Git",
+                                         "Transient Tolaria UI state through open_note, highlight_editor, and refresh_vault",
+                                         "Selected MCP client configuration during manual setup"
+                                     ]
+                      },
+    "capabilities":  {
+                         "read":  true,
+                         "sensitive_read":  true,
+                         "write":  true,
+                         "remote_write":  false,
+                         "publish":  false,
+                         "overwrite":  true,
+                         "delete":  false,
+                         "arbitrary_execution":  false,
+                         "oauth":  false,
+                         "destructive":  true,
+                         "details":  [
+                                         "Treat full-content update_note as overwrite-capable even though its MCP annotation says non-destructive",
+                                         "Prefer get_note, diff review, and expectedMtime before update_note",
+                                         "The MCP content-mutation surface is limited to create, append, update, attach, and local clone operations; open, highlight, and refresh also change transient UI state",
+                                         "Review embedded agents, direct provider models, stored provider keys, and AutoGit as separate trust boundaries before enabling them"
+                                     ]
+                     },
+    "confirmation":  {
+                         "required_for":  [
+                                              "credential_setup",
+                                              "external_install",
+                                              "read_sensitive",
+                                              "write",
+                                              "overwrite",
+                                              "destructive"
+                                          ],
+                         "notes":  "Use normal approval for a single create or append; confirm broad vault reads, show a diff before full replacement, and separately approve vault attachment, cloning, or MCP client-configuration writes."
+                     },
+    "risk_tags":  [
+                      "local-data",
+                      "sensitive-read",
+                      "read-write",
+                      "overwrite-capable",
+                      "destructive-capable",
+                      "mcp-config"
+                  ],
+    "maturity":  "verified",
+    "last_verified":  "2026-08-15",
+    "evidence":  [
+                     "https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/site/concepts/ai.md",
+                     "https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/mcp-server/index.js",
+                     "https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/docs/adr/0158-vault-write-mcp-tools-update-and-append.md"
+                 ],
+    "health_check":  "Start Tolaria, list mounted vaults, read vault context, run a bounded search, then use a disposable note for any write smoke test.",
+    "uninstall":  {
+                      "instructions":  "Remove the Tolaria MCP entry from each configured client; preserve the Tolaria application and every vault unless separate removal is requested.",
+                      "removes_user_data":  false
+                  }
+}

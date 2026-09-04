@@ -1,0 +1,90 @@
+{
+    "id":  "notion-mcp",
+    "name":  "Notion MCP",
+    "summary":  "Notion\u0027s hosted, actively maintained OAuth MCP for searching, reading, and changing content available to the connected user.",
+    "source_url":  "https://developers.notion.com/guides/mcp/get-started-with-mcp",
+    "kind":  "mcp_server",
+    "supported_agents":  [
+                             "claude_code",
+                             "codex",
+                             "cursor",
+                             "generic"
+                         ],
+    "installation":  {
+                         "automatic":  false,
+                         "scope":  "project_or_user",
+                         "prerequisites":  [
+                                               "A Notion workspace",
+                                               "An MCP client supporting remote Streamable HTTP and browser OAuth",
+                                               "A user permitted to connect external MCP clients"
+                                           ]
+                     },
+    "data_boundary":  {
+                          "credentials":  [
+                                              "Per-user browser OAuth token managed by the MCP client and hosted service"
+                                          ],
+                          "reads":  [
+                                        "Sensitive pages, databases, data sources, comments, meeting notes, members, guests, email addresses, and workspace identity allowed to the connected user",
+                                        "Search results from connected sources such as Slack, Google Drive, or Jira when Notion AI and workspace configuration allow them",
+                                        "Retrieved content that enters the connected model context"
+                                    ],
+                          "writes":  [
+                                         "Remote writes to Notion pages, databases, data sources, views, folders, comments, properties, icons, covers, and file uploads",
+                                         "Page moves, duplication, template application, and full-content replacement or other overwrite-capable updates"
+                                     ]
+                      },
+    "capabilities":  {
+                         "read":  true,
+                         "sensitive_read":  true,
+                         "write":  true,
+                         "remote_write":  true,
+                         "publish":  false,
+                         "overwrite":  true,
+                         "delete":  false,
+                         "arbitrary_execution":  false,
+                         "oauth":  true,
+                         "destructive":  true,
+                         "details":  [
+                                         "Use only Notion\u0027s official Streamable HTTP endpoint at https://mcp.notion.com/mcp; the older open-source npm server is no longer actively maintained",
+                                         "OAuth gives the connected client access to content the user can access, and Notion warns that retrieved content can contain prompt injection",
+                                         "Search can cross into connected sources, while meeting-note queries and some multi-source tools depend on workspace plan and Notion AI access",
+                                         "Require a diff before replace_content, template application, property replacement, or another overwrite-capable update",
+                                         "File uploads and remote content changes require exact target review; broad searches, member lookup, and meeting-note queries require a sensitive-read review"
+                                     ]
+                     },
+    "confirmation":  {
+                         "required_for":  [
+                                              "credential_setup",
+                                              "external_install",
+                                              "read_sensitive",
+                                              "write",
+                                              "write_remote",
+                                              "overwrite",
+                                              "oauth",
+                                              "destructive"
+                                          ],
+                         "notes":  "Confirm the exact Notion user and workspace during OAuth; ask before broad or connected-source reads, then show the exact destination and content before remote writes, moves, uploads, template application, or overwrite-capable updates."
+                     },
+    "risk_tags":  [
+                      "sensitive-read",
+                      "remote-write",
+                      "overwrite-capable",
+                      "oauth",
+                      "destructive-capable",
+                      "hosted",
+                      "prompt-injection",
+                      "connected-sources"
+                  ],
+    "maturity":  "verified",
+    "last_verified":  "2026-08-15",
+    "evidence":  [
+                     "https://developers.notion.com/guides/mcp/get-started-with-mcp",
+                     "https://developers.notion.com/guides/mcp/mcp-supported-tools",
+                     "https://developers.notion.com/guides/mcp/mcp-security-best-practices"
+                 ],
+    "health_check":  "After OAuth, fetch self to verify the exact workspace, user, and available tool access, then fetch one explicitly chosen page before any broad search or write.",
+    "uninstall":  {
+                      "instructions":  "Remove the MCP entry from the client and revoke the connection in Notion Settings under Connections; preserve all workspace pages, databases, comments, and uploaded files.",
+                      "removes_user_data":  false
+                  }
+}

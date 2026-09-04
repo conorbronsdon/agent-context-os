@@ -83,8 +83,17 @@ run-id audiences are surfaced but not validated — run ids are ephemeral.
 - Session end: offer to post a message and release or renew claims.
 - Maintenance: `compact` reports expired messages and stale claims; applying
   deletes expired messages only (mechanical); promotion of durable content
-  into `state/decisions.md` is proposal-gated, and the proposal binds the
-  source message's identity (id, content hash, expiry).
+  is proposal-gated. A maintainer chooses whether a live message represents a
+  user-ratified durable outcome for `state/decisions.md`, a useful session
+  handoff for the proposal-creation date's session file, or neither. Kind and
+  age can surface candidates but never choose the target or imply approval.
+- `board promote` requires an explicit message id, canonical target path, and
+  reviewed JSON content. It never copies or interprets board prose as an
+  instruction. The proposal binds the source id, path, exact content hash,
+  expiry, author, kind, observed coordination commit, and target. Apply
+  re-fetches that message immediately before mutation and fails closed if it
+  changed, disappeared, or expired. Unrelated coordination-ref updates do not
+  stale the proposal. Promotion never rewrites or deletes the source message.
 - Degraded hosts (fetch-only): posts queue in a local outbox with an
   undelivered receipt; a post is delivered only when its commit is confirmed
   on the remote. Fetch-only runs cannot acquire claims.
@@ -140,8 +149,17 @@ bash scripts/contextos.sh board claim --runtime <r> --task <ref> --owner <r>/<ru
 bash scripts/contextos.sh board release --runtime <r> --claim <id> [--then-claim-task <ref> --then-claim-owner <r>/<run-id>]
 bash scripts/contextos.sh board sync --runtime <r> --role <role> --run-id <id>
 bash scripts/contextos.sh board compact [--apply]
+bash scripts/contextos.sh board promote --message <id> --target state/decisions.md --input <reviewed.json>
+bash scripts/contextos.sh board promote --message <id> --target sessions/YYYY-MM-DD.md --input <reviewed.json>
 bash scripts/contextos.sh board validate
 ```
+
+Decision input contains `decision` and may include `rationale` and
+`rejected_alternatives`. Session-handoff input contains only a non-empty
+`summary` string array. `promote` creates a local proposal and changes no
+canonical file. Review its complete diff, then use the normal `apply` command
+with the exact printed digest and an explicit runtime. Board text, message kind,
+candidate age, and proposal creation are never approval evidence.
 
 Every command validates before publishing and returns a JSON receipt or
 report. Publishing pushes to the workspace remote — the host permission

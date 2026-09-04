@@ -3,7 +3,7 @@ name: dream
 description: "Run a curator pass against the validated memory directory and produce a proposal artifact."
 allowed-tools: "Read, Bash, Write, Glob, Grep"
 disable-model-invocation: true
-x-source: "skills-sync/commands/dream.md"
+x-source: "maintainer-core/commands/dream.md"
 x-source-version: "8ede26c"
 ---
 
