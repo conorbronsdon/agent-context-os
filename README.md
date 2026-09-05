@@ -191,6 +191,10 @@ uninstall behavior.
 
 Start with the task-based [integration chooser](docs/integrations-guide.md), add at most one new trust boundary at a time, then read the selected generated entry in full.
 
+Maintainers can run `python3 scripts/integrations.py freshness` to see which
+entries are approaching or past their human evidence-review date. Pass
+`--as-of YYYY-MM-DD` when reproducible output is required.
+
 The catalog spans portable skill collections, creator tools, CLIs, and MCP
 servers. Treat the generated catalog and task-based chooser as the current
 inventory rather than relying on a hand-maintained summary. `listed` and

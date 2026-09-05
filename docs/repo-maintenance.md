@@ -90,6 +90,27 @@ If upstream behavior changed since `last_verified`, update its
 `integrations/entries/<id>.json` source, run `scripts/integrations.py render`,
 add regression coverage when needed, and review every generated diff.
 
+### Evidence freshness policy
+
+Run `python3 scripts/integrations.py freshness` for JSON, or add
+`--format markdown` for a maintainer table. Pass `--as-of YYYY-MM-DD` in CI,
+saved evidence, or comparisons so the result is reproducible.
+
+Evidence has a 90-day review interval:
+
+- `current`: more than 30 days remain. No immediate action; review by the
+  suggested next-review date.
+- `due_soon`: 1–30 days remain. Schedule a human review of every catalog claim
+  against current first-party evidence before that date.
+- `stale`: the review is due today or overdue. Re-verify before relying on the
+  entry's safety, capability, maturity, or support claims.
+
+The report is offline and read-only. It reports entry ID, evidence URLs,
+`last_verified`, state, days remaining, suggested next-review date, and response.
+It never updates `last_verified`, maturity, capabilities, or support claims.
+A reachable link would not prove that upstream permissions, scopes, tools, or
+safety behavior are unchanged; any future network check must remain advisory.
+
 ## Changelog
 
 Whenever you add, remove, or significantly change a file, update `CHANGELOG.md`. Use each applicable `Added`, `Changed`, `Fixed`, or `Removed` heading at most once per release block, and list each public behavior change once.

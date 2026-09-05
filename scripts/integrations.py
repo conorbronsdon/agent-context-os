@@ -19,6 +19,9 @@ CATALOG_PATH = ROOT / "integrations" / "catalog.json"
 ENTRY_DIR = ROOT / "integrations" / "entries"
 REFERENCE_PATH = ROOT / "references" / "integrations.md"
 COMPONENT_MANIFEST_PATH = ROOT / "components" / "manifest.json"
+FRESHNESS_REVIEW_DAYS = 90
+FRESHNESS_DUE_SOON_DAYS = 30
+FRESHNESS_STATES = ("current", "due_soon", "stale")
 
 KINDS = {
     "mcp_server",
@@ -405,6 +408,10 @@ def validate_catalog(catalog: Any) -> None:
             raise CatalogError(f"{location}.uninstall: user-data removal requires delete and destructive capabilities")
         if not isinstance(item["maturity"], str) or item["maturity"] not in MATURITY:
             raise CatalogError(f"{location}.maturity: unsupported maturity")
+        if not isinstance(item["last_verified"], str) or not re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}", item["last_verified"]
+        ):
+            raise CatalogError(f"{location}.last_verified: expected YYYY-MM-DD")
         try:
             verified_on = dt.date.fromisoformat(item["last_verified"])
         except (TypeError, ValueError):
@@ -429,6 +436,106 @@ def markdown_paragraph(value: str) -> str:
     if value.startswith(("#", "-", "+")) or re.match(r"^\d+[.)]\s", value):
         return "\\" + escaped
     return escaped
+
+
+def parse_report_date(value: str) -> dt.date:
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        raise CatalogError("--as-of: expected YYYY-MM-DD")
+    try:
+        return dt.date.fromisoformat(value)
+    except ValueError:
+        raise CatalogError("--as-of: expected YYYY-MM-DD") from None
+
+
+def freshness_report(catalog: dict[str, Any], as_of: dt.date) -> dict[str, Any]:
+    entries = []
+    summary = {state: 0 for state in FRESHNESS_STATES}
+    for item in sorted(catalog["integrations"], key=lambda value: value["id"]):
+        if not isinstance(item["last_verified"], str) or not re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}", item["last_verified"]
+        ):
+            raise CatalogError(
+                f"{item['id']}.last_verified: expected YYYY-MM-DD"
+            )
+        try:
+            verified_on = dt.date.fromisoformat(item["last_verified"])
+        except (TypeError, ValueError):
+            raise CatalogError(
+                f"{item['id']}.last_verified: expected YYYY-MM-DD"
+            ) from None
+        if verified_on > as_of:
+            raise CatalogError(
+                f"{item['id']}.last_verified: {verified_on.isoformat()} is after "
+                f"report date {as_of.isoformat()}"
+            )
+        suggested_next_review = verified_on + dt.timedelta(
+            days=FRESHNESS_REVIEW_DAYS
+        )
+        days_until_review = (suggested_next_review - as_of).days
+        if days_until_review <= 0:
+            state = "stale"
+            action = (
+                "Complete a human first-party-evidence review of every catalog claim "
+                "before relying on it; update metadata only after that review."
+            )
+        elif days_until_review <= FRESHNESS_DUE_SOON_DAYS:
+            state = "due_soon"
+            action = (
+                "Schedule a human first-party-evidence review before the suggested "
+                "next review date."
+            )
+        else:
+            state = "current"
+            action = "No immediate action; review by the suggested next review date."
+        summary[state] += 1
+        entries.append(
+            {
+                "id": item["id"],
+                "evidence_urls": list(item["evidence"]),
+                "last_verified": verified_on.isoformat(),
+                "freshness_state": state,
+                "suggested_next_review": suggested_next_review.isoformat(),
+                "days_until_review": days_until_review,
+                "suggested_action": action,
+            }
+        )
+    return {
+        "schema_version": 1,
+        "as_of": as_of.isoformat(),
+        "policy": {
+            "review_after_days": FRESHNESS_REVIEW_DAYS,
+            "due_soon_when_days_remaining_at_most": FRESHNESS_DUE_SOON_DAYS,
+            "states": list(FRESHNESS_STATES),
+        },
+        "summary": summary,
+        "entries": entries,
+    }
+
+
+def render_freshness_markdown(report: dict[str, Any]) -> str:
+    rows = []
+    for item in report["entries"]:
+        evidence = "<br>".join(
+            f"[{index + 1}]({url})"
+            for index, url in enumerate(item["evidence_urls"])
+        )
+        rows.append(
+            f"| `{item['id']}` | `{item['freshness_state']}` | "
+            f"{item['last_verified']} | {item['suggested_next_review']} | "
+            f"{item['days_until_review']} | {evidence} | "
+            f"{item['suggested_action']} |"
+        )
+    policy = report["policy"]
+    return (
+        "# Integration evidence freshness\n\n"
+        f"As of `{report['as_of']}`. Evidence becomes stale "
+        f"{policy['review_after_days']} days after `last_verified`; `due_soon` "
+        f"begins when {policy['due_soon_when_days_remaining_at_most']} days remain.\n\n"
+        "| Entry | State | Last verified | Suggested next review | Days remaining | Evidence | Maintainer response |\n"
+        "|---|---|---|---|---:|---|---|\n"
+        + "\n".join(rows)
+        + "\n"
+    )
 
 
 def render_reference(catalog: dict[str, Any]) -> str:
@@ -494,10 +601,28 @@ def render_reference(catalog: dict[str, Any]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("validate", "render", "check"))
+    parser.add_argument("command", choices=("validate", "render", "check", "freshness"))
+    parser.add_argument("--as-of", help="freshness report date in YYYY-MM-DD")
+    parser.add_argument("--format", choices=("json", "markdown"))
     args = parser.parse_args(argv)
+    if args.command != "freshness" and (
+        args.as_of is not None or args.format is not None
+    ):
+        parser.error("--as-of and --format apply only to the freshness command")
     try:
         catalog = load_catalog()
+        if args.command == "freshness":
+            as_of = (
+                parse_report_date(args.as_of)
+                if args.as_of is not None
+                else dt.date.today()
+            )
+            report = freshness_report(catalog, as_of)
+            if args.format == "markdown":
+                sys.stdout.write(render_freshness_markdown(report))
+            else:
+                sys.stdout.write(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
+            return 0
         rendered_catalog = render_catalog(catalog)
         rendered_reference = render_reference(catalog)
         rendered_components = render_component_manifest(catalog)
