@@ -11,7 +11,7 @@
 
 ### Added
 - An experimental three-file starter for sequential project work, with explicit
-  read/checkpoint prompts, an AGENTS-only comparison, and a one-week trial guide.
+  read/checkpoint prompts and a one-week guide for comparing it with one file.
   The supplied-snapshot evidence remains tracked as development material and is
   excluded from installed core files; full-template workflows remain available.
 - Source-attributed briefing previews and readable local receipt history expose

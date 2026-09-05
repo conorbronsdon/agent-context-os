@@ -3,8 +3,8 @@
 Experiment date: 2026-09-04. One synthetic CSV project, one run per condition.
 
 The simulation provides a limited reason to try the [experimental starter](minimal-starter.md)
-for sequential work on one project. It does not establish a preferred file layout. It also found a checkpoint error that led
-to a small instruction change. It does not establish time savings or show that
+for sequential work on one project. It does not establish a preferred file
+layout. It also found a checkpoint error that led to a small instruction change. It does not establish time savings or show that
 the full template's write controls are unnecessary.
 
 ## Method
@@ -65,7 +65,7 @@ rule. Review generated checkpoints for unsupported claims and dropped facts.
 
 ## Inspect the evidence
 
-The [source JSON record](https://github.com/conorbronsdon/agent-context-os/blob/main/docs/evidence/minimal-starter-trial.json)
+The [source JSON record](https://github.com/conorbronsdon/agent-context-os/blob/b23a55bc9d99d6edc936b2e8ae9ceb91414f2ac2/docs/evidence/minimal-starter-trial.json)
 is tracked as development evidence and excluded from installed core files.
 It contains the original
 criteria, method amendments, frozen templates, parser fixture, exact model
