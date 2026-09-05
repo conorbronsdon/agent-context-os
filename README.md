@@ -32,6 +32,9 @@ Context OS does not scrape every account, sync product UIs automatically, or ins
 
 ## Quick start
 
+Try [your first reviewed handoff](docs/first-handoff.md) for a small Claude-to-Codex
+example. Then inspect [source briefings and change history](docs/continuity.md).
+
 Personal and business context often belongs in a private repository. Create an empty private repository first if that applies to you, and never commit credentials or a raw account export.
 
 ```bash

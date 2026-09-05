@@ -5,6 +5,10 @@ assistant. The result is a small, reviewable repository that Claude Code,
 Codex, OpenClaw, and OpenCode, plus the experimental Hermes, Cursor, and Devin adapters,
 can use as shared state.
 
+For one guided example before importing your own context, try
+[your first reviewed handoff](first-handoff.md). Use
+[source briefings and change history](continuity.md) to inspect the result.
+
 ## Before you clone
 
 You need Git, Bash, and Python 3.10 or newer. Local hosts include Claude Code,

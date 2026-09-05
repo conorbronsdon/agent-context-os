@@ -75,6 +75,7 @@ def _readme(config: Mapping[str, Any], selected: Sequence[Mapping[str, Any]]) ->
             "",
             "## Safety and configuration",
             "",
+            "- [Inspect source briefings and change history](docs/continuity.md)",
             "- [Safety contract](docs/safety-contract.md)",
             "",
             f"Profile: `{config['composition']['profile']}`.",
