@@ -24,7 +24,7 @@ def _display_path(raw: str) -> str:
     """Validate a receipt label without opening or resolving its historical target."""
     if (not raw or "\\" in raw or PurePosixPath(raw).is_absolute()
             or PureWindowsPath(raw).drive or any(p in {"", ".", ".."} for p in raw.split("/"))
-            or any(ord(c) < 32 or c in '<>:"|?*' for c in raw)):
+            or any(ord(c) < 32 or ord(c) == 127 or c in '<>:"|?*' for c in raw)):
         raise ContextOSError("history path must be a canonical repository-relative label")
     return raw
 
@@ -133,6 +133,7 @@ def history_report(root: Path, *, limit: int = 10, path: str | None = None, deta
     for candidate in sorted(candidates):
         relative = candidate.relative_to(root).as_posix()
         try:
+            _display_path(relative)
             receipt = _object(root, candidate)
             identifier = receipt.get("proposal_id")
             if not isinstance(identifier, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", identifier):

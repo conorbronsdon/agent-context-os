@@ -5,6 +5,7 @@ import io
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from datetime import datetime
 from pathlib import Path
 
@@ -151,6 +152,19 @@ class ContinuityTest(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()) as error:
             self.assertNotEqual(0, main(["--root", str(self.root), "history"]))
         self.assertIn("must be a directory", error.getvalue())
+
+    def test_control_characters_in_receipt_filename_cannot_inject_headings(self):
+        _, valid_path, receipt = self.apply_update()
+        # Simulate a POSIX-only filename on every platform; the valid sibling
+        # must remain visible and the unsafe label must never be opened.
+        unsafe_path = valid_path.with_name("bad\n# Forged.json")
+        with patch.object(Path, "iterdir", return_value=iter([unsafe_path, valid_path])), \
+                patch("contextos.continuity._object", return_value=receipt) as reader:
+            report = history_report(self.root)
+        self.assertEqual(1, reader.call_count)
+        self.assertEqual(1, len(report["entries"]))
+        self.assertEqual(1, len(report["warnings"]))
+        self.assertNotIn("\n# Forged", render_history(report))
 
     def test_cli_json_and_markdown(self):
         for arguments, expected in ((["start", "--briefing", "--format", "json"], '"sources"'),
