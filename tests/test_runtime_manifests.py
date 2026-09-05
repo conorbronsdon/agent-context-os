@@ -29,9 +29,15 @@ def load(runtime: str) -> dict:
 
 class RuntimeManifestTest(unittest.TestCase):
     def test_registry_discovers_and_validates_every_descriptor(self) -> None:
-        self.assertEqual(["claude", "codex", "cursor", "devin", "hermes", "openclaw"], runtime_ids(ROOT))
+        self.assertEqual(
+            ["claude", "codex", "cursor", "devin", "hermes", "openclaw", "opencode"],
+            runtime_ids(ROOT),
+        )
         registry = runtime_registry(ROOT)
-        self.assertEqual({"claude", "codex", "cursor", "devin", "hermes", "openclaw"}, set(registry))
+        self.assertEqual(
+            {"claude", "codex", "cursor", "devin", "hermes", "openclaw", "opencode"},
+            set(registry),
+        )
         self.assertNotIn("generic", registry)
         for runtime, manifest in registry.items():
             with self.subTest(runtime=runtime):
@@ -59,6 +65,7 @@ class RuntimeManifestTest(unittest.TestCase):
         }
         self.assertEqual(expected, cursor["surfaces"]["ide"]["invocation"])
         self.assertEqual(expected, cursor["surfaces"]["cli"]["invocation"])
+        self.assertEqual(expected, load("opencode")["surfaces"]["cli"]["invocation"])
         devin = load("devin")
         self.assertEqual(
             {name: f"@skills:context-{name}" for name in ("setup", "start", "update", "end")},

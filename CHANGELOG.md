@@ -2,7 +2,18 @@
 
 ## [Unreleased]
 
+### Fixed
+- OpenCode live conformance dispatches registered commands with `--command`,
+  rejects failed skill loads and Windows fixture traversal, and requires
+  successful tool controls under both allowed and denied permission policies.
+  Host-generated dependency manifests are excluded from the fixture digest;
+  command sources and lifecycle artifacts remain covered.
+
 ### Added
+- First-class OpenCode support now ships repository-native `AGENTS.md` and Agent
+  Skills discovery, typed `/context-*` adapters, setup and doctor registration,
+  explicit permission/privacy/memory boundaries, deterministic conformance, and
+  an opt-in exact-client live harness validated against OpenCode 1.18.27 (#169).
 - A deterministic, read-only integration evidence-freshness report now marks
   entries as current, due soon, or stale and gives maintainers evidence links,
   review dates, and explicit human-review actions without changing claims (#162).

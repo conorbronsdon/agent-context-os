@@ -46,7 +46,7 @@ this is guidance, not a host-enforced gate. The `$context-setup`, `$context-star
 - `.claude/` contains Claude Code commands, hooks, settings, and memory adapters.
 - `.codex/hooks.json` maps Codex events to the same read-only policy checks.
 - `adapters/hermes/` documents optional Hermes hooks and skill installation.
-- `adapters/openclaw/` documents first-class external-plugin OpenClaw support.
+- `adapters/openclaw/` and `adapters/opencode/` document first-class host support.
 - `adapters/cursor/` documents separate experimental Cursor IDE and CLI support.
 - `adapters/devin/` documents experimental Devin cloud-session and Review support.
 - Runtime manifests under `runtimes/` declare support instead of implying parity.

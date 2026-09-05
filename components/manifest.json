@@ -8,6 +8,7 @@
         ".agents/skills",
         ".claude/commands",
         ".cursor",
+        ".opencode",
         "content",
         "identity",
         "inbox",
@@ -1045,6 +1046,53 @@
                 },
                 {
                     "path": "tests/test_openclaw_skill_sync.py",
+                    "policy": "development"
+                }
+            ]
+        },
+        {
+            "id": "opencode-adapter",
+            "description": "First-class OpenCode commands, onboarding, runtime descriptor, and exact-client conformance controls.",
+            "depends_on": [
+                "core",
+                "portable-skills",
+                "agents-instructions"
+            ],
+            "paths": [
+                {
+                    "path": ".opencode/commands/context-end.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".opencode/commands/context-setup.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".opencode/commands/context-start.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".opencode/commands/context-update.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "adapters/opencode/README.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "adapters/opencode/live_conformance.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/releases/opencode-first-class.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "runtimes/opencode.json",
+                    "policy": "managed"
+                },
+                {
+                    "path": "tests/test_opencode_conformance.py",
                     "policy": "development"
                 }
             ]

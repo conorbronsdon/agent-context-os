@@ -359,7 +359,7 @@ if git grep -n -F 'skills-sync' -- .claude docs scripts; then
 fi
 
 help_output=$(bash scripts/setup.sh --help)
-grep -Fq -- '--agents claude,codex,cursor,devin,hermes,openclaw|auto|none' <<<"$help_output" || fail "setup help does not describe multi-agent selection"
+grep -Fq -- '--agents claude,codex,cursor,devin,hermes,openclaw,opencode|auto|none' <<<"$help_output" || fail "setup help does not describe multi-agent selection"
 grep -Fq -- '--agent auto|RUNTIME|none' <<<"$help_output" || fail "setup help omits the singleton compatibility alias"
 grep -Fq 'Setup does not launch OpenClaw' scripts/setup.sh \
   || fail "OpenClaw setup omits the private-workspace launch boundary"
@@ -374,6 +374,18 @@ grep -Fq '/contextos <alias> setup' <<<"$openclaw_setup_case" \
 if grep -Fq 'Gateway agent RPC cwd' <<<"$openclaw_setup_case" || grep -Fq '/skill setup' <<<"$openclaw_setup_case"; then
   fail "OpenClaw setup still prints the rejected pre-plugin invocation path"
 fi
+grep -Fq 'Setup does not launch OpenCode' scripts/setup.sh \
+  || fail "OpenCode setup omits the model and permission verification boundary"
+opencode_setup_case=$(sed -n '/^  opencode)/,/^    ;;/p' scripts/setup.sh)
+test -n "$opencode_setup_case" \
+  || fail "OpenCode setup case could not be inspected for launch behavior"
+if grep -Eq '(^|[[:space:]])exec[[:space:]]+opencode([[:space:]]|$)' <<<"$opencode_setup_case"; then
+  fail "setup can launch OpenCode before model and permission settings are verified"
+fi
+grep -Fq '/context-setup' <<<"$opencode_setup_case" \
+  || fail "OpenCode setup omits the typed lifecycle command"
+grep -Fq 'Do not use --auto' <<<"$opencode_setup_case" \
+  || fail "OpenCode setup omits the unsafe auto-mode boundary"
 grep -Fq 'Setup does not launch Cursor' scripts/setup.sh \
   || fail "Cursor setup omits the separate-surface launch boundary"
 cursor_setup_case=$(sed -n '/^  cursor)/,/^    ;;/p' scripts/setup.sh)

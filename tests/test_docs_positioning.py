@@ -97,7 +97,7 @@ class DocumentationPositioningTests(unittest.TestCase):
         setup_skill_root = "/".join(SETUP_SKILL_PREFIX) + "/"
         self.assertIn(f"`{setup_skill_root}`", contract)
         expected_product_roots = {
-            ".agents", ".claude", ".codex", ".cursor", ".github",
+            ".agents", ".claude", ".codex", ".cursor", ".github", ".opencode",
             "adapters", "bundles", "components", "contextos", "integrations",
             "runtimes", "scripts", "workspace",
         }

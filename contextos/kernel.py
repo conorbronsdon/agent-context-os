@@ -150,6 +150,7 @@ LIFECYCLE_PRODUCT_ROOTS = {
     ".codex",
     ".cursor",
     ".github",
+    ".opencode",
     "adapters",
     "bundles",
     "components",

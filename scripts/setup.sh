@@ -9,7 +9,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 readonly CONTEXTOS_SETUP_BASH="$BASH"
 cd "$REPO_ROOT"
 
-SETUP_USAGE="Usage: bash scripts/setup.sh [--agents claude,codex,cursor,devin,hermes,openclaw|auto|none] [--agent auto|RUNTIME|none]"
+SETUP_USAGE="Usage: bash scripts/setup.sh [--agents claude,codex,cursor,devin,hermes,openclaw,opencode|auto|none] [--agent auto|RUNTIME|none]"
 AGENT_SELECTION_KIND=""
 AGENT_SELECTION_RAW=""
 while [ "$#" -gt 0 ]; do
@@ -352,6 +352,14 @@ else
   echo "    Optional: openclaw"
 fi
 
+OPENCODE_FOUND=false
+if command -v opencode &>/dev/null; then
+  echo "    Found: opencode"
+  OPENCODE_FOUND=true
+else
+  echo "    Optional: opencode — see adapters/opencode/README.md"
+fi
+
 if command -v git &>/dev/null; then
   echo "    Found: git"
 else
@@ -515,6 +523,8 @@ if [[ "$SELECTED_AGENT" == *,* ]]; then
     SELECTED_AGENT="claude"
   elif [[ ",$SELECTED_AGENT," == *,codex,* ]] && [ "$CODEX_FOUND" = true ]; then
     SELECTED_AGENT="codex"
+  elif [[ ",$SELECTED_AGENT," == *,opencode,* ]] && [ "$OPENCODE_FOUND" = true ]; then
+    SELECTED_AGENT="opencode"
   elif [[ ",$SELECTED_AGENT," == *,hermes,* ]] && [ "$HERMES_FOUND" = true ]; then
     SELECTED_AGENT="hermes"
   elif [[ ",$SELECTED_AGENT," == *,cursor,* ]] && [ "$CURSOR_IDE_FOUND" = true ]; then
@@ -530,6 +540,8 @@ if [ "$SELECTED_AGENT" = "auto" ]; then
     SELECTED_AGENT="claude"
   elif [ "$CODEX_FOUND" = true ]; then
     SELECTED_AGENT="codex"
+  elif [ "$OPENCODE_FOUND" = true ]; then
+    SELECTED_AGENT="opencode"
   elif [ "$HERMES_FOUND" = true ]; then
     SELECTED_AGENT="hermes"
   elif [ "$CURSOR_IDE_FOUND" = true ]; then
@@ -573,6 +585,20 @@ case "$SELECTED_AGENT" in
       cd "$REPO_ROOT"
       exec codex
     fi
+    ;;
+  opencode)
+    if [ -z "$REQUESTED_REGISTERED_AGENTS" ]; then
+      "$CONTEXTOS_PYTHON_CMD" -m contextos install --runtime opencode >/dev/null
+    fi
+    printf '  1. cd %q && opencode\n' "$REPO_ROOT"
+    echo "  2. Type: /context-setup"
+    echo "     OpenCode discovers AGENTS.md, .agents/skills/, and .opencode/commands/."
+    echo "     Choose a model route whose data handling matches this repository."
+    echo "     Do not use --auto; review every proposal diff and exact digest."
+    echo "     See adapters/opencode/README.md for permission, privacy, and memory limits."
+    echo "     Setup does not launch OpenCode because it cannot verify the selected"
+    echo "     model route or host permission policy without inspecting host state."
+    echo ""
     ;;
   hermes)
     if [ -z "$REQUESTED_REGISTERED_AGENTS" ]; then
@@ -634,6 +660,7 @@ case "$SELECTED_AGENT" in
     printf '  Cursor:      see adapters/cursor/README.md (separate IDE and Agent CLI paths)\n'
     echo "  Devin:       see adapters/devin/README.md (managed cloud account + Review)"
     echo "  OpenClaw:    see adapters/openclaw/README.md (private workspace + copied skills)"
+    echo "  OpenCode:    see adapters/opencode/README.md (native skills + typed commands)"
     echo "  claude.ai:   open SETUP-PROMPTS.md and paste the prompts there"
     echo "  Guide:       docs/getting-started.md"
     echo ""

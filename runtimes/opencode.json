@@ -1,0 +1,118 @@
+{
+  "schema_version": 2,
+  "runtime": "opencode",
+  "display_name": "OpenCode",
+  "support_tier": "first-class",
+  "support_summary": "Repository-native AGENTS.md and Agent Skills discovery with typed lifecycle commands, native permissions, and deterministic proposal/apply safety",
+  "components": ["core", "portable-skills", "agents-instructions", "opencode-adapter"],
+  "install": {
+    "mode": "native-project-discovery",
+    "next_steps": [
+      "Start OpenCode from this repository root so it discovers AGENTS.md, .agents/skills, and .opencode/commands.",
+      "Invoke /context-setup, /context-start, /context-update, and /context-end explicitly; each command loads its exact portable skill.",
+      "Keep write and shell permissions review-gated, never use --auto for lifecycle work, and apply only the exact proposal digest after reviewing its complete diff.",
+      "Use only a model route whose data handling matches the repository; free and contributor routes may log or train on prompts and must not receive private context."
+    ]
+  },
+  "onboarding_doc": "adapters/opencode/README.md",
+  "surfaces": {
+    "cli": {
+      "kind": "cli",
+      "support_tier": "first-class",
+      "instruction_sources": [
+        {"scope": "repository", "role": "canonical", "path": "AGENTS.md", "precedence": 100}
+      ],
+      "skill_sources": [
+        {"scope": "repository", "role": "skills", "path": ".agents/skills", "precedence": 100}
+      ],
+      "invocation": {
+        "setup": "/context-setup",
+        "start": "/context-start",
+        "update": "/context-update",
+        "end": "/context-end"
+      },
+      "capabilities": {
+        "agent_skills": "native",
+        "explicit_invocation": "adapter",
+        "project_hooks": "unsupported",
+        "blocking_pre_tool_hook": "unsupported",
+        "mcp": "native",
+        "native_memory": "unsupported",
+        "proposal_apply": "adapter",
+        "skill_allowlists": "native",
+        "execution_authorization": "native"
+      },
+      "hook_output": null,
+      "binary_probes": [
+        {"purpose": "availability", "candidates": ["opencode"]},
+        {"purpose": "version", "candidates": ["opencode"]}
+      ],
+      "conformance_tests": [
+        "tests/test_opencode_conformance.py",
+        "adapters/opencode/live_conformance.py",
+        "tests/test_contextos_kernel.py"
+      ],
+      "evidence": [
+        "opencode-rules", "opencode-skills", "opencode-commands",
+        "opencode-permissions", "opencode-mcp", "opencode-kernel",
+        "opencode-conformance", "opencode-live-conformance"
+      ]
+    }
+  },
+  "evidence": {
+    "checked_on": "2026-09-03",
+    "tested_versions": [
+      {"surface": "cli", "version": "1.18.27"}
+    ],
+    "sources": [
+      {
+        "id": "opencode-rules",
+        "type": "official",
+        "location": "https://opencode.ai/docs/rules/",
+        "claims": ["instruction_sources"]
+      },
+      {
+        "id": "opencode-skills",
+        "type": "official",
+        "location": "https://opencode.ai/docs/skills/",
+        "claims": ["agent_skills", "skill_allowlists", "skill_sources"]
+      },
+      {
+        "id": "opencode-commands",
+        "type": "official",
+        "location": "https://opencode.ai/docs/commands/",
+        "claims": ["explicit_invocation", "invocation"]
+      },
+      {
+        "id": "opencode-permissions",
+        "type": "official",
+        "location": "https://opencode.ai/docs/permissions/",
+        "claims": ["execution_authorization"]
+      },
+      {
+        "id": "opencode-mcp",
+        "type": "official",
+        "location": "https://opencode.ai/docs/mcp-servers/",
+        "claims": ["mcp"]
+      },
+      {
+        "id": "opencode-kernel",
+        "type": "conformance",
+        "location": "tests/test_contextos_kernel.py",
+        "claims": ["proposal_apply"]
+      },
+      {
+        "id": "opencode-conformance",
+        "type": "conformance",
+        "location": "tests/test_opencode_conformance.py",
+        "claims": ["support", "instruction_sources", "skill_sources", "explicit_invocation", "invocation"]
+      },
+      {
+        "id": "opencode-live-conformance",
+        "type": "conformance",
+        "location": "adapters/opencode/live_conformance.py",
+        "claims": ["support", "agent_skills", "explicit_invocation", "invocation"]
+      }
+    ]
+  }
+}
