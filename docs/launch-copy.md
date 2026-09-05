@@ -71,3 +71,17 @@ behavior.
 I also rewrote the onboarding and migration docs around the actual user journey: bring forward selected context, choose a host, add only the tools you need, and keep the result current.
 
 https://github.com/conorbronsdon/agent-context-os
+
+## Experimental starter announcement
+
+Draft only. Verify the starter is available in the linked branch or release
+before publishing this copy.
+
+Context OS has an experimental three-file starter for keeping current work and
+a handoff beside one project. Copy the files, ask your agent to read them, and
+review each saved update. A single instruction file may be enough; the guide
+includes a one-week comparison to test whether separate notes earn their upkeep.
+The full template remains available for managed lifecycle updates and host
+adapters. No human time savings have been measured.
+
+[Read the starter guide](minimal-starter.md).

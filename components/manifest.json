@@ -25,6 +25,30 @@
             "depends_on": [],
             "paths": [
                 {
+                    "path": "docs/minimal-starter-evidence.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/evidence/minimal-starter-trial.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "starter/AGENTS.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "starter/current-work.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "starter/handoff.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/minimal-starter.md",
+                    "policy": "managed"
+                },
+                {
                     "path": ".gitattributes",
                     "policy": "managed"
                 },
