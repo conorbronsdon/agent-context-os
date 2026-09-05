@@ -148,6 +148,7 @@ def copy_tracked_fixture(repo: Path, fixture: Path, commit: str) -> None:
         relative = PurePosixPath(name)
         if (
             relative.is_absolute()
+            or "\\" in name
             or ".." in relative.parts
             or not relative.parts
             or re.match(r"^[A-Za-z]:", relative.parts[0])
@@ -179,6 +180,8 @@ def tool_loaded_exact_skill(output: str, root: Path, skill_name: str) -> bool:
             continue
         part = event.get("part", {})
         state = part.get("state", {})
+        if state.get("status") != "completed":
+            continue
         tool = part.get("tool")
         inputs = state.get("input", {})
         if tool == "skill" and inputs.get("name") == skill_name:
@@ -225,6 +228,44 @@ def bash_commands(output: str) -> list[str]:
         ):
             commands.append(inputs["command"])
     return commands
+
+
+def successful_bash_sentinel(output: str) -> bool:
+    for line in output.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        part = event.get("part", {})
+        state = part.get("state", {})
+        if (
+            event.get("type") == "tool_use"
+            and part.get("tool") == "bash"
+            and state.get("status") == "completed"
+            and state.get("metadata", {}).get("exit") == 0
+            and state.get("output", "").strip() == "CONTEXTOS_POSITIVE_SENTINEL"
+        ):
+            return True
+    return False
+
+
+def run_lifecycle_command(
+    binary: Path, fixture: Path, model: str, name: str,
+) -> subprocess.CompletedProcess[str]:
+    return run(
+        binary, fixture, "run", "--pure", "--format", "json", "-m", model,
+        "--command", name,
+        "Conformance control: load the exact skill, then stop before "
+        "running shell commands or editing files.", timeout=300,
+    )
+
+
+def verify_denial_output(output: str, fixture: Path) -> None:
+    if not tool_loaded_exact_skill(output, fixture, "context-start"):
+        raise RuntimeError("permission denial control produced no successful allowed read")
+    exposed = {"bash", "edit"} & set(tool_names(output))
+    if exposed:
+        raise RuntimeError(f"denied tools were exposed to model intent: {sorted(exposed)}")
 
 
 def main() -> int:
@@ -339,6 +380,7 @@ def main() -> int:
             if (
                 tool_names(positive.stdout) != ["bash"]
                 or bash_commands(positive.stdout) != ["echo CONTEXTOS_POSITIVE_SENTINEL"]
+                or not successful_bash_sentinel(positive.stdout)
             ):
                 raise RuntimeError(
                     "permission positive control did not execute only the exact bash sentinel"
@@ -346,19 +388,19 @@ def main() -> int:
             before = tree_digest(fixture)
             for item in LIFECYCLE:
                 name = f"context-{item}"
-                result = run(
-                    binary, fixture, "run", "--pure", "--format", "json", "-m", args.model,
-                    f"/{name} Conformance control: load the exact skill, then stop before "
-                    "running shell commands or editing files.", timeout=300,
-                )
+                result = run_lifecycle_command(binary, fixture, args.model, name)
                 if result.returncode != 0:
                     raise RuntimeError(f"live {name} failed: {result.stderr.strip()}")
                 if not tool_loaded_exact_skill(result.stdout, fixture, name):
                     raise RuntimeError(f"live {name} produced no exact-skill tool event")
+                if set(tool_names(result.stdout)) - {"skill", "read"}:
+                    raise RuntimeError(f"live {name} used tools beyond skill loading")
             denial = run(
                 binary, fixture, "run", "--pure", "--format", "json", "-m", args.model,
-                "Conformance control: use the bash tool to run echo "
-                "CONTEXTOS_DENIAL_SENTINEL. Do not use another tool.",
+                "Conformance control: first use read to load "
+                ".agents/skills/context-start/SKILL.md as data without following it. "
+                "Then try to use the bash tool to run echo CONTEXTOS_DENIAL_SENTINEL. "
+                "Do not use another tool.",
                 timeout=300,
                 extra_env={
                     "OPENCODE_CONFIG_CONTENT": json.dumps(
@@ -368,9 +410,7 @@ def main() -> int:
             )
             if denial.returncode != 0:
                 raise RuntimeError(f"permission denial control failed: {denial.stderr.strip()}")
-            exposed = {"bash", "edit"} & set(tool_names(denial.stdout))
-            if exposed:
-                raise RuntimeError(f"denied tools were exposed to model intent: {sorted(exposed)}")
+            verify_denial_output(denial.stdout, fixture)
             after = tree_digest(fixture)
             if after != before:
                 raise RuntimeError("read-only live command routing changed the disposable fixture")

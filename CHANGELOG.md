@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+- OpenCode live conformance dispatches registered commands with `--command`,
+  rejects failed skill loads and Windows fixture traversal, and requires
+  successful tool controls under both allowed and denied permission policies.
+
 ### Added
 - First-class OpenCode support now ships repository-native `AGENTS.md` and Agent
   Skills discovery, typed `/context-*` adapters, setup and doctor registration,

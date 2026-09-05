@@ -228,6 +228,20 @@ class OpenCodeAdapterTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "unsafe tracked path"):
                 live.copy_tracked_fixture(root, root / "fixture", "0" * 40)
 
+    def test_fixture_rejects_backslash_traversal_before_reading_blob(self) -> None:
+        live = load_live_module()
+        for name in (br"a\..\..\escape.txt", br"\escape.txt", br"\\server\share\file"):
+            completed = subprocess.CompletedProcess(
+                [], 0, b"100644 blob " + b"0" * 40 + b"\t" + name + b"\0", b""
+            )
+            with tempfile.TemporaryDirectory() as temporary, patch.object(
+                live.subprocess, "run", return_value=completed
+            ) as mocked:
+                root = Path(temporary)
+                with self.assertRaisesRegex(RuntimeError, "unsafe tracked path"):
+                    live.copy_tracked_fixture(root, root / "fixture", "0" * 40)
+                self.assertEqual(1, mocked.call_count)
+
     def test_exact_skill_read_resolves_relative_to_fixture(self) -> None:
         live = load_live_module()
         with tempfile.TemporaryDirectory() as temporary:
@@ -239,6 +253,7 @@ class OpenCodeAdapterTest(unittest.TestCase):
                     "part": {
                         "tool": "read",
                         "state": {
+                            "status": "completed",
                             "input": {
                                 "filePath": f".agents/skills/{skill_name}/SKILL.md"
                             }
@@ -247,6 +262,58 @@ class OpenCodeAdapterTest(unittest.TestCase):
                 }
             )
             self.assertTrue(live.tool_loaded_exact_skill(event, root, skill_name))
+            for status in ("pending", "running", "error"):
+                self.assertFalse(live.tool_loaded_exact_skill(
+                    event.replace('"completed"', json.dumps(status)), root, skill_name
+                ))
+
+    def test_failed_skill_event_is_not_loaded(self) -> None:
+        live = load_live_module()
+        for status in ("pending", "running", "error", "completed"):
+            event = json.dumps({"type": "tool_use", "part": {
+                "tool": "skill", "state": {
+                    "status": status, "input": {"name": "context-start"}
+                }
+            }})
+            self.assertEqual(status == "completed", live.tool_loaded_exact_skill(
+                event, ROOT, "context-start"
+            ))
+
+    def test_lifecycle_run_dispatches_registered_command(self) -> None:
+        live = load_live_module()
+        with patch.object(live, "run") as mocked:
+            live.run_lifecycle_command(Path("opencode"), ROOT, "test/model", "context-start")
+        args = mocked.call_args.args
+        index = args.index("--command")
+        self.assertEqual("context-start", args[index + 1])
+        self.assertNotIn("/context-start", args[-1])
+
+    def test_positive_sentinel_requires_successful_execution(self) -> None:
+        live = load_live_module()
+        state = {"status": "completed", "metadata": {"exit": 0},
+                 "output": "CONTEXTOS_POSITIVE_SENTINEL\n"}
+        def event(value):
+            return json.dumps({"type": "tool_use", "part": {"tool": "bash", "state": value}})
+        self.assertTrue(live.successful_bash_sentinel(event(state)))
+        for replacement in ({"status": "error"}, {"status": "running"},
+                            {"metadata": {"exit": 1}}, {"output": ""}):
+            self.assertFalse(live.successful_bash_sentinel(event({**state, **replacement})))
+
+    def test_denial_requires_allowed_read_and_rejects_denied_tool_events(self) -> None:
+        live = load_live_module()
+        allowed = json.dumps({"type": "tool_use", "part": {
+            "tool": "read", "state": {"status": "completed", "input": {
+                "filePath": ".agents/skills/context-start/SKILL.md"
+            }}
+        }})
+        live.verify_denial_output(allowed, ROOT)
+        for output in ("", "I cannot do that", allowed.replace('"completed"', '"error"')):
+            with self.assertRaisesRegex(RuntimeError, "no successful allowed read"):
+                live.verify_denial_output(output, ROOT)
+        for tool in ("bash", "edit"):
+            denied = json.dumps({"type": "tool_use", "part": {"tool": tool}})
+            with self.assertRaisesRegex(RuntimeError, "denied tools were exposed"):
+                live.verify_denial_output(allowed + "\n" + denied, ROOT)
 
     def test_positive_control_requires_exact_bash_command(self) -> None:
         live = load_live_module()

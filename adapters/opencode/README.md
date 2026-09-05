@@ -56,16 +56,18 @@ continuity belongs in the reviewed Context OS files and receipts.
 Run deterministic checks with:
 
 ```bash
-python -m unittest tests.test_opencode_conformance
+python -m unittest discover -s tests -p test_opencode_conformance.py
 bash scripts/validate-all.sh
 ```
 
 The opt-in installed-client harness verifies an exact binary and version,
 native `AGENTS.md`/skill discovery, the resolved typed-command templates, and a
 read-only live command route that must produce a concrete tool event for the
-exact skill. It isolates host-level configuration directories for each client
-invocation, and its permission-denial check first requires the same model to
-produce a positive bash-tool event. These checks cannot pass on a generic
+exact skill. It dispatches each registered template through `run --command`
+and requires completed tool events and a successful bash sentinel. Failed or
+pending tool attempts do not count as evidence. It isolates host-level configuration directories for each client
+invocation, and its permission-denial check requires a successful allowed read
+under the denial policy, after a separate positive bash control. These checks cannot pass on a generic
 textual answer. The read-only digest excludes only OpenCode's generated
 `.opencode/.gitignore` and `.opencode/node_modules` dependency bootstrap; it
 continues covering every adapter source and `.context-os` lifecycle artifact.
