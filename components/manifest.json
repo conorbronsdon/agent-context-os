@@ -625,6 +625,10 @@
                     "policy": "development"
                 },
                 {
+                    "path": "tests/fixtures/integration-freshness.json",
+                    "policy": "development"
+                },
+                {
                     "path": "tests/fixtures/workspace-conflicts.json",
                     "policy": "development"
                 },

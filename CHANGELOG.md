@@ -12,6 +12,9 @@
   Skills discovery, typed `/context-*` adapters, setup and doctor registration,
   explicit permission/privacy/memory boundaries, deterministic conformance, and
   an opt-in exact-client live harness validated against OpenCode 1.18.27 (#169).
+- A deterministic, read-only integration evidence-freshness report now marks
+  entries as current, due soon, or stale and gives maintainers evidence links,
+  review dates, and explicit human-review actions without changing claims (#162).
 - Integration catalog contributions now use one authoritative JSON file per
   entry. Deterministic aggregation generates the machine catalog, Markdown
   reference, and component ownership records, while the chooser and changelog
