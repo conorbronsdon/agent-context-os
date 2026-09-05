@@ -318,11 +318,9 @@ This is a template. Structural contributions, clearer conventions, reusable skil
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the validator, generated files, and conventions, and [SECURITY.md](SECURITY.md) to report a vulnerability privately. Issues labelled [`good first issue`](https://github.com/conorbronsdon/agent-context-os/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) need no external account or credential.
 
-## Used by
+## Created By
 
 - [Conor Bronsdon](https://github.com/conorbronsdon), host of the [Chain of Thought podcast](https://chainofthought.show/?utm_source=github&utm_medium=referral&utm_campaign=repo-readme&utm_content=agent-context-os)
-
-Using the template? Open a PR to add yourself.
 
 ## Disclaimer
 
