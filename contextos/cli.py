@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .continuity import briefing_report, history_report, render_briefing, render_history
 from .attachment import AttachmentError, RootRoles, resolve_root_roles
 from .bundle_schema import (
     BundleError,
@@ -105,6 +106,15 @@ def parser() -> argparse.ArgumentParser:
 
     start = commands.add_parser("start", help="Read workspace continuity as structured data")
     start.add_argument("--now", help="ISO-8601 timestamp for deterministic runs")
+    start.add_argument("--format", choices=("json", "markdown"), default="json")
+    start.add_argument("--briefing", action="store_true", help="Include source-attributed excerpts in JSON (Markdown includes them automatically)")
+    start.add_argument("--source", action="append", default=[], help="Explicit repository-relative Markdown task source (repeatable)")
+
+    history = commands.add_parser("history", help="Read local context change receipts")
+    history.add_argument("--format", choices=("json", "markdown"), default="markdown")
+    history.add_argument("--limit", type=int, default=10)
+    history.add_argument("--path", help="Filter by one repository-relative changed path")
+    history.add_argument("--details", action="store_true", help="Include available proposal diffs after checking their digest binding")
 
     propose = commands.add_parser("propose", help="Create a reviewable lifecycle proposal")
     propose.add_argument("workflow", choices=("setup", "update", "end"))
@@ -871,6 +881,13 @@ def _board_roles(root: Path) -> list[str] | None:
     return roles or None
 
 
+def _print_report(text: str) -> None:
+    # Redirected Windows terminals can use a legacy encoding. Preserve readable
+    # output with explicit Unicode escapes instead of failing the whole report.
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    print(text.encode(encoding, errors="backslashreplace").decode(encoding))
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     hook_output: str | None = None
@@ -885,7 +902,7 @@ def main(argv: list[str] | None = None) -> int:
         root = roles.context_root
         split_mode = args.context_root is not None or args.working_root is not None
         if split_mode and args.command not in {
-            "start", "propose", "apply", "hook", "project", "doctor"
+            "start", "history", "propose", "apply", "hook", "project", "doctor"
         }:
             raise ContextOSError(
                 f"{args.command} is not yet a split-root lifecycle surface"
@@ -895,7 +912,14 @@ def main(argv: list[str] | None = None) -> int:
         ):
             load_project_attachment(roles)
         if args.command == "start":
-            emit(start_report(root, parse_now(args.now), roles=roles if split_mode else None))
+            if args.briefing or args.source or args.format == "markdown":
+                report = briefing_report(root, parse_now(args.now), sources=args.source, roles=roles if split_mode else None)
+            else:
+                report = start_report(root, parse_now(args.now), roles=roles if split_mode else None)
+            _print_report(render_briefing(report)) if args.format == "markdown" else emit(report)
+        elif args.command == "history":
+            report = history_report(root, limit=args.limit, path=args.path, details=args.details)
+            _print_report(render_history(report)) if args.format == "markdown" else emit(report)
         elif args.command == "propose":
             path, document = create_proposal(root, args.workflow, read_json(args.input), parse_now(args.now))
             emit({

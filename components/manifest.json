@@ -659,6 +659,38 @@
                 {
                     "path": "workspace/schema.json",
                     "policy": "managed"
+                },
+                {
+                    "path": "contextos/continuity.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/continuity-benchmark.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/continuity.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/first-handoff.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "scripts/continuity-benchmark.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/fixtures/continuity/scenario.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_continuity.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_continuity_benchmark.py",
+                    "policy": "development"
                 }
             ]
         },

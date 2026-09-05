@@ -10,6 +10,10 @@
   command sources and lifecycle artifacts remain covered.
 
 ### Added
+- Source-attributed briefing previews and readable local receipt history expose
+  recorded freshness, selected context, and available proposal diffs. A guided
+  first handoff and constrained continuity benchmark compare project state
+  with a concise handoff-note baseline.
 - First-class OpenCode support now ships repository-native `AGENTS.md` and Agent
   Skills discovery, typed `/context-*` adapters, setup and doctor registration,
   explicit permission/privacy/memory boundaries, deterministic conformance, and

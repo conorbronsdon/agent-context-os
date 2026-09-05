@@ -1,0 +1,24 @@
+{
+  "id": "project-lantern",
+  "description": "Synthetic project context only. No real user or customer information.",
+  "sources": {
+    "AGENTS.md": "Use recorded project decisions. A later explicit decision replaces an earlier proposal. Distinguish rejected alternatives and unresolved assumptions. When evidence is absent, answer unknown. Cite the supplied source rather than inventing facts.",
+    "HANDOFF.md": "Lantern handoff, 2026-09-04. Use PostgreSQL for concurrent writers. The CSV export replaces the earlier PDF export plan. Automatic retries were rejected because duplicate charges are possible. The launch date is unconfirmed; ask before promising it.",
+    "state/decisions.md": "| Date | Decision | Rationale | Rejected alternatives |\n|---|---|---|---|\n| 2026-08-20 | Proposed SQLite and PDF export | Initial prototype | |\n| 2026-09-03 | Use PostgreSQL for concurrent writers. | Multiple workers write simultaneously | SQLite prototype |\n| 2026-09-04 | The CSV export replaces the earlier PDF export plan. | Customers need spreadsheet analysis | PDF export |\n| 2026-09-04 | Automatic retries were rejected because duplicate charges are possible. | Reconcile ambiguous results manually | Automatic retry |",
+    "state/blockers.md": "**Last Updated:** 2026-09-04\nThe launch date is unconfirmed; ask before promising it.",
+    "sessions/2026-08-20.md": "Old prototype session: we proposed SQLite, PDF export, automatic retries, and a September 15 launch. These were ideas awaiting review, not confirmed commitments.",
+    "state/current.md": "**Last Updated:** 2026-09-04\nImplement the approved export. Follow state/decisions.md and check state/blockers.md before making a launch commitment."
+  },
+  "questions": {
+    "database": "Which database should the next agent use? value: postgresql, sqlite, or unknown.",
+    "export": "Which export should it implement? value: csv, pdf, or unknown.",
+    "retries": "Should it automatically retry an ambiguous charge? value: yes, no, or unknown.",
+    "launch": "What is the status of the September 15 launch date? value: confirmed, unconfirmed, or unknown. Use unconfirmed when evidence explicitly says the date is unresolved; use unknown when no launch-date evidence is supplied."
+  },
+  "expected": {
+    "database": {"value": "postgresql", "source": "state/decisions.md", "quote": "Use PostgreSQL for concurrent writers."},
+    "export": {"value": "csv", "source": "state/decisions.md", "quote": "The CSV export replaces the earlier PDF export plan."},
+    "retries": {"value": "no", "source": "state/decisions.md", "quote": "Automatic retries were rejected because duplicate charges are possible."},
+    "launch": {"value": "unconfirmed", "source": "state/blockers.md", "quote": "The launch date is unconfirmed; ask before promising it."}
+  }
+}
