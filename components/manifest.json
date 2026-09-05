@@ -288,6 +288,94 @@
                     "policy": "managed"
                 },
                 {
+                    "path": "integrations/entries/agent-skills.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/agent-workspace.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/ai-tools-for-creators.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/asana-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/atlassian-rovo-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/beads-gemini.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/github-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/gitlab-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/google-workspace-cli.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/granola-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/linear-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/markitdown-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/notion-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/obsidian.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/pandoc.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/readwise-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/shortcut-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/slack-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/substack-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/todoist-cli.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/tolaria.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/trello-mcp.json",
+                    "policy": "development"
+                },
+                {
                     "path": "LICENSE",
                     "policy": "managed"
                 },

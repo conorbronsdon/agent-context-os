@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Added
+- Integration catalog contributions now use one authoritative JSON file per
+  entry. Deterministic aggregation generates the machine catalog, Markdown
+  reference, and component ownership records, while the chooser and changelog
+  remain explicit curated surfaces (#161).
 - Coordination messages can now become source-bound kernel proposals for an
   explicit decision-log or session-handoff target. Apply requires the normal
   exact digest and rejects changed, missing, or expired source messages while

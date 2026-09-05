@@ -1,0 +1,92 @@
+{
+    "id":  "obsidian",
+    "name":  "Obsidian CLI",
+    "summary":  "Obsidian\u0027s official desktop CLI exposes broad local application and vault capabilities; scope is enforceable only through an exact external command-and-argument policy.",
+    "source_url":  "https://obsidian.md/help/cli",
+    "kind":  "editor_guide",
+    "supported_agents":  [
+                             "claude_code",
+                             "codex",
+                             "gemini_cli",
+                             "generic"
+                         ],
+    "installation":  {
+                         "automatic":  false,
+                         "scope":  "project_or_user",
+                         "prerequisites":  [
+                                               "Obsidian desktop 1.12.7 or newer",
+                                               "The command line interface enabled on PATH",
+                                               "Obsidian running for CLI calls",
+                                               "An exact command-and-argument policy enforced by the calling harness"
+                                           ]
+                     },
+    "data_boundary":  {
+                          "credentials":  [
+                                              "Optional Obsidian Sync or Publish credentials remain inside Obsidian"
+                                          ],
+                          "reads":  [
+                                        "The current-working-directory vault when the shell is inside a vault, otherwise the active vault; many file commands then default to the active file unless vault= and path= are explicit",
+                                        "Explicitly targeted notes, properties, tasks, backlinks, history, workspaces, plugins, and themes"
+                                    ],
+                          "writes":  [
+                                         "Vault notes, properties, tasks, moves, renames, overwrites, and link-aware mutations",
+                                         "Trash or permanent deletion, workspace deletion, and Sync restore or other mutating Sync actions",
+                                         "Publish or unpublish actions, plugin or theme installation and changes, URL opening, arbitrary registered command execution, and JavaScript eval"
+                                     ]
+                      },
+    "capabilities":  {
+                         "read":  true,
+                         "sensitive_read":  true,
+                         "write":  true,
+                         "remote_write":  true,
+                         "publish":  true,
+                         "overwrite":  true,
+                         "delete":  true,
+                         "arbitrary_execution":  true,
+                         "oauth":  false,
+                         "destructive":  true,
+                         "details":  [
+                                         "No enforcement wrapper ships here; the calling harness must constrain commands, arguments, and flags, and default-deny eval, command, plugin, theme, web, publish, permanent delete, and mutating sync operations",
+                                         "For bounded file operations require explicit vault= plus path= and reject dangerous flags such as overwrite unless separately approved",
+                                         "Treat plugin commands and JavaScript eval as open-world execution with possible filesystem and network effects"
+                                     ]
+                     },
+    "confirmation":  {
+                         "required_for":  [
+                                              "credential_setup",
+                                              "external_install",
+                                              "read_sensitive",
+                                              "write",
+                                              "write_remote",
+                                              "publish",
+                                              "overwrite",
+                                              "delete",
+                                              "arbitrary_execution",
+                                              "destructive"
+                                          ],
+                         "notes":  "Confirm broad or implicit-target reads, overwrites or overwrite flags, bulk or link-affecting moves, Sync control or restore, deletion, publish or unpublish, URL opening, plugin or theme changes, arbitrary command, and eval; use the normal local-edit gate only when vault= and path= bound a single note edit."
+                     },
+    "risk_tags":  [
+                      "local-data",
+                      "sensitive-read",
+                      "read-write",
+                      "remote-write",
+                      "publish-capable",
+                      "overwrite-capable",
+                      "delete-capable",
+                      "arbitrary-execution",
+                      "destructive-capable",
+                      "open-world",
+                      "network-capable"
+                  ],
+    "maturity":  "verified",
+    "last_verified":  "2026-08-15",
+    "evidence":  [
+                     "https://obsidian.md/help/cli"
+                 ],
+    "health_check":  "Run obsidian version, resolve the exact vault path, then perform a bounded JSON search with limit 1 through the enforced allowlist.",
+    "uninstall":  {
+                      "instructions":  "Disable the Obsidian CLI or remove its executable from the calling client\u0027s configuration or PATH; leave the vault, Sync, Publish, plugins, and themes unchanged.",
+                      "removes_user_data":  false
+                  }
+}

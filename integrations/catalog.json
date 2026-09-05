@@ -7,16 +7,28 @@
       "summary": "A source catalog and installer for portable agent skills.",
       "source_url": "https://github.com/conorbronsdon/agent-skills",
       "kind": "skill_catalog",
-      "supported_agents": ["claude_code", "codex", "cursor", "opencode"],
+      "supported_agents": [
+        "claude_code",
+        "codex",
+        "cursor",
+        "opencode"
+      ],
       "installation": {
         "automatic": false,
         "scope": "project_or_user",
-        "prerequisites": ["Git", "A supported agent client"]
+        "prerequisites": [
+          "Git",
+          "A supported agent client"
+        ]
       },
       "data_boundary": {
         "credentials": [],
-        "reads": ["Selected public skill source files"],
-        "writes": ["Chosen skill files in an agent-specific project or user directory, including replacement or removal of an existing installation"]
+        "reads": [
+          "Selected public skill source files"
+        ],
+        "writes": [
+          "Chosen skill files in an agent-specific project or user directory, including replacement or removal of an existing installation"
+        ]
       },
       "capabilities": {
         "read": true,
@@ -29,16 +41,35 @@
         "arbitrary_execution": false,
         "oauth": false,
         "destructive": true,
-        "details": ["Install and diff explicitly selected skills", "Update can replace an installed skill directory; uninstall removes it"]
+        "details": [
+          "Install and diff explicitly selected skills",
+          "Update can replace an installed skill directory; uninstall removes it"
+        ]
       },
       "confirmation": {
-        "required_for": ["external_install", "write", "overwrite", "delete", "destructive"],
+        "required_for": [
+          "external_install",
+          "write",
+          "overwrite",
+          "delete",
+          "destructive"
+        ],
         "notes": "Review the selected skill, destination, diff, and local modifications before installation, replacement, or removal."
       },
-      "risk_tags": ["external-install", "project-files", "replacement", "removal", "overwrite-capable", "delete-capable", "destructive-capable"],
+      "risk_tags": [
+        "external-install",
+        "project-files",
+        "replacement",
+        "removal",
+        "overwrite-capable",
+        "delete-capable",
+        "destructive-capable"
+      ],
       "maturity": "verified",
       "last_verified": "2026-08-15",
-      "evidence": ["https://github.com/conorbronsdon/agent-skills"],
+      "evidence": [
+        "https://github.com/conorbronsdon/agent-skills"
+      ],
       "health_check": "Use the repository's documented diff and validation workflow for the selected skill.",
       "uninstall": {
         "instructions": "Remove only the installed skill directory after reviewing and preserving any local modifications.",
@@ -51,16 +82,26 @@
       "summary": "A slim standalone package for agent lifecycle, state, reconciliation, and recovery workflows.",
       "source_url": "https://github.com/conorbronsdon/agent-workspace",
       "kind": "workspace_template",
-      "supported_agents": ["claude_code"],
+      "supported_agents": [
+        "claude_code"
+      ],
       "installation": {
         "automatic": false,
         "scope": "project_or_user",
-        "prerequisites": ["Git", "A repository where workspace state may be stored"]
+        "prerequisites": [
+          "Git",
+          "A repository where workspace state may be stored"
+        ]
       },
       "data_boundary": {
         "credentials": [],
-        "reads": ["Local workspace state, sessions, branches, and worktrees"],
-        "writes": ["Local workspace state and session files after workflow approval", "Optional removal of explicitly approved stale worktrees or branches"]
+        "reads": [
+          "Local workspace state, sessions, branches, and worktrees"
+        ],
+        "writes": [
+          "Local workspace state and session files after workflow approval",
+          "Optional removal of explicitly approved stale worktrees or branches"
+        ]
       },
       "capabilities": {
         "read": true,
@@ -73,16 +114,33 @@
         "arbitrary_execution": false,
         "oauth": false,
         "destructive": true,
-        "details": ["Session lifecycle", "State reconciliation", "Optional stale worktree cleanup and removal"]
+        "details": [
+          "Session lifecycle",
+          "State reconciliation",
+          "Optional stale worktree cleanup and removal"
+        ]
       },
       "confirmation": {
-        "required_for": ["external_install", "write", "delete", "destructive"],
+        "required_for": [
+          "external_install",
+          "write",
+          "delete",
+          "destructive"
+        ],
         "notes": "Recovery is read-only by default; require approval before cleanup or state mutation."
       },
-      "risk_tags": ["local-state", "git", "cleanup", "delete-capable", "destructive-capable"],
+      "risk_tags": [
+        "local-state",
+        "git",
+        "cleanup",
+        "delete-capable",
+        "destructive-capable"
+      ],
       "maturity": "verified",
       "last_verified": "2026-08-15",
-      "evidence": ["https://github.com/conorbronsdon/agent-workspace"],
+      "evidence": [
+        "https://github.com/conorbronsdon/agent-workspace"
+      ],
       "health_check": "Run the package's documented validation and a read-only start or reconcile workflow.",
       "uninstall": {
         "instructions": "Remove the installed adapters only after preserving any workspace state the user wants to keep.",
@@ -95,7 +153,9 @@
       "summary": "A discovery catalog for creator skills, MCP servers, benchmarks, and publishing tools.",
       "source_url": "https://github.com/conorbronsdon/ai-tools-for-creators",
       "kind": "resource_catalog",
-      "supported_agents": ["generic"],
+      "supported_agents": [
+        "generic"
+      ],
       "installation": {
         "automatic": false,
         "scope": "none",
@@ -103,7 +163,9 @@
       },
       "data_boundary": {
         "credentials": [],
-        "reads": ["Public catalog documentation"],
+        "reads": [
+          "Public catalog documentation"
+        ],
         "writes": []
       },
       "capabilities": {
@@ -117,19 +179,245 @@
         "arbitrary_execution": false,
         "oauth": false,
         "destructive": false,
-        "details": ["Discovery links only; every linked tool needs separate review"]
+        "details": [
+          "Discovery links only; every linked tool needs separate review"
+        ]
       },
       "confirmation": {
         "required_for": [],
         "notes": "A listing is not verification. Re-check the linked source before installing or authorizing it."
       },
-      "risk_tags": ["catalog", "third-party-links", "drift-prone"],
+      "risk_tags": [
+        "catalog",
+        "third-party-links",
+        "drift-prone"
+      ],
       "maturity": "listed",
       "last_verified": "2026-08-15",
-      "evidence": ["https://github.com/conorbronsdon/ai-tools-for-creators"],
+      "evidence": [
+        "https://github.com/conorbronsdon/ai-tools-for-creators"
+      ],
       "health_check": "Open the linked project's current source and verify its own installation and safety claims.",
       "uninstall": {
         "instructions": "No installation is performed by this catalog entry.",
+        "removes_user_data": false
+      }
+    },
+    {
+      "id": "asana-mcp",
+      "name": "Asana MCP",
+      "summary": "Asana's official hosted V2 MCP server for tasks, projects, portfolios, and status updates with OAuth 2.0 and write/delete capabilities.",
+      "source_url": "https://developers.asana.com/docs/mcp-server",
+      "kind": "mcp_server",
+      "supported_agents": [
+        "claude_code",
+        "codex",
+        "cursor",
+        "generic"
+      ],
+      "installation": {
+        "automatic": false,
+        "scope": "project_or_user",
+        "prerequisites": [
+          "An Asana account and workspace",
+          "An MCP client supporting remote Streamable HTTP and browser OAuth",
+          "A pre-registered Asana MCP app with a client ID and client secret",
+          "A redirect URL matching exactly between the Asana app settings and the client configuration; dynamic client registration is not supported",
+          "An authorized Asana workspace"
+        ]
+      },
+      "data_boundary": {
+        "credentials": [
+          "OAuth 2.0 token managed by the MCP client for the authorized Asana workspace; tokens issued for MCP apps are valid only for the MCP server, not the Asana REST API",
+          "The registered app's client secret, which coding clients store locally (keychain or a credentials file) and must be kept out of repositories"
+        ],
+        "reads": [
+          "Sensitive Asana workspace identity, teams, projects, sections, tasks, subtasks, dependencies, custom fields, comments, portfolios, goals, and status updates",
+          "The workspace user directory: get_users and get_user return names, email addresses, and workspace memberships",
+          "Attachment metadata with download and view URLs for tasks, projects, and project briefs",
+          "AI Teammate agent records, including behavior guidance",
+          "Full-text task search across names, descriptions, and comments (Premium workspaces)"
+        ],
+        "writes": [
+          "Remote creation of tasks, subtasks, projects, comments, and project or portfolio status updates in the authorized workspace; create_tasks and create_project create immediately, without a confirmation step, up to 50 tasks per call",
+          "Updates are limited to tasks: update_tasks (up to 50 per call) has no project-update counterpart, add_comment has no edit tool, and a status update is a creation (create_project_status_update) rather than an edit",
+          "Overwrite-capable task updates to name, description, assignee, due and start dates, completion status, parent, dependencies and dependents, project membership, followers, and custom fields",
+          "Permanent deletion is delete_task only, documented as deleting a task and any of its subtasks that are not also members of another project -- subtasks shared with another project survive"
+        ]
+      },
+      "capabilities": {
+        "read": true,
+        "sensitive_read": true,
+        "write": true,
+        "remote_write": true,
+        "publish": false,
+        "overwrite": true,
+        "delete": true,
+        "arbitrary_execution": false,
+        "oauth": true,
+        "destructive": true,
+        "details": [
+          "Recommended: start with read-only task and project inspection; no server-side read-only OAuth scope is currently provided by Asana",
+          "MCP apps do not take scopes: one authorization may access any available tool, including tools added to the server in the future, with no tool-level narrowing",
+          "The effective controls are therefore client-side confirmation plus the authenticated user's own Asana permissions -- access is limited to the workspaces, projects, and tasks that user already has",
+          "Tokens are workspace-scoped: each session is bound to the workspace chosen at authorization, and other workspaces need separate sessions",
+          "The preview tools that render a confirmation UI (create_task_preview, create_project_preview, search_tasks_preview) are available only in Claude and ChatGPT; other clients call the standard write tools directly",
+          "The server exposes task and project creation, task updates, and permanent task deletion",
+          "Require exact payload and target confirmation client-side before any write, status update, or deletion"
+        ]
+      },
+      "confirmation": {
+        "required_for": [
+          "credential_setup",
+          "external_install",
+          "read_sensitive",
+          "write",
+          "write_remote",
+          "overwrite",
+          "delete",
+          "oauth",
+          "destructive"
+        ],
+        "notes": "Confirm the target Asana workspace before reading sensitive project state; show exact task title, fields, and proposed changes or deletions before executing writes."
+      },
+      "risk_tags": [
+        "credentials",
+        "hosted",
+        "project-management",
+        "sensitive-read",
+        "remote-write",
+        "overwrite-capable",
+        "delete-capable",
+        "oauth",
+        "destructive-capable",
+        "dynamic-api-surface",
+        "prompt-injection"
+      ],
+      "maturity": "verified",
+      "last_verified": "2026-09-03",
+      "evidence": [
+        "https://developers.asana.com/docs/mcp-server",
+        "https://developers.asana.com/docs/connecting-mcp-clients-to-asanas-v2-server",
+        "https://developers.asana.com/docs/integrating-with-asanas-mcp-server",
+        "https://developers.asana.com/docs/mcp-tools-reference"
+      ],
+      "health_check": "Connect to the Asana V2 MCP endpoint, verify authorized workspace and user identity, then fetch one explicitly named project or task without writing or modifying fields.",
+      "uninstall": {
+        "instructions": "Remove the Asana MCP entry from the client, delete the locally stored client secret, and revoke the authorized application connection in Asana account settings; preserve all workspace, project, and task data.",
+        "removes_user_data": false
+      }
+    },
+    {
+      "id": "atlassian-rovo-mcp",
+      "name": "Atlassian Rovo MCP",
+      "summary": "Atlassian's official hosted MCP server (Rovo MCP v2). One authorization can reach Jira, Confluence, Jira Service Management, Bitbucket Cloud, Loom, Goals, Projects, Teams, Focus, Talent, Teamwork Graph, Rovo search, and connected source-code search, each as its own admin-managed permission group.",
+      "source_url": "https://support.atlassian.com/atlassian-ai-gateway/",
+      "kind": "mcp_server",
+      "supported_agents": [
+        "claude_code",
+        "codex",
+        "gemini_cli",
+        "cursor",
+        "generic"
+      ],
+      "installation": {
+        "automatic": false,
+        "scope": "project_or_user",
+        "prerequisites": [
+          "An Atlassian Cloud account on the site to be authorized",
+          "An MCP client supporting remote Streamable HTTP and browser OAuth, pointed at https://mcp.atlassian.com/v2/mcp",
+          "An authorized Atlassian site",
+          "For Bitbucket tools, a Bitbucket workspace linked to an Atlassian organization",
+          "For API-token authentication, an organization admin who has enabled it"
+        ]
+      },
+      "data_boundary": {
+        "credentials": [
+          "OAuth 2.1 authorization managed by the MCP client, consented for a specific Atlassian site (cloudId) and product set, with redirect-domain allowlist checks",
+          "When enabled by an organization admin, API-token authentication: a personal API token (Basic auth, email:token) or a service-account API key (Bearer); such tokens are not bound to a cloudId, so cross-site calls are possible, and no redirect-domain allowlist check applies",
+          "Jira Service Management tools are available only through API-token authentication"
+        ],
+        "reads": [
+          "Sensitive Jira issues, epics, sprints, boards, filters, dashboards, comments, worklogs, change history, user lookups by name or email, and attachment downloads across the authorized site",
+          "Confluence spaces, content of every type (pages, blog posts, live docs, whiteboards, databases, folders), version history and diffs, comments, attachment downloads, PDF or Word exports, content permissions and public-link status, and CQL search",
+          "Jira Service Management operations alerts, on-call schedules, and teams; Bitbucket Cloud workspaces, repositories, file and directory contents, branches, commits, pull requests and diffs, pipelines and step logs, deployments, and environments",
+          "Loom videos with transcripts, comments, AI meeting action items, and signed MP4 download URLs; Goals, Projects, Teams, Focus areas, and Talent data (positions, managers, headcount by country, level, or job family, and skill assignments)",
+          "Teamwork Graph context across all of the above plus third-party data connected to Jira (GitHub, Azure DevOps, GitLab, Jenkins, and Spinnaker pull requests, builds, and deployments); Rovo semantic search across Jira, Confluence, and connected apps; source-code search and full file reads across connected source-control providers"
+        ],
+        "writes": [
+          "Jira: create, edit, transition, link, watch, and comment on work items, log time, upload attachments, set entity properties, and manage sprints, versions (including release and archive), and boards; with the admin-enabled manage_jira group, create and update projects",
+          "Confluence: create pages, blog posts, live docs, whiteboards, databases, embeds, smart links, and folders through a single content tool; full-body or granular updates; copy, move, archive, restore versions, convert modes, and set content status; comments, attachments, labels, spaces, and space instructions",
+          "Confluence access control: add, remove, or replace content permission grants (replace removes any grant absent from the request), set restriction state, and enable or disable the anonymous public link for a page",
+          "Bitbucket Cloud: create, update, comment on, approve, request changes on, and merge pull requests; create branches and commits; run pipelines",
+          "Jira Service Management: acknowledge, close, or escalate operations alerts; Loom: upload and publish videos, rename, set visibility to OWNER, WORKSPACE, or PUBLIC, share, comment, and move; Goals, Projects, Focus areas, and Teams: create and update; Talent: create skills, assign or decline worker skills, and allocate positions to focus areas; Teamwork Graph: add relationships between objects",
+          "Permanent deletion through the admin-enabled delete_jira group: Jira issues, comments, and issue attachments"
+        ]
+      },
+      "capabilities": {
+        "read": true,
+        "sensitive_read": true,
+        "write": true,
+        "remote_write": true,
+        "publish": true,
+        "overwrite": true,
+        "delete": true,
+        "arbitrary_execution": false,
+        "oauth": true,
+        "destructive": true,
+        "details": [
+          "Recommended narrow profile, not the declared boundary: enable only the Jira and Confluence read and search groups, and widen deliberately",
+          "Recommended: exclude Teamwork Graph and Rovo search; both widen visibility to organization-wide and third-party connected data, and each call may consume up to 10 Rovo credits",
+          "Organization admins grant or revoke access per permission group; delete_jira and manage_jira are disabled by default and must be enabled by an admin",
+          "Three tools delete permanently and cannot be undone: deleteJiraIssue, deleteJiraComment, and deleteJiraIssueAttachment",
+          "Confluence writes are content-level tools, so one write tool reaches blog posts, whiteboards, databases, and folders as well as pages; enableConfluencePublicLink and updateLoomVideoPermissions can make content anonymously or publicly reachable",
+          "Bitbucket writes include merging pull requests and running pipelines; a commit that changes pipeline configuration followed by a pipeline run executes code on Bitbucket runners under the user's permissions",
+          "The server exposes a small primary tool set and defers the rest behind discover plus executeRead, executeWrite, and executeDestructive, so new tools become reachable without reconnecting; the ?tools=all endpoint variant exposes the full flat list",
+          "Creating, updating, publishing, or deleting anything requires explicit outbound confirmation"
+        ]
+      },
+      "confirmation": {
+        "required_for": [
+          "credential_setup",
+          "external_install",
+          "read_sensitive",
+          "write",
+          "write_remote",
+          "publish",
+          "overwrite",
+          "delete",
+          "oauth",
+          "destructive"
+        ],
+        "notes": "Confirm the target Atlassian site, permission groups, and project or space before reading sensitive organizational state; show proposed Jira, Confluence, or Bitbucket changes before execution; gate the three delete tools, public-link and permission changes, pull-request merges, and pipeline runs separately from other writes; and keep Teamwork Graph and Rovo search disabled by default."
+      },
+      "risk_tags": [
+        "credentials",
+        "hosted",
+        "project-management",
+        "private-repositories",
+        "sensitive-read",
+        "remote-write",
+        "publish-capable",
+        "public-publish",
+        "overwrite-capable",
+        "delete-capable",
+        "oauth",
+        "destructive-capable",
+        "ci-cd",
+        "dynamic-api-surface",
+        "prompt-injection"
+      ],
+      "maturity": "verified",
+      "last_verified": "2026-09-03",
+      "evidence": [
+        "https://support.atlassian.com/atlassian-ai-gateway/docs/supported-tools/",
+        "https://support.atlassian.com/atlassian-ai-gateway/docs/get-started-with-the-atlassian-remote-mcp-server/",
+        "https://support.atlassian.com/atlassian-ai-gateway/docs/configure-authentication-via-api-token/",
+        "https://support.atlassian.com/atlassian-ai-gateway/docs/configure-oauth-2-1/"
+      ],
+      "health_check": "Connect to the Rovo MCP endpoint, verify authorized Atlassian site identity and the granted permission groups, then run a bounded read query for one known issue or page without creating or modifying content.",
+      "uninstall": {
+        "instructions": "Remove the Atlassian Rovo MCP entry from the client and revoke the authorized application connection in Atlassian account settings, or revoke the API token or service-account key; preserve all Jira, Confluence, Jira Service Management, Bitbucket, and Loom data.",
         "removes_user_data": false
       }
     },
@@ -139,16 +427,31 @@
       "summary": "A Gemini integration for Beads issue graphs and persistent coordination state; project scope is available, but the documented setup default is user-global.",
       "source_url": "https://beads.gascity.com/integrations/gemini",
       "kind": "agent_extension",
-      "supported_agents": ["gemini_cli"],
+      "supported_agents": [
+        "gemini_cli"
+      ],
       "installation": {
         "automatic": false,
         "scope": "project_or_user",
-        "prerequisites": ["The bd CLI", "A deliberately initialized Beads project", "Gemini CLI"]
+        "prerequisites": [
+          "The bd CLI",
+          "A deliberately initialized Beads project",
+          "Gemini CLI"
+        ]
       },
       "data_boundary": {
-        "credentials": ["Optional Dolt, Git, or cloud remote credentials stay with their configured clients"],
-        "reads": ["Local issue descriptions, comments, dependencies, memories, readiness, and coordination state"],
-        "writes": ["The project Beads database", "Project or user Gemini hooks and instructions", "Optional remote issue-history sync or push", "Issue deletion, purge, migration, repair, or reset when explicitly invoked"]
+        "credentials": [
+          "Optional Dolt, Git, or cloud remote credentials stay with their configured clients"
+        ],
+        "reads": [
+          "Local issue descriptions, comments, dependencies, memories, readiness, and coordination state"
+        ],
+        "writes": [
+          "The project Beads database",
+          "Project or user Gemini hooks and instructions",
+          "Optional remote issue-history sync or push",
+          "Issue deletion, purge, migration, repair, or reset when explicitly invoked"
+        ]
       },
       "capabilities": {
         "read": true,
@@ -161,16 +464,41 @@
         "arbitrary_execution": false,
         "oauth": false,
         "destructive": true,
-        "details": ["bd setup gemini writes user-global hooks by default; prefer bd setup gemini --project for repository scope", "bd init can modify agent instructions and configure a remote", "bd dolt push --force can overwrite remote history", "bd init --discard-remote authorizes a divergent local initialization; a later Dolt push is the separate remote-history replacement"]
+        "details": [
+          "bd setup gemini writes user-global hooks by default; prefer bd setup gemini --project for repository scope",
+          "bd init can modify agent instructions and configure a remote",
+          "bd dolt push --force can overwrite remote history",
+          "bd init --discard-remote authorizes a divergent local initialization; a later Dolt push is the separate remote-history replacement"
+        ]
       },
       "confirmation": {
-        "required_for": ["credential_setup", "external_install", "write", "write_remote", "overwrite", "delete", "destructive"],
+        "required_for": [
+          "credential_setup",
+          "external_install",
+          "write",
+          "write_remote",
+          "overwrite",
+          "delete",
+          "destructive"
+        ],
         "notes": "Confirm initialization and setup after showing the project or user-config diff; separately confirm divergent local initialization with discard-remote and any later remote sync or push, especially force push, plus migration, fix, delete, purge, and reset."
       },
-      "risk_tags": ["local-state", "hooks", "project-config", "remote-write", "overwrite-capable", "delete-capable", "destructive-capable"],
+      "risk_tags": [
+        "local-state",
+        "hooks",
+        "project-config",
+        "remote-write",
+        "overwrite-capable",
+        "delete-capable",
+        "destructive-capable"
+      ],
       "maturity": "verified",
       "last_verified": "2026-08-15",
-      "evidence": ["https://beads.gascity.com/integrations/gemini", "https://github.com/steveyegge/beads/blob/7505e173f2659ba6e1f955b86d81a4f9e21810ca/docs/cli-reference/dolt.md", "https://github.com/steveyegge/beads/blob/7505e173f2659ba6e1f955b86d81a4f9e21810ca/docs/recovery/init-safety.md"],
+      "evidence": [
+        "https://beads.gascity.com/integrations/gemini",
+        "https://github.com/steveyegge/beads/blob/7505e173f2659ba6e1f955b86d81a4f9e21810ca/docs/cli-reference/dolt.md",
+        "https://github.com/steveyegge/beads/blob/7505e173f2659ba6e1f955b86d81a4f9e21810ca/docs/recovery/init-safety.md"
+      ],
       "health_check": "Run bd version, bd doctor, bd setup gemini --check, and a bounded bd ready --json query.",
       "uninstall": {
         "instructions": "Remove only the Gemini integration with the documented project or user --remove command; preserve the Beads project database unless separate deletion is approved.",
@@ -183,16 +511,34 @@
       "summary": "GitHub's official MCP server exposes repository, issue, pull-request, Actions, security, and administration toolsets with granular allowlists and an enforced read-only mode.",
       "source_url": "https://github.com/github/github-mcp-server",
       "kind": "mcp_server",
-      "supported_agents": ["claude_code","codex","gemini_cli","cursor","opencode","generic"],
+      "supported_agents": [
+        "claude_code",
+        "codex",
+        "gemini_cli",
+        "cursor",
+        "opencode",
+        "generic"
+      ],
       "installation": {
         "automatic": false,
         "scope": "project_or_user",
-        "prerequisites": ["An MCP-compatible client","A GitHub account","Docker or a current native release for the local server; hosted-server availability depends on the client"]
+        "prerequisites": [
+          "An MCP-compatible client",
+          "A GitHub account",
+          "Docker or a current native release for the local server; hosted-server availability depends on the client"
+        ]
       },
       "data_boundary": {
-        "credentials": ["Browser OAuth token held by the client, or a fine-grained personal access token or GitHub App credentials kept outside repository files"],
-        "reads": ["Private or public repository contents and metadata, issues, pull requests, users, Actions, security findings, notifications, and other explicitly enabled toolsets allowed by the authenticated account"],
-        "writes": ["Remote GitHub writes exposed by enabled toolsets, including issue and pull-request comments, branch or file changes, workflow operations, labels, notifications, and repository administration where the credential permits","Publicly visible posts, overwrite-capable file or branch changes, and resource deletion when the corresponding write tools are enabled"]
+        "credentials": [
+          "Browser OAuth token held by the client, or a fine-grained personal access token or GitHub App credentials kept outside repository files"
+        ],
+        "reads": [
+          "Private or public repository contents and metadata, issues, pull requests, users, Actions, security findings, notifications, and other explicitly enabled toolsets allowed by the authenticated account"
+        ],
+        "writes": [
+          "Remote GitHub writes exposed by enabled toolsets, including issue and pull-request comments, branch or file changes, workflow operations, labels, notifications, and repository administration where the credential permits",
+          "Publicly visible posts, overwrite-capable file or branch changes, and resource deletion when the corresponding write tools are enabled"
+        ]
       },
       "capabilities": {
         "read": true,
@@ -205,38 +551,192 @@
         "arbitrary_execution": false,
         "oauth": true,
         "destructive": true,
-        "details": ["Start with --read-only and only the context, repos, issues, and pull_requests toolsets; read-only mode takes priority even if a write tool is requested explicitly","Toolsets and individual tools are allowlisted independently, so enabling all or the default surface can expose materially more data and actions than a bounded project workflow needs","Treat workflow dispatch, branch or file mutation, repository administration, and public comments as separate high-impact remote actions"]
+        "details": [
+          "Start with --read-only and only the context, repos, issues, and pull_requests toolsets; read-only mode takes priority even if a write tool is requested explicitly",
+          "Toolsets and individual tools are allowlisted independently, so enabling all or the default surface can expose materially more data and actions than a bounded project workflow needs",
+          "Treat workflow dispatch, branch or file mutation, repository administration, and public comments as separate high-impact remote actions"
+        ]
       },
       "confirmation": {
-        "required_for": ["credential_setup","external_install","read_sensitive","write","write_remote","publish","overwrite","delete","oauth","destructive"],
+        "required_for": [
+          "credential_setup",
+          "external_install",
+          "read_sensitive",
+          "write",
+          "write_remote",
+          "publish",
+          "overwrite",
+          "delete",
+          "oauth",
+          "destructive"
+        ],
         "notes": "Confirm the exact GitHub identity, host, repositories, credential scopes, and enabled toolsets; ask before private-repository reads, and separately show the exact target and payload before comments, branch or file writes, workflow actions, publication, overwrite, deletion, or administration."
       },
-      "risk_tags": ["credentials","private-repositories","sensitive-read","remote-write","publish-capable","public-publish","overwrite-capable","delete-capable","oauth","destructive-capable","broad-api-surface","ci-cd","prompt-injection"],
+      "risk_tags": [
+        "credentials",
+        "private-repositories",
+        "sensitive-read",
+        "remote-write",
+        "publish-capable",
+        "public-publish",
+        "overwrite-capable",
+        "delete-capable",
+        "oauth",
+        "destructive-capable",
+        "broad-api-surface",
+        "ci-cd",
+        "prompt-injection"
+      ],
       "maturity": "verified",
       "last_verified": "2026-08-18",
-      "evidence": ["https://github.com/github/github-mcp-server","https://github.com/github/github-mcp-server/blob/bf47e3eca9aeda1e3826916a57c0f9fb0f9d2bc7/docs/server-configuration.md","https://github.com/github/github-mcp-server/blob/bf47e3eca9aeda1e3826916a57c0f9fb0f9d2bc7/docs/remote-server.md"],
+      "evidence": [
+        "https://github.com/github/github-mcp-server",
+        "https://github.com/github/github-mcp-server/blob/bf47e3eca9aeda1e3826916a57c0f9fb0f9d2bc7/docs/server-configuration.md",
+        "https://github.com/github/github-mcp-server/blob/bf47e3eca9aeda1e3826916a57c0f9fb0f9d2bc7/docs/remote-server.md"
+      ],
       "health_check": "Start the server in read-only mode with only context, repos, issues, and pull_requests enabled, verify the authenticated identity and host, then read one explicitly named repository and issue without performing a write.",
       "uninstall": {
         "instructions": "Remove the MCP client entry, stop or uninstall the local server if used, and revoke the OAuth grant, personal access token, or GitHub App installation used for the connection; leave repositories and GitHub content unchanged.",
         "removes_user_data": false
       }
-        },
+    },
+    {
+      "id": "gitlab-mcp",
+      "name": "GitLab MCP",
+      "summary": "GitLab's official Beta MCP server exposes repository, issue, work item, merge request, discussion, and pipeline tools over OAuth 2.0 with the mcp scope.",
+      "source_url": "https://docs.gitlab.com/user/model_context_protocol/mcp_server/",
+      "kind": "mcp_server",
+      "supported_agents": [
+        "claude_code",
+        "codex",
+        "cursor",
+        "gemini_cli",
+        "generic"
+      ],
+      "installation": {
+        "automatic": false,
+        "scope": "project_or_user",
+        "prerequisites": [
+          "An MCP-compatible client",
+          "A GitLab SaaS or self-managed account",
+          "GitLab Duo availability set to Always on or On by default",
+          "Beta and experimental features turned on",
+          "Access to the MCP server allowed",
+          "Activation settings configured for the top-level group on GitLab.com, or for the instance on GitLab Self-Managed and Dedicated",
+          "OAuth 2.0 Dynamic Client Registration available, or a pre-registered OAuth application with the mcp scope and Confidential checkbox cleared where an administrator turns Dynamic Client Registration off"
+        ]
+      },
+      "data_boundary": {
+        "credentials": [
+          "Per-user OAuth 2.0 access token with the mcp scope, obtained through Dynamic Client Registration or a pre-registered OAuth application, kept outside repository files"
+        ],
+        "reads": [
+          "Private or public GitLab repository contents, commits, issues, work items, merge requests, diffs, comments, wiki page lists, project members, pipelines, and job logs allowed by the authenticated user"
+        ],
+        "writes": [
+          "Remote GitLab writes including creating and updating issues, work items, merge requests, comments, branches, and merge request reviews",
+          "File actions committed to a branch through add_commit, covering file creation, update, deletion, and move",
+          "Merging or scheduling the automatic merge of a merge request through accept_merge_request",
+          "CI/CD pipeline runs, retries, cancellations, and renames through save_pipeline, and pipeline metadata updates or pipeline deletion through manage_pipeline",
+          "Publicly visible posts, overwrite-capable branch and file updates, and security scan profile attachment to projects or groups"
+        ]
+      },
+      "capabilities": {
+        "read": true,
+        "sensitive_read": true,
+        "write": true,
+        "remote_write": true,
+        "publish": true,
+        "overwrite": true,
+        "delete": true,
+        "arbitrary_execution": false,
+        "oauth": true,
+        "destructive": true,
+        "details": [
+          "Start with read-only repository, issue, merge request, and pipeline inspection allowlists",
+          "No enforced server-side read-only mode is provided; restrict toolsets client-side",
+          "Treat pipeline triggering, retry, cancellation, and deletion as high-impact CI/CD actions requiring separate confirmation",
+          "This boundary describes the tool surface documented for GitLab 19.4; re-check the tools reference when the instance runs a different version"
+        ]
+      },
+      "confirmation": {
+        "required_for": [
+          "credential_setup",
+          "external_install",
+          "read_sensitive",
+          "write",
+          "write_remote",
+          "publish",
+          "overwrite",
+          "delete",
+          "oauth",
+          "destructive"
+        ],
+        "notes": "Confirm the exact GitLab instance, project scope, and token permissions; show exact target and payload before comments, branch writes, publication, overwrite, deletion, or CI/CD pipeline actions."
+      },
+      "risk_tags": [
+        "credentials",
+        "private-repositories",
+        "sensitive-read",
+        "remote-write",
+        "publish-capable",
+        "public-publish",
+        "overwrite-capable",
+        "delete-capable",
+        "oauth",
+        "destructive-capable",
+        "ci-cd",
+        "prompt-injection"
+      ],
+      "maturity": "verified",
+      "last_verified": "2026-09-02",
+      "evidence": [
+        "https://docs.gitlab.com/user/model_context_protocol/mcp_server/",
+        "https://docs.gitlab.com/user/model_context_protocol/mcp_server_tools/"
+      ],
+      "health_check": "Connect to the GitLab MCP server, verify authenticated user identity and GitLab instance, then read one explicitly named project and issue without performing a write or pipeline action.",
+      "uninstall": {
+        "instructions": "Remove the MCP client entry and revoke the authorized OAuth application for the MCP client in GitLab user settings; an administrator can also withdraw access by disallowing MCP server access for the top-level group or instance. Repositories and GitLab content are left unchanged.",
+        "removes_user_data": false
+      }
+    },
     {
       "id": "google-workspace-cli",
       "name": "Google Workspace CLI",
       "summary": "Google's pre-1.0 command-line interface and Agent Skills for scoped access to Workspace APIs; optional session-start reads require read-only OAuth scopes and per-invocation approval.",
       "source_url": "https://github.com/googleworkspace/cli",
       "kind": "connector",
-      "supported_agents": ["claude_code", "codex", "gemini_cli", "generic"],
+      "supported_agents": [
+        "claude_code",
+        "codex",
+        "gemini_cli",
+        "generic"
+      ],
       "installation": {
         "automatic": false,
         "scope": "project_or_user",
-        "prerequisites": ["A current gws release", "A Google account with Workspace access", "A Google Cloud project and OAuth client", "gcloud for automated auth setup or a manual OAuth configuration"]
+        "prerequisites": [
+          "A current gws release",
+          "A Google account with Workspace access",
+          "A Google Cloud project and OAuth client",
+          "gcloud for automated auth setup or a manual OAuth configuration"
+        ]
       },
       "data_boundary": {
-        "credentials": ["OAuth client configuration", "Encrypted local OAuth credentials or an access token", "Optional service-account credential file", "Optional file-backed encryption key when an OS keyring is unavailable"],
-        "reads": ["Sensitive Gmail, Drive, Calendar, Sheets, Docs, Chat, Admin, and other selected Workspace API data allowed by the active account and OAuth scopes"],
-        "writes": ["Remote writes through selected Workspace APIs, including email sends, messages, events, documents, spreadsheets, tasks, subscriptions, and file uploads", "Overwrite or replacement methods exposed by selected APIs and helpers", "Resource deletion methods exposed by selected Google Discovery APIs"]
+        "credentials": [
+          "OAuth client configuration",
+          "Encrypted local OAuth credentials or an access token",
+          "Optional service-account credential file",
+          "Optional file-backed encryption key when an OS keyring is unavailable"
+        ],
+        "reads": [
+          "Sensitive Gmail, Drive, Calendar, Sheets, Docs, Chat, Admin, and other selected Workspace API data allowed by the active account and OAuth scopes"
+        ],
+        "writes": [
+          "Remote writes through selected Workspace APIs, including email sends, messages, events, documents, spreadsheets, tasks, subscriptions, and file uploads",
+          "Overwrite or replacement methods exposed by selected APIs and helpers",
+          "Resource deletion methods exposed by selected Google Discovery APIs"
+        ]
       },
       "capabilities": {
         "read": true,
@@ -249,16 +749,49 @@
         "arbitrary_execution": false,
         "oauth": true,
         "destructive": true,
-        "details": ["The CLI builds commands from current Google Discovery documents, so enabled services can expose a wider method surface than a static guide lists", "Context OS does not install or authenticate gws; at the pinned upstream revision verified here, the CLI does not expose the older gws mcp command", "The Claude session-start adapter does not pre-approve Bash; every proposed CLI read goes through normal approval with its exact identifiers, limits, fields, and output flags visible", "The documented login uses --readonly for the selected services and verifies the resulting account and scopes with gws auth status", "OAuth scopes limit account access but do not provide per-action review; use narrow scopes and separate confirmation for every send, remote write, overwrite, and deletion", "gws auth setup requires gcloud; the documented manual OAuth path is the fallback, and testing-mode apps can hit scope-count limits", "Upstream supports dry-run for API methods and many mutating helpers, but availability must be checked for the exact command"]
+        "details": [
+          "The CLI builds commands from current Google Discovery documents, so enabled services can expose a wider method surface than a static guide lists",
+          "Context OS does not install or authenticate gws; at the pinned upstream revision verified here, the CLI does not expose the older gws mcp command",
+          "The Claude session-start adapter does not pre-approve Bash; every proposed CLI read goes through normal approval with its exact identifiers, limits, fields, and output flags visible",
+          "The documented login uses --readonly for the selected services and verifies the resulting account and scopes with gws auth status",
+          "OAuth scopes limit account access but do not provide per-action review; use narrow scopes and separate confirmation for every send, remote write, overwrite, and deletion",
+          "gws auth setup requires gcloud; the documented manual OAuth path is the fallback, and testing-mode apps can hit scope-count limits",
+          "Upstream supports dry-run for API methods and many mutating helpers, but availability must be checked for the exact command"
+        ]
       },
       "confirmation": {
-        "required_for": ["credential_setup", "external_install", "read_sensitive", "write", "write_remote", "overwrite", "delete", "oauth", "destructive"],
+        "required_for": [
+          "credential_setup",
+          "external_install",
+          "read_sensitive",
+          "write",
+          "write_remote",
+          "overwrite",
+          "delete",
+          "oauth",
+          "destructive"
+        ],
         "notes": "Confirm the exact Google account, Cloud project, services, and OAuth scopes; ask before broad sensitive reads, and separately confirm every send, upload, event creation, remote update, replacement, or deletion after showing the exact target and payload."
       },
-      "risk_tags": ["sensitive-read", "remote-write", "overwrite-capable", "delete-capable", "oauth", "destructive-capable", "pre-v1", "dynamic-api-surface", "external-messages"],
+      "risk_tags": [
+        "sensitive-read",
+        "remote-write",
+        "overwrite-capable",
+        "delete-capable",
+        "oauth",
+        "destructive-capable",
+        "pre-v1",
+        "dynamic-api-surface",
+        "external-messages"
+      ],
       "maturity": "verified",
       "last_verified": "2026-08-15",
-      "evidence": ["https://github.com/googleworkspace/cli/blob/a3768d0e82ad83cca2da97724e46bea4ff0e6dbd/README.md", "https://github.com/googleworkspace/cli/blob/a3768d0e82ad83cca2da97724e46bea4ff0e6dbd/docs/skills.md", "https://github.com/googleworkspace/cli/blob/a3768d0e82ad83cca2da97724e46bea4ff0e6dbd/crates/google-workspace-cli/src/auth_commands.rs", "https://github.com/googleworkspace/cli/blob/a3768d0e82ad83cca2da97724e46bea4ff0e6dbd/CHANGELOG.md"],
+      "evidence": [
+        "https://github.com/googleworkspace/cli/blob/a3768d0e82ad83cca2da97724e46bea4ff0e6dbd/README.md",
+        "https://github.com/googleworkspace/cli/blob/a3768d0e82ad83cca2da97724e46bea4ff0e6dbd/docs/skills.md",
+        "https://github.com/googleworkspace/cli/blob/a3768d0e82ad83cca2da97724e46bea4ff0e6dbd/crates/google-workspace-cli/src/auth_commands.rs",
+        "https://github.com/googleworkspace/cli/blob/a3768d0e82ad83cca2da97724e46bea4ff0e6dbd/CHANGELOG.md"
+      ],
       "health_check": "Run gws --version and gws auth status, verify the active account and read-only scope list, then perform one approval-gated read with a single-result limit and no --page-all or --output; do not use a write for the initial check.",
       "uninstall": {
         "instructions": "Remove installed gws skills or extensions, uninstall the CLI if desired, review then remove its local configuration, and revoke the Google OAuth grant; leave Workspace content unchanged.",
@@ -271,15 +804,26 @@
       "summary": "Granola's official hosted, read-only MCP for sensitive meeting notes and plan-dependent transcripts.",
       "source_url": "https://docs.granola.ai/help-center/sharing/integrations/mcp",
       "kind": "mcp_server",
-      "supported_agents": ["claude_code", "generic"],
+      "supported_agents": [
+        "claude_code",
+        "generic"
+      ],
       "installation": {
         "automatic": false,
         "scope": "user",
-        "prerequisites": ["A Granola account with notes", "An MCP client supporting Streamable HTTP and browser OAuth"]
+        "prerequisites": [
+          "A Granola account with notes",
+          "An MCP client supporting Streamable HTTP and browser OAuth"
+        ]
       },
       "data_boundary": {
-        "credentials": ["Per-user browser OAuth bearer token stays outside repository configuration and logs"],
-        "reads": ["Owned, directly shared, private-folder-shared, or workspace-public notes allowed by the active account and plan", "Account information, meeting folders, meeting notes, searches, and plan-dependent transcripts that enter the connected model context"],
+        "credentials": [
+          "Per-user browser OAuth bearer token stays outside repository configuration and logs"
+        ],
+        "reads": [
+          "Owned, directly shared, private-folder-shared, or workspace-public notes allowed by the active account and plan",
+          "Account information, meeting folders, meeting notes, searches, and plan-dependent transcripts that enter the connected model context"
+        ],
         "writes": []
       },
       "capabilities": {
@@ -293,16 +837,41 @@
         "arbitrary_execution": false,
         "oauth": true,
         "destructive": false,
-        "details": ["Do not ingest meeting data automatically at startup; ask before raw transcript retrieval or broad multi-meeting search", "Notes and transcripts are retained indefinitely by default and stored in AWS in the United States", "Granola states it is not currently HIPAA or FERPA compliant, and meeting-participant consent remains the user's responsibility", "Basic access is limited to personal notes from the last 30 days; folder, search, and transcript tools can require a paid plan", "Free and Business plans may use anonymized data for model improvement by default, with an account opt-out documented", "Granola can transcribe voice memos, but current MCP documentation guarantees meeting-note and transcript tools rather than voice-memo coverage"]
+        "details": [
+          "Do not ingest meeting data automatically at startup; ask before raw transcript retrieval or broad multi-meeting search",
+          "Notes and transcripts are retained indefinitely by default and stored in AWS in the United States",
+          "Granola states it is not currently HIPAA or FERPA compliant, and meeting-participant consent remains the user's responsibility",
+          "Basic access is limited to personal notes from the last 30 days; folder, search, and transcript tools can require a paid plan",
+          "Free and Business plans may use anonymized data for model improvement by default, with an account opt-out documented",
+          "Granola can transcribe voice memos, but current MCP documentation guarantees meeting-note and transcript tools rather than voice-memo coverage"
+        ]
       },
       "confirmation": {
-        "required_for": ["credential_setup", "external_install", "read_sensitive", "oauth"],
+        "required_for": [
+          "credential_setup",
+          "external_install",
+          "read_sensitive",
+          "oauth"
+        ],
         "notes": "Require explicit OAuth, verify the active account and workspace, and ask before transcript retrieval, broad searches, or moving meeting content elsewhere; confirm participant-consent obligations before use."
       },
-      "risk_tags": ["sensitive-read", "oauth", "hosted", "transcripts", "plan-limited", "us-data-residency", "indefinite-retention", "consent-required"],
+      "risk_tags": [
+        "sensitive-read",
+        "oauth",
+        "hosted",
+        "transcripts",
+        "plan-limited",
+        "us-data-residency",
+        "indefinite-retention",
+        "consent-required"
+      ],
       "maturity": "verified",
       "last_verified": "2026-08-15",
-      "evidence": ["https://docs.granola.ai/help-center/sharing/integrations/mcp", "https://docs.granola.ai/help-center/consent-security-privacy/security-privacy-data-faqs", "https://docs.granola.ai/help-center/getting-started/setting-up-granola-for-the-first-time"],
+      "evidence": [
+        "https://docs.granola.ai/help-center/sharing/integrations/mcp",
+        "https://docs.granola.ai/help-center/consent-security-privacy/security-privacy-data-faqs",
+        "https://docs.granola.ai/help-center/getting-started/setting-up-granola-for-the-first-time"
+      ],
       "health_check": "After OAuth, call get_account_info to verify the exact account and workspace, then run a narrowly bounded list_meetings request.",
       "uninstall": {
         "instructions": "Disconnect Granola in the client and remove the MCP entry; do not claim token revocation unless the current client documents it.",
@@ -315,16 +884,31 @@
       "summary": "Linear's official hosted MCP provides authenticated search and read access plus optional creation and updates for issues, projects, and comments, with a dedicated read-only endpoint.",
       "source_url": "https://linear.app/docs/mcp",
       "kind": "mcp_server",
-      "supported_agents": ["claude_code","codex","cursor","generic"],
+      "supported_agents": [
+        "claude_code",
+        "codex",
+        "cursor",
+        "generic"
+      ],
       "installation": {
         "automatic": false,
         "scope": "project_or_user",
-        "prerequisites": ["A Linear workspace account","An MCP client supporting remote Streamable HTTP and browser OAuth, or a compatible remote-server bridge"]
+        "prerequisites": [
+          "A Linear workspace account",
+          "An MCP client supporting remote Streamable HTTP and browser OAuth, or a compatible remote-server bridge"
+        ]
       },
       "data_boundary": {
-        "credentials": ["OAuth 2.1 token managed by the MCP client, or an optional bearer token or Linear API key kept outside repository files"],
-        "reads": ["Sensitive Linear workspace identity, teams, issues, projects, initiatives, cycles, comments, and related metadata available to the connected user"],
-        "writes": ["Remote creation and updates of Linear issues, projects, comments, milestones, relationships, status, assignment, descriptions, and other fields exposed by the current tool surface","Overwrite-capable updates to existing project-management fields and content"]
+        "credentials": [
+          "OAuth 2.1 token managed by the MCP client, or an optional bearer token or Linear API key kept outside repository files"
+        ],
+        "reads": [
+          "Sensitive Linear workspace identity, teams, issues, projects, initiatives, cycles, comments, and related metadata available to the connected user"
+        ],
+        "writes": [
+          "Remote creation and updates of Linear issues, projects, comments, milestones, relationships, status, assignment, descriptions, and other fields exposed by the current tool surface",
+          "Overwrite-capable updates to existing project-management fields and content"
+        ]
       },
       "capabilities": {
         "read": true,
@@ -337,239 +921,44 @@
         "arbitrary_execution": false,
         "oauth": true,
         "destructive": true,
-        "details": ["Use https://mcp.linear.app/mcp/readonly or request only the read OAuth scope for session briefings and investigation","The default https://mcp.linear.app/mcp endpoint is read-write and can create or update issues, projects, and comments","Before turning notes or repository state into Linear work, show the proposed project, milestones, issues, relationships, and exact comments and do not invent dependencies"]
+        "details": [
+          "Use https://mcp.linear.app/mcp/readonly or request only the read OAuth scope for session briefings and investigation",
+          "The default https://mcp.linear.app/mcp endpoint is read-write and can create or update issues, projects, and comments",
+          "Before turning notes or repository state into Linear work, show the proposed project, milestones, issues, relationships, and exact comments and do not invent dependencies"
+        ]
       },
       "confirmation": {
-        "required_for": ["credential_setup","external_install","read_sensitive","write","write_remote","overwrite","oauth","destructive"],
+        "required_for": [
+          "credential_setup",
+          "external_install",
+          "read_sensitive",
+          "write",
+          "write_remote",
+          "overwrite",
+          "oauth",
+          "destructive"
+        ],
         "notes": "Confirm the exact Linear user, workspace, teams, and OAuth scope; ask before broad workspace reads, and show the exact issue, project, field changes, relationships, or comment before every remote creation or overwrite-capable update."
       },
-      "risk_tags": ["credentials","hosted","project-management","sensitive-read","remote-write","overwrite-capable","oauth","destructive-capable","prompt-injection"],
+      "risk_tags": [
+        "credentials",
+        "hosted",
+        "project-management",
+        "sensitive-read",
+        "remote-write",
+        "overwrite-capable",
+        "oauth",
+        "destructive-capable",
+        "prompt-injection"
+      ],
       "maturity": "verified",
       "last_verified": "2026-08-18",
-      "evidence": ["https://linear.app/docs/mcp"],
+      "evidence": [
+        "https://linear.app/docs/mcp"
+      ],
       "health_check": "Connect through the dedicated read-only endpoint, verify the expected user and workspace, then fetch one explicitly named team and issue without creating or updating anything.",
       "uninstall": {
         "instructions": "Remove the Linear MCP entry from the client and revoke the authorized connection or API key; preserve every issue, project, comment, and workspace setting.",
-        "removes_user_data": false
-      }
-        },
-    {
-      "id": "notion-mcp",
-      "name": "Notion MCP",
-      "summary": "Notion's hosted, actively maintained OAuth MCP for searching, reading, and changing content available to the connected user.",
-      "source_url": "https://developers.notion.com/guides/mcp/get-started-with-mcp",
-      "kind": "mcp_server",
-      "supported_agents": ["claude_code", "codex", "cursor", "generic"],
-      "installation": {
-        "automatic": false,
-        "scope": "project_or_user",
-        "prerequisites": ["A Notion workspace", "An MCP client supporting remote Streamable HTTP and browser OAuth", "A user permitted to connect external MCP clients"]
-      },
-      "data_boundary": {
-        "credentials": ["Per-user browser OAuth token managed by the MCP client and hosted service"],
-        "reads": ["Sensitive pages, databases, data sources, comments, meeting notes, members, guests, email addresses, and workspace identity allowed to the connected user", "Search results from connected sources such as Slack, Google Drive, or Jira when Notion AI and workspace configuration allow them", "Retrieved content that enters the connected model context"],
-        "writes": ["Remote writes to Notion pages, databases, data sources, views, folders, comments, properties, icons, covers, and file uploads", "Page moves, duplication, template application, and full-content replacement or other overwrite-capable updates"]
-      },
-      "capabilities": {
-        "read": true,
-        "sensitive_read": true,
-        "write": true,
-        "remote_write": true,
-        "publish": false,
-        "overwrite": true,
-        "delete": false,
-        "arbitrary_execution": false,
-        "oauth": true,
-        "destructive": true,
-        "details": ["Use only Notion's official Streamable HTTP endpoint at https://mcp.notion.com/mcp; the older open-source npm server is no longer actively maintained", "OAuth gives the connected client access to content the user can access, and Notion warns that retrieved content can contain prompt injection", "Search can cross into connected sources, while meeting-note queries and some multi-source tools depend on workspace plan and Notion AI access", "Require a diff before replace_content, template application, property replacement, or another overwrite-capable update", "File uploads and remote content changes require exact target review; broad searches, member lookup, and meeting-note queries require a sensitive-read review"]
-      },
-      "confirmation": {
-        "required_for": ["credential_setup", "external_install", "read_sensitive", "write", "write_remote", "overwrite", "oauth", "destructive"],
-        "notes": "Confirm the exact Notion user and workspace during OAuth; ask before broad or connected-source reads, then show the exact destination and content before remote writes, moves, uploads, template application, or overwrite-capable updates."
-      },
-      "risk_tags": ["sensitive-read", "remote-write", "overwrite-capable", "oauth", "destructive-capable", "hosted", "prompt-injection", "connected-sources"],
-      "maturity": "verified",
-      "last_verified": "2026-08-15",
-      "evidence": ["https://developers.notion.com/guides/mcp/get-started-with-mcp", "https://developers.notion.com/guides/mcp/mcp-supported-tools", "https://developers.notion.com/guides/mcp/mcp-security-best-practices"],
-      "health_check": "After OAuth, fetch self to verify the exact workspace, user, and available tool access, then fetch one explicitly chosen page before any broad search or write.",
-      "uninstall": {
-        "instructions": "Remove the MCP entry from the client and revoke the connection in Notion Settings under Connections; preserve all workspace pages, databases, comments, and uploaded files.",
-        "removes_user_data": false
-      }
-    },
-    {
-      "id": "obsidian",
-      "name": "Obsidian CLI",
-      "summary": "Obsidian's official desktop CLI exposes broad local application and vault capabilities; scope is enforceable only through an exact external command-and-argument policy.",
-      "source_url": "https://obsidian.md/help/cli",
-      "kind": "editor_guide",
-      "supported_agents": ["claude_code", "codex", "gemini_cli", "generic"],
-      "installation": {
-        "automatic": false,
-        "scope": "project_or_user",
-        "prerequisites": ["Obsidian desktop 1.12.7 or newer", "The command line interface enabled on PATH", "Obsidian running for CLI calls", "An exact command-and-argument policy enforced by the calling harness"]
-      },
-      "data_boundary": {
-        "credentials": ["Optional Obsidian Sync or Publish credentials remain inside Obsidian"],
-        "reads": ["The current-working-directory vault when the shell is inside a vault, otherwise the active vault; many file commands then default to the active file unless vault= and path= are explicit", "Explicitly targeted notes, properties, tasks, backlinks, history, workspaces, plugins, and themes"],
-        "writes": ["Vault notes, properties, tasks, moves, renames, overwrites, and link-aware mutations", "Trash or permanent deletion, workspace deletion, and Sync restore or other mutating Sync actions", "Publish or unpublish actions, plugin or theme installation and changes, URL opening, arbitrary registered command execution, and JavaScript eval"]
-      },
-      "capabilities": {
-        "read": true,
-        "sensitive_read": true,
-        "write": true,
-        "remote_write": true,
-        "publish": true,
-        "overwrite": true,
-        "delete": true,
-        "arbitrary_execution": true,
-        "oauth": false,
-        "destructive": true,
-        "details": ["No enforcement wrapper ships here; the calling harness must constrain commands, arguments, and flags, and default-deny eval, command, plugin, theme, web, publish, permanent delete, and mutating sync operations", "For bounded file operations require explicit vault= plus path= and reject dangerous flags such as overwrite unless separately approved", "Treat plugin commands and JavaScript eval as open-world execution with possible filesystem and network effects"]
-      },
-      "confirmation": {
-        "required_for": ["credential_setup", "external_install", "read_sensitive", "write", "write_remote", "publish", "overwrite", "delete", "arbitrary_execution", "destructive"],
-        "notes": "Confirm broad or implicit-target reads, overwrites or overwrite flags, bulk or link-affecting moves, Sync control or restore, deletion, publish or unpublish, URL opening, plugin or theme changes, arbitrary command, and eval; use the normal local-edit gate only when vault= and path= bound a single note edit."
-      },
-      "risk_tags": ["local-data", "sensitive-read", "read-write", "remote-write", "publish-capable", "overwrite-capable", "delete-capable", "arbitrary-execution", "destructive-capable", "open-world", "network-capable"],
-      "maturity": "verified",
-      "last_verified": "2026-08-15",
-      "evidence": ["https://obsidian.md/help/cli"],
-      "health_check": "Run obsidian version, resolve the exact vault path, then perform a bounded JSON search with limit 1 through the enforced allowlist.",
-      "uninstall": {
-        "instructions": "Disable the Obsidian CLI or remove its executable from the calling client's configuration or PATH; leave the vault, Sync, Publish, plugins, and themes unchanged.",
-        "removes_user_data": false
-      }
-    },
-    {
-      "id": "readwise-mcp",
-      "name": "Readwise MCP",
-      "summary": "Readwise's official hosted MCP searches highlights, notes, and Reader documents across an indexed personal library and can optionally organize documents or change highlights.",
-      "source_url": "https://docs.readwise.io/tools/mcp",
-      "kind": "mcp_server",
-      "supported_agents": ["claude_code","codex","cursor","generic"],
-      "installation": {
-        "automatic": false,
-        "scope": "user",
-        "prerequisites": ["A Readwise account","An MCP client supporting remote Streamable HTTP and browser OAuth"]
-      },
-      "data_boundary": {
-        "credentials": ["Per-user browser OAuth token managed by the MCP client and hosted service"],
-        "reads": ["Sensitive indexed Readwise highlights, notes, Daily Review content, Reader documents, document metadata, tags, and reading history available to the connected account"],
-        "writes": ["Remote creation, update, and deletion of highlights; creation of Reader documents; bulk document-metadata edits; moves between inbox, archive, and shortlist; and tag or note changes","Overwrite-capable highlight and metadata updates plus permanent highlight deletion"]
-      },
-      "capabilities": {
-        "read": true,
-        "sensitive_read": true,
-        "write": true,
-        "remote_write": true,
-        "publish": false,
-        "overwrite": true,
-        "delete": true,
-        "arbitrary_execution": false,
-        "oauth": true,
-        "destructive": true,
-        "details": ["Use the current https://mcp2.readwise.io/mcp endpoint; the older Readwise-only MCP is deprecated","The server indexes both Readwise highlights and Reader documents, so connecting it exposes a broader personal knowledge boundary than a single selected document","No separate read-only endpoint is documented; treat organizing, bulk editing, updating, and deleting tools as disabled by policy until the user requests a specific change"]
-      },
-      "confirmation": {
-        "required_for": ["credential_setup","external_install","read_sensitive","write","write_remote","overwrite","delete","oauth","destructive"],
-        "notes": "Confirm the exact Readwise account and the full-library indexing boundary; ask before broad searches or exporting content elsewhere, and show the exact document, highlight, tags, metadata, destination, or deletion before every remote change."
-      },
-      "risk_tags": ["credentials","hosted","personal-library","semantic-index","sensitive-read","remote-write","overwrite-capable","delete-capable","oauth","destructive-capable", "prompt-injection"],
-      "maturity": "verified",
-      "last_verified": "2026-08-18",
-      "evidence": ["https://docs.readwise.io/tools/mcp","https://docs.readwise.io/tools"],
-      "health_check": "After OAuth, run one narrowly scoped search for a known title or highlight and inspect a single result without moving, tagging, creating, updating, or deleting content.",
-      "uninstall": {
-        "instructions": "Disconnect Readwise in the MCP client and revoke the authorization in Readwise if available; leave all Reader documents, highlights, notes, and tags unchanged.",
-        "removes_user_data": false
-      }
-        },
-    {
-      "id": "substack-mcp",
-      "name": "Substack MCP",
-      "summary": "An MCP server for reading Substack publication data, managing private drafts, and publishing short-form Notes.",
-      "source_url": "https://github.com/conorbronsdon/substack-mcp",
-      "kind": "mcp_server",
-      "supported_agents": ["claude_code", "generic"],
-      "installation": {
-        "automatic": false,
-        "scope": "project",
-        "prerequisites": ["Node.js with npm/npx", "A Substack publication account"]
-      },
-      "data_boundary": {
-        "credentials": ["Publication URL", "Session token", "User ID", "Optional machine-bound browser-login session file"],
-        "reads": ["Subscriber count, posts, drafts, comments, sections, analytics, and schedules"],
-        "writes": ["Private long-form drafts", "Publicly fetchable image uploads", "Immediately public Notes"]
-      },
-      "capabilities": {
-        "read": true,
-        "sensitive_read": true,
-        "write": true,
-        "remote_write": true,
-        "publish": true,
-        "overwrite": false,
-        "delete": false,
-        "arbitrary_execution": false,
-        "oauth": false,
-        "destructive": false,
-        "details": ["Long-form tooling is draft-only; scheduling and public-post mutation are unavailable", "Note creation publishes immediately and has no server-side undo"]
-      },
-      "confirmation": {
-        "required_for": ["credential_setup", "external_install", "read_sensitive", "write", "write_remote", "publish"],
-        "notes": "Always confirm Note creation as an immediate public publish action; private draft writes use the normal external-write gate, and broad analytics or subscriber reads require a sensitive-read gate."
-      },
-      "risk_tags": ["credentials", "external-data", "sensitive-read", "remote-write", "publish-capable", "public-publish", "unofficial-api"],
-      "maturity": "verified",
-      "last_verified": "2026-08-15",
-      "evidence": ["https://github.com/conorbronsdon/substack-mcp"],
-      "health_check": "After explicit authentication, run the documented subscriber-count read and verify the expected publication account.",
-      "uninstall": {
-        "instructions": "Remove the MCP client entry and, if used, review then remove the local browser-login session file.",
-        "removes_user_data": false
-      }
-    },
-    {
-      "id": "tolaria",
-      "name": "Tolaria MCP",
-      "summary": "Tolaria's bundled stdio MCP for bounded Markdown-vault reads and note mutations; this entry excludes Tolaria's embedded agents, direct provider models, and AutoGit.",
-      "source_url": "https://github.com/refactoringhq/tolaria",
-      "kind": "local_workspace",
-      "supported_agents": ["claude_code", "cursor", "opencode", "generic"],
-      "installation": {
-        "automatic": false,
-        "scope": "project_or_user",
-        "prerequisites": ["Tolaria for macOS, Windows, or Linux", "A mounted local vault", "A supported external MCP client configured manually"]
-      },
-      "data_boundary": {
-        "credentials": ["Optional Git credentials for cloning an additional vault remain with system Git"],
-        "reads": ["Markdown and YAML frontmatter in explicitly mounted local vaults"],
-        "writes": ["Create, append, or full-content update of notes in mounted vaults", "Attach an existing vault or clone one into a local directory through system Git", "Transient Tolaria UI state through open_note, highlight_editor, and refresh_vault", "Selected MCP client configuration during manual setup"]
-      },
-      "capabilities": {
-        "read": true,
-        "sensitive_read": true,
-        "write": true,
-        "remote_write": false,
-        "publish": false,
-        "overwrite": true,
-        "delete": false,
-        "arbitrary_execution": false,
-        "oauth": false,
-        "destructive": true,
-        "details": ["Treat full-content update_note as overwrite-capable even though its MCP annotation says non-destructive", "Prefer get_note, diff review, and expectedMtime before update_note", "The MCP content-mutation surface is limited to create, append, update, attach, and local clone operations; open, highlight, and refresh also change transient UI state", "Review embedded agents, direct provider models, stored provider keys, and AutoGit as separate trust boundaries before enabling them"]
-      },
-      "confirmation": {
-        "required_for": ["credential_setup", "external_install", "read_sensitive", "write", "overwrite", "destructive"],
-        "notes": "Use normal approval for a single create or append; confirm broad vault reads, show a diff before full replacement, and separately approve vault attachment, cloning, or MCP client-configuration writes."
-      },
-      "risk_tags": ["local-data", "sensitive-read", "read-write", "overwrite-capable", "destructive-capable", "mcp-config"],
-      "maturity": "verified",
-      "last_verified": "2026-08-15",
-      "evidence": ["https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/site/concepts/ai.md", "https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/mcp-server/index.js", "https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/docs/adr/0158-vault-write-mcp-tools-update-and-append.md"],
-      "health_check": "Start Tolaria, list mounted vaults, read vault context, run a bounded search, then use a disposable note for any write smoke test.",
-      "uninstall": {
-        "instructions": "Remove the Tolaria MCP entry from each configured client; preserve the Tolaria application and every vault unless separate removal is requested.",
         "removes_user_data": false
       }
     },
@@ -579,15 +968,30 @@
       "summary": "Microsoft's local MCP server converts explicitly supplied file, HTTP, HTTPS, and data URIs to Markdown through one read-only tool.",
       "source_url": "https://github.com/microsoft/markitdown/tree/main/packages/markitdown-mcp",
       "kind": "mcp_server",
-      "supported_agents": ["claude_code", "codex", "gemini_cli", "cursor", "opencode", "generic"],
+      "supported_agents": [
+        "claude_code",
+        "codex",
+        "gemini_cli",
+        "cursor",
+        "opencode",
+        "generic"
+      ],
       "installation": {
         "automatic": false,
         "scope": "project_or_user",
-        "prerequisites": ["Python with pip or Docker", "An MCP-compatible client", "Explicitly bounded file and network access for the server process", "Third-party plugins disabled by leaving MARKITDOWN_ENABLE_PLUGINS unset or false"]
+        "prerequisites": [
+          "Python with pip or Docker",
+          "An MCP-compatible client",
+          "Explicitly bounded file and network access for the server process",
+          "Third-party plugins disabled by leaving MARKITDOWN_ENABLE_PLUGINS unset or false"
+        ]
       },
       "data_boundary": {
         "credentials": [],
-        "reads": ["Any local file readable by the server account when given a file URI", "Any HTTP or HTTPS resource reachable from the server process, plus caller-supplied data URIs"],
+        "reads": [
+          "Any local file readable by the server account when given a file URI",
+          "Any HTTP or HTTPS resource reachable from the server process, plus caller-supplied data URIs"
+        ],
         "writes": []
       },
       "capabilities": {
@@ -601,19 +1005,220 @@
         "arbitrary_execution": false,
         "oauth": false,
         "destructive": false,
-        "details": ["The convert_to_markdown tool accepts file, HTTP, HTTPS, and data URIs, so every call must be treated as an explicit sensitive-read boundary", "The server has no authentication and runs with the privileges and network reachability of its process", "Keep HTTP or SSE bound to localhost and prefer a sandbox or container with narrow mounts when converting untrusted content", "This reviewed profile excludes third-party plugins; keep MARKITDOWN_ENABLE_PLUGINS unset or false because enabled plugins widen the process execution boundary"]
+        "details": [
+          "The convert_to_markdown tool accepts file, HTTP, HTTPS, and data URIs, so every call must be treated as an explicit sensitive-read boundary",
+          "The server has no authentication and runs with the privileges and network reachability of its process",
+          "Keep HTTP or SSE bound to localhost and prefer a sandbox or container with narrow mounts when converting untrusted content",
+          "This reviewed profile excludes third-party plugins; keep MARKITDOWN_ENABLE_PLUGINS unset or false because enabled plugins widen the process execution boundary"
+        ]
       },
       "confirmation": {
-        "required_for": ["external_install", "read_sensitive"],
+        "required_for": [
+          "external_install",
+          "read_sensitive"
+        ],
         "notes": "Confirm installation and the exact URI before each conversion; reject broad local paths, private-network targets, or untrusted remote content unless their read boundary is explicitly approved."
       },
-      "risk_tags": ["local-data", "sensitive-read", "network-capable", "open-world", "no-authentication", "prompt-injection"],
+      "risk_tags": [
+        "local-data",
+        "sensitive-read",
+        "network-capable",
+        "open-world",
+        "no-authentication",
+        "prompt-injection"
+      ],
       "maturity": "verified",
       "last_verified": "2026-08-24",
-      "evidence": ["https://github.com/microsoft/markitdown/blob/fd239d5d2be43d9b68329730206b9312c7d5a388/packages/markitdown-mcp/README.md", "https://github.com/microsoft/markitdown/blob/fd239d5d2be43d9b68329730206b9312c7d5a388/packages/markitdown-mcp/src/markitdown_mcp/__main__.py", "https://github.com/microsoft/markitdown/releases/tag/v0.1.7"],
+      "evidence": [
+        "https://github.com/microsoft/markitdown/blob/fd239d5d2be43d9b68329730206b9312c7d5a388/packages/markitdown-mcp/README.md",
+        "https://github.com/microsoft/markitdown/blob/fd239d5d2be43d9b68329730206b9312c7d5a388/packages/markitdown-mcp/src/markitdown_mcp/__main__.py",
+        "https://github.com/microsoft/markitdown/releases/tag/v0.1.7"
+      ],
       "health_check": "Run the stdio server in a sandbox, list its single convert_to_markdown tool, then convert one non-sensitive local fixture from an explicitly allowed directory.",
       "uninstall": {
         "instructions": "Remove the MarkItDown MCP entry from the client and uninstall markitdown-mcp or remove its container image; preserve every source file and converted output unless separately requested.",
+        "removes_user_data": false
+      }
+    },
+    {
+      "id": "notion-mcp",
+      "name": "Notion MCP",
+      "summary": "Notion's hosted, actively maintained OAuth MCP for searching, reading, and changing content available to the connected user.",
+      "source_url": "https://developers.notion.com/guides/mcp/get-started-with-mcp",
+      "kind": "mcp_server",
+      "supported_agents": [
+        "claude_code",
+        "codex",
+        "cursor",
+        "generic"
+      ],
+      "installation": {
+        "automatic": false,
+        "scope": "project_or_user",
+        "prerequisites": [
+          "A Notion workspace",
+          "An MCP client supporting remote Streamable HTTP and browser OAuth",
+          "A user permitted to connect external MCP clients"
+        ]
+      },
+      "data_boundary": {
+        "credentials": [
+          "Per-user browser OAuth token managed by the MCP client and hosted service"
+        ],
+        "reads": [
+          "Sensitive pages, databases, data sources, comments, meeting notes, members, guests, email addresses, and workspace identity allowed to the connected user",
+          "Search results from connected sources such as Slack, Google Drive, or Jira when Notion AI and workspace configuration allow them",
+          "Retrieved content that enters the connected model context"
+        ],
+        "writes": [
+          "Remote writes to Notion pages, databases, data sources, views, folders, comments, properties, icons, covers, and file uploads",
+          "Page moves, duplication, template application, and full-content replacement or other overwrite-capable updates"
+        ]
+      },
+      "capabilities": {
+        "read": true,
+        "sensitive_read": true,
+        "write": true,
+        "remote_write": true,
+        "publish": false,
+        "overwrite": true,
+        "delete": false,
+        "arbitrary_execution": false,
+        "oauth": true,
+        "destructive": true,
+        "details": [
+          "Use only Notion's official Streamable HTTP endpoint at https://mcp.notion.com/mcp; the older open-source npm server is no longer actively maintained",
+          "OAuth gives the connected client access to content the user can access, and Notion warns that retrieved content can contain prompt injection",
+          "Search can cross into connected sources, while meeting-note queries and some multi-source tools depend on workspace plan and Notion AI access",
+          "Require a diff before replace_content, template application, property replacement, or another overwrite-capable update",
+          "File uploads and remote content changes require exact target review; broad searches, member lookup, and meeting-note queries require a sensitive-read review"
+        ]
+      },
+      "confirmation": {
+        "required_for": [
+          "credential_setup",
+          "external_install",
+          "read_sensitive",
+          "write",
+          "write_remote",
+          "overwrite",
+          "oauth",
+          "destructive"
+        ],
+        "notes": "Confirm the exact Notion user and workspace during OAuth; ask before broad or connected-source reads, then show the exact destination and content before remote writes, moves, uploads, template application, or overwrite-capable updates."
+      },
+      "risk_tags": [
+        "sensitive-read",
+        "remote-write",
+        "overwrite-capable",
+        "oauth",
+        "destructive-capable",
+        "hosted",
+        "prompt-injection",
+        "connected-sources"
+      ],
+      "maturity": "verified",
+      "last_verified": "2026-08-15",
+      "evidence": [
+        "https://developers.notion.com/guides/mcp/get-started-with-mcp",
+        "https://developers.notion.com/guides/mcp/mcp-supported-tools",
+        "https://developers.notion.com/guides/mcp/mcp-security-best-practices"
+      ],
+      "health_check": "After OAuth, fetch self to verify the exact workspace, user, and available tool access, then fetch one explicitly chosen page before any broad search or write.",
+      "uninstall": {
+        "instructions": "Remove the MCP entry from the client and revoke the connection in Notion Settings under Connections; preserve all workspace pages, databases, comments, and uploaded files.",
+        "removes_user_data": false
+      }
+    },
+    {
+      "id": "obsidian",
+      "name": "Obsidian CLI",
+      "summary": "Obsidian's official desktop CLI exposes broad local application and vault capabilities; scope is enforceable only through an exact external command-and-argument policy.",
+      "source_url": "https://obsidian.md/help/cli",
+      "kind": "editor_guide",
+      "supported_agents": [
+        "claude_code",
+        "codex",
+        "gemini_cli",
+        "generic"
+      ],
+      "installation": {
+        "automatic": false,
+        "scope": "project_or_user",
+        "prerequisites": [
+          "Obsidian desktop 1.12.7 or newer",
+          "The command line interface enabled on PATH",
+          "Obsidian running for CLI calls",
+          "An exact command-and-argument policy enforced by the calling harness"
+        ]
+      },
+      "data_boundary": {
+        "credentials": [
+          "Optional Obsidian Sync or Publish credentials remain inside Obsidian"
+        ],
+        "reads": [
+          "The current-working-directory vault when the shell is inside a vault, otherwise the active vault; many file commands then default to the active file unless vault= and path= are explicit",
+          "Explicitly targeted notes, properties, tasks, backlinks, history, workspaces, plugins, and themes"
+        ],
+        "writes": [
+          "Vault notes, properties, tasks, moves, renames, overwrites, and link-aware mutations",
+          "Trash or permanent deletion, workspace deletion, and Sync restore or other mutating Sync actions",
+          "Publish or unpublish actions, plugin or theme installation and changes, URL opening, arbitrary registered command execution, and JavaScript eval"
+        ]
+      },
+      "capabilities": {
+        "read": true,
+        "sensitive_read": true,
+        "write": true,
+        "remote_write": true,
+        "publish": true,
+        "overwrite": true,
+        "delete": true,
+        "arbitrary_execution": true,
+        "oauth": false,
+        "destructive": true,
+        "details": [
+          "No enforcement wrapper ships here; the calling harness must constrain commands, arguments, and flags, and default-deny eval, command, plugin, theme, web, publish, permanent delete, and mutating sync operations",
+          "For bounded file operations require explicit vault= plus path= and reject dangerous flags such as overwrite unless separately approved",
+          "Treat plugin commands and JavaScript eval as open-world execution with possible filesystem and network effects"
+        ]
+      },
+      "confirmation": {
+        "required_for": [
+          "credential_setup",
+          "external_install",
+          "read_sensitive",
+          "write",
+          "write_remote",
+          "publish",
+          "overwrite",
+          "delete",
+          "arbitrary_execution",
+          "destructive"
+        ],
+        "notes": "Confirm broad or implicit-target reads, overwrites or overwrite flags, bulk or link-affecting moves, Sync control or restore, deletion, publish or unpublish, URL opening, plugin or theme changes, arbitrary command, and eval; use the normal local-edit gate only when vault= and path= bound a single note edit."
+      },
+      "risk_tags": [
+        "local-data",
+        "sensitive-read",
+        "read-write",
+        "remote-write",
+        "publish-capable",
+        "overwrite-capable",
+        "delete-capable",
+        "arbitrary-execution",
+        "destructive-capable",
+        "open-world",
+        "network-capable"
+      ],
+      "maturity": "verified",
+      "last_verified": "2026-08-15",
+      "evidence": [
+        "https://obsidian.md/help/cli"
+      ],
+      "health_check": "Run obsidian version, resolve the exact vault path, then perform a bounded JSON search with limit 1 through the enforced allowlist.",
+      "uninstall": {
+        "instructions": "Disable the Obsidian CLI or remove its executable from the calling client's configuration or PATH; leave the vault, Sync, Publish, plugins, and themes unchanged.",
         "removes_user_data": false
       }
     },
@@ -623,16 +1228,28 @@
       "summary": "A document-conversion CLI for turning reviewed Markdown into DOCX, PDF, EPUB, or HTML while keeping Markdown canonical in Git.",
       "source_url": "https://github.com/jgm/pandoc",
       "kind": "connector",
-      "supported_agents": ["generic"],
+      "supported_agents": [
+        "generic"
+      ],
       "installation": {
         "automatic": false,
         "scope": "project_or_user",
-        "prerequisites": ["Pandoc CLI", "A separately installed and reviewed PDF engine when producing PDF output"]
+        "prerequisites": [
+          "Pandoc CLI",
+          "A separately installed and reviewed PDF engine when producing PDF output"
+        ]
       },
       "data_boundary": {
         "credentials": [],
-        "reads": ["Explicitly selected local input files and assets in the bounded profile", "Absolute HTTP or HTTPS inputs, URL-valued resources, and local or remote iframe sources when those surfaces are used", "Additional files and resources reachable by approved include directives, filters, custom writers, or PDF engines and their options"],
-        "writes": ["Explicitly selected local output files, including overwrite of an existing output path when approved", "Temporary files used during PDF production and any additional filesystem side effects introduced by approved filters, custom writers, or PDF engines"]
+        "reads": [
+          "Explicitly selected local input files and assets in the bounded profile",
+          "Absolute HTTP or HTTPS inputs, URL-valued resources, and local or remote iframe sources when those surfaces are used",
+          "Additional files and resources reachable by approved include directives, filters, custom writers, or PDF engines and their options"
+        ],
+        "writes": [
+          "Explicitly selected local output files, including overwrite of an existing output path when approved",
+          "Temporary files used during PDF production and any additional filesystem side effects introduced by approved filters, custom writers, or PDF engines"
+        ]
       },
       "capabilities": {
         "read": true,
@@ -645,19 +1262,584 @@
         "arbitrary_execution": true,
         "oauth": false,
         "destructive": true,
-        "details": ["The bounded non-PDF profile uses --sandbox with one exact local input and a new exact local output path; reject remote inputs and resources, include directives, filters, custom writers, and overwrite", "Pandoc accepts absolute HTTP or HTTPS inputs, and its HTML reader can fetch local or remote iframe sources; treat those as sensitive network reads outside the bounded profile", "--sandbox limits reader and writer IO to files named on the command line, but does not constrain filters or PDF production and can prevent formats such as DOCX from loading filesystem data files", "PDF output invokes a separately installed engine; audit and confirm the exact --pdf-engine and every --pdf-engine-opt because the engine can widen filesystem, network, and execution risk", "Pandoc's full flag surface can enable arbitrary execution and additional side effects through filters, custom writers, and PDF engines"]
+        "details": [
+          "The bounded non-PDF profile uses --sandbox with one exact local input and a new exact local output path; reject remote inputs and resources, include directives, filters, custom writers, and overwrite",
+          "Pandoc accepts absolute HTTP or HTTPS inputs, and its HTML reader can fetch local or remote iframe sources; treat those as sensitive network reads outside the bounded profile",
+          "--sandbox limits reader and writer IO to files named on the command line, but does not constrain filters or PDF production and can prevent formats such as DOCX from loading filesystem data files",
+          "PDF output invokes a separately installed engine; audit and confirm the exact --pdf-engine and every --pdf-engine-opt because the engine can widen filesystem, network, and execution risk",
+          "Pandoc's full flag surface can enable arbitrary execution and additional side effects through filters, custom writers, and PDF engines"
+        ]
       },
       "confirmation": {
-        "required_for": ["external_install", "read_sensitive", "write", "overwrite", "arbitrary_execution", "destructive"],
+        "required_for": [
+          "external_install",
+          "read_sensitive",
+          "write",
+          "overwrite",
+          "arbitrary_execution",
+          "destructive"
+        ],
         "notes": "Confirm exact input and output paths before each run. Separately confirm any remote input or resource, include directive, filter, custom writer, overwrite, or PDF production; for PDF, name the reviewed engine and exact engine options."
       },
-      "risk_tags": ["external-install", "local-data", "sensitive-read", "network-capable", "overwrite-capable", "arbitrary-execution", "destructive-capable", "open-world"],
+      "risk_tags": [
+        "external-install",
+        "local-data",
+        "sensitive-read",
+        "network-capable",
+        "overwrite-capable",
+        "arbitrary-execution",
+        "destructive-capable",
+        "open-world"
+      ],
       "maturity": "verified",
       "last_verified": "2026-08-25",
-      "evidence": ["https://github.com/jgm/pandoc", "https://github.com/jgm/pandoc/releases/tag/3.10.2", "https://pandoc.org/MANUAL.html"],
+      "evidence": [
+        "https://github.com/jgm/pandoc",
+        "https://github.com/jgm/pandoc/releases/tag/3.10.2",
+        "https://pandoc.org/MANUAL.html"
+      ],
       "health_check": "Run pandoc --version, then use --sandbox to convert one non-sensitive local Markdown fixture to a new local HTML output path without remote resources, includes, filters, custom writers, or PDF production.",
       "uninstall": {
         "instructions": "Uninstall Pandoc using the platform package manager and keep generated documents unless the user explicitly asks to remove them; review any separately installed PDF engine independently.",
+        "removes_user_data": false
+      }
+    },
+    {
+      "id": "readwise-mcp",
+      "name": "Readwise MCP",
+      "summary": "Readwise's official hosted MCP searches highlights, notes, and Reader documents across an indexed personal library and can optionally organize documents or change highlights.",
+      "source_url": "https://docs.readwise.io/tools/mcp",
+      "kind": "mcp_server",
+      "supported_agents": [
+        "claude_code",
+        "codex",
+        "cursor",
+        "generic"
+      ],
+      "installation": {
+        "automatic": false,
+        "scope": "user",
+        "prerequisites": [
+          "A Readwise account",
+          "An MCP client supporting remote Streamable HTTP and browser OAuth"
+        ]
+      },
+      "data_boundary": {
+        "credentials": [
+          "Per-user browser OAuth token managed by the MCP client and hosted service"
+        ],
+        "reads": [
+          "Sensitive indexed Readwise highlights, notes, Daily Review content, Reader documents, document metadata, tags, and reading history available to the connected account"
+        ],
+        "writes": [
+          "Remote creation, update, and deletion of highlights; creation of Reader documents; bulk document-metadata edits; moves between inbox, archive, and shortlist; and tag or note changes",
+          "Overwrite-capable highlight and metadata updates plus permanent highlight deletion"
+        ]
+      },
+      "capabilities": {
+        "read": true,
+        "sensitive_read": true,
+        "write": true,
+        "remote_write": true,
+        "publish": false,
+        "overwrite": true,
+        "delete": true,
+        "arbitrary_execution": false,
+        "oauth": true,
+        "destructive": true,
+        "details": [
+          "Use the current https://mcp2.readwise.io/mcp endpoint; the older Readwise-only MCP is deprecated",
+          "The server indexes both Readwise highlights and Reader documents, so connecting it exposes a broader personal knowledge boundary than a single selected document",
+          "No separate read-only endpoint is documented; treat organizing, bulk editing, updating, and deleting tools as disabled by policy until the user requests a specific change"
+        ]
+      },
+      "confirmation": {
+        "required_for": [
+          "credential_setup",
+          "external_install",
+          "read_sensitive",
+          "write",
+          "write_remote",
+          "overwrite",
+          "delete",
+          "oauth",
+          "destructive"
+        ],
+        "notes": "Confirm the exact Readwise account and the full-library indexing boundary; ask before broad searches or exporting content elsewhere, and show the exact document, highlight, tags, metadata, destination, or deletion before every remote change."
+      },
+      "risk_tags": [
+        "credentials",
+        "hosted",
+        "personal-library",
+        "semantic-index",
+        "sensitive-read",
+        "remote-write",
+        "overwrite-capable",
+        "delete-capable",
+        "oauth",
+        "destructive-capable",
+        "prompt-injection"
+      ],
+      "maturity": "verified",
+      "last_verified": "2026-08-18",
+      "evidence": [
+        "https://docs.readwise.io/tools/mcp",
+        "https://docs.readwise.io/tools"
+      ],
+      "health_check": "After OAuth, run one narrowly scoped search for a known title or highlight and inspect a single result without moving, tagging, creating, updating, or deleting content.",
+      "uninstall": {
+        "instructions": "Disconnect Readwise in the MCP client and revoke the authorization in Readwise if available; leave all Reader documents, highlights, notes, and tags unchanged.",
+        "removes_user_data": false
+      }
+    },
+    {
+      "id": "shortcut-mcp",
+      "name": "Shortcut MCP",
+      "summary": "Shortcut's hosted MCP server for stories, epics, iterations, objectives, and docs with granular OAuth scopes including a dedicated read-only scope.",
+      "source_url": "https://www.shortcut.com/help/integrations/mcp-server/",
+      "kind": "mcp_server",
+      "supported_agents": [
+        "claude_code",
+        "codex",
+        "cursor",
+        "generic"
+      ],
+      "installation": {
+        "automatic": false,
+        "scope": "project_or_user",
+        "prerequisites": [
+          "A Shortcut account and workspace",
+          "An MCP client supporting remote Streamable HTTP and browser OAuth",
+          "An authorized Shortcut workspace"
+        ]
+      },
+      "data_boundary": {
+        "credentials": [
+          "OAuth 2.0 token managed by the MCP client for the authorized Shortcut workspace"
+        ],
+        "reads": [
+          "Sensitive Shortcut stories, epics, iterations, objectives, teams, members, workflows, and docs across the authorized workspace"
+        ],
+        "writes": [
+          "Remote creation of stories, epics, iterations, and docs in the authorized workspace",
+          "Overwrite-capable updates to existing story descriptions, assignees, estimates, workflows, or doc contents"
+        ]
+      },
+      "capabilities": {
+        "read": true,
+        "sensitive_read": true,
+        "write": true,
+        "remote_write": true,
+        "publish": false,
+        "overwrite": true,
+        "delete": false,
+        "arbitrary_execution": false,
+        "oauth": true,
+        "destructive": true,
+        "details": [
+          "Start with the dedicated read OAuth scope for read-only story and epic search",
+          "The hosted service supports granular write, story-write, and comment-write OAuth scopes for explicit creation and update workflows",
+          "The open-source repository is archived but the hosted https://mcp.shortcut.com/mcp service remains actively documented",
+          "The documented surface is overwrite-capable but includes no permanently destructive operations; archiving remains within standard Shortcut workflows"
+        ]
+      },
+      "confirmation": {
+        "required_for": [
+          "credential_setup",
+          "external_install",
+          "read_sensitive",
+          "write",
+          "write_remote",
+          "overwrite",
+          "oauth",
+          "destructive"
+        ],
+        "notes": "Confirm the target Shortcut workspace before reading sensitive project state; show proposed story, epic, or doc changes before executing writes, and prefer the dedicated read OAuth scope for session briefings."
+      },
+      "risk_tags": [
+        "credentials",
+        "hosted",
+        "project-management",
+        "sensitive-read",
+        "remote-write",
+        "overwrite-capable",
+        "oauth",
+        "destructive-capable",
+        "prompt-injection"
+      ],
+      "maturity": "verified",
+      "last_verified": "2026-08-30",
+      "evidence": [
+        "https://www.shortcut.com/help/integrations/mcp-server/"
+      ],
+      "health_check": "Connect to https://mcp.shortcut.com/mcp using the read scope, verify authorized workspace and user identity, then fetch one explicitly named story or epic without modifying content.",
+      "uninstall": {
+        "instructions": "Remove the Shortcut MCP entry from the client and revoke the authorized application connection in Shortcut account settings; preserve all workspace, story, epic, and doc data.",
+        "removes_user_data": false
+      }
+    },
+    {
+      "id": "slack-mcp",
+      "name": "Slack MCP",
+      "summary": "Slack's official first-party MCP server for searching conversations, channels, canvases, files, and lists, and for posting messages, restricted to Marketplace-published or internal Slack apps using confidential OAuth 2.0 with workspace admin approval.",
+      "source_url": "https://docs.slack.dev/ai/slack-mcp-server/",
+      "kind": "mcp_server",
+      "supported_agents": [
+        "claude_code",
+        "cursor",
+        "generic"
+      ],
+      "installation": {
+        "automatic": false,
+        "scope": "project_or_user",
+        "prerequisites": [
+          "A Slack workspace account",
+          "An MCP client backed by a registered Slack app with a fixed, hardcoded app ID",
+          "An app published in the Slack Marketplace or an internal app; unlisted apps are prohibited from using MCP",
+          "Workspace admin approval through the standard Slack app approval process",
+          "The app's client_id and client_secret for confidential OAuth; Dynamic Client Registration is not supported",
+          "An MCP client supporting JSON-RPC 2.0 over Streamable HTTP at https://mcp.slack.com/mcp; SSE-based connections are not supported"
+        ]
+      },
+      "data_boundary": {
+        "credentials": [
+          "Confidential OAuth 2.0 client credentials, the registered Slack app's client_id and client_secret, kept outside repository files",
+          "Per-user OAuth 2.0 access token managed by the MCP client for the authorized Slack workspace"
+        ],
+        "reads": [
+          "Sensitive public or private channel conversations, threads, DMs, canvases, files, user profiles, and emails depending on granted scopes",
+          "Slack list contents and schemas"
+        ],
+        "writes": [
+          "Remote creation and updates of Slack channel messages, thread replies, reactions, drafts, canvases, and conversations",
+          "File uploads through the two-step flow of slack_get_file_upload_url then slack_complete_file_upload, optionally sharing the uploaded file to a channel with a message",
+          "Slack Lists writes including creating lists with custom schemas, updating list metadata and columns, and adding or updating individual records",
+          "Publicly visible message sends in shared channels and overwrite-capable updates to canvas, list, and record content"
+        ]
+      },
+      "capabilities": {
+        "read": true,
+        "sensitive_read": true,
+        "write": true,
+        "remote_write": true,
+        "publish": true,
+        "overwrite": true,
+        "delete": false,
+        "arbitrary_execution": false,
+        "oauth": true,
+        "destructive": true,
+        "details": [
+          "Start with read-only search and history tools for explicitly named public channels",
+          "Exclude DMs, user email addresses, files, canvas mutations, list writes, and write scopes by default",
+          "Posting messages, uploading files, or updating canvases and lists creates immediate visible team communication and requires separate approval",
+          "The server focuses on messaging, search, files, canvases, and lists; the documented tool surface is create-and-update only, and message retraction remains within the Slack UI"
+        ]
+      },
+      "confirmation": {
+        "required_for": [
+          "credential_setup",
+          "external_install",
+          "read_sensitive",
+          "write",
+          "write_remote",
+          "publish",
+          "overwrite",
+          "oauth",
+          "destructive"
+        ],
+        "notes": "Confirm the target Slack workspace, channels, and granted OAuth scopes before reading conversations; show exact message text, target channel, and thread before posting messages, show the exact file and destination before completing an upload, and keep DM, canvas, and list writes disabled by default."
+      },
+      "risk_tags": [
+        "credentials",
+        "hosted",
+        "team-chat",
+        "sensitive-read",
+        "remote-write",
+        "publish-capable",
+        "public-publish",
+        "overwrite-capable",
+        "oauth",
+        "destructive-capable",
+        "prompt-injection"
+      ],
+      "maturity": "verified",
+      "last_verified": "2026-09-02",
+      "evidence": [
+        "https://docs.slack.dev/ai/slack-mcp-server/",
+        "https://docs.slack.dev/ai/slack-mcp-server/connect-to-claude"
+      ],
+      "health_check": "Connect to the Slack MCP endpoint, verify authorized workspace and user identity, then read history from one explicitly named test channel without posting messages.",
+      "uninstall": {
+        "instructions": "Remove the Slack MCP entry from the client and revoke the authorized application connection in Slack workspace settings; preserve all messages and conversation history.",
+        "removes_user_data": false
+      }
+    },
+    {
+      "id": "substack-mcp",
+      "name": "Substack MCP",
+      "summary": "An MCP server for reading Substack publication data, managing private drafts, and publishing short-form Notes.",
+      "source_url": "https://github.com/conorbronsdon/substack-mcp",
+      "kind": "mcp_server",
+      "supported_agents": [
+        "claude_code",
+        "generic"
+      ],
+      "installation": {
+        "automatic": false,
+        "scope": "project",
+        "prerequisites": [
+          "Node.js with npm/npx",
+          "A Substack publication account"
+        ]
+      },
+      "data_boundary": {
+        "credentials": [
+          "Publication URL",
+          "Session token",
+          "User ID",
+          "Optional machine-bound browser-login session file"
+        ],
+        "reads": [
+          "Subscriber count, posts, drafts, comments, sections, analytics, and schedules"
+        ],
+        "writes": [
+          "Private long-form drafts",
+          "Publicly fetchable image uploads",
+          "Immediately public Notes"
+        ]
+      },
+      "capabilities": {
+        "read": true,
+        "sensitive_read": true,
+        "write": true,
+        "remote_write": true,
+        "publish": true,
+        "overwrite": false,
+        "delete": false,
+        "arbitrary_execution": false,
+        "oauth": false,
+        "destructive": false,
+        "details": [
+          "Long-form tooling is draft-only; scheduling and public-post mutation are unavailable",
+          "Note creation publishes immediately and has no server-side undo"
+        ]
+      },
+      "confirmation": {
+        "required_for": [
+          "credential_setup",
+          "external_install",
+          "read_sensitive",
+          "write",
+          "write_remote",
+          "publish"
+        ],
+        "notes": "Always confirm Note creation as an immediate public publish action; private draft writes use the normal external-write gate, and broad analytics or subscriber reads require a sensitive-read gate."
+      },
+      "risk_tags": [
+        "credentials",
+        "external-data",
+        "sensitive-read",
+        "remote-write",
+        "publish-capable",
+        "public-publish",
+        "unofficial-api"
+      ],
+      "maturity": "verified",
+      "last_verified": "2026-08-15",
+      "evidence": [
+        "https://github.com/conorbronsdon/substack-mcp"
+      ],
+      "health_check": "After explicit authentication, run the documented subscriber-count read and verify the expected publication account.",
+      "uninstall": {
+        "instructions": "Remove the MCP client entry and, if used, review then remove the local browser-login session file.",
+        "removes_user_data": false
+      }
+    },
+    {
+      "id": "todoist-cli",
+      "name": "Todoist CLI",
+      "summary": "Doist's official command-line interface for Todoist tasks, projects, comments, and labels; supports a dedicated --read-only OAuth login flow.",
+      "source_url": "https://github.com/Doist/todoist-cli",
+      "kind": "connector",
+      "supported_agents": [
+        "claude_code",
+        "codex",
+        "gemini_cli",
+        "cursor",
+        "opencode",
+        "generic"
+      ],
+      "installation": {
+        "automatic": false,
+        "scope": "project_or_user",
+        "prerequisites": [
+          "A Todoist account",
+          "A current todoist-cli release (e.g. td)",
+          "OAuth or API token credentials",
+          "For app-management, backups, or billing commands, a login that requested those opt-in scopes with td auth login --additional-scopes"
+        ]
+      },
+      "data_boundary": {
+        "credentials": [
+          "OAuth token stored in the OS credential manager by the CLI (plaintext config-file storage only with an explicit --credential-store=plaintext), or an API token provided via the TODOIST_API_TOKEN environment variable, which takes precedence over stored credentials",
+          "td config view --show-token prints the stored token"
+        ],
+        "reads": [
+          "Sensitive Todoist tasks, projects, sections, comments, attachments, reminders, and labels across personal and shared workspaces",
+          "Workspaces, folders, filters, and shared-label definitions",
+          "With the app-management scope, registered app metadata; td apps view --include-secrets additionally reveals the client secret, verification token, and test token",
+          "With the backups scope, a downloadable archive of account data; with the billing scope, subscription, plan, and price information",
+          "Local files named on the command line: td comment add --file and td template import-file read a local file and upload it"
+        ],
+        "writes": [
+          "Creating, updating, completing, closing, and moving tasks, projects, sections, and comments",
+          "Workspace creation, update, and deletion (admin-only); project sharing, joining, and moving across workspaces, including invitation emails to the addresses named in td project share",
+          "Deletion of individual tasks, projects, sections, comments, folders, labels (including shared-label removal), filters, and reminders",
+          "With the app-management scope, editing webhooks and OAuth redirect URIs, and deleting a registered app -- documented as irreversible and immediately breaking that app for everyone who uses it",
+          "Local files: td backup download and td template export-file write to paths named on the command line; td skill install and td completion install write agent skill directories and shell configuration"
+        ]
+      },
+      "capabilities": {
+        "read": true,
+        "sensitive_read": true,
+        "write": true,
+        "remote_write": true,
+        "publish": false,
+        "overwrite": true,
+        "delete": true,
+        "arbitrary_execution": false,
+        "oauth": true,
+        "destructive": true,
+        "details": [
+          "Recommended: start with td auth login --read-only, which requests data:read and blocks mutations in the CLI",
+          "Write-capable tokens can create, edit, close, move, and delete tasks, projects, workspaces, folders, labels, filters, and reminders",
+          "Environment-provided API tokens are treated as unknown scope and assumed write-capable; the read-only guarantee comes from the --read-only login flow, not from the CLI generally",
+          "Mutating commands accept --dry-run to preview without executing, and destructive commands typically require an explicit --yes",
+          "app-management, backups, and billing are opt-in OAuth scopes requested via td auth login --additional-scopes; app deletion under app-management is irreversible for all users of that app",
+          "The billing scope grants billing:read_write unless the login also used --read-only (then billing:read); the documented td billing commands only read",
+          "There is no bulk purge command: deletion is per resource"
+        ]
+      },
+      "confirmation": {
+        "required_for": [
+          "credential_setup",
+          "external_install",
+          "read_sensitive",
+          "write",
+          "write_remote",
+          "overwrite",
+          "delete",
+          "oauth",
+          "destructive"
+        ],
+        "notes": "Confirm the target account and projects before reading sensitive task state; show proposed task or project changes and deletions before execution."
+      },
+      "risk_tags": [
+        "credentials",
+        "personal-tasks",
+        "sensitive-read",
+        "remote-write",
+        "overwrite-capable",
+        "delete-capable",
+        "oauth",
+        "destructive-capable",
+        "local-data",
+        "prompt-injection"
+      ],
+      "maturity": "verified",
+      "last_verified": "2026-09-03",
+      "evidence": [
+        "https://github.com/Doist/todoist-cli",
+        "https://github.com/Doist/todoist-cli/blob/2e32cb86954e11c093493d5f1fed76c002b358ea/skills/todoist-cli/SKILL.md"
+      ],
+      "health_check": "Log in with td auth login --read-only, verify authenticated user identity, then fetch assigned tasks for today without writing or completing items.",
+      "uninstall": {
+        "instructions": "Run td auth logout, remove any installed agent skill with td skill uninstall, remove the CLI binary or client configuration, and revoke the OAuth application or API token in Todoist settings; preserve all remote task and project data.",
+        "removes_user_data": false
+      }
+    },
+    {
+      "id": "tolaria",
+      "name": "Tolaria MCP",
+      "summary": "Tolaria's bundled stdio MCP for bounded Markdown-vault reads and note mutations; this entry excludes Tolaria's embedded agents, direct provider models, and AutoGit.",
+      "source_url": "https://github.com/refactoringhq/tolaria",
+      "kind": "local_workspace",
+      "supported_agents": [
+        "claude_code",
+        "cursor",
+        "opencode",
+        "generic"
+      ],
+      "installation": {
+        "automatic": false,
+        "scope": "project_or_user",
+        "prerequisites": [
+          "Tolaria for macOS, Windows, or Linux",
+          "A mounted local vault",
+          "A supported external MCP client configured manually"
+        ]
+      },
+      "data_boundary": {
+        "credentials": [
+          "Optional Git credentials for cloning an additional vault remain with system Git"
+        ],
+        "reads": [
+          "Markdown and YAML frontmatter in explicitly mounted local vaults"
+        ],
+        "writes": [
+          "Create, append, or full-content update of notes in mounted vaults",
+          "Attach an existing vault or clone one into a local directory through system Git",
+          "Transient Tolaria UI state through open_note, highlight_editor, and refresh_vault",
+          "Selected MCP client configuration during manual setup"
+        ]
+      },
+      "capabilities": {
+        "read": true,
+        "sensitive_read": true,
+        "write": true,
+        "remote_write": false,
+        "publish": false,
+        "overwrite": true,
+        "delete": false,
+        "arbitrary_execution": false,
+        "oauth": false,
+        "destructive": true,
+        "details": [
+          "Treat full-content update_note as overwrite-capable even though its MCP annotation says non-destructive",
+          "Prefer get_note, diff review, and expectedMtime before update_note",
+          "The MCP content-mutation surface is limited to create, append, update, attach, and local clone operations; open, highlight, and refresh also change transient UI state",
+          "Review embedded agents, direct provider models, stored provider keys, and AutoGit as separate trust boundaries before enabling them"
+        ]
+      },
+      "confirmation": {
+        "required_for": [
+          "credential_setup",
+          "external_install",
+          "read_sensitive",
+          "write",
+          "overwrite",
+          "destructive"
+        ],
+        "notes": "Use normal approval for a single create or append; confirm broad vault reads, show a diff before full replacement, and separately approve vault attachment, cloning, or MCP client-configuration writes."
+      },
+      "risk_tags": [
+        "local-data",
+        "sensitive-read",
+        "read-write",
+        "overwrite-capable",
+        "destructive-capable",
+        "mcp-config"
+      ],
+      "maturity": "verified",
+      "last_verified": "2026-08-15",
+      "evidence": [
+        "https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/site/concepts/ai.md",
+        "https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/mcp-server/index.js",
+        "https://github.com/refactoringhq/tolaria/blob/c63a672a25c7450a8baf4bfbf548fe6b62964b69/docs/adr/0158-vault-write-mcp-tools-update-and-append.md"
+      ],
+      "health_check": "Start Tolaria, list mounted vaults, read vault context, run a bounded search, then use a disposable note for any write smoke test.",
+      "uninstall": {
+        "instructions": "Remove the Tolaria MCP entry from each configured client; preserve the Tolaria application and every vault unless separate removal is requested.",
         "removes_user_data": false
       }
     },
@@ -752,270 +1934,6 @@
       "health_check": "After OAuth, read the connected member profile and one explicitly named board to confirm the authorized workspace and its read/write permissions, then separately verify account-level Inbox and Planner access and any connected Google or Outlook calendar before any search, write, move, archive, link, or unlink.",
       "uninstall": {
         "instructions": "Remove the Trello MCP entry from the MCP client and revoke the authorized connection in Trello; archived cards and lists remain in place unless the user manages them separately in Trello.",
-        "removes_user_data": false
-      }
-    },
-    {
-      "id": "shortcut-mcp",
-      "name": "Shortcut MCP",
-      "summary": "Shortcut's hosted MCP server for stories, epics, iterations, objectives, and docs with granular OAuth scopes including a dedicated read-only scope.",
-      "source_url": "https://www.shortcut.com/help/integrations/mcp-server/",
-      "kind": "mcp_server",
-      "supported_agents": ["claude_code", "codex", "cursor", "generic"],
-      "installation": {
-        "automatic": false,
-        "scope": "project_or_user",
-        "prerequisites": ["A Shortcut account and workspace", "An MCP client supporting remote Streamable HTTP and browser OAuth", "An authorized Shortcut workspace"]
-      },
-      "data_boundary": {
-        "credentials": ["OAuth 2.0 token managed by the MCP client for the authorized Shortcut workspace"],
-        "reads": ["Sensitive Shortcut stories, epics, iterations, objectives, teams, members, workflows, and docs across the authorized workspace"],
-        "writes": ["Remote creation of stories, epics, iterations, and docs in the authorized workspace", "Overwrite-capable updates to existing story descriptions, assignees, estimates, workflows, or doc contents"]
-      },
-      "capabilities": {
-        "read": true,
-        "sensitive_read": true,
-        "write": true,
-        "remote_write": true,
-        "publish": false,
-        "overwrite": true,
-        "delete": false,
-        "arbitrary_execution": false,
-        "oauth": true,
-        "destructive": true,
-        "details": ["Start with the dedicated read OAuth scope for read-only story and epic search", "The hosted service supports granular write, story-write, and comment-write OAuth scopes for explicit creation and update workflows", "The open-source repository is archived but the hosted https://mcp.shortcut.com/mcp service remains actively documented", "The documented surface is overwrite-capable but includes no permanently destructive operations; archiving remains within standard Shortcut workflows"]
-      },
-      "confirmation": {
-        "required_for": ["credential_setup", "external_install", "read_sensitive", "write", "write_remote", "overwrite", "oauth", "destructive"],
-        "notes": "Confirm the target Shortcut workspace before reading sensitive project state; show proposed story, epic, or doc changes before executing writes, and prefer the dedicated read OAuth scope for session briefings."
-      },
-      "risk_tags": ["credentials", "hosted", "project-management", "sensitive-read", "remote-write", "overwrite-capable", "oauth", "destructive-capable", "prompt-injection"],
-      "maturity": "verified",
-      "last_verified": "2026-08-30",
-      "evidence": ["https://www.shortcut.com/help/integrations/mcp-server/"],
-      "health_check": "Connect to https://mcp.shortcut.com/mcp using the read scope, verify authorized workspace and user identity, then fetch one explicitly named story or epic without modifying content.",
-      "uninstall": {
-        "instructions": "Remove the Shortcut MCP entry from the client and revoke the authorized application connection in Shortcut account settings; preserve all workspace, story, epic, and doc data.",
-        "removes_user_data": false
-      }
-    },
-    {
-      "id": "gitlab-mcp",
-      "name": "GitLab MCP",
-      "summary": "GitLab's official Beta MCP server exposes repository, issue, work item, merge request, discussion, and pipeline tools over OAuth 2.0 with the mcp scope.",
-      "source_url": "https://docs.gitlab.com/user/model_context_protocol/mcp_server/",
-      "kind": "mcp_server",
-      "supported_agents": ["claude_code", "codex", "cursor", "gemini_cli", "generic"],
-      "installation": {
-        "automatic": false,
-        "scope": "project_or_user",
-        "prerequisites": ["An MCP-compatible client", "A GitLab SaaS or self-managed account", "GitLab Duo availability set to Always on or On by default", "Beta and experimental features turned on", "Access to the MCP server allowed", "Activation settings configured for the top-level group on GitLab.com, or for the instance on GitLab Self-Managed and Dedicated", "OAuth 2.0 Dynamic Client Registration available, or a pre-registered OAuth application with the mcp scope and Confidential checkbox cleared where an administrator turns Dynamic Client Registration off"]
-      },
-      "data_boundary": {
-        "credentials": ["Per-user OAuth 2.0 access token with the mcp scope, obtained through Dynamic Client Registration or a pre-registered OAuth application, kept outside repository files"],
-        "reads": ["Private or public GitLab repository contents, commits, issues, work items, merge requests, diffs, comments, wiki page lists, project members, pipelines, and job logs allowed by the authenticated user"],
-        "writes": ["Remote GitLab writes including creating and updating issues, work items, merge requests, comments, branches, and merge request reviews", "File actions committed to a branch through add_commit, covering file creation, update, deletion, and move", "Merging or scheduling the automatic merge of a merge request through accept_merge_request", "CI/CD pipeline runs, retries, cancellations, and renames through save_pipeline, and pipeline metadata updates or pipeline deletion through manage_pipeline", "Publicly visible posts, overwrite-capable branch and file updates, and security scan profile attachment to projects or groups"]
-      },
-      "capabilities": {
-        "read": true,
-        "sensitive_read": true,
-        "write": true,
-        "remote_write": true,
-        "publish": true,
-        "overwrite": true,
-        "delete": true,
-        "arbitrary_execution": false,
-        "oauth": true,
-        "destructive": true,
-        "details": ["Start with read-only repository, issue, merge request, and pipeline inspection allowlists", "No enforced server-side read-only mode is provided; restrict toolsets client-side", "Treat pipeline triggering, retry, cancellation, and deletion as high-impact CI/CD actions requiring separate confirmation", "This boundary describes the tool surface documented for GitLab 19.4; re-check the tools reference when the instance runs a different version"]
-      },
-      "confirmation": {
-        "required_for": ["credential_setup", "external_install", "read_sensitive", "write", "write_remote", "publish", "overwrite", "delete", "oauth", "destructive"],
-        "notes": "Confirm the exact GitLab instance, project scope, and token permissions; show exact target and payload before comments, branch writes, publication, overwrite, deletion, or CI/CD pipeline actions."
-      },
-      "risk_tags": ["credentials", "private-repositories", "sensitive-read", "remote-write", "publish-capable", "public-publish", "overwrite-capable", "delete-capable", "oauth", "destructive-capable", "ci-cd", "prompt-injection"],
-      "maturity": "verified",
-      "last_verified": "2026-09-02",
-      "evidence": ["https://docs.gitlab.com/user/model_context_protocol/mcp_server/", "https://docs.gitlab.com/user/model_context_protocol/mcp_server_tools/"],
-      "health_check": "Connect to the GitLab MCP server, verify authenticated user identity and GitLab instance, then read one explicitly named project and issue without performing a write or pipeline action.",
-      "uninstall": {
-        "instructions": "Remove the MCP client entry and revoke the authorized OAuth application for the MCP client in GitLab user settings; an administrator can also withdraw access by disallowing MCP server access for the top-level group or instance. Repositories and GitLab content are left unchanged.",
-        "removes_user_data": false
-      }
-    },
-    {
-      "id": "slack-mcp",
-      "name": "Slack MCP",
-      "summary": "Slack's official first-party MCP server for searching conversations, channels, canvases, files, and lists, and for posting messages, restricted to Marketplace-published or internal Slack apps using confidential OAuth 2.0 with workspace admin approval.",
-      "source_url": "https://docs.slack.dev/ai/slack-mcp-server/",
-      "kind": "mcp_server",
-      "supported_agents": ["claude_code", "cursor", "generic"],
-      "installation": {
-        "automatic": false,
-        "scope": "project_or_user",
-        "prerequisites": ["A Slack workspace account", "An MCP client backed by a registered Slack app with a fixed, hardcoded app ID", "An app published in the Slack Marketplace or an internal app; unlisted apps are prohibited from using MCP", "Workspace admin approval through the standard Slack app approval process", "The app's client_id and client_secret for confidential OAuth; Dynamic Client Registration is not supported", "An MCP client supporting JSON-RPC 2.0 over Streamable HTTP at https://mcp.slack.com/mcp; SSE-based connections are not supported"]
-      },
-      "data_boundary": {
-        "credentials": ["Confidential OAuth 2.0 client credentials, the registered Slack app's client_id and client_secret, kept outside repository files", "Per-user OAuth 2.0 access token managed by the MCP client for the authorized Slack workspace"],
-        "reads": ["Sensitive public or private channel conversations, threads, DMs, canvases, files, user profiles, and emails depending on granted scopes", "Slack list contents and schemas"],
-        "writes": ["Remote creation and updates of Slack channel messages, thread replies, reactions, drafts, canvases, and conversations", "File uploads through the two-step flow of slack_get_file_upload_url then slack_complete_file_upload, optionally sharing the uploaded file to a channel with a message", "Slack Lists writes including creating lists with custom schemas, updating list metadata and columns, and adding or updating individual records", "Publicly visible message sends in shared channels and overwrite-capable updates to canvas, list, and record content"]
-      },
-      "capabilities": {
-        "read": true,
-        "sensitive_read": true,
-        "write": true,
-        "remote_write": true,
-        "publish": true,
-        "overwrite": true,
-        "delete": false,
-        "arbitrary_execution": false,
-        "oauth": true,
-        "destructive": true,
-        "details": ["Start with read-only search and history tools for explicitly named public channels", "Exclude DMs, user email addresses, files, canvas mutations, list writes, and write scopes by default", "Posting messages, uploading files, or updating canvases and lists creates immediate visible team communication and requires separate approval", "The server focuses on messaging, search, files, canvases, and lists; the documented tool surface is create-and-update only, and message retraction remains within the Slack UI"]
-      },
-      "confirmation": {
-        "required_for": ["credential_setup", "external_install", "read_sensitive", "write", "write_remote", "publish", "overwrite", "oauth", "destructive"],
-        "notes": "Confirm the target Slack workspace, channels, and granted OAuth scopes before reading conversations; show exact message text, target channel, and thread before posting messages, show the exact file and destination before completing an upload, and keep DM, canvas, and list writes disabled by default."
-      },
-      "risk_tags": ["credentials", "hosted", "team-chat", "sensitive-read", "remote-write", "publish-capable", "public-publish", "overwrite-capable", "oauth", "destructive-capable", "prompt-injection"],
-      "maturity": "verified",
-      "last_verified": "2026-09-02",
-      "evidence": ["https://docs.slack.dev/ai/slack-mcp-server/", "https://docs.slack.dev/ai/slack-mcp-server/connect-to-claude"],
-      "health_check": "Connect to the Slack MCP endpoint, verify authorized workspace and user identity, then read history from one explicitly named test channel without posting messages.",
-      "uninstall": {
-        "instructions": "Remove the Slack MCP entry from the client and revoke the authorized application connection in Slack workspace settings; preserve all messages and conversation history.",
-        "removes_user_data": false
-      }
-    },
-    {
-      "id": "todoist-cli",
-      "name": "Todoist CLI",
-      "summary": "Doist's official command-line interface for Todoist tasks, projects, comments, and labels; supports a dedicated --read-only OAuth login flow.",
-      "source_url": "https://github.com/Doist/todoist-cli",
-      "kind": "connector",
-      "supported_agents": ["claude_code", "codex", "gemini_cli", "cursor", "opencode", "generic"],
-      "installation": {
-        "automatic": false,
-        "scope": "project_or_user",
-        "prerequisites": ["A Todoist account", "A current todoist-cli release (e.g. td)", "OAuth or API token credentials", "For app-management, backups, or billing commands, a login that requested those opt-in scopes with td auth login --additional-scopes"]
-      },
-      "data_boundary": {
-        "credentials": ["OAuth token stored in the OS credential manager by the CLI (plaintext config-file storage only with an explicit --credential-store=plaintext), or an API token provided via the TODOIST_API_TOKEN environment variable, which takes precedence over stored credentials", "td config view --show-token prints the stored token"],
-        "reads": ["Sensitive Todoist tasks, projects, sections, comments, attachments, reminders, and labels across personal and shared workspaces", "Workspaces, folders, filters, and shared-label definitions", "With the app-management scope, registered app metadata; td apps view --include-secrets additionally reveals the client secret, verification token, and test token", "With the backups scope, a downloadable archive of account data; with the billing scope, subscription, plan, and price information", "Local files named on the command line: td comment add --file and td template import-file read a local file and upload it"],
-        "writes": ["Creating, updating, completing, closing, and moving tasks, projects, sections, and comments", "Workspace creation, update, and deletion (admin-only); project sharing, joining, and moving across workspaces, including invitation emails to the addresses named in td project share", "Deletion of individual tasks, projects, sections, comments, folders, labels (including shared-label removal), filters, and reminders", "With the app-management scope, editing webhooks and OAuth redirect URIs, and deleting a registered app -- documented as irreversible and immediately breaking that app for everyone who uses it", "Local files: td backup download and td template export-file write to paths named on the command line; td skill install and td completion install write agent skill directories and shell configuration"]
-      },
-      "capabilities": {
-        "read": true,
-        "sensitive_read": true,
-        "write": true,
-        "remote_write": true,
-        "publish": false,
-        "overwrite": true,
-        "delete": true,
-        "arbitrary_execution": false,
-        "oauth": true,
-        "destructive": true,
-        "details": ["Recommended: start with td auth login --read-only, which requests data:read and blocks mutations in the CLI", "Write-capable tokens can create, edit, close, move, and delete tasks, projects, workspaces, folders, labels, filters, and reminders", "Environment-provided API tokens are treated as unknown scope and assumed write-capable; the read-only guarantee comes from the --read-only login flow, not from the CLI generally", "Mutating commands accept --dry-run to preview without executing, and destructive commands typically require an explicit --yes", "app-management, backups, and billing are opt-in OAuth scopes requested via td auth login --additional-scopes; app deletion under app-management is irreversible for all users of that app", "The billing scope grants billing:read_write unless the login also used --read-only (then billing:read); the documented td billing commands only read", "There is no bulk purge command: deletion is per resource"]
-      },
-      "confirmation": {
-        "required_for": ["credential_setup", "external_install", "read_sensitive", "write", "write_remote", "overwrite", "delete", "oauth", "destructive"],
-        "notes": "Confirm the target account and projects before reading sensitive task state; show proposed task or project changes and deletions before execution."
-      },
-      "risk_tags": ["credentials", "personal-tasks", "sensitive-read", "remote-write", "overwrite-capable", "delete-capable", "oauth", "destructive-capable", "local-data", "prompt-injection"],
-      "maturity": "verified",
-      "last_verified": "2026-09-03",
-      "evidence": ["https://github.com/Doist/todoist-cli", "https://github.com/Doist/todoist-cli/blob/2e32cb86954e11c093493d5f1fed76c002b358ea/skills/todoist-cli/SKILL.md"],
-      "health_check": "Log in with td auth login --read-only, verify authenticated user identity, then fetch assigned tasks for today without writing or completing items.",
-      "uninstall": {
-        "instructions": "Run td auth logout, remove any installed agent skill with td skill uninstall, remove the CLI binary or client configuration, and revoke the OAuth application or API token in Todoist settings; preserve all remote task and project data.",
-        "removes_user_data": false
-      }
-    },
-    {
-      "id": "atlassian-rovo-mcp",
-      "name": "Atlassian Rovo MCP",
-      "summary": "Atlassian's official hosted MCP server (Rovo MCP v2). One authorization can reach Jira, Confluence, Jira Service Management, Bitbucket Cloud, Loom, Goals, Projects, Teams, Focus, Talent, Teamwork Graph, Rovo search, and connected source-code search, each as its own admin-managed permission group.",
-      "source_url": "https://support.atlassian.com/atlassian-ai-gateway/",
-      "kind": "mcp_server",
-      "supported_agents": ["claude_code", "codex", "gemini_cli", "cursor", "generic"],
-      "installation": {
-        "automatic": false,
-        "scope": "project_or_user",
-        "prerequisites": ["An Atlassian Cloud account on the site to be authorized", "An MCP client supporting remote Streamable HTTP and browser OAuth, pointed at https://mcp.atlassian.com/v2/mcp", "An authorized Atlassian site", "For Bitbucket tools, a Bitbucket workspace linked to an Atlassian organization", "For API-token authentication, an organization admin who has enabled it"]
-      },
-      "data_boundary": {
-        "credentials": ["OAuth 2.1 authorization managed by the MCP client, consented for a specific Atlassian site (cloudId) and product set, with redirect-domain allowlist checks", "When enabled by an organization admin, API-token authentication: a personal API token (Basic auth, email:token) or a service-account API key (Bearer); such tokens are not bound to a cloudId, so cross-site calls are possible, and no redirect-domain allowlist check applies", "Jira Service Management tools are available only through API-token authentication"],
-        "reads": ["Sensitive Jira issues, epics, sprints, boards, filters, dashboards, comments, worklogs, change history, user lookups by name or email, and attachment downloads across the authorized site", "Confluence spaces, content of every type (pages, blog posts, live docs, whiteboards, databases, folders), version history and diffs, comments, attachment downloads, PDF or Word exports, content permissions and public-link status, and CQL search", "Jira Service Management operations alerts, on-call schedules, and teams; Bitbucket Cloud workspaces, repositories, file and directory contents, branches, commits, pull requests and diffs, pipelines and step logs, deployments, and environments", "Loom videos with transcripts, comments, AI meeting action items, and signed MP4 download URLs; Goals, Projects, Teams, Focus areas, and Talent data (positions, managers, headcount by country, level, or job family, and skill assignments)", "Teamwork Graph context across all of the above plus third-party data connected to Jira (GitHub, Azure DevOps, GitLab, Jenkins, and Spinnaker pull requests, builds, and deployments); Rovo semantic search across Jira, Confluence, and connected apps; source-code search and full file reads across connected source-control providers"],
-        "writes": ["Jira: create, edit, transition, link, watch, and comment on work items, log time, upload attachments, set entity properties, and manage sprints, versions (including release and archive), and boards; with the admin-enabled manage_jira group, create and update projects", "Confluence: create pages, blog posts, live docs, whiteboards, databases, embeds, smart links, and folders through a single content tool; full-body or granular updates; copy, move, archive, restore versions, convert modes, and set content status; comments, attachments, labels, spaces, and space instructions", "Confluence access control: add, remove, or replace content permission grants (replace removes any grant absent from the request), set restriction state, and enable or disable the anonymous public link for a page", "Bitbucket Cloud: create, update, comment on, approve, request changes on, and merge pull requests; create branches and commits; run pipelines", "Jira Service Management: acknowledge, close, or escalate operations alerts; Loom: upload and publish videos, rename, set visibility to OWNER, WORKSPACE, or PUBLIC, share, comment, and move; Goals, Projects, Focus areas, and Teams: create and update; Talent: create skills, assign or decline worker skills, and allocate positions to focus areas; Teamwork Graph: add relationships between objects", "Permanent deletion through the admin-enabled delete_jira group: Jira issues, comments, and issue attachments"]
-      },
-      "capabilities": {
-        "read": true,
-        "sensitive_read": true,
-        "write": true,
-        "remote_write": true,
-        "publish": true,
-        "overwrite": true,
-        "delete": true,
-        "arbitrary_execution": false,
-        "oauth": true,
-        "destructive": true,
-        "details": ["Recommended narrow profile, not the declared boundary: enable only the Jira and Confluence read and search groups, and widen deliberately", "Recommended: exclude Teamwork Graph and Rovo search; both widen visibility to organization-wide and third-party connected data, and each call may consume up to 10 Rovo credits", "Organization admins grant or revoke access per permission group; delete_jira and manage_jira are disabled by default and must be enabled by an admin", "Three tools delete permanently and cannot be undone: deleteJiraIssue, deleteJiraComment, and deleteJiraIssueAttachment", "Confluence writes are content-level tools, so one write tool reaches blog posts, whiteboards, databases, and folders as well as pages; enableConfluencePublicLink and updateLoomVideoPermissions can make content anonymously or publicly reachable", "Bitbucket writes include merging pull requests and running pipelines; a commit that changes pipeline configuration followed by a pipeline run executes code on Bitbucket runners under the user's permissions", "The server exposes a small primary tool set and defers the rest behind discover plus executeRead, executeWrite, and executeDestructive, so new tools become reachable without reconnecting; the ?tools=all endpoint variant exposes the full flat list", "Creating, updating, publishing, or deleting anything requires explicit outbound confirmation"]
-      },
-      "confirmation": {
-        "required_for": ["credential_setup", "external_install", "read_sensitive", "write", "write_remote", "publish", "overwrite", "delete", "oauth", "destructive"],
-        "notes": "Confirm the target Atlassian site, permission groups, and project or space before reading sensitive organizational state; show proposed Jira, Confluence, or Bitbucket changes before execution; gate the three delete tools, public-link and permission changes, pull-request merges, and pipeline runs separately from other writes; and keep Teamwork Graph and Rovo search disabled by default."
-      },
-      "risk_tags": ["credentials", "hosted", "project-management", "private-repositories", "sensitive-read", "remote-write", "publish-capable", "public-publish", "overwrite-capable", "delete-capable", "oauth", "destructive-capable", "ci-cd", "dynamic-api-surface", "prompt-injection"],
-      "maturity": "verified",
-      "last_verified": "2026-09-03",
-      "evidence": ["https://support.atlassian.com/atlassian-ai-gateway/docs/supported-tools/", "https://support.atlassian.com/atlassian-ai-gateway/docs/get-started-with-the-atlassian-remote-mcp-server/", "https://support.atlassian.com/atlassian-ai-gateway/docs/configure-authentication-via-api-token/", "https://support.atlassian.com/atlassian-ai-gateway/docs/configure-oauth-2-1/"],
-      "health_check": "Connect to the Rovo MCP endpoint, verify authorized Atlassian site identity and the granted permission groups, then run a bounded read query for one known issue or page without creating or modifying content.",
-      "uninstall": {
-        "instructions": "Remove the Atlassian Rovo MCP entry from the client and revoke the authorized application connection in Atlassian account settings, or revoke the API token or service-account key; preserve all Jira, Confluence, Jira Service Management, Bitbucket, and Loom data.",
-        "removes_user_data": false
-      }
-    },
-    {
-      "id": "asana-mcp",
-      "name": "Asana MCP",
-      "summary": "Asana's official hosted V2 MCP server for tasks, projects, portfolios, and status updates with OAuth 2.0 and write/delete capabilities.",
-      "source_url": "https://developers.asana.com/docs/mcp-server",
-      "kind": "mcp_server",
-      "supported_agents": ["claude_code", "codex", "cursor", "generic"],
-      "installation": {
-        "automatic": false,
-        "scope": "project_or_user",
-        "prerequisites": ["An Asana account and workspace", "An MCP client supporting remote Streamable HTTP and browser OAuth", "A pre-registered Asana MCP app with a client ID and client secret", "A redirect URL matching exactly between the Asana app settings and the client configuration; dynamic client registration is not supported", "An authorized Asana workspace"]
-      },
-      "data_boundary": {
-        "credentials": ["OAuth 2.0 token managed by the MCP client for the authorized Asana workspace; tokens issued for MCP apps are valid only for the MCP server, not the Asana REST API", "The registered app's client secret, which coding clients store locally (keychain or a credentials file) and must be kept out of repositories"],
-        "reads": ["Sensitive Asana workspace identity, teams, projects, sections, tasks, subtasks, dependencies, custom fields, comments, portfolios, goals, and status updates", "The workspace user directory: get_users and get_user return names, email addresses, and workspace memberships", "Attachment metadata with download and view URLs for tasks, projects, and project briefs", "AI Teammate agent records, including behavior guidance", "Full-text task search across names, descriptions, and comments (Premium workspaces)"],
-        "writes": ["Remote creation of tasks, subtasks, projects, comments, and project or portfolio status updates in the authorized workspace; create_tasks and create_project create immediately, without a confirmation step, up to 50 tasks per call", "Updates are limited to tasks: update_tasks (up to 50 per call) has no project-update counterpart, add_comment has no edit tool, and a status update is a creation (create_project_status_update) rather than an edit", "Overwrite-capable task updates to name, description, assignee, due and start dates, completion status, parent, dependencies and dependents, project membership, followers, and custom fields", "Permanent deletion is delete_task only, documented as deleting a task and any of its subtasks that are not also members of another project -- subtasks shared with another project survive"]
-      },
-      "capabilities": {
-        "read": true,
-        "sensitive_read": true,
-        "write": true,
-        "remote_write": true,
-        "publish": false,
-        "overwrite": true,
-        "delete": true,
-        "arbitrary_execution": false,
-        "oauth": true,
-        "destructive": true,
-        "details": ["Recommended: start with read-only task and project inspection; no server-side read-only OAuth scope is currently provided by Asana", "MCP apps do not take scopes: one authorization may access any available tool, including tools added to the server in the future, with no tool-level narrowing", "The effective controls are therefore client-side confirmation plus the authenticated user's own Asana permissions -- access is limited to the workspaces, projects, and tasks that user already has", "Tokens are workspace-scoped: each session is bound to the workspace chosen at authorization, and other workspaces need separate sessions", "The preview tools that render a confirmation UI (create_task_preview, create_project_preview, search_tasks_preview) are available only in Claude and ChatGPT; other clients call the standard write tools directly", "The server exposes task and project creation, task updates, and permanent task deletion", "Require exact payload and target confirmation client-side before any write, status update, or deletion"]
-      },
-      "confirmation": {
-        "required_for": ["credential_setup", "external_install", "read_sensitive", "write", "write_remote", "overwrite", "delete", "oauth", "destructive"],
-        "notes": "Confirm the target Asana workspace before reading sensitive project state; show exact task title, fields, and proposed changes or deletions before executing writes."
-      },
-      "risk_tags": ["credentials", "hosted", "project-management", "sensitive-read", "remote-write", "overwrite-capable", "delete-capable", "oauth", "destructive-capable", "dynamic-api-surface", "prompt-injection"],
-      "maturity": "verified",
-      "last_verified": "2026-09-03",
-      "evidence": ["https://developers.asana.com/docs/mcp-server", "https://developers.asana.com/docs/connecting-mcp-clients-to-asanas-v2-server", "https://developers.asana.com/docs/integrating-with-asanas-mcp-server", "https://developers.asana.com/docs/mcp-tools-reference"],
-      "health_check": "Connect to the Asana V2 MCP endpoint, verify authorized workspace and user identity, then fetch one explicitly named project or task without writing or modifying fields.",
-      "uninstall": {
-        "instructions": "Remove the Asana MCP entry from the client, delete the locally stored client secret, and revoke the authorized application connection in Asana account settings; preserve all workspace, project, and task data.",
         "removes_user_data": false
       }
     }
