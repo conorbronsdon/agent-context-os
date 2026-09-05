@@ -11,6 +11,7 @@ import re
 import stat
 import subprocess
 import tempfile
+import unicodedata
 from pathlib import Path, PurePosixPath
 
 
@@ -39,6 +40,20 @@ OPENCODE_GENERATED_PATHS = {
     ".opencode/package-lock.json",
 }
 OPENCODE_GENERATED_PREFIXES = (".opencode/node_modules",)
+
+
+def verify_no_ancestor_config(root: Path) -> None:
+    """Reject ambiguous setup; keep the fixture's own project config enabled."""
+    for parent in root.resolve().parents:
+        for name in ("opencode.json", "opencode.jsonc", ".opencode"):
+            candidate = parent / name
+            if candidate.exists() or candidate.is_symlink():
+                raise RuntimeError(
+                    f"ancestor OpenCode configuration detected: {candidate}. "
+                    "Choose a clean temporary location with TMPDIR (POSIX) or "
+                    "TEMP/TMP (Windows), outside directories containing OpenCode "
+                    "configuration. The harness does not disable project configuration."
+                )
 
 
 def run(
@@ -170,10 +185,11 @@ def copy_tracked_fixture(repo: Path, fixture: Path, commit: str) -> None:
         for depth in range(1, len(relative.parts) + 1):
             prefix = "/".join(relative.parts[:depth])
             is_file = depth == len(relative.parts)
-            prior = seen.get(prefix.casefold())
+            key = unicodedata.normalize("NFC", unicodedata.normalize("NFC", prefix).casefold())
+            prior = seen.get(key)
             if prior is not None and (prior[0] != prefix or prior[1] or is_file):
                 raise RuntimeError(f"colliding tracked path: {name!r}")
-            seen[prefix.casefold()] = (prefix, is_file)
+            seen[key] = (prefix, is_file)
         entries.append((relative, mode, object_id))
 
     # Validate the entire tree before fetching blobs or materializing any files.
@@ -297,8 +313,9 @@ def run_lifecycle_command(
 def verify_denial_output(output: str, fixture: Path) -> None:
     if not tool_loaded_exact_skill(output, fixture, "context-start"):
         raise RuntimeError("permission denial control produced no successful allowed read")
-    # This control permits only reading the skill file as data. In particular,
-    # loading it through the skill tool is denied and cannot satisfy the control.
+    # The runtime policy denies bash/edit. This verifier additionally rejects
+    # every non-read tool, including skill loading. Extra reads are permitted:
+    # this proves the required read plus absence of other tools, not a read sandbox.
     exposed = set(tool_names(output)) - {"read"}
     if exposed:
         raise RuntimeError(f"denied tools were exposed to model intent: {sorted(exposed)}")
@@ -343,6 +360,7 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="contextos-opencode-") as temporary:
         fixture = Path(temporary) / "public-fixture"
+        verify_no_ancestor_config(fixture)
         copy_tracked_fixture(repo, fixture, verified_commit)
         skills = parse_json_document(run(binary, fixture, "debug", "skill"), "debug skill")
         by_name: dict[str, dict[str, object]] = {}

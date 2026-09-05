@@ -7,6 +7,16 @@ on:
     branches: [main]
 
 jobs:
+  opencode-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Check OpenCode fixture portability on macOS
+        run: python -m unittest discover -s tests -p "test_opencode_conformance.py" -v
+
   validate:
     runs-on: ubuntu-latest
     steps:

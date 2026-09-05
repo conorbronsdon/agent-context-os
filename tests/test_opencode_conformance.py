@@ -257,6 +257,9 @@ class OpenCodeAdapterTest(unittest.TestCase):
             ("File.md", "file.md"), ("same", "same"),
             ("Dir/a", "dir/b"), ("file", "file/child"),
             ("file/child", "file"),
+            ("caf\u00e9", "cafe\u0301"),
+            ("CAF\u00c9/a", "cafe\u0301/b"),
+            ("caf\u00e9/child", "cafe\u0301"),
         ):
             with self.subTest(names=names), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
@@ -282,6 +285,49 @@ class OpenCodeAdapterTest(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, "unsafe tracked path"):
                         live.copy_tracked_fixture(root, root / "fixture", "0" * 40)
                     self.assertEqual(1, mocked.call_count)
+
+    def test_fixture_preserves_distinct_unicode_names_and_bytes(self) -> None:
+        live = load_live_module()
+        names = ("caf\u00e9/a", "caf\u00e9/b", "\u6771\u4eac.txt", "cafe.txt")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            tree = b"".join(b"100644 blob " + b"0" * 40 + b"\t" + name.encode("utf-8") + b"\0"
+                            for name in names)
+            responses = [subprocess.CompletedProcess([], 0, tree, b"")] + [
+                subprocess.CompletedProcess([], 0, name.encode("utf-8"), b"") for name in names
+            ]
+            with patch.object(live.subprocess, "run", side_effect=responses):
+                live.copy_tracked_fixture(root, root / "fixture", "0" * 40)
+            for name in names:
+                self.assertEqual(name.encode("utf-8"), (root / "fixture" / name).read_bytes())
+
+    def test_ancestor_config_guard_rejects_each_source_without_reading_it(self) -> None:
+        live = load_live_module()
+        for name in ("opencode.json", "opencode.jsonc", ".opencode"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                config = root / name
+                if name == ".opencode":
+                    config.mkdir()
+                else:
+                    config.write_text("not parsed: reject the location", encoding="utf-8")
+                with self.assertRaisesRegex(RuntimeError, "ancestor OpenCode configuration.*clean temporary"):
+                    live.verify_no_ancestor_config(root / "nested" / "fixture")
+
+    def test_ancestor_config_guard_allows_fixture_config_and_unrelated_sibling(self) -> None:
+        live = load_live_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fixture = root / "fixture"
+            fixture.mkdir()
+            (fixture / ".opencode").mkdir()
+            config = fixture / "opencode.json"
+            config.write_text('{"permission":{"bash":"allow"}}', encoding="utf-8")
+            sibling = root / "unrelated"
+            sibling.mkdir()
+            (sibling / "opencode.jsonc").write_text("{}", encoding="utf-8")
+            live.verify_no_ancestor_config(fixture)
+            self.assertEqual('{"permission":{"bash":"allow"}}', config.read_text(encoding="utf-8"))
 
     def test_fixture_allows_shared_directory_and_distinct_files(self) -> None:
         live = load_live_module()
@@ -425,6 +471,10 @@ class OpenCodeAdapterTest(unittest.TestCase):
             }}
         }})
         live.verify_denial_output(allowed, ROOT)
+        extra_read = allowed.replace(".agents/skills/context-start/SKILL.md", "README.md")
+        live.verify_denial_output(allowed + "\n" + extra_read, ROOT)
+        with self.assertRaisesRegex(RuntimeError, "no successful allowed read"):
+            live.verify_denial_output(extra_read, ROOT)
         for output in ("", "I cannot do that", allowed.replace('"completed"', '"error"')):
             with self.assertRaisesRegex(RuntimeError, "no successful allowed read"):
                 live.verify_denial_output(output, ROOT)

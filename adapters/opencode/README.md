@@ -89,6 +89,25 @@ Add `--model <provider/model>` plus all acknowledgement flags printed by
 a logged or training-enabled route for private repository material. The live
 run rejects dirty checkouts and is release evidence for the exact reviewed
 commit, not a required CI step.
+
+Fixture paths are checked using NFC Unicode normalization and case folding
+before any files are copied. Equivalent Unicode spellings, case collisions,
+and file/directory conflicts are rejected; distinct Unicode names retain their
+original spelling and bytes. Focused fixture tests run on macOS, Linux, and Windows.
+
+The denial control requires a completed read of the exact skill file. Additional
+reads are allowed, but every non-read tool event is rejected by the verifier.
+The runtime permission override denies bash and edit; the verifier also rejects
+skill loading. This checks tool behavior, not a filesystem read sandbox.
+
+OpenCode searches parent directories for [project configuration](https://opencode.ai/docs/config/).
+Before copying the fixture or asking it to load skills, the harness rejects any
+ancestor `opencode.json`, `opencode.jsonc`, or `.opencode` entry. This is a
+conservative setup check, not an attempt to reproduce the client's Git-boundary
+search rules. On rejection, select a clean temporary location using `TMPDIR`
+on POSIX or `TEMP`/`TMP` on Windows and rerun. The fixture's own configuration
+remains enabled; unrelated sibling directories do not affect this check.
+
 See the [first-class promotion note](../../docs/releases/opencode-first-class.md)
 for the shipped claim boundary.
 
