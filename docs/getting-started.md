@@ -1,4 +1,9 @@
-# Getting started with Context OS
+# Getting started with the full Context OS template
+
+For a first trial, use the [three-file starter](minimal-starter.md). It needs
+no setup script or runtime registration. This guide covers the full template
+with its lifecycle kernel and host adapters. Existing workspaces can continue
+using this path.
 
 Context OS can begin with a blank interview or selected context from another
 assistant. The result is a small, reviewable repository that Claude Code,

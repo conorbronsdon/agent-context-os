@@ -1,51 +1,31 @@
 # Context OS launch copy
 
-Drafts only. Review links, release status, and platform length before publishing.
+Draft only. Verify the linked branch or release contains the starter before publishing.
 
-## Main announcement
+## Announcement
 
-I built `agent-context-os` because I was tired of rebuilding the same context across chats, projects, and coding agents.
+I built Context OS because I kept explaining the same project to the next agent session.
 
-The project now has a clearer public name: Context OS.
+The starting point is three Markdown files: instructions, current work, and a
+handoff. Copy them into a project, fill in the context, and ask your agent to
+read them. Before stopping, review its update so the next session has the
+changes, actual verification results, and somewhere useful to resume.
 
-It keeps the durable parts of working with an agent in plain Markdown:
+The full template remains available for managed lifecycle updates, host
+adapters, and optional integrations. Start with the files and add those
+capabilities when you need them.
 
-- identity and project context
-- current priorities, blockers, and decisions
-- reusable workflows
-- reviewed session handoffs
+The starter includes a one-week trial guide. I want to learn what people still
+have to explain again, which decisions get missed, and how much maintenance
+the saved context takes. The example is illustrative; it is not a measured result.
 
-Claude Code and Codex can now use the same repository state and the same setup, start, checkpoint, and end workflow. There is also a selective migration guide for bringing useful context forward from ChatGPT, Claude, Gemini, or another assistant without dumping your full private history into Git.
-
-The new integration catalog is opt-in and explicit about what each add-on can read, write, publish, overwrite, or delete. Setup enables nothing automatically.
-
-If your AI context is scattered across five places and slowly going stale, this is the problem I want Context OS to solve.
-
-https://github.com/conorbronsdon/agent-context-os
+[Try the starter](minimal-starter.md).
 
 ## Short announcement
 
-`agent-context-os` is now Context OS: a Git-backed context and workflow layer for Claude Code and Codex.
-
-New in this release:
-
-- one shared lifecycle across both coding agents
-- a selective migration guide for ChatGPT, Claude, Gemini, and other systems
-- a safety-gated catalog of optional integrations
-- clearer setup, privacy, and maintenance docs
-
-Your durable context stays in files you can inspect, version, and move.
-
-https://github.com/conorbronsdon/agent-context-os
-
-## Changelog post
-
-Context OS update:
-
-Codex is now a first-class path, not a fork. The same repository state powers `$setup`, `$start`, `$update`, and `$end`, while Claude Code keeps its slash-command adapters.
-
-The optional integration catalog now covers portable skill collections and creator tools, plus reviewed paths for Tolaria, Obsidian, Beads, Granola, Google Workspace, Notion, and Substack. Each entry declares data access, side effects, confirmation gates, evidence, health checks, and uninstall behavior.
-
-I also rewrote the onboarding and migration docs around the actual user journey: bring forward selected context, choose a host, add only the tools you need, and keep the result current.
+Context OS now starts with three files: `AGENTS.md`, `current-work.md`, and
+`handoff.md`. Keep your objective, decisions, and last session's results beside
+your work. No installer required for the starter. Review each update, try it
+for a week, and add workflows when you need them.
 
 https://github.com/conorbronsdon/agent-context-os

@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Changed
+- Starter dates now require a host/user-supplied or checked session date, with
+  `unknown` when unavailable. The starter placeholders and guide reflect the
+  rule; README links the synthetic continuity evidence and its limits.
+- README onboarding now leads with the standalone three-file loop and keeps
+  full-template reference material in an expandable section. Getting-started,
+  positioning, and launch-copy docs distinguish the two paths. Removed the
+  author-only Used by section.
 - The v0.12 root contract now names `KernelRoot`, `ContextRoot`, and
   `WorkingRoot`, versions their colocated compatibility mode, separates the
   nominal WorkingRoot path from a possibly enclosing read-only Git evidence
@@ -28,6 +35,13 @@
   README support claims, plus strict maintainer and conformance checks.
 
 ### Added
+- `docs/minimal-starter-evidence.md` and a sanitized JSON evidence record retain
+  the continuity trial inputs and outputs, including its unsupported-date
+  finding. Both are registered in `components/manifest.json`.
+- Copyable `starter/AGENTS.md`, `starter/current-work.md`, and
+  `starter/handoff.md`, plus `docs/minimal-starter.md` with explicit session
+  prompts, a one-week evaluation, and guidance for adding capabilities.
+  `components/manifest.json` records ownership of the shipped templates and guide.
 - Digest-bound bundle composition and upgrade proposals that materialize binary
   and text component files through the existing journal, receipt, recovery, and
   rollback engine. Clean composition writes workspace configuration in the same

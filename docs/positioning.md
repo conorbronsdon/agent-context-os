@@ -6,7 +6,7 @@ The product name and the repository slug are both **Context OS** (`agent-context
 
 ## One-line description
 
-Context OS is a Git-backed context and workflow layer shared across Claude Code and Codex.
+Context OS carries your current work and decisions into the next coding-agent session, starting with three Markdown files.
 
 ## The problem
 
@@ -51,6 +51,14 @@ This is not a general knowledge base, a replacement for every notes app, or an a
 
 ## Feature hierarchy
 
-Lead with the shared repository and lifecycle. Then show migration and portability. Present integrations as optional expansion. Treat Claude Code auto-memory, `/dream`, and hooks as valuable host-specific extensions, not the definition of the whole product.
+Lead with the standalone three-file starter and one concrete session handoff.
+Name its manual review and instruction-loading requirements. Introduce the
+full template only when users need managed lifecycle updates, routing, or host
+adapters. Migration and integrations are optional additions. Treat Claude Code
+auto-memory, `/dream`, and hooks as host-specific extensions. The starter is a
+separate copyable workflow, not a smaller kernel configuration.
+
+Use the [starter trial](minimal-starter.md#evaluate-it-for-one-week) to collect
+evidence before claiming time savings or successful cross-agent resumption.
 
 Drafts that apply this language live in [launch-copy.md](launch-copy.md). Update them together when positioning changes.

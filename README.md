@@ -2,7 +2,7 @@
 
 # Context OS
 
-A portable Git-backed context and workflow layer for agents like Claude Code, Codex, Hermes, OpenClaw, Cursor, and Devin. Evolves alongside you and your agents.
+Carry your current work and decisions into the next coding-agent session. Start with three Markdown files; add workflows when you need them.
 
 [![GitHub stars](https://img.shields.io/github/stars/conorbronsdon/agent-context-os?style=social)](https://github.com/conorbronsdon/agent-context-os/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
@@ -12,6 +12,65 @@ A portable Git-backed context and workflow layer for agents like Claude Code, Co
 [![X](https://img.shields.io/badge/X-@ConorBronsdon-black?style=flat-square&logo=x)](https://x.com/ConorBronsdon)
 
 </div>
+
+## Start with three files
+
+Context OS helps you keep useful context between sessions and across coding
+agents. Start with the [three-file starter](docs/minimal-starter.md) in one
+project. It needs no installer, Python, runtime registration, or integration.
+
+| File | Purpose |
+|---|---|
+| [AGENTS.md](starter/AGENTS.md) | Instructions for reading and maintaining context |
+| [current-work.md](starter/current-work.md) | Active objective, constraints, blockers, and next action |
+| [handoff.md](starter/handoff.md) | Latest changes, verification, unfinished work, and resume point |
+
+Copy those three files into your project and fill in the placeholders. Merge
+instructions if you already have an `AGENTS.md`; do not overwrite existing files.
+Existing full-template users should try this in a separate project.
+
+At the start of a session, ask:
+
+> Read AGENTS.md, current-work.md, and handoff.md. Check the relevant project
+> files, summarize where we are, and propose the next action.
+
+Before stopping, ask:
+
+> Update current-work.md and replace handoff.md with this session's changes,
+> actual verification results, unfinished work, and where to resume. Show me
+> the diff. Do not commit or publish.
+
+Review the saved context before relying on it next time. Use these prompts
+explicitly in each agent; automatic instruction discovery varies by host.
+
+## What we tested
+
+A small simulation used Grok-generated handoffs and fresh Codex sessions on a
+CSV importer. Saved context retained decisions and helped resolve a stale
+handoff. A decision removed from both files became unknown; a generated date
+also needed correction.
+
+Read the [evidence and limits](docs/minimal-starter-evidence.md), then use the
+[one-week trial guide](docs/minimal-starter.md#evaluate-it-for-one-week) on your
+own project. The simulation supplied file contents directly; it did not test
+automatic file discovery or measure human time savings.
+
+## Add capabilities when you need them
+
+Keep the three-file loop while it is sufficient. Add topic routing when context
+grows, a skill when a procedure repeats, or stronger write coordination when
+concurrent sessions create conflicts. The [starter guide](docs/minimal-starter.md#add-structure-when-a-problem-repeats)
+maps those problems to the next addition.
+
+The full template is a Git-backed context and workflow layer. It provides
+reviewed lifecycle updates, host adapters, migration tooling, and optional
+integrations. It has additional setup and maintenance
+requirements. Follow [full-template onboarding](docs/getting-started.md#before-you-clone)
+when you need those capabilities. Existing full-template workspaces continue
+using their current commands and state files.
+
+<details>
+<summary>Full template: setup, supported agents, and reference documentation</summary>
 
 Chat history, project instructions, and copied prompts drift apart. Context OS puts the durable parts in plain Markdown: who you are, what you are working on, decisions already made, and the workflows you want an agent to follow.
 
@@ -272,17 +331,13 @@ behavior of an installed agent version or an external service.
 | Maintain workspace context and memory | [Workspace maintenance](docs/maintenance.md) |
 | Maintain the repository | [Repository maintenance](docs/repo-maintenance.md) |
 
+</details>
+
 ## Contributing
 
 This is a template. Structural contributions, clearer conventions, reusable skills, and integration catalog entries are welcome. Open an issue with the pattern and the problem it solves.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the validator, generated files, and conventions, and [SECURITY.md](SECURITY.md) to report a vulnerability privately. Issues labelled [`good first issue`](https://github.com/conorbronsdon/agent-context-os/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) need no external account or credential.
-
-## Used by
-
-- [Conor Bronsdon](https://github.com/conorbronsdon), host of the [Chain of Thought podcast](https://chainofthought.show/?utm_source=github&utm_medium=referral&utm_campaign=repo-readme&utm_content=agent-context-os)
-
-Using the template? Open a PR to add yourself.
 
 ## Disclaimer
 
