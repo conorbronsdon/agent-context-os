@@ -58,6 +58,13 @@ class ContinuityTest(unittest.TestCase):
             with self.subTest(raw=raw), self.assertRaises(ContextOSError):
                 briefing_report(self.root, NOW, sources=[raw])
 
+    def test_source_limit_counts_unique_explicit_sources(self):
+        sources = [f"selected-{i}.md" for i in range(24)]
+        self.assertEqual(29, len(briefing_report(self.root, NOW, sources=sources)["sources"]))
+        self.assertEqual(6, len(briefing_report(self.root, NOW, sources=["missing.md"] * 30)["sources"]))
+        with self.assertRaises(ContextOSError):
+            briefing_report(self.root, NOW, sources=[*sources, "one-too-many.md"])
+
     def test_linked_source_and_receipt_directory_are_not_followed(self):
         with tempfile.TemporaryDirectory() as outside:
             target = Path(outside)
@@ -135,6 +142,15 @@ class ContinuityTest(unittest.TestCase):
         for limit in (0, 101):
             with self.assertRaises(ContextOSError):
                 history_report(self.root, limit=limit)
+
+    def test_receipts_file_produces_actionable_error(self):
+        (self.root / ".context-os").mkdir(exist_ok=True)
+        (self.root / ".context-os/receipts").write_text("not a directory", encoding="utf-8")
+        with self.assertRaisesRegex(ContextOSError, "must be a directory"):
+            history_report(self.root)
+        with contextlib.redirect_stderr(io.StringIO()) as error:
+            self.assertNotEqual(0, main(["--root", str(self.root), "history"]))
+        self.assertIn("must be a directory", error.getvalue())
 
     def test_cli_json_and_markdown(self):
         for arguments, expected in ((["start", "--briefing", "--format", "json"], '"sources"'),

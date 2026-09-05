@@ -59,6 +59,8 @@ def briefing_report(
     is never interpreted as permission to expand the read set.
     """
     root = root.resolve()
+    if len(set(sources or [])) > 24:
+        raise ContextOSError("select at most 24 additional context sources")
     report = start_report(root, now, roles=roles)
     workspace = load_workspace(root)
     paths = [("ROUTING.md", "routing")]
@@ -72,8 +74,6 @@ def briefing_report(
         if path.suffix.lower() != ".md":
             raise ContextOSError("explicit context sources must be Markdown files")
         paths.append((path.relative_to(root).as_posix(), "explicit task source"))
-    if len(paths) > 30:
-        raise ContextOSError("select at most 24 additional context sources")
     selected = []
     seen = set()
     for relative, reason in paths:
@@ -123,6 +123,8 @@ def history_report(root: Path, *, limit: int = 10, path: str | None = None, deta
     entries, warnings = [], []
     candidates = []
     if directory.exists():
+        if not directory.is_dir():
+            raise ContextOSError("local receipts path must be a directory")
         for candidate in directory.iterdir():
             if candidate.suffix == ".json":
                 candidates.append(candidate)

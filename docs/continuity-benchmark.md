@@ -5,6 +5,11 @@ decisions: remembered database choice, replaced export plan, rejected retries,
 and an unresolved launch date. It tests observable answers with supporting
 sentences, rather than asking another model for a subjective grade.
 
+Run it from a **source checkout** of this repository with Python 3.10+. Selected
+release bundles omit the development script and fixtures. If you installed a
+bundle, clone the public repository into a separate disposable directory and
+run these commands there; the benchmark never needs your personal workspace.
+
 ## Compare three context profiles
 
 - `instructions`: a basic `AGENTS.md`, with no project facts. Correct behavior
