@@ -297,7 +297,9 @@ def run_lifecycle_command(
 def verify_denial_output(output: str, fixture: Path) -> None:
     if not tool_loaded_exact_skill(output, fixture, "context-start"):
         raise RuntimeError("permission denial control produced no successful allowed read")
-    exposed = {"bash", "edit"} & set(tool_names(output))
+    # This control permits only reading the skill file as data. In particular,
+    # loading it through the skill tool is denied and cannot satisfy the control.
+    exposed = set(tool_names(output)) - {"read"}
     if exposed:
         raise RuntimeError(f"denied tools were exposed to model intent: {sorted(exposed)}")
 

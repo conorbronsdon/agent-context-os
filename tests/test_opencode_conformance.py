@@ -428,7 +428,12 @@ class OpenCodeAdapterTest(unittest.TestCase):
         for output in ("", "I cannot do that", allowed.replace('"completed"', '"error"')):
             with self.assertRaisesRegex(RuntimeError, "no successful allowed read"):
                 live.verify_denial_output(output, ROOT)
-        for tool in ("bash", "edit"):
+        skill = json.dumps({"type": "tool_use", "part": {
+            "tool": "skill", "state": {"status": "completed", "input": {"name": "context-start"}}
+        }})
+        with self.assertRaisesRegex(RuntimeError, "denied tools were exposed"):
+            live.verify_denial_output(skill, ROOT)
+        for tool in ("bash", "edit", "skill", "write", "unknown_tool"):
             denied = json.dumps({"type": "tool_use", "part": {"tool": tool}})
             with self.assertRaisesRegex(RuntimeError, "denied tools were exposed"):
                 live.verify_denial_output(allowed + "\n" + denied, ROOT)
