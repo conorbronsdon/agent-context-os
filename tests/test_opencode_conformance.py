@@ -126,10 +126,19 @@ class OpenCodeAdapterTest(unittest.TestCase):
             (root / ".opencode" / ".gitignore").write_text(
                 "node_modules\n", encoding="utf-8"
             )
+            for filename in ("package.json", "package-lock.json"):
+                (root / ".opencode" / filename).write_text("{}\n", encoding="utf-8")
             dependency = root / ".opencode" / "node_modules" / "host-package"
             dependency.mkdir(parents=True)
             (dependency / "index.js").write_text("export {};\n", encoding="utf-8")
             self.assertEqual(before, live.tree_digest(root))
+            commands = root / ".opencode" / "commands"
+            commands.mkdir()
+            command = commands / "context-start.md"
+            command.write_text("original\n", encoding="utf-8")
+            with_command = live.tree_digest(root)
+            command.write_text("changed\n", encoding="utf-8")
+            self.assertNotEqual(with_command, live.tree_digest(root))
             (root / ".context-os").mkdir()
             self.assertNotEqual(before, live.tree_digest(root))
 

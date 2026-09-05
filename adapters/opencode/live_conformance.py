@@ -33,7 +33,11 @@ ISOLATED_HOST_PATH_ENV = {
     "APPDATA": "appdata",
     "LOCALAPPDATA": "localappdata",
 }
-OPENCODE_GENERATED_PATHS = {".opencode/.gitignore"}
+OPENCODE_GENERATED_PATHS = {
+    ".opencode/.gitignore",
+    ".opencode/package.json",
+    ".opencode/package-lock.json",
+}
 OPENCODE_GENERATED_PREFIXES = (".opencode/node_modules",)
 
 

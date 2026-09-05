@@ -6,6 +6,8 @@
 - OpenCode live conformance dispatches registered commands with `--command`,
   rejects failed skill loads and Windows fixture traversal, and requires
   successful tool controls under both allowed and denied permission policies.
+  Host-generated dependency manifests are excluded from the fixture digest;
+  command sources and lifecycle artifacts remain covered.
 
 ### Added
 - First-class OpenCode support now ships repository-native `AGENTS.md` and Agent

@@ -69,7 +69,8 @@ pending tool attempts do not count as evidence. It isolates host-level configura
 invocation, and its permission-denial check requires a successful allowed read
 under the denial policy, after a separate positive bash control. These checks cannot pass on a generic
 textual answer. The read-only digest excludes only OpenCode's generated
-`.opencode/.gitignore` and `.opencode/node_modules` dependency bootstrap; it
+`.opencode/.gitignore`, `.opencode/package.json`, `.opencode/package-lock.json`,
+and `.opencode/node_modules` dependency bootstrap; it
 continues covering every adapter source and `.context-os` lifecycle artifact.
 It hashes each in-tree path, type, mode, and content or symlink target, while
 deliberately ignoring filesystem link counts so excluded child directories do
