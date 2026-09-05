@@ -139,7 +139,8 @@ def copy_tracked_fixture(repo: Path, fixture: Path, commit: str) -> None:
     )
     if listed.returncode != 0:
         raise RuntimeError("could not enumerate the verified commit tree")
-    fixture.mkdir(parents=True)
+    entries: list[tuple[PurePosixPath, str, str]] = []
+    seen: dict[str, tuple[str, bool]] = {}
     for record in listed.stdout.split(b"\0"):
         if not record:
             continue
@@ -156,19 +157,41 @@ def copy_tracked_fixture(repo: Path, fixture: Path, commit: str) -> None:
             or ".." in relative.parts
             or not relative.parts
             or re.match(r"^[A-Za-z]:", relative.parts[0])
+            or any(
+                re.search(r'[<>:"|?*\x00-\x1f]', part)
+                or part.endswith((".", " "))
+                or re.fullmatch(r"(?i:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])", part.split(".")[0])
+                for part in relative.parts
+            )
         ):
             raise RuntimeError(f"unsafe tracked path: {name!r}")
         if object_type != "blob" or mode not in {"100644", "100755"}:
             raise RuntimeError(f"tracked fixture source must be a regular file: {name!r}")
+        for depth in range(1, len(relative.parts) + 1):
+            prefix = "/".join(relative.parts[:depth])
+            is_file = depth == len(relative.parts)
+            prior = seen.get(prefix.casefold())
+            if prior is not None and (prior[0] != prefix or prior[1] or is_file):
+                raise RuntimeError(f"colliding tracked path: {name!r}")
+            seen[prefix.casefold()] = (prefix, is_file)
+        entries.append((relative, mode, object_id))
+
+    # Validate the entire tree before fetching blobs or materializing any files.
+    fixture.mkdir(parents=True)
+    fixture_root = fixture.resolve()
+    for relative, mode, object_id in entries:
+        target = fixture.joinpath(*relative.parts)
+        if not target.resolve().is_relative_to(fixture_root):
+            raise RuntimeError(f"tracked target escapes fixture: {relative}")
         blob = subprocess.run(
             ["git", "cat-file", "blob", object_id], cwd=repo,
             capture_output=True, check=False,
         )
         if blob.returncode != 0:
-            raise RuntimeError(f"could not read verified blob for {name!r}")
-        target = fixture.joinpath(*relative.parts)
+            raise RuntimeError(f"could not read verified blob for {str(relative)!r}")
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(blob.stdout)
+        with target.open("xb") as output:
+            output.write(blob.stdout)
         if os.name != "nt":
             target.chmod(0o755 if mode == "100755" else 0o644)
 
@@ -212,6 +235,13 @@ def tool_names(output: str) -> list[str]:
         if event.get("type") == "tool_use" and isinstance(event.get("part"), dict):
             names.append(str(event["part"].get("tool", "")))
     return names
+
+
+def verify_lifecycle_output(output: str, fixture: Path, name: str) -> None:
+    if not tool_loaded_exact_skill(output, fixture, name):
+        raise RuntimeError(f"live {name} produced no exact-skill tool event")
+    if set(tool_names(output)) - {"skill", "read"}:
+        raise RuntimeError(f"live {name} used tools beyond skill loading")
 
 
 def bash_commands(output: str) -> list[str]:
@@ -395,10 +425,7 @@ def main() -> int:
                 result = run_lifecycle_command(binary, fixture, args.model, name)
                 if result.returncode != 0:
                     raise RuntimeError(f"live {name} failed: {result.stderr.strip()}")
-                if not tool_loaded_exact_skill(result.stdout, fixture, name):
-                    raise RuntimeError(f"live {name} produced no exact-skill tool event")
-                if set(tool_names(result.stdout)) - {"skill", "read"}:
-                    raise RuntimeError(f"live {name} used tools beyond skill loading")
+                verify_lifecycle_output(result.stdout, fixture, name)
             denial = run(
                 binary, fixture, "run", "--pure", "--format", "json", "-m", args.model,
                 "Conformance control: first use read to load "
