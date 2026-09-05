@@ -50,6 +50,15 @@ This is not a general knowledge base, a replacement for every notes app, or an a
 - "Verified integration" without the date and evidence scope. Catalog validation checks internal consistency, not continuing upstream truth.
 - "Universal agent OS." The repository provides a context and workflow layer, not a complete runtime.
 
+## Experimental starter
+
+Offer the [three-file starter](minimal-starter.md) as an optional experiment for
+sequential work on one project. A single instruction file may be sufficient.
+Do not call either format the proven default or claim human time savings.
+Name the manual read/review requirements and keep full-template onboarding
+available. The starter uses direct file updates in a separate project, not
+the full template's proposal/apply lifecycle.
+
 ## Feature hierarchy
 
 Lead with the shared repository and lifecycle. Then show migration and portability. Present integrations as optional expansion. Treat Claude Code auto-memory, `/dream`, and hooks as valuable host-specific extensions, not the definition of the whole product.

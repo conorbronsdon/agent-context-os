@@ -30,6 +30,20 @@ source of truth.
 
 Context OS does not scrape every account, sync product UIs automatically, or install integrations on setup. Imports are selective, browser-project sync is manual, and external capabilities remain opt-in.
 
+## Experimental starter for one project
+
+For a small project, try keeping the objective, decisions, and latest handoff
+in one instruction file. If separate notes help you review that context, the
+[experimental three-file starter](docs/minimal-starter.md) provides copyable
+instructions, current work, and a handoff. It needs a file-capable agent and
+manual review, with no installer or runtime registration.
+
+The starter has not been established as the preferred default. Read the
+[evidence and limits](docs/minimal-starter-evidence.md), then try the
+[one-week comparison](docs/minimal-starter.md#evaluate-it-for-one-week).
+Existing full-template users should keep their current workflow and evaluate
+the starter in a separate project.
+
 ## Quick start
 
 Try [your first reviewed handoff](docs/first-handoff.md) for a small Claude-to-Codex

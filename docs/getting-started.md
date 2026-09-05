@@ -1,4 +1,9 @@
-# Getting started with Context OS
+# Getting started with the full Context OS template
+
+For sequential work on one project, the [experimental starter](minimal-starter.md)
+is an optional trial with no setup script or runtime registration. A single
+instruction file may be sufficient. This guide covers the full template with
+its lifecycle kernel and host adapters; existing workspaces keep using this path.
 
 Context OS can begin with a blank interview or selected context from another
 assistant. The result is a small, reviewable repository that Claude Code,

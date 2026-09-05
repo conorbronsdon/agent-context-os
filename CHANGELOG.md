@@ -10,6 +10,10 @@
   command sources and lifecycle artifacts remain covered.
 
 ### Added
+- An experimental three-file starter for sequential project work, with explicit
+  read/checkpoint prompts and a one-week guide for comparing it with one file.
+  The supplied-snapshot evidence remains tracked as development material and is
+  excluded from installed core files; full-template workflows remain available.
 - Source-attributed briefing previews and readable local receipt history expose
   recorded freshness, selected context, and available proposal diffs. A guided
   first handoff and constrained continuity benchmark compare project state
