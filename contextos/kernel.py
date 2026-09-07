@@ -868,11 +868,12 @@ def _mount_projects_windows_modes(
     target: PurePosixPath,
     release: str,
     mountinfo: str,
+    expected_device: str | None = None,
 ) -> bool:
     """Classify only WSL Windows mounts that lack POSIX metadata support."""
     if "microsoft" not in release.lower():
         return False
-    best_mount: tuple[int, str, str, set[str]] | None = None
+    best_mount: tuple[int, str, str, set[str], str] | None = None
     for line in mountinfo.splitlines():
         fields = line.split()
         try:
@@ -894,14 +895,14 @@ def _mount_projects_windows_modes(
             for field in option_fields
             for option in re.split("[,;]", field)
         }
-        candidate = (len(mount_point.parts), filesystem, source, options)
+        candidate = (len(mount_point.parts), filesystem, source, options, fields[2])
         if best_mount is None or candidate[0] > best_mount[0]:
             best_mount = candidate
         elif candidate[0] == best_mount[0] and candidate[1:] != best_mount[1:]:
             return False
     if best_mount is None:
         return False
-    _depth, filesystem, source, options = best_mount
+    _depth, filesystem, source, options, device = best_mount
     windows_drive_source = (
         len(source) >= 3
         and source[0].isalpha()
@@ -909,10 +910,18 @@ def _mount_projects_windows_modes(
     )
     windows_backed = source.lower().startswith("drvfs") or windows_drive_source
     metadata_enabled = any(option.split("=", 1)[0] == "metadata" for option in options)
-    return filesystem in {"9p", "drvfs"} and windows_backed and not metadata_enabled
+    return (
+        filesystem in {"9p", "drvfs"}
+        and windows_backed
+        and not metadata_enabled
+        and (expected_device is None or device == expected_device)
+    )
 
 
-def _wsl_windows_mount_does_not_preserve_modes(path: Path) -> bool:
+def _wsl_windows_mount_does_not_preserve_modes(
+    path: Path,
+    expected_st_dev: int,
+) -> bool:
     """Detect a Windows-backed WSL mount that projects rather than stores modes."""
     if os.name != "posix":
         return False
@@ -920,7 +929,10 @@ def _wsl_windows_mount_does_not_preserve_modes(path: Path) -> bool:
         release = Path("/proc/sys/kernel/osrelease").read_text(encoding="utf-8")
         mountinfo = Path("/proc/self/mountinfo").read_text(encoding="utf-8")
         target = PurePosixPath(path.resolve(strict=False).as_posix())
-        return _mount_projects_windows_modes(target, release, mountinfo)
+        expected_device = f"{os.major(expected_st_dev)}:{os.minor(expected_st_dev)}"
+        return _mount_projects_windows_modes(
+            target, release, mountinfo, expected_device=expected_device
+        )
     except (OSError, UnicodeError, ValueError):
         return False
 
@@ -930,7 +942,8 @@ def _post_write_mode_matches(
     expected_mode: int,
     publication_anchor: Path,
 ) -> bool:
-    actual_mode = path.stat().st_mode & 0o7777
+    observed_stat = path.stat()
+    actual_mode = observed_stat.st_mode & 0o7777
     if actual_mode == expected_mode:
         return True
     permission_bits = actual_mode & 0o777
@@ -942,10 +955,13 @@ def _post_write_mode_matches(
     if (
         expected_mode != 0o644
         or not uniform_projection
+        or not os.path.samestat(observed_stat, publication_anchor.stat())
         or not _same_file(path, publication_anchor)
     ):
         return False
-    projected = _wsl_windows_mount_does_not_preserve_modes(path)
+    projected = _wsl_windows_mount_does_not_preserve_modes(
+        path, observed_stat.st_dev
+    )
     return projected and _same_file(path, publication_anchor)
 
 

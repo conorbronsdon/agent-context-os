@@ -127,7 +127,7 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
             "contextos.kernel._wsl_windows_mount_does_not_preserve_modes",
             return_value=True,
         ):
-            for actual_mode in (0o755, 0o1755):
+            for actual_mode in (0o755, 0o1755, 0o1777):
                 with self.subTest(mode=oct(actual_mode)), mock.patch.object(
                     Path,
                     "stat",
@@ -136,6 +136,38 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
                     self.assertFalse(
                         _post_write_mode_matches(target, 0o644, anchor)
                     )
+
+    def test_projected_mode_fallback_binds_observed_stat_to_anchor(self) -> None:
+        target = self.root / "target.txt"
+        target.write_text("same bytes\n", encoding="utf-8")
+        os.chmod(target, 0o666)
+        anchor = self.root / "target.anchor"
+        os.link(target, anchor)
+        unrelated = self.root / "unrelated.txt"
+        unrelated.write_text("same bytes\n", encoding="utf-8")
+        os.chmod(unrelated, 0o666)
+        original_stat = Path.stat
+        captured = False
+
+        def capture_decoy_then_restore(candidate: Path, *args, **kwargs):
+            nonlocal captured
+            if candidate == target and not captured:
+                captured = True
+                target.unlink()
+                os.link(unrelated, target)
+                decoy_stat = original_stat(target, *args, **kwargs)
+                target.unlink()
+                os.link(anchor, target)
+                return decoy_stat
+            return original_stat(candidate, *args, **kwargs)
+
+        with mock.patch.object(
+            Path, "stat", autospec=True, side_effect=capture_decoy_then_restore
+        ), mock.patch(
+            "contextos.kernel._wsl_windows_mount_does_not_preserve_modes",
+            return_value=True,
+        ):
+            self.assertFalse(_post_write_mode_matches(target, 0o644, anchor))
 
     def test_posix_mode_mismatch_still_fails(self) -> None:
         target = self.root / "strict.txt"
@@ -162,7 +194,7 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         unrelated.write_text("same bytes\n", encoding="utf-8")
         os.chmod(unrelated, 0o666)
 
-        def swap_target(_path: Path) -> bool:
+        def swap_target(_path: Path, _expected_st_dev: int) -> bool:
             target.unlink()
             os.link(unrelated, target)
             return True
@@ -211,6 +243,22 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
                 PurePosixPath("/mnt/c/work/file"),
                 "microsoft-standard-WSL2",
                 projected,
+            )
+        )
+        self.assertTrue(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/c/work/file"),
+                "microsoft-standard-WSL2",
+                projected,
+                expected_device="0:70",
+            )
+        )
+        self.assertFalse(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/c/work/file"),
+                "microsoft-standard-WSL2",
+                projected,
+                expected_device="0:71",
             )
         )
         non_windows = projected.replace("C:\\134", "server-share")
