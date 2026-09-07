@@ -168,6 +168,25 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
                 nested_posix,
             )
         )
+        malformed_before_projected = "malformed - 9p\n" + projected
+        self.assertTrue(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/c/work/file"),
+                "microsoft-standard-WSL2",
+                malformed_before_projected,
+            )
+        )
+        stacked_metadata = projected + (
+            "133 132 0:70 / /mnt/c rw - 9p C:\\134 "
+            "rw,aname=drvfs;path=C:\\;metadata\n"
+        )
+        self.assertFalse(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/c/work/file"),
+                "microsoft-standard-WSL2",
+                stacked_metadata,
+            )
+        )
         escaped_space = projected.replace("/mnt/c", "/mnt/my\\040drive")
         self.assertTrue(
             _mount_projects_windows_modes(
