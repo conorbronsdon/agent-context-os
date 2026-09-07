@@ -851,6 +851,120 @@ def _selection_components(root: Path, agents: Sequence[str]) -> list[str]:
         ) from exc
 
 
+def _decode_mountinfo_path(value: str) -> str:
+    """Decode the octal escapes used for path fields in proc mountinfo."""
+    escapes = (
+        ("\\040", " "),
+        ("\\011", "\t"),
+        ("\\012", "\n"),
+        ("\\134", "\\"),
+    )
+    for escaped, decoded in escapes:
+        value = value.replace(escaped, decoded)
+    return value
+
+
+def _mount_projects_windows_modes(
+    target: PurePosixPath,
+    release: str,
+    mountinfo: str,
+    expected_device: str | None = None,
+) -> bool:
+    """Classify only WSL Windows mounts that lack POSIX metadata support."""
+    if "microsoft" not in release.lower():
+        return False
+    best_mount: tuple[int, str, str, set[str], str] | None = None
+    for line in mountinfo.splitlines():
+        fields = line.split()
+        try:
+            separator = fields.index("-")
+        except ValueError:
+            return False
+        if separator < 6 or len(fields) < separator + 4:
+            return False
+        mount_point = PurePosixPath(_decode_mountinfo_path(fields[4]))
+        try:
+            target.relative_to(mount_point)
+        except ValueError:
+            continue
+        filesystem = fields[separator + 1]
+        source = _decode_mountinfo_path(fields[separator + 2])
+        option_fields = fields[5:separator] + fields[separator + 3 :]
+        options = {
+            option.lower()
+            for field in option_fields
+            for option in re.split("[,;]", field)
+        }
+        candidate = (len(mount_point.parts), filesystem, source, options, fields[2])
+        if best_mount is None or candidate[0] > best_mount[0]:
+            best_mount = candidate
+        elif candidate[0] == best_mount[0] and candidate[1:] != best_mount[1:]:
+            return False
+    if best_mount is None:
+        return False
+    _depth, filesystem, source, options, device = best_mount
+    windows_drive_source = (
+        len(source) >= 3
+        and source[0].isalpha()
+        and source[1:3] == ":\\"
+    )
+    windows_backed = source.lower().startswith("drvfs") or windows_drive_source
+    metadata_enabled = any(option.split("=", 1)[0] == "metadata" for option in options)
+    return (
+        filesystem in {"9p", "drvfs"}
+        and windows_backed
+        and not metadata_enabled
+        and (expected_device is None or device == expected_device)
+    )
+
+
+def _wsl_windows_mount_does_not_preserve_modes(
+    path: Path,
+    expected_st_dev: int,
+) -> bool:
+    """Detect a Windows-backed WSL mount that projects rather than stores modes."""
+    if os.name != "posix":
+        return False
+    try:
+        release = Path("/proc/sys/kernel/osrelease").read_text(encoding="utf-8")
+        mountinfo = Path("/proc/self/mountinfo").read_text(encoding="utf-8")
+        target = PurePosixPath(path.resolve(strict=False).as_posix())
+        expected_device = f"{os.major(expected_st_dev)}:{os.minor(expected_st_dev)}"
+        return _mount_projects_windows_modes(
+            target, release, mountinfo, expected_device=expected_device
+        )
+    except (OSError, UnicodeError, ValueError):
+        return False
+
+
+def _post_write_mode_matches(
+    path: Path,
+    expected_mode: int,
+    publication_anchor: Path,
+) -> bool:
+    observed_stat = path.stat()
+    actual_mode = observed_stat.st_mode & 0o7777
+    if actual_mode == expected_mode:
+        return True
+    permission_bits = actual_mode & 0o777
+    uniform_projection = (
+        actual_mode & 0o7000 == 0
+        and permission_bits >> 6 == permission_bits >> 3 & 0o7
+        and permission_bits >> 6 == permission_bits & 0o7
+    )
+    if (
+        expected_mode != 0o644
+        or not uniform_projection
+        or not os.path.samestat(observed_stat, publication_anchor.stat())
+        or not _same_file(path, publication_anchor)
+    ):
+        return False
+    projected = _wsl_windows_mount_does_not_preserve_modes(
+        path, observed_stat.st_dev
+    )
+    return projected and _same_file(path, publication_anchor)
+
+
 def _workspace_component_ids(root: Path) -> list[str] | None:
     component_path = safe_repo_path(root, "components/manifest.json")
     if not component_path.exists():
@@ -4219,7 +4333,9 @@ def apply_proposal(
                     expected_mode = change["after_mode"]
                     if (
                         change["action"] == "write"
-                        and path.stat().st_mode & 0o7777 != expected_mode
+                        and not _post_write_mode_matches(
+                            path, expected_mode, publication_anchors[path]
+                        )
                     ):
                         raise ContextOSError(
                             f"agent-config post-write mode is invalid: {change['path']}"
@@ -4249,7 +4365,9 @@ def apply_proposal(
                         if backup_modes[path] is not None
                         else NEW_CONTENT_MODE
                     )
-                    if path.stat().st_mode & 0o7777 != expected_mode:
+                    if not _post_write_mode_matches(
+                        path, expected_mode, publication_anchors[path]
+                    ):
                         raise ContextOSError(
                             f"content post-write mode is invalid: {change['path']}"
                         )

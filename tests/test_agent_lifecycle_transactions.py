@@ -14,7 +14,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stdout
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from unittest import mock
 
 from contextos.cli import main as cli_main
@@ -25,7 +25,9 @@ from contextos.kernel import (
     _create_agent_journal,
     _discard_agent_journal,
     _fsync_directory,
+    _mount_projects_windows_modes,
     _prepare_publication_anchor,
+    _post_write_mode_matches,
     _publish_exclusive,
     _recover_pending_agent_journals,
     _rmtree_readonly_artifacts,
@@ -102,6 +104,235 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
             if path.exists():
                 self.assertEqual([], list(path.iterdir()), folder)
         self.assertFalse((self.root / ".context-os/apply.lock").exists())
+
+    def test_wsl_windows_mount_accepts_projected_post_write_mode(self) -> None:
+        target = self.root / "projected.txt"
+        target.write_text("fixture\n", encoding="utf-8")
+        os.chmod(target, 0o666)
+        anchor = self.root / "projected.anchor"
+        os.link(target, anchor)
+        with mock.patch(
+            "contextos.kernel._wsl_windows_mount_does_not_preserve_modes",
+            return_value=True,
+        ):
+            self.assertTrue(_post_write_mode_matches(target, 0o644, anchor))
+            self.assertFalse(_post_write_mode_matches(target, 0o600, anchor))
+
+    def test_projected_mode_fallback_rejects_mixed_or_special_modes(self) -> None:
+        target = self.root / "projected.txt"
+        target.write_text("fixture\n", encoding="utf-8")
+        anchor = self.root / "projected.anchor"
+        os.link(target, anchor)
+        with mock.patch(
+            "contextos.kernel._wsl_windows_mount_does_not_preserve_modes",
+            return_value=True,
+        ):
+            for actual_mode in (0o755, 0o1755, 0o1777):
+                with self.subTest(mode=oct(actual_mode)), mock.patch.object(
+                    Path,
+                    "stat",
+                    return_value=mock.Mock(st_mode=stat.S_IFREG | actual_mode),
+                ):
+                    self.assertFalse(
+                        _post_write_mode_matches(target, 0o644, anchor)
+                    )
+
+    def test_projected_mode_fallback_binds_observed_stat_to_anchor(self) -> None:
+        target = self.root / "target.txt"
+        target.write_text("same bytes\n", encoding="utf-8")
+        os.chmod(target, 0o666)
+        anchor = self.root / "target.anchor"
+        os.link(target, anchor)
+        unrelated = self.root / "unrelated.txt"
+        unrelated.write_text("same bytes\n", encoding="utf-8")
+        os.chmod(unrelated, 0o666)
+        original_stat = Path.stat
+        captured = False
+
+        def capture_decoy_then_restore(candidate: Path, *args, **kwargs):
+            nonlocal captured
+            if candidate == target and not captured:
+                captured = True
+                target.unlink()
+                os.link(unrelated, target)
+                decoy_stat = original_stat(target, *args, **kwargs)
+                target.unlink()
+                os.link(anchor, target)
+                return decoy_stat
+            return original_stat(candidate, *args, **kwargs)
+
+        with mock.patch.object(
+            Path, "stat", autospec=True, side_effect=capture_decoy_then_restore
+        ), mock.patch(
+            "contextos.kernel._wsl_windows_mount_does_not_preserve_modes",
+            return_value=True,
+        ):
+            self.assertFalse(_post_write_mode_matches(target, 0o644, anchor))
+
+    def test_posix_mode_mismatch_still_fails(self) -> None:
+        target = self.root / "strict.txt"
+        target.write_text("fixture\n", encoding="utf-8")
+        anchor = self.root / "strict.anchor"
+        os.link(target, anchor)
+        actual_mode = target.stat().st_mode & 0o7777
+        mismatched_mode = actual_mode ^ 0o100
+        with mock.patch(
+            "contextos.kernel._wsl_windows_mount_does_not_preserve_modes",
+            return_value=False,
+        ):
+            self.assertFalse(
+                _post_write_mode_matches(target, mismatched_mode, anchor)
+            )
+
+    def test_projected_mode_fallback_rejects_target_identity_swap(self) -> None:
+        target = self.root / "target.txt"
+        target.write_text("same bytes\n", encoding="utf-8")
+        os.chmod(target, 0o666)
+        anchor = self.root / "target.anchor"
+        os.link(target, anchor)
+        unrelated = self.root / "unrelated.txt"
+        unrelated.write_text("same bytes\n", encoding="utf-8")
+        os.chmod(unrelated, 0o666)
+
+        def swap_target(_path: Path, _expected_st_dev: int) -> bool:
+            target.unlink()
+            os.link(unrelated, target)
+            return True
+
+        with mock.patch(
+            "contextos.kernel._wsl_windows_mount_does_not_preserve_modes",
+            side_effect=swap_target,
+        ):
+            self.assertFalse(_post_write_mode_matches(target, 0o644, anchor))
+
+    def test_agent_config_apply_rolls_back_when_mode_guard_rejects(self) -> None:
+        path, proposal = self.propose()
+        with mock.patch(
+            "contextos.kernel._post_write_mode_matches",
+            return_value=False,
+        ), self.assertRaisesRegex(ContextOSError, "post-write mode is invalid"):
+            self.apply(path, proposal)
+        self.assertTrue((self.root / "workspace.yaml").exists())
+        self.assertFalse((self.root / "contextos.workspace.json").exists())
+        self.assert_no_transaction_artifacts()
+
+    def test_wsl_metadata_mount_remains_strict(self) -> None:
+        metadata_mountinfo = (
+            "132 82 0:70 / /mnt/c rw,noatime - 9p C:\\134 "
+            "rw,aname=drvfs;path=C:\\;metadata\n"
+        )
+        for mountinfo in (
+            metadata_mountinfo,
+            metadata_mountinfo.replace(";metadata", ";metadata=1"),
+        ):
+            self.assertFalse(
+                _mount_projects_windows_modes(
+                    PurePosixPath("/mnt/c/work/file"),
+                    "microsoft-standard-WSL2",
+                    mountinfo,
+                )
+            )
+
+    def test_wsl_projected_mount_parser_is_narrow_and_defensive(self) -> None:
+        projected = (
+            "132 82 0:70 / /mnt/c rw,noatime - 9p C:\\134 "
+            "rw,aname=drvfs;path=C:\\\n"
+        )
+        self.assertTrue(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/c/work/file"),
+                "microsoft-standard-WSL2",
+                projected,
+            )
+        )
+        self.assertTrue(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/c/work/file"),
+                "microsoft-standard-WSL2",
+                projected,
+                expected_device="0:70",
+            )
+        )
+        self.assertFalse(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/c/work/file"),
+                "microsoft-standard-WSL2",
+                projected,
+                expected_device="0:71",
+            )
+        )
+        non_windows = projected.replace("C:\\134", "server-share")
+        self.assertFalse(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/c/work/file"),
+                "microsoft-standard-WSL2",
+                non_windows,
+            )
+        )
+        nested_posix = projected + (
+            "133 132 0:71 / /mnt/c/work rw - ext4 /dev/sda rw\n"
+        )
+        self.assertFalse(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/c/work/file"),
+                "microsoft-standard-WSL2",
+                nested_posix,
+            )
+        )
+        malformed_before_projected = "malformed - 9p\n" + projected
+        self.assertFalse(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/c/work/file"),
+                "microsoft-standard-WSL2",
+                malformed_before_projected,
+            )
+        )
+        no_separator = "malformed mount record\n"
+        for malformed_mountinfo in (
+            no_separator + projected,
+            projected + no_separator,
+        ):
+            self.assertFalse(
+                _mount_projects_windows_modes(
+                    PurePosixPath("/mnt/c/work/file"),
+                    "microsoft-standard-WSL2",
+                    malformed_mountinfo,
+                )
+            )
+        stacked_metadata = projected + (
+            "133 132 0:70 / /mnt/c rw - 9p C:\\134 "
+            "rw,aname=drvfs;path=C:\\;metadata\n"
+        )
+        self.assertFalse(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/c/work/file"),
+                "microsoft-standard-WSL2",
+                stacked_metadata,
+            )
+        )
+        reverse_stacked_metadata = stacked_metadata.splitlines(keepends=True)
+        self.assertFalse(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/c/work/file"),
+                "microsoft-standard-WSL2",
+                "".join(reversed(reverse_stacked_metadata)),
+            )
+        )
+        escaped_space = projected.replace("/mnt/c", "/mnt/my\\040drive")
+        self.assertTrue(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/my drive/work/file"),
+                "microsoft-standard-WSL2",
+                escaped_space,
+            )
+        )
+        self.assertFalse(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/c/work/file"),
+                "microsoft-standard-WSL2",
+                "malformed - 9p\n",
+            )
+        )
 
     def test_legacy_migration_is_atomic_write_delete_with_evidence(self) -> None:
         legacy = self.root / "workspace.yaml"
