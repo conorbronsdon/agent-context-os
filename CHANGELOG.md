@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Fixed
+- Pin validation actions to immutable commits and label the OpenClaw gateway
+  test token as synthetic without changing its authorization controls.
 - OpenCode live conformance dispatches registered commands with `--command`,
   rejects failed skill loads and Windows fixture traversal, and requires
   successful tool controls under both allowed and denied permission policies.
@@ -10,6 +12,9 @@
   command sources and lifecycle artifacts remain covered.
 
 ### Added
+- A Codex workspace-companion plugin that routes to an explicitly selected
+  workspace without importing context or installing hooks. Distribution files
+  are development-owned and are not copied into composed workspaces.
 - An experimental three-file starter for sequential project work, with explicit
   read/checkpoint prompts and a one-week guide for comparing it with one file.
   The supplied-snapshot evidence remains tracked as development material and is
