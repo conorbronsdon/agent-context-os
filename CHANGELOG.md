@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Fixed
+- Freeze the apply-time clock in four coordination promotion tests so fixed-date
+  message fixtures do not expire as wall-clock time advances.
 - Pin validation actions to immutable commits and label the OpenClaw gateway
   test token as synthetic without changing its authorization controls.
 - OpenCode live conformance dispatches registered commands with `--command`,
