@@ -933,7 +933,17 @@ def _post_write_mode_matches(
     actual_mode = path.stat().st_mode & 0o7777
     if actual_mode == expected_mode:
         return True
-    if expected_mode != 0o644 or not _same_file(path, publication_anchor):
+    permission_bits = actual_mode & 0o777
+    uniform_projection = (
+        actual_mode & 0o7000 == 0
+        and permission_bits >> 6 == permission_bits >> 3 & 0o7
+        and permission_bits >> 6 == permission_bits & 0o7
+    )
+    if (
+        expected_mode != 0o644
+        or not uniform_projection
+        or not _same_file(path, publication_anchor)
+    ):
         return False
     projected = _wsl_windows_mount_does_not_preserve_modes(path)
     return projected and _same_file(path, publication_anchor)

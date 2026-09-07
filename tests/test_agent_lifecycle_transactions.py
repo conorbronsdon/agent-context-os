@@ -118,6 +118,25 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
             self.assertTrue(_post_write_mode_matches(target, 0o644, anchor))
             self.assertFalse(_post_write_mode_matches(target, 0o600, anchor))
 
+    def test_projected_mode_fallback_rejects_mixed_or_special_modes(self) -> None:
+        target = self.root / "projected.txt"
+        target.write_text("fixture\n", encoding="utf-8")
+        anchor = self.root / "projected.anchor"
+        os.link(target, anchor)
+        with mock.patch(
+            "contextos.kernel._wsl_windows_mount_does_not_preserve_modes",
+            return_value=True,
+        ):
+            for actual_mode in (0o755, 0o1755):
+                with self.subTest(mode=oct(actual_mode)), mock.patch.object(
+                    Path,
+                    "stat",
+                    return_value=mock.Mock(st_mode=stat.S_IFREG | actual_mode),
+                ):
+                    self.assertFalse(
+                        _post_write_mode_matches(target, 0o644, anchor)
+                    )
+
     def test_posix_mode_mismatch_still_fails(self) -> None:
         target = self.root / "strict.txt"
         target.write_text("fixture\n", encoding="utf-8")
