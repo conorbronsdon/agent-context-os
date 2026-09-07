@@ -925,12 +925,18 @@ def _wsl_windows_mount_does_not_preserve_modes(path: Path) -> bool:
         return False
 
 
-def _post_write_mode_matches(path: Path, expected_mode: int) -> bool:
+def _post_write_mode_matches(
+    path: Path,
+    expected_mode: int,
+    publication_anchor: Path,
+) -> bool:
     actual_mode = path.stat().st_mode & 0o7777
-    return (
-        actual_mode == expected_mode
-        or _wsl_windows_mount_does_not_preserve_modes(path)
-    )
+    if actual_mode == expected_mode:
+        return True
+    if expected_mode != 0o644 or not _same_file(path, publication_anchor):
+        return False
+    projected = _wsl_windows_mount_does_not_preserve_modes(path)
+    return projected and _same_file(path, publication_anchor)
 
 
 def _workspace_component_ids(root: Path) -> list[str] | None:
@@ -4301,7 +4307,9 @@ def apply_proposal(
                     expected_mode = change["after_mode"]
                     if (
                         change["action"] == "write"
-                        and not _post_write_mode_matches(path, expected_mode)
+                        and not _post_write_mode_matches(
+                            path, expected_mode, publication_anchors[path]
+                        )
                     ):
                         raise ContextOSError(
                             f"agent-config post-write mode is invalid: {change['path']}"
@@ -4331,7 +4339,9 @@ def apply_proposal(
                         if backup_modes[path] is not None
                         else NEW_CONTENT_MODE
                     )
-                    if not _post_write_mode_matches(path, expected_mode):
+                    if not _post_write_mode_matches(
+                        path, expected_mode, publication_anchors[path]
+                    ):
                         raise ContextOSError(
                             f"content post-write mode is invalid: {change['path']}"
                         )

@@ -108,22 +108,51 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
     def test_wsl_windows_mount_accepts_projected_post_write_mode(self) -> None:
         target = self.root / "projected.txt"
         target.write_text("fixture\n", encoding="utf-8")
+        os.chmod(target, 0o666)
+        anchor = self.root / "projected.anchor"
+        os.link(target, anchor)
         with mock.patch(
             "contextos.kernel._wsl_windows_mount_does_not_preserve_modes",
             return_value=True,
         ):
-            self.assertTrue(_post_write_mode_matches(target, 0o600))
+            self.assertTrue(_post_write_mode_matches(target, 0o644, anchor))
+            self.assertFalse(_post_write_mode_matches(target, 0o600, anchor))
 
     def test_posix_mode_mismatch_still_fails(self) -> None:
         target = self.root / "strict.txt"
         target.write_text("fixture\n", encoding="utf-8")
+        anchor = self.root / "strict.anchor"
+        os.link(target, anchor)
         actual_mode = target.stat().st_mode & 0o7777
         mismatched_mode = actual_mode ^ 0o100
         with mock.patch(
             "contextos.kernel._wsl_windows_mount_does_not_preserve_modes",
             return_value=False,
         ):
-            self.assertFalse(_post_write_mode_matches(target, mismatched_mode))
+            self.assertFalse(
+                _post_write_mode_matches(target, mismatched_mode, anchor)
+            )
+
+    def test_projected_mode_fallback_rejects_target_identity_swap(self) -> None:
+        target = self.root / "target.txt"
+        target.write_text("same bytes\n", encoding="utf-8")
+        os.chmod(target, 0o666)
+        anchor = self.root / "target.anchor"
+        os.link(target, anchor)
+        unrelated = self.root / "unrelated.txt"
+        unrelated.write_text("same bytes\n", encoding="utf-8")
+        os.chmod(unrelated, 0o666)
+
+        def swap_target(_path: Path) -> bool:
+            target.unlink()
+            os.link(unrelated, target)
+            return True
+
+        with mock.patch(
+            "contextos.kernel._wsl_windows_mount_does_not_preserve_modes",
+            side_effect=swap_target,
+        ):
+            self.assertFalse(_post_write_mode_matches(target, 0o644, anchor))
 
     def test_agent_config_apply_rolls_back_when_mode_guard_rejects(self) -> None:
         path, proposal = self.propose()
