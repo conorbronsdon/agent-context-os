@@ -908,7 +908,8 @@ def _mount_projects_windows_modes(
         and source[1:3] == ":\\"
     )
     windows_backed = source.lower().startswith("drvfs") or windows_drive_source
-    return filesystem in {"9p", "drvfs"} and windows_backed and "metadata" not in options
+    metadata_enabled = any(option.split("=", 1)[0] == "metadata" for option in options)
+    return filesystem in {"9p", "drvfs"} and windows_backed and not metadata_enabled
 
 
 def _wsl_windows_mount_does_not_preserve_modes(path: Path) -> bool:

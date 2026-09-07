@@ -125,18 +125,33 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
         ):
             self.assertFalse(_post_write_mode_matches(target, mismatched_mode))
 
+    def test_agent_config_apply_rolls_back_when_mode_guard_rejects(self) -> None:
+        path, proposal = self.propose()
+        with mock.patch(
+            "contextos.kernel._post_write_mode_matches",
+            return_value=False,
+        ), self.assertRaisesRegex(ContextOSError, "post-write mode is invalid"):
+            self.apply(path, proposal)
+        self.assertTrue((self.root / "workspace.yaml").exists())
+        self.assertFalse((self.root / "contextos.workspace.json").exists())
+        self.assert_no_transaction_artifacts()
+
     def test_wsl_metadata_mount_remains_strict(self) -> None:
-        mountinfo = (
+        metadata_mountinfo = (
             "132 82 0:70 / /mnt/c rw,noatime - 9p C:\\134 "
             "rw,aname=drvfs;path=C:\\;metadata\n"
         )
-        self.assertFalse(
-            _mount_projects_windows_modes(
-                PurePosixPath("/mnt/c/work/file"),
-                "microsoft-standard-WSL2",
-                mountinfo,
+        for mountinfo in (
+            metadata_mountinfo,
+            metadata_mountinfo.replace(";metadata", ";metadata=1"),
+        ):
+            self.assertFalse(
+                _mount_projects_windows_modes(
+                    PurePosixPath("/mnt/c/work/file"),
+                    "microsoft-standard-WSL2",
+                    mountinfo,
+                )
             )
-        )
 
     def test_wsl_projected_mount_parser_is_narrow_and_defensive(self) -> None:
         projected = (
