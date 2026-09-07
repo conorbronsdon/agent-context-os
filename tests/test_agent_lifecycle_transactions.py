@@ -14,7 +14,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stdout
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from unittest import mock
 
 from contextos.cli import main as cli_main
@@ -25,7 +25,9 @@ from contextos.kernel import (
     _create_agent_journal,
     _discard_agent_journal,
     _fsync_directory,
+    _mount_projects_windows_modes,
     _prepare_publication_anchor,
+    _post_write_mode_matches,
     _publish_exclusive,
     _recover_pending_agent_journals,
     _rmtree_readonly_artifacts,
@@ -102,6 +104,85 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
             if path.exists():
                 self.assertEqual([], list(path.iterdir()), folder)
         self.assertFalse((self.root / ".context-os/apply.lock").exists())
+
+    def test_wsl_windows_mount_accepts_projected_post_write_mode(self) -> None:
+        target = self.root / "projected.txt"
+        target.write_text("fixture\n", encoding="utf-8")
+        with mock.patch(
+            "contextos.kernel._wsl_windows_mount_does_not_preserve_modes",
+            return_value=True,
+        ):
+            self.assertTrue(_post_write_mode_matches(target, 0o600))
+
+    def test_posix_mode_mismatch_still_fails(self) -> None:
+        target = self.root / "strict.txt"
+        target.write_text("fixture\n", encoding="utf-8")
+        actual_mode = target.stat().st_mode & 0o7777
+        mismatched_mode = actual_mode ^ 0o100
+        with mock.patch(
+            "contextos.kernel._wsl_windows_mount_does_not_preserve_modes",
+            return_value=False,
+        ):
+            self.assertFalse(_post_write_mode_matches(target, mismatched_mode))
+
+    def test_wsl_metadata_mount_remains_strict(self) -> None:
+        mountinfo = (
+            "132 82 0:70 / /mnt/c rw,noatime - 9p C:\\134 "
+            "rw,aname=drvfs;path=C:\\;metadata\n"
+        )
+        self.assertFalse(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/c/work/file"),
+                "microsoft-standard-WSL2",
+                mountinfo,
+            )
+        )
+
+    def test_wsl_projected_mount_parser_is_narrow_and_defensive(self) -> None:
+        projected = (
+            "132 82 0:70 / /mnt/c rw,noatime - 9p C:\\134 "
+            "rw,aname=drvfs;path=C:\\\n"
+        )
+        self.assertTrue(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/c/work/file"),
+                "microsoft-standard-WSL2",
+                projected,
+            )
+        )
+        non_windows = projected.replace("C:\\134", "server-share")
+        self.assertFalse(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/c/work/file"),
+                "microsoft-standard-WSL2",
+                non_windows,
+            )
+        )
+        nested_posix = projected + (
+            "133 132 0:71 / /mnt/c/work rw - ext4 /dev/sda rw\n"
+        )
+        self.assertFalse(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/c/work/file"),
+                "microsoft-standard-WSL2",
+                nested_posix,
+            )
+        )
+        escaped_space = projected.replace("/mnt/c", "/mnt/my\\040drive")
+        self.assertTrue(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/my drive/work/file"),
+                "microsoft-standard-WSL2",
+                escaped_space,
+            )
+        )
+        self.assertFalse(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/c/work/file"),
+                "microsoft-standard-WSL2",
+                "malformed - 9p\n",
+            )
+        )
 
     def test_legacy_migration_is_atomic_write_delete_with_evidence(self) -> None:
         legacy = self.root / "workspace.yaml"

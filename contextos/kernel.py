@@ -851,6 +851,82 @@ def _selection_components(root: Path, agents: Sequence[str]) -> list[str]:
         ) from exc
 
 
+def _decode_mountinfo_path(value: str) -> str:
+    """Decode the octal escapes used for path fields in proc mountinfo."""
+    escapes = (
+        ("\\040", " "),
+        ("\\011", "\t"),
+        ("\\012", "\n"),
+        ("\\134", "\\"),
+    )
+    for escaped, decoded in escapes:
+        value = value.replace(escaped, decoded)
+    return value
+
+
+def _mount_projects_windows_modes(
+    target: PurePosixPath,
+    release: str,
+    mountinfo: str,
+) -> bool:
+    """Classify only WSL Windows mounts that lack POSIX metadata support."""
+    if "microsoft" not in release.lower():
+        return False
+    best_mount: tuple[int, str, str, set[str]] | None = None
+    for line in mountinfo.splitlines():
+        fields = line.split()
+        try:
+            separator = fields.index("-")
+            if separator < 6 or len(fields) < separator + 4:
+                return False
+            mount_point = PurePosixPath(_decode_mountinfo_path(fields[4]))
+            target.relative_to(mount_point)
+            filesystem = fields[separator + 1]
+            source = _decode_mountinfo_path(fields[separator + 2])
+            option_fields = fields[5:separator] + fields[separator + 3 :]
+        except (IndexError, ValueError):
+            continue
+        options = {
+            option.lower()
+            for field in option_fields
+            for option in re.split("[,;]", field)
+        }
+        candidate = (len(mount_point.parts), filesystem, source, options)
+        if best_mount is None or candidate[0] > best_mount[0]:
+            best_mount = candidate
+    if best_mount is None:
+        return False
+    _depth, filesystem, source, options = best_mount
+    windows_drive_source = (
+        len(source) >= 3
+        and source[0].isalpha()
+        and source[1:3] == ":\\"
+    )
+    windows_backed = source.lower().startswith("drvfs") or windows_drive_source
+    return filesystem in {"9p", "drvfs"} and windows_backed and "metadata" not in options
+
+
+def _wsl_windows_mount_does_not_preserve_modes(path: Path) -> bool:
+    """Detect a Windows-backed WSL mount that projects rather than stores modes."""
+    if os.name != "posix":
+        return False
+    try:
+        release = Path("/proc/sys/kernel/osrelease").read_text(encoding="utf-8")
+        mountinfo = Path("/proc/self/mountinfo").read_text(encoding="utf-8")
+        target = PurePosixPath(path.resolve(strict=False).as_posix())
+        return _mount_projects_windows_modes(target, release, mountinfo)
+    except (OSError, UnicodeError, ValueError):
+        return False
+
+
+def _post_write_mode_matches(path: Path, expected_mode: int) -> bool:
+    actual_mode = path.stat().st_mode & 0o7777
+    return (
+        actual_mode == expected_mode
+        or _wsl_windows_mount_does_not_preserve_modes(path)
+    )
+
+
 def _workspace_component_ids(root: Path) -> list[str] | None:
     component_path = safe_repo_path(root, "components/manifest.json")
     if not component_path.exists():
@@ -4219,7 +4295,7 @@ def apply_proposal(
                     expected_mode = change["after_mode"]
                     if (
                         change["action"] == "write"
-                        and path.stat().st_mode & 0o7777 != expected_mode
+                        and not _post_write_mode_matches(path, expected_mode)
                     ):
                         raise ContextOSError(
                             f"agent-config post-write mode is invalid: {change['path']}"
@@ -4249,7 +4325,7 @@ def apply_proposal(
                         if backup_modes[path] is not None
                         else NEW_CONTENT_MODE
                     )
-                    if path.stat().st_mode & 0o7777 != expected_mode:
+                    if not _post_write_mode_matches(path, expected_mode):
                         raise ContextOSError(
                             f"content post-write mode is invalid: {change['path']}"
                         )
