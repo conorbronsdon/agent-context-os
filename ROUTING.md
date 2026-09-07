@@ -36,6 +36,11 @@ For tasks without a slash command, use this table to determine which files to lo
   `scripts/validate-all.sh --workspace`
 
 ## Agent migration
+
+For the optional Codex `contextos-workspace` plugin, read
+`docs/codex-onboarding.md`. It routes to a selected workspace, not plugin-local
+state; repository-native lifecycle skills remain canonical.
+
 - Importing selected context from an assistant, project, memory export, or account export → read `docs/migration-guide.md`, then use Claude Code `/setup` or portable `$context-setup`
 - Migrating selected Gemini CLI configuration or workflows → Claude Code `/migrate-gemini`; portable skill `$migrate-gemini`
 - Discovering repeated workflows from selected Gemini sessions → Claude Code `/mine-gemini-workflows`; portable skill `$mine-gemini-workflows`

@@ -988,6 +988,8 @@ class CoordinationTests(unittest.TestCase):
             + synced["scan"]["claim_bytes_read"],
         )
 
+    # Apply revalidates expiry against utc_now; use the fixture timeline, not the wall clock.
+    @mock.patch.object(coordination, "utc_now", lambda: NOW + timedelta(hours=1))
     def test_promotion_requires_exact_digest_and_preserves_source(self) -> None:
         self._prepare_workspace()
         message = post_message(
@@ -1090,6 +1092,7 @@ class CoordinationTests(unittest.TestCase):
             )
         self.assertEqual(before, decisions.read_text(encoding="utf-8"))
 
+    @mock.patch.object(coordination, "utc_now", lambda: NOW + timedelta(hours=1))
     def test_promotion_rolls_back_second_source_validation_failure(self) -> None:
         self._prepare_workspace()
         message = post_message(
@@ -1133,6 +1136,7 @@ class CoordinationTests(unittest.TestCase):
         journals = self.repo_a / ".context-os" / "journals"
         self.assertEqual([], list(journals.iterdir()))
 
+    @mock.patch.object(coordination, "utc_now", lambda: NOW + timedelta(hours=1))
     def test_promotion_retires_committed_journal_during_recovery(self) -> None:
         self._prepare_workspace()
         message = post_message(
@@ -1168,6 +1172,7 @@ class CoordinationTests(unittest.TestCase):
             (self.repo_a / "state" / "decisions.md").read_text(encoding="utf-8"),
         )
 
+    @mock.patch.object(coordination, "utc_now", lambda: NOW + timedelta(hours=1))
     def test_promotion_tolerates_unrelated_update_and_writes_handoff(self) -> None:
         self._prepare_workspace()
         source = post_message(

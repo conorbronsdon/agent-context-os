@@ -73,6 +73,10 @@
                     "policy": "development"
                 },
                 {
+                    "path": ".github/dependabot.yml",
+                    "policy": "development"
+                },
+                {
                     "path": ".github/workflows/validate.yml",
                     "policy": "development"
                 },
@@ -1010,6 +1014,22 @@
                 "openai-skill-metadata"
             ],
             "paths": [
+                {
+                    "path": ".codex-plugin/plugin.json",
+                    "policy": "development"
+                },
+                {
+                    "path": ".codexignore",
+                    "policy": "development"
+                },
+                {
+                    "path": "skills/contextos-workspace/SKILL.md",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_codex_plugin_package.py",
+                    "policy": "development"
+                },
                 {
                     "path": ".codex/hooks.json",
                     "policy": "managed"
