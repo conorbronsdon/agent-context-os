@@ -877,15 +877,18 @@ def _mount_projects_windows_modes(
         fields = line.split()
         try:
             separator = fields.index("-")
-            if separator < 6 or len(fields) < separator + 4:
-                return False
-            mount_point = PurePosixPath(_decode_mountinfo_path(fields[4]))
+        except ValueError:
+            return False
+        if separator < 6 or len(fields) < separator + 4:
+            return False
+        mount_point = PurePosixPath(_decode_mountinfo_path(fields[4]))
+        try:
             target.relative_to(mount_point)
-            filesystem = fields[separator + 1]
-            source = _decode_mountinfo_path(fields[separator + 2])
-            option_fields = fields[5:separator] + fields[separator + 3 :]
-        except (IndexError, ValueError):
+        except ValueError:
             continue
+        filesystem = fields[separator + 1]
+        source = _decode_mountinfo_path(fields[separator + 2])
+        option_fields = fields[5:separator] + fields[separator + 3 :]
         options = {
             option.lower()
             for field in option_fields

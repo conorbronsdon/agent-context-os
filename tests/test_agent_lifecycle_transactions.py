@@ -176,6 +176,18 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
                 malformed_before_projected,
             )
         )
+        no_separator = "malformed mount record\n"
+        for malformed_mountinfo in (
+            no_separator + projected,
+            projected + no_separator,
+        ):
+            self.assertFalse(
+                _mount_projects_windows_modes(
+                    PurePosixPath("/mnt/c/work/file"),
+                    "microsoft-standard-WSL2",
+                    malformed_mountinfo,
+                )
+            )
         stacked_metadata = projected + (
             "133 132 0:70 / /mnt/c rw - 9p C:\\134 "
             "rw,aname=drvfs;path=C:\\;metadata\n"
