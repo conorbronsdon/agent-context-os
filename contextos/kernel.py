@@ -878,7 +878,7 @@ def _mount_projects_windows_modes(
         try:
             separator = fields.index("-")
             if separator < 6 or len(fields) < separator + 4:
-                continue
+                return False
             mount_point = PurePosixPath(_decode_mountinfo_path(fields[4]))
             target.relative_to(mount_point)
             filesystem = fields[separator + 1]
@@ -892,8 +892,10 @@ def _mount_projects_windows_modes(
             for option in re.split("[,;]", field)
         }
         candidate = (len(mount_point.parts), filesystem, source, options)
-        if best_mount is None or candidate[0] >= best_mount[0]:
+        if best_mount is None or candidate[0] > best_mount[0]:
             best_mount = candidate
+        elif candidate[0] == best_mount[0] and candidate[1:] != best_mount[1:]:
+            return False
     if best_mount is None:
         return False
     _depth, filesystem, source, options = best_mount

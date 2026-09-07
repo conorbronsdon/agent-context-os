@@ -169,7 +169,7 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
             )
         )
         malformed_before_projected = "malformed - 9p\n" + projected
-        self.assertTrue(
+        self.assertFalse(
             _mount_projects_windows_modes(
                 PurePosixPath("/mnt/c/work/file"),
                 "microsoft-standard-WSL2",
@@ -185,6 +185,14 @@ class AgentLifecycleTransactionTest(unittest.TestCase):
                 PurePosixPath("/mnt/c/work/file"),
                 "microsoft-standard-WSL2",
                 stacked_metadata,
+            )
+        )
+        reverse_stacked_metadata = stacked_metadata.splitlines(keepends=True)
+        self.assertFalse(
+            _mount_projects_windows_modes(
+                PurePosixPath("/mnt/c/work/file"),
+                "microsoft-standard-WSL2",
+                "".join(reversed(reverse_stacked_metadata)),
             )
         )
         escaped_space = projected.replace("/mnt/c", "/mnt/my\\040drive")
