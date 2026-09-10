@@ -153,6 +153,41 @@ the target. `bash scripts/check-links.sh` catches links to files that no longer
 exist; `bash scripts/check-doc-reachability.sh` catches the opposite problem —
 a doc that still exists but that nothing points to any more.
 
+## Documentation drift pilot
+
+The `SSOT / ssot` CI job checks the Python floor on every PR using `.ssot.yaml`.
+The executable interpreter probe in `scripts/python-env.sh` owns the Python 3
+minor requirement. The manifest checks the hand-maintained setup/contributor
+docs and the minimum-Python CI job against it. Existing component, generated
+reference, and release validators remain authoritative for their domains.
+
+Registered drift, missing copies, and malformed manifests fail CI. Fix the
+underlying requirement and its copies. Explain canonical changes, removed
+locators, or new exclusions in the PR; removing a check is not a drift fix.
+
+Discovery is advisory. It scans prose for supported numeric patterns and cannot
+infer the Python floor, so those locations are registered explicitly. History,
+test fixtures, templates, release notes, and generated integration references
+are excluded. Remaining baseline warnings include shell positional variables,
+release-command examples, and unrelated session counts. Review warnings before
+registering facts; excluded paths still receive their explicit checks.
+
+To reproduce CI, check out the checker revision pinned in
+`.github/workflows/ssot.yml` into a sibling `ssot-check` directory, then run:
+
+```bash
+python3 ../ssot-check/ssot_check.py check --manifest .ssot.yaml
+python3 ../ssot-check/ssot_check.py discover --manifest .ssot.yaml --untracked-only --github-annotations
+python3 scripts/check-ssot-controls.py ../ssot-check/ssot_check.py
+```
+
+Controls mutate disposable copies to prove drift, restoration, missing-copy and
+manifest failures. They verify that a history exclusion cannot hide registered
+drift and that an unregistered current price warns while `check` stays green.
+Record useful findings, repeated warnings, and maintenance effort in the pilot
+PR or a follow-up issue before expanding coverage. This is a source-repository
+check; its files are development-owned and are not installed into workspaces.
+
 ## Changelog
 
 Update `CHANGELOG.md` whenever you add, remove, or significantly change a file.

@@ -25,6 +25,18 @@
             "depends_on": [],
             "paths": [
                 {
+                    "path": ".ssot.yaml",
+                    "policy": "development"
+                },
+                {
+                    "path": ".github/workflows/ssot.yml",
+                    "policy": "development"
+                },
+                {
+                    "path": "scripts/check-ssot-controls.py",
+                    "policy": "development"
+                },
+                {
                     "path": "docs/minimal-starter-evidence.md",
                     "policy": "managed"
                 },
