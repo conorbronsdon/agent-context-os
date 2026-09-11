@@ -9,6 +9,7 @@ A portable, evolving Git-backed context and workflow layer for coding agents. Cl
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-ready-d97757?style=flat-square)](https://docs.anthropic.com/en/docs/claude-code)
 [![Codex](https://img.shields.io/badge/Codex-ready-111827?style=flat-square)](docs/codex-onboarding.md)
 [![Validate](https://github.com/conorbronsdon/agent-context-os/actions/workflows/validate.yml/badge.svg)](https://github.com/conorbronsdon/agent-context-os/actions/workflows/validate.yml)
+[![Podcast](https://img.shields.io/badge/Podcast-Chain_of_Thought-purple?style=flat-square)](https://chainofthought.show/?utm_source=github&utm_medium=referral&utm_campaign=repo-readme&utm_content=agent-context-os)
 [![X](https://img.shields.io/badge/X-@ConorBronsdon-black?style=flat-square&logo=x)](https://x.com/ConorBronsdon)
 
 </div>
