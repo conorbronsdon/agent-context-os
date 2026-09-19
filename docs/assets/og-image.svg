@@ -1,43 +1,84 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
+  <!-- Render at 1280 by 640 with Inkscape into docs/assets/og-image.png. -->
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0b1020"/>
-      <stop offset="100%" stop-color="#11182c"/>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#090d1a"/>
+      <stop offset="58%" stop-color="#10172a"/>
+      <stop offset="100%" stop-color="#171334"/>
     </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9b7bff"/>
+      <stop offset="100%" stop-color="#5de1e6"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7658ff" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#7658ff" stop-opacity="0"/>
+    </radialGradient>
     <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1c2740" stroke-width="1"/>
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#26314c" stroke-width="1"/>
     </pattern>
   </defs>
 
-  <rect width="1280" height="640" fill="url(#bg)"/>
-  <rect width="1280" height="640" fill="url(#grid)" opacity="0.5"/>
+  <rect width="1280" height="640" fill="url(#background)"/>
+  <rect width="1280" height="640" fill="url(#grid)" opacity="0.34"/>
+  <ellipse cx="1045" cy="250" rx="360" ry="340" fill="url(#glow)"/>
+  <rect width="7" height="640" fill="url(#accent)"/>
 
-  <!-- left accent bar -->
-  <rect x="0" y="0" width="6" height="640" fill="#7c5cff"/>
+  <g font-family="DejaVu Sans Mono, monospace">
+    <text x="72" y="104" font-size="23" font-weight="700" letter-spacing="2" fill="#9b7bff">$ CONTEXT OS</text>
+    <rect x="72" y="124" width="72" height="3" rx="1.5" fill="#5de1e6"/>
+  </g>
 
-  <!-- prompt symbol -->
-  <text x="80" y="148" font-family="JetBrains Mono, Fira Code, Menlo, monospace" font-size="42" fill="#7c5cff">$</text>
+  <g font-family="DejaVu Sans, sans-serif">
+    <text x="72" y="220" font-size="58" font-weight="700" fill="#ffffff">Durable context.</text>
+    <text x="72" y="288" font-size="58" font-weight="700" fill="#ffffff">Portable workflows.</text>
+    <text x="74" y="339" font-size="25" fill="#aeb8d2">Git-backed continuity across coding agents.</text>
+  </g>
 
-  <!-- product name -->
-  <text x="120" y="148" font-family="JetBrains Mono, Fira Code, Menlo, monospace" font-size="56" font-weight="700" fill="#ffffff">Context OS</text>
+  <g font-family="DejaVu Sans Mono, monospace">
+    <text x="74" y="411" font-size="15" font-weight="700" letter-spacing="1.5" fill="#5de1e6">FIRST-CLASS</text>
+    <text x="74" y="445" font-size="21" fill="#e5e9f5">Claude Code · Codex · OpenClaw · OpenCode</text>
+    <text x="74" y="500" font-size="15" font-weight="700" letter-spacing="1.5" fill="#9b7bff">EXPERIMENTAL</text>
+    <text x="74" y="534" font-size="21" fill="#aeb8d2">Hermes Agent · Cursor · Devin</text>
+    <text x="74" y="596" font-size="18" fill="#7f8aa8">github.com/conorbronsdon/agent-context-os</text>
+  </g>
 
-  <!-- divider -->
-  <line x1="80" y1="200" x2="320" y2="200" stroke="#7c5cff" stroke-width="2"/>
+  <g>
+    <rect x="824" y="82" width="384" height="476" rx="18" fill="#0d1324" stroke="#34415f" stroke-width="2"/>
+    <rect x="824" y="82" width="384" height="54" rx="18" fill="#161e33"/>
+    <rect x="824" y="118" width="384" height="18" fill="#161e33"/>
+    <circle cx="856" cy="109" r="6" fill="#ff6b81"/>
+    <circle cx="880" cy="109" r="6" fill="#f7c95c"/>
+    <circle cx="904" cy="109" r="6" fill="#5de1a8"/>
 
-  <!-- tagline -->
-  <text x="80" y="290" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="44" font-weight="600" fill="#e6e9f2">Portable Git-backed context for coding agents.</text>
-  <text x="80" y="350" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="44" font-weight="600" fill="#e6e9f2">Evolves with you. Reviewed handoffs.</text>
+    <g font-family="DejaVu Sans Mono, monospace">
+      <text x="854" y="183" font-size="19" fill="#9b7bff">$ contextos start</text>
+      <text x="854" y="228" font-size="17" fill="#5de1e6">✓</text>
+      <text x="882" y="228" font-size="17" fill="#dce2f2">identity</text>
+      <text x="854" y="266" font-size="17" fill="#5de1e6">✓</text>
+      <text x="882" y="266" font-size="17" fill="#dce2f2">project state</text>
+      <text x="854" y="304" font-size="17" fill="#5de1e6">✓</text>
+      <text x="882" y="304" font-size="17" fill="#dce2f2">decisions</text>
+      <text x="854" y="342" font-size="17" fill="#5de1e6">✓</text>
+      <text x="882" y="342" font-size="17" fill="#dce2f2">latest handoff</text>
+      <line x1="854" y1="375" x2="1178" y2="375" stroke="#283550"/>
 
-  <!-- sub bullets -->
-  <text x="80" y="438" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="24" fill="#9aa3b8">+ First-class: Claude Code, Codex, and OpenClaw</text>
-  <text x="80" y="476" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="24" fill="#9aa3b8">+ Experimental adapters: Hermes Agent, Cursor, and Devin</text>
-  <text x="80" y="514" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="24" fill="#9aa3b8">+ Selective migration and opt-in integrations</text>
+      <g font-size="13" font-weight="700">
+        <rect x="854" y="409" width="66" height="34" rx="6" fill="#28214e" stroke="#7357dd"/>
+        <text x="870" y="431" fill="#cbbfff">SETUP</text>
+        <path d="M 926 426 H 944" stroke="#52617f" stroke-width="2"/>
+        <rect x="950" y="409" width="66" height="34" rx="6" fill="#17323d" stroke="#3da4aa"/>
+        <text x="966" y="431" fill="#9bf1f4">START</text>
+        <path d="M 1022 426 H 1040" stroke="#52617f" stroke-width="2"/>
+        <rect x="1046" y="409" width="66" height="34" rx="6" fill="#28214e" stroke="#7357dd"/>
+        <text x="1054" y="431" fill="#cbbfff">UPDATE</text>
+        <path d="M 1118 426 H 1136" stroke="#52617f" stroke-width="2"/>
+        <rect x="1142" y="409" width="46" height="34" rx="6" fill="#17323d" stroke="#3da4aa"/>
+        <text x="1150" y="431" fill="#9bf1f4">END</text>
+      </g>
 
-  <!-- footer -->
-  <text x="80" y="588" font-family="JetBrains Mono, Fira Code, Menlo, monospace" font-size="22" fill="#6e7898">github.com/conorbronsdon/agent-context-os</text>
-
-  <!-- terminal cursor -->
-  <rect x="1170" y="568" width="14" height="26" fill="#7c5cff">
-    <animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite"/>
-  </rect>
+      <text x="854" y="501" font-size="15" fill="#7f8aa8">review → approve → apply</text>
+      <rect x="1158" y="486" width="11" height="20" fill="#9b7bff"/>
+    </g>
+  </g>
 </svg>
