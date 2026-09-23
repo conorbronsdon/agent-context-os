@@ -1,0 +1,86 @@
+{
+    "id":  "shortcut-mcp",
+    "name":  "Shortcut MCP",
+    "summary":  "Shortcut\u0027s hosted MCP server for stories, epics, iterations, objectives, and docs with granular OAuth scopes including a dedicated read-only scope.",
+    "source_url":  "https://www.shortcut.com/help/integrations/mcp-server/",
+    "kind":  "mcp_server",
+    "supported_agents":  [
+                             "claude_code",
+                             "codex",
+                             "cursor",
+                             "generic"
+                         ],
+    "installation":  {
+                         "automatic":  false,
+                         "scope":  "project_or_user",
+                         "prerequisites":  [
+                                               "A Shortcut account and workspace",
+                                               "An MCP client supporting remote Streamable HTTP and browser OAuth",
+                                               "An authorized Shortcut workspace"
+                                           ]
+                     },
+    "data_boundary":  {
+                          "credentials":  [
+                                              "OAuth 2.0 token managed by the MCP client for the authorized Shortcut workspace"
+                                          ],
+                          "reads":  [
+                                        "Sensitive Shortcut stories, epics, iterations, objectives, teams, members, workflows, and docs across the authorized workspace"
+                                    ],
+                          "writes":  [
+                                         "Remote creation of stories, epics, iterations, and docs in the authorized workspace",
+                                         "Overwrite-capable updates to existing story descriptions, assignees, estimates, workflows, or doc contents"
+                                     ]
+                      },
+    "capabilities":  {
+                         "read":  true,
+                         "sensitive_read":  true,
+                         "write":  true,
+                         "remote_write":  true,
+                         "publish":  false,
+                         "overwrite":  true,
+                         "delete":  false,
+                         "arbitrary_execution":  false,
+                         "oauth":  true,
+                         "destructive":  true,
+                         "details":  [
+                                         "Start with the dedicated read OAuth scope for read-only story and epic search",
+                                         "The hosted service supports granular write, story-write, and comment-write OAuth scopes for explicit creation and update workflows",
+                                         "The open-source repository is archived but the hosted https://mcp.shortcut.com/mcp service remains actively documented",
+                                         "The documented surface is overwrite-capable but includes no permanently destructive operations; archiving remains within standard Shortcut workflows"
+                                     ]
+                     },
+    "confirmation":  {
+                         "required_for":  [
+                                              "credential_setup",
+                                              "external_install",
+                                              "read_sensitive",
+                                              "write",
+                                              "write_remote",
+                                              "overwrite",
+                                              "oauth",
+                                              "destructive"
+                                          ],
+                         "notes":  "Confirm the target Shortcut workspace before reading sensitive project state; show proposed story, epic, or doc changes before executing writes, and prefer the dedicated read OAuth scope for session briefings."
+                     },
+    "risk_tags":  [
+                      "credentials",
+                      "hosted",
+                      "project-management",
+                      "sensitive-read",
+                      "remote-write",
+                      "overwrite-capable",
+                      "oauth",
+                      "destructive-capable",
+                      "prompt-injection"
+                  ],
+    "maturity":  "verified",
+    "last_verified":  "2026-08-30",
+    "evidence":  [
+                     "https://www.shortcut.com/help/integrations/mcp-server/"
+                 ],
+    "health_check":  "Connect to https://mcp.shortcut.com/mcp using the read scope, verify authorized workspace and user identity, then fetch one explicitly named story or epic without modifying content.",
+    "uninstall":  {
+                      "instructions":  "Remove the Shortcut MCP entry from the client and revoke the authorized application connection in Shortcut account settings; preserve all workspace, story, epic, and doc data.",
+                      "removes_user_data":  false
+                  }
+}

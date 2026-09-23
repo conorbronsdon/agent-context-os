@@ -8,6 +8,7 @@
         ".agents/skills",
         ".claude/commands",
         ".cursor",
+        ".opencode",
         "content",
         "identity",
         "inbox",
@@ -23,6 +24,42 @@
             "description": "Provider-neutral kernel, shared documentation, repository scaffolding, and user-owned seed files.",
             "depends_on": [],
             "paths": [
+                {
+                    "path": ".ssot.yaml",
+                    "policy": "development"
+                },
+                {
+                    "path": ".github/workflows/ssot.yml",
+                    "policy": "development"
+                },
+                {
+                    "path": "scripts/check-ssot-controls.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/minimal-starter-evidence.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/evidence/minimal-starter-trial.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "starter/AGENTS.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "starter/current-work.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "starter/handoff.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/minimal-starter.md",
+                    "policy": "managed"
+                },
                 {
                     "path": ".gitattributes",
                     "policy": "managed"
@@ -45,6 +82,10 @@
                 },
                 {
                     "path": ".github/PULL_REQUEST_TEMPLATE.md",
+                    "policy": "development"
+                },
+                {
+                    "path": ".github/dependabot.yml",
                     "policy": "development"
                 },
                 {
@@ -232,6 +273,14 @@
                     "policy": "managed"
                 },
                 {
+                    "path": "docs/releases/v0.13.0.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/releases/v0.13.1.md",
+                    "policy": "managed"
+                },
+                {
                     "path": "docs/root-contract.md",
                     "policy": "managed"
                 },
@@ -278,6 +327,94 @@
                 {
                     "path": "integrations/catalog.json",
                     "policy": "managed"
+                },
+                {
+                    "path": "integrations/entries/agent-skills.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/agent-workspace.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/ai-tools-for-creators.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/asana-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/atlassian-rovo-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/beads-gemini.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/github-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/gitlab-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/google-workspace-cli.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/granola-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/linear-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/markitdown-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/notion-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/obsidian.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/pandoc.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/readwise-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/shortcut-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/slack-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/substack-mcp.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/todoist-cli.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/tolaria.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "integrations/entries/trello-mcp.json",
+                    "policy": "development"
                 },
                 {
                     "path": "LICENSE",
@@ -528,6 +665,10 @@
                     "policy": "development"
                 },
                 {
+                    "path": "tests/fixtures/integration-freshness.json",
+                    "policy": "development"
+                },
+                {
                     "path": "tests/fixtures/workspace-conflicts.json",
                     "policy": "development"
                 },
@@ -558,6 +699,38 @@
                 {
                     "path": "workspace/schema.json",
                     "policy": "managed"
+                },
+                {
+                    "path": "contextos/continuity.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/continuity-benchmark.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/continuity.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/first-handoff.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "scripts/continuity-benchmark.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/fixtures/continuity/scenario.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_continuity.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_continuity_benchmark.py",
+                    "policy": "development"
                 }
             ]
         },
@@ -854,6 +1027,22 @@
             ],
             "paths": [
                 {
+                    "path": ".codex-plugin/plugin.json",
+                    "policy": "development"
+                },
+                {
+                    "path": ".codexignore",
+                    "policy": "development"
+                },
+                {
+                    "path": "skills/contextos-workspace/SKILL.md",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_codex_plugin_package.py",
+                    "policy": "development"
+                },
+                {
                     "path": ".codex/hooks.json",
                     "policy": "managed"
                 },
@@ -945,6 +1134,53 @@
                 },
                 {
                     "path": "tests/test_openclaw_skill_sync.py",
+                    "policy": "development"
+                }
+            ]
+        },
+        {
+            "id": "opencode-adapter",
+            "description": "First-class OpenCode commands, onboarding, runtime descriptor, and exact-client conformance controls.",
+            "depends_on": [
+                "core",
+                "portable-skills",
+                "agents-instructions"
+            ],
+            "paths": [
+                {
+                    "path": ".opencode/commands/context-end.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".opencode/commands/context-setup.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".opencode/commands/context-start.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".opencode/commands/context-update.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "adapters/opencode/README.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "adapters/opencode/live_conformance.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "docs/releases/opencode-first-class.md",
+                    "policy": "managed"
+                },
+                {
+                    "path": "runtimes/opencode.json",
+                    "policy": "managed"
+                },
+                {
+                    "path": "tests/test_opencode_conformance.py",
                     "policy": "development"
                 }
             ]

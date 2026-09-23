@@ -64,9 +64,11 @@ SHA-256 values. Their proposal digest covers the entire unsigned proposal. It
 binds integrity; the host permission prompt supplies the human approval boundary.
 Apply requires that exact digest, re-hashes every target, takes an exclusive
 `O_EXCL` lock, writes using UTF-8/LF, and emits a receipt inside a durable,
-path-bound journal. The journal gives `setup`, `update`, `end`, and
-`agent-config` resumable multi-file rollback across process death. New tracked
-content is non-executable; existing targets preserve their approved mode.
+path-bound journal. The journal gives `setup`, `update`, `end`, `promotion`, and
+`agent-config` resumable rollback across process death. Promotion additionally
+binds its coordination source and canonical target into the journal and receipt,
+so recovery validates the same provenance as apply. New tracked content is
+non-executable; existing targets preserve their approved mode.
 
 The `agent-config` workspace-migration workflow additionally binds raw-byte
 target and source hashes, proposal-bound before/after modes,

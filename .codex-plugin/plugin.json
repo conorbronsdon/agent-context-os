@@ -1,0 +1,27 @@
+{
+  "name": "agent-context-os",
+  "version": "0.1.0",
+  "description": "Use Context OS workflows in an explicitly selected workspace.",
+  "author": {
+    "name": "Conor Bronsdon",
+    "url": "https://github.com/conorbronsdon"
+  },
+  "homepage": "https://github.com/conorbronsdon/agent-context-os",
+  "repository": "https://github.com/conorbronsdon/agent-context-os",
+  "license": "MIT",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Context OS Workspace Companion",
+    "shortDescription": "Use Context OS workflows in an explicitly selected workspace.",
+    "longDescription": "Routes to the selected workspace's canonical lifecycle skills. Installation does not create a workspace, import context, install hooks, or authorize proposal application.",
+    "developerName": "Conor Bronsdon",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Check my Context OS workspace."
+    ]
+  }
+}

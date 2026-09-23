@@ -1,0 +1,104 @@
+{
+    "id":  "asana-mcp",
+    "name":  "Asana MCP",
+    "summary":  "Asana\u0027s official hosted V2 MCP server for tasks, projects, portfolios, and status updates with OAuth 2.0 and write/delete capabilities.",
+    "source_url":  "https://developers.asana.com/docs/mcp-server",
+    "kind":  "mcp_server",
+    "supported_agents":  [
+                             "claude_code",
+                             "codex",
+                             "cursor",
+                             "generic"
+                         ],
+    "installation":  {
+                         "automatic":  false,
+                         "scope":  "project_or_user",
+                         "prerequisites":  [
+                                               "An Asana account and workspace",
+                                               "An MCP client supporting remote Streamable HTTP and browser OAuth",
+                                               "A pre-registered Asana MCP app with a client ID and client secret",
+                                               "A redirect URL matching exactly between the Asana app settings and the client configuration; dynamic client registration is not supported",
+                                               "An authorized Asana workspace"
+                                           ]
+                     },
+    "data_boundary":  {
+                          "credentials":  [
+                                              "OAuth 2.0 token managed by the MCP client for the authorized Asana workspace; tokens issued for MCP apps are valid only for the MCP server, not the Asana REST API",
+                                              "The registered app\u0027s client secret, which coding clients store locally (keychain or a credentials file) and must be kept out of repositories"
+                                          ],
+                          "reads":  [
+                                        "Sensitive Asana workspace identity, teams, projects, sections, tasks, subtasks, dependencies, custom fields, comments, portfolios, goals, and status updates",
+                                        "The workspace user directory: get_users and get_user return names, email addresses, and workspace memberships",
+                                        "Attachment metadata with download and view URLs for tasks, projects, and project briefs",
+                                        "AI Teammate agent records, including behavior guidance",
+                                        "Full-text task search across names, descriptions, and comments (Premium workspaces)"
+                                    ],
+                          "writes":  [
+                                         "Remote creation of tasks, subtasks, projects, comments, and project or portfolio status updates in the authorized workspace; create_tasks and create_project create immediately, without a confirmation step, up to 50 tasks per call",
+                                         "Updates are limited to tasks: update_tasks (up to 50 per call) has no project-update counterpart, add_comment has no edit tool, and a status update is a creation (create_project_status_update) rather than an edit",
+                                         "Overwrite-capable task updates to name, description, assignee, due and start dates, completion status, parent, dependencies and dependents, project membership, followers, and custom fields",
+                                         "Permanent deletion is delete_task only, documented as deleting a task and any of its subtasks that are not also members of another project -- subtasks shared with another project survive"
+                                     ]
+                      },
+    "capabilities":  {
+                         "read":  true,
+                         "sensitive_read":  true,
+                         "write":  true,
+                         "remote_write":  true,
+                         "publish":  false,
+                         "overwrite":  true,
+                         "delete":  true,
+                         "arbitrary_execution":  false,
+                         "oauth":  true,
+                         "destructive":  true,
+                         "details":  [
+                                         "Recommended: start with read-only task and project inspection; no server-side read-only OAuth scope is currently provided by Asana",
+                                         "MCP apps do not take scopes: one authorization may access any available tool, including tools added to the server in the future, with no tool-level narrowing",
+                                         "The effective controls are therefore client-side confirmation plus the authenticated user\u0027s own Asana permissions -- access is limited to the workspaces, projects, and tasks that user already has",
+                                         "Tokens are workspace-scoped: each session is bound to the workspace chosen at authorization, and other workspaces need separate sessions",
+                                         "The preview tools that render a confirmation UI (create_task_preview, create_project_preview, search_tasks_preview) are available only in Claude and ChatGPT; other clients call the standard write tools directly",
+                                         "The server exposes task and project creation, task updates, and permanent task deletion",
+                                         "Require exact payload and target confirmation client-side before any write, status update, or deletion"
+                                     ]
+                     },
+    "confirmation":  {
+                         "required_for":  [
+                                              "credential_setup",
+                                              "external_install",
+                                              "read_sensitive",
+                                              "write",
+                                              "write_remote",
+                                              "overwrite",
+                                              "delete",
+                                              "oauth",
+                                              "destructive"
+                                          ],
+                         "notes":  "Confirm the target Asana workspace before reading sensitive project state; show exact task title, fields, and proposed changes or deletions before executing writes."
+                     },
+    "risk_tags":  [
+                      "credentials",
+                      "hosted",
+                      "project-management",
+                      "sensitive-read",
+                      "remote-write",
+                      "overwrite-capable",
+                      "delete-capable",
+                      "oauth",
+                      "destructive-capable",
+                      "dynamic-api-surface",
+                      "prompt-injection"
+                  ],
+    "maturity":  "verified",
+    "last_verified":  "2026-09-03",
+    "evidence":  [
+                     "https://developers.asana.com/docs/mcp-server",
+                     "https://developers.asana.com/docs/connecting-mcp-clients-to-asanas-v2-server",
+                     "https://developers.asana.com/docs/integrating-with-asanas-mcp-server",
+                     "https://developers.asana.com/docs/mcp-tools-reference"
+                 ],
+    "health_check":  "Connect to the Asana V2 MCP endpoint, verify authorized workspace and user identity, then fetch one explicitly named project or task without writing or modifying fields.",
+    "uninstall":  {
+                      "instructions":  "Remove the Asana MCP entry from the client, delete the locally stored client secret, and revoke the authorized application connection in Asana account settings; preserve all workspace, project, and task data.",
+                      "removes_user_data":  false
+                  }
+}

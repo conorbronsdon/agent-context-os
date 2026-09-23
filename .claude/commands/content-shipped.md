@@ -3,7 +3,7 @@ name: content-shipped
 description: "Log a completed piece of content to content/log.md after the user confirms it was published."
 allowed-tools: "Read, Edit"
 disable-model-invocation: true
-x-source: "skills-sync/skills/content-shipped/SKILL.md"
+x-source: "maintainer-core/skills/content-shipped/SKILL.md"
 x-source-version: "b85d60f"
 ---
 

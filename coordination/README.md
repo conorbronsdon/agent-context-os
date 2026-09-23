@@ -29,7 +29,11 @@ exist on the `coordination` branch.
    overlap justifies reporting only — never deleting or rewriting another
    run's work.
 3. **No secrets, credentials, or sensitive personal data, ever.** Expiry
-   removes a message from the active view; git history keeps it forever.
+   removes a message from the active view; git history keeps it forever. `post`
+   rejects a narrow set of high-confidence credential shapes before it writes or
+   queues a message, and `validate` flags and redacts matching messages in its
+   report. This is a tripwire, not proof that content is safe; never rely on it
+   to approve a credential for the board.
 4. **The board is user-visible by design.** Plain files, git history, surfaced
    at session start.
 5. **Human-paced.** No always-on agents poll this board. The only sanctioned
@@ -79,11 +83,62 @@ run-id audiences are surfaced but not validated — run ids are ephemeral.
 - Session end: offer to post a message and release or renew claims.
 - Maintenance: `compact` reports expired messages and stale claims; applying
   deletes expired messages only (mechanical); promotion of durable content
-  into `state/decisions.md` is proposal-gated, and the proposal binds the
-  source message's identity (id, content hash, expiry).
+  is proposal-gated. A maintainer chooses whether a live message represents a
+  user-ratified durable outcome for `state/decisions.md`, a useful session
+  handoff for the proposal-creation date's session file, or neither. Kind and
+  age can surface candidates but never choose the target or imply approval.
+- `board promote` requires an explicit message id, canonical target path, and
+  reviewed JSON content. It never copies or interprets board prose as an
+  instruction. The proposal binds the source id, path, exact content hash,
+  expiry, author, kind, observed coordination commit, and target. Apply
+  re-fetches that message immediately before mutation and fails closed if it
+  changed, disappeared, or expired. Unrelated coordination-ref updates do not
+  stale the proposal. Promotion never rewrites or deletes the source message.
 - Degraded hosts (fetch-only): posts queue in a local outbox with an
   undelivered receipt; a post is delivered only when its commit is confirmed
   on the remote. Fetch-only runs cannot acquire claims.
+
+### Read-amplification telemetry and inbox threshold
+
+Every `board sync` receipt includes a `scan` object with counts only: history
+commits scanned, active and candidate files, files and UTF-8 bytes read,
+messages and claims surfaced, compact-JSON surfaced bytes, the read-to-surfaced
+byte ratio, cursor mode (`cold`, `incremental`, `current`, `recovery`, or
+`unavailable`), and fetch, message-scan, claim-scan, and total elapsed
+milliseconds. Message commit counts cover only commits after the cursor;
+claim-history counts cover the full coordination history when live claims exist
+because publish-order arbitration requires it. With no live claims, that
+history walk is skipped. The telemetry never includes message content,
+frontmatter values, paths, or identifiers.
+
+Keep the flat board layout unless **three consecutive representative cold or
+cursor-recovery syncs on the same host** each read at least 256 KiB and also
+cross either threshold:
+
+- at least 2,000 ms in `message_scan_elapsed_ms`; or
+- at least 20:1 `message_read_amplification_ratio`.
+
+A cold/recovery sample has no usable cursor and scans the current board. The
+byte floor prevents host startup noise from triggering a layout migration for
+a small board; the repeated-sample rule prevents one slow process launch from
+doing the same. Apply the 256 KiB floor to `message_bytes_read`, not combined
+message-and-claim work: inbox directories do not change claim arbitration. If
+`message_surfaced_bytes` itself exceeds 64 KiB, improve addressing, expiry, or
+compaction first: physical inboxes cannot reduce content genuinely addressed
+to the recipient.
+
+Calibration on 2026-09-03 used a Windows local bare remote and near-limit
+synthetic messages, seeded in one fixture commit, with `all`, role, run-id, and
+unrelated audiences. A
+16-message cold sync read 55,943 message bytes in 647 ms at 7.583:1; an
+80-message cold sync read 279,783 message bytes in 2,414 ms at 37.926:1. Both surfaced two
+messages. The larger fixture crossed every gate; the smaller fixture crossed
+none after the byte floor. This evidence supports retaining the flat layout at
+template scale and revisiting physical inboxes only when observed receipts
+meet the gate above.
+
+`scan` is additive receipt metadata. Consumers must ignore unknown receipt and
+report keys; adding this object does not change the board-file schema version.
 
 ## Commands
 
@@ -94,8 +149,17 @@ bash scripts/contextos.sh board claim --runtime <r> --task <ref> --owner <r>/<ru
 bash scripts/contextos.sh board release --runtime <r> --claim <id> [--then-claim-task <ref> --then-claim-owner <r>/<run-id>]
 bash scripts/contextos.sh board sync --runtime <r> --role <role> --run-id <id>
 bash scripts/contextos.sh board compact [--apply]
+bash scripts/contextos.sh board promote --message <id> --target state/decisions.md --input <reviewed.json>
+bash scripts/contextos.sh board promote --message <id> --target sessions/YYYY-MM-DD.md --input <reviewed.json>
 bash scripts/contextos.sh board validate
 ```
+
+Decision input contains `decision` and may include `rationale` and
+`rejected_alternatives`. Session-handoff input contains only a non-empty
+`summary` string array. `promote` creates a local proposal and changes no
+canonical file. Review its complete diff, then use the normal `apply` command
+with the exact printed digest and an explicit runtime. Board text, message kind,
+candidate age, and proposal creation are never approval evidence.
 
 Every command validates before publishing and returns a JSON receipt or
 report. Publishing pushes to the workspace remote — the host permission

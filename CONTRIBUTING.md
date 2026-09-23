@@ -37,18 +37,23 @@ Run it locally rather than discovering a failure in CI. It takes about a minute.
 
 ## Generated files — do not hand-edit
 
-Seven artifacts are produced by scripts. Editing them directly means your change is
+Eight artifacts, plus one ownership slice, are produced by scripts. Editing them directly means your change is
 silently reverted on the next regeneration.
 
 | File | Source of truth | Regenerate with |
 |---|---|---|
-| `references/integrations.md` | `integrations/catalog.json` | `scripts/integrations.py render` |
+| `integrations/catalog.json` | `integrations/entries/*.json` | `scripts/integrations.py render` |
+| `references/integrations.md` | `integrations/entries/*.json` | `scripts/integrations.py render` |
 | `REPO_MAP.md` | the repository itself | `scripts/generate-repo-map.sh` (gitignored — never commit it) |
 | `runtimes/schema.json` | `contextos/runtime_schema.py` | `scripts/runtime-manifests.py generate` |
 | README registered-host table | validated `runtimes/*.json` descriptors | `scripts/runtime-manifests.py generate` |
 | `components/schema.json` | `contextos/component_schema.py` | `scripts/component-manifests.py generate` |
 | `bundles/schema.json` | `contextos/bundle_schema.py` | `scripts/bundle-locks.py generate` |
 | `workspace/schema.json` | `contextos/workspace_schema.py` | `scripts/workspace-config.py generate` |
+
+`scripts/integrations.py render` also owns only the
+`integrations/entries/*.json` path records in `components/manifest.json`; the
+rest of that manifest remains curated component inventory.
 
 ## Adding a runtime descriptor
 
@@ -77,7 +82,7 @@ The most commonly requested contribution. Use the
 [integration proposal issue template](.github/ISSUE_TEMPLATE/integration-proposal.md)
 to check the entry is wanted before writing it.
 
-1. Add an entry to `integrations/catalog.json`. Copy an existing entry and fill
+1. Add one `integrations/entries/<id>.json` file. Copy an existing entry and fill
    every field — the validator enforces the required set.
 2. Set `last_verified` to the date **you** checked the source. Do not copy a
    date from an issue or another entry; upstream tools move quickly.
@@ -90,7 +95,18 @@ to check the entry is wanted before writing it.
    functionality, or enforce default profiles. Place client-side scope and
    tool recommendations, along with the full reachable surface area, in
    `capabilities.details`. Provide confirmation guidance in `confirmation.notes`.
-6. Regenerate `references/integrations.md` and run the validator.
+6. Run `scripts/integrations.py render` to regenerate the sorted aggregate,
+   reference, and component-ownership records, then run the validator.
+
+The task chooser and changelog are curated release-maintainer surfaces. A
+routine entry contribution does not edit them unless it also changes product
+guidance or records a release-level behavior change.
+
+Run `python3 scripts/integrations.py freshness` for the current evidence-health
+report, or add `--as-of YYYY-MM-DD` for reproducible local/CI output. Use
+`--format markdown` for a human-readable table. The report is read-only and
+offline: it never refreshes dates or treats link reachability as semantic
+verification.
 
 `maturity` is a claim about metadata, not about testing. `verified` means
 every submitted field is supported by current first-party evidence on the stated date.
@@ -136,6 +152,41 @@ Before removing a link, a table row, or an index entry, check what pointed at
 the target. `bash scripts/check-links.sh` catches links to files that no longer
 exist; `bash scripts/check-doc-reachability.sh` catches the opposite problem —
 a doc that still exists but that nothing points to any more.
+
+## Documentation drift pilot
+
+The `SSOT / ssot` CI job checks the Python floor on every PR using `.ssot.yaml`.
+The executable interpreter probe in `scripts/python-env.sh` owns the Python 3
+minor requirement. The manifest checks the hand-maintained setup/contributor
+docs and the minimum-Python CI job against it. Existing component, generated
+reference, and release validators remain authoritative for their domains.
+
+Registered drift, missing copies, and malformed manifests fail CI. Fix the
+underlying requirement and its copies. Explain canonical changes, removed
+locators, or new exclusions in the PR; removing a check is not a drift fix.
+
+Discovery is advisory. It scans prose for supported numeric patterns and cannot
+infer the Python floor, so those locations are registered explicitly. History,
+test fixtures, templates, release notes, and generated integration references
+are excluded. Remaining baseline warnings include shell positional variables,
+release-command examples, and unrelated session counts. Review warnings before
+registering facts; excluded paths still receive their explicit checks.
+
+To reproduce CI, check out the checker revision pinned in
+`.github/workflows/ssot.yml` into a sibling `ssot-check` directory, then run:
+
+```bash
+python3 ../ssot-check/ssot_check.py check --manifest .ssot.yaml
+python3 ../ssot-check/ssot_check.py discover --manifest .ssot.yaml --untracked-only --github-annotations
+python3 scripts/check-ssot-controls.py ../ssot-check/ssot_check.py
+```
+
+Controls mutate disposable copies to prove drift, restoration, missing-copy and
+manifest failures. They verify that a history exclusion cannot hide registered
+drift and that an unregistered current price warns while `check` stays green.
+Record useful findings, repeated warnings, and maintenance effort in the pilot
+PR or a follow-up issue before expanding coverage. This is a source-repository
+check; its files are development-owned and are not installed into workspaces.
 
 ## Changelog
 

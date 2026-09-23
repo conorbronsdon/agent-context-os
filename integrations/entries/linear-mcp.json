@@ -1,0 +1,84 @@
+{
+    "id":  "linear-mcp",
+    "name":  "Linear MCP",
+    "summary":  "Linear\u0027s official hosted MCP provides authenticated search and read access plus optional creation and updates for issues, projects, and comments, with a dedicated read-only endpoint.",
+    "source_url":  "https://linear.app/docs/mcp",
+    "kind":  "mcp_server",
+    "supported_agents":  [
+                             "claude_code",
+                             "codex",
+                             "cursor",
+                             "generic"
+                         ],
+    "installation":  {
+                         "automatic":  false,
+                         "scope":  "project_or_user",
+                         "prerequisites":  [
+                                               "A Linear workspace account",
+                                               "An MCP client supporting remote Streamable HTTP and browser OAuth, or a compatible remote-server bridge"
+                                           ]
+                     },
+    "data_boundary":  {
+                          "credentials":  [
+                                              "OAuth 2.1 token managed by the MCP client, or an optional bearer token or Linear API key kept outside repository files"
+                                          ],
+                          "reads":  [
+                                        "Sensitive Linear workspace identity, teams, issues, projects, initiatives, cycles, comments, and related metadata available to the connected user"
+                                    ],
+                          "writes":  [
+                                         "Remote creation and updates of Linear issues, projects, comments, milestones, relationships, status, assignment, descriptions, and other fields exposed by the current tool surface",
+                                         "Overwrite-capable updates to existing project-management fields and content"
+                                     ]
+                      },
+    "capabilities":  {
+                         "read":  true,
+                         "sensitive_read":  true,
+                         "write":  true,
+                         "remote_write":  true,
+                         "publish":  false,
+                         "overwrite":  true,
+                         "delete":  false,
+                         "arbitrary_execution":  false,
+                         "oauth":  true,
+                         "destructive":  true,
+                         "details":  [
+                                         "Use https://mcp.linear.app/mcp/readonly or request only the read OAuth scope for session briefings and investigation",
+                                         "The default https://mcp.linear.app/mcp endpoint is read-write and can create or update issues, projects, and comments",
+                                         "Before turning notes or repository state into Linear work, show the proposed project, milestones, issues, relationships, and exact comments and do not invent dependencies"
+                                     ]
+                     },
+    "confirmation":  {
+                         "required_for":  [
+                                              "credential_setup",
+                                              "external_install",
+                                              "read_sensitive",
+                                              "write",
+                                              "write_remote",
+                                              "overwrite",
+                                              "oauth",
+                                              "destructive"
+                                          ],
+                         "notes":  "Confirm the exact Linear user, workspace, teams, and OAuth scope; ask before broad workspace reads, and show the exact issue, project, field changes, relationships, or comment before every remote creation or overwrite-capable update."
+                     },
+    "risk_tags":  [
+                      "credentials",
+                      "hosted",
+                      "project-management",
+                      "sensitive-read",
+                      "remote-write",
+                      "overwrite-capable",
+                      "oauth",
+                      "destructive-capable",
+                      "prompt-injection"
+                  ],
+    "maturity":  "verified",
+    "last_verified":  "2026-08-18",
+    "evidence":  [
+                     "https://linear.app/docs/mcp"
+                 ],
+    "health_check":  "Connect through the dedicated read-only endpoint, verify the expected user and workspace, then fetch one explicitly named team and issue without creating or updating anything.",
+    "uninstall":  {
+                      "instructions":  "Remove the Linear MCP entry from the client and revoke the authorized connection or API key; preserve every issue, project, comment, and workspace setting.",
+                      "removes_user_data":  false
+                  }
+}

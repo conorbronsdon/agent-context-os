@@ -619,7 +619,9 @@ class KernelTest(unittest.TestCase):
             (self.root / "state" / name).write_text(
                 f"# {name}\n\n**Last Updated:** 2026-08-20\n", encoding="utf-8"
             )
-        for runtime in ("claude", "codex", "cursor", "devin", "hermes", "openclaw"):
+        for runtime in (
+            "claude", "codex", "cursor", "devin", "hermes", "openclaw", "opencode"
+        ):
             source = ROOT / "runtimes" / f"{runtime}.json"
             (self.root / "runtimes" / f"{runtime}.json").write_bytes(source.read_bytes())
         for directory in (
@@ -856,6 +858,14 @@ class KernelTest(unittest.TestCase):
         (self.root / "sessions/2026-08-23.md").write_text("parallel writer\n", encoding="utf-8")
         with self.assertRaisesRegex(ContextOSError, "stale proposal"):
             self._apply(proposal_path, proposal, "claude")
+
+    def test_opencode_apply_records_runtime_receipt(self) -> None:
+        proposal_path, proposal = self._propose(
+            "update", {"progress": ["Verified OpenCode lifecycle"]}
+        )
+        receipt_path, receipt = self._apply(proposal_path, proposal, "opencode")
+        self.assertTrue(receipt_path.is_file())
+        self.assertEqual("opencode", receipt["runtime"])
 
     def test_apply_lock_fails_closed_and_survives_no_write(self) -> None:
         proposal_path, proposal = self._propose("update", {"progress": ["One"]})
@@ -2413,7 +2423,7 @@ with mock.patch("contextos.kernel._fsync_directory", side_effect=crash_after_tar
 
         report = doctor(self.root, all_runtimes=True)
         self.assertEqual(
-            {"claude", "codex", "cursor", "devin", "hermes", "openclaw"},
+            {"claude", "codex", "cursor", "devin", "hermes", "openclaw", "opencode"},
             set(report["runtimes"]),
         )
 

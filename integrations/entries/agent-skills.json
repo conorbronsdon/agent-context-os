@@ -1,0 +1,77 @@
+{
+    "id":  "agent-skills",
+    "name":  "Agent Skills",
+    "summary":  "A source catalog and installer for portable agent skills.",
+    "source_url":  "https://github.com/conorbronsdon/agent-skills",
+    "kind":  "skill_catalog",
+    "supported_agents":  [
+                             "claude_code",
+                             "codex",
+                             "cursor",
+                             "opencode"
+                         ],
+    "installation":  {
+                         "automatic":  false,
+                         "scope":  "project_or_user",
+                         "prerequisites":  [
+                                               "Git",
+                                               "A supported agent client"
+                                           ]
+                     },
+    "data_boundary":  {
+                          "credentials":  [
+
+                                          ],
+                          "reads":  [
+                                        "Selected public skill source files"
+                                    ],
+                          "writes":  [
+                                         "Chosen skill files in an agent-specific project or user directory, including replacement or removal of an existing installation"
+                                     ]
+                      },
+    "capabilities":  {
+                         "read":  true,
+                         "sensitive_read":  false,
+                         "write":  true,
+                         "remote_write":  false,
+                         "publish":  false,
+                         "overwrite":  true,
+                         "delete":  true,
+                         "arbitrary_execution":  false,
+                         "oauth":  false,
+                         "destructive":  true,
+                         "details":  [
+                                         "Install and diff explicitly selected skills",
+                                         "Update can replace an installed skill directory; uninstall removes it"
+                                     ]
+                     },
+    "confirmation":  {
+                         "required_for":  [
+                                              "external_install",
+                                              "write",
+                                              "overwrite",
+                                              "delete",
+                                              "destructive"
+                                          ],
+                         "notes":  "Review the selected skill, destination, diff, and local modifications before installation, replacement, or removal."
+                     },
+    "risk_tags":  [
+                      "external-install",
+                      "project-files",
+                      "replacement",
+                      "removal",
+                      "overwrite-capable",
+                      "delete-capable",
+                      "destructive-capable"
+                  ],
+    "maturity":  "verified",
+    "last_verified":  "2026-08-15",
+    "evidence":  [
+                     "https://github.com/conorbronsdon/agent-skills"
+                 ],
+    "health_check":  "Use the repository\u0027s documented diff and validation workflow for the selected skill.",
+    "uninstall":  {
+                      "instructions":  "Remove only the installed skill directory after reviewing and preserving any local modifications.",
+                      "removes_user_data":  true
+                  }
+}

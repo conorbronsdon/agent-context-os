@@ -3,7 +3,7 @@ name: today
 description: "Create a morning heartbeat from repository state and update the local heartbeat log."
 allowed-tools: "Read, Write, Bash, Glob"
 disable-model-invocation: true
-x-source: "skills-sync/commands/today.md"
+x-source: "maintainer-core/commands/today.md"
 x-source-version: "7ae9852"
 ---
 

@@ -1,0 +1,98 @@
+{
+    "id":  "google-workspace-cli",
+    "name":  "Google Workspace CLI",
+    "summary":  "Google\u0027s pre-1.0 command-line interface and Agent Skills for scoped access to Workspace APIs; optional session-start reads require read-only OAuth scopes and per-invocation approval.",
+    "source_url":  "https://github.com/googleworkspace/cli",
+    "kind":  "connector",
+    "supported_agents":  [
+                             "claude_code",
+                             "codex",
+                             "gemini_cli",
+                             "generic"
+                         ],
+    "installation":  {
+                         "automatic":  false,
+                         "scope":  "project_or_user",
+                         "prerequisites":  [
+                                               "A current gws release",
+                                               "A Google account with Workspace access",
+                                               "A Google Cloud project and OAuth client",
+                                               "gcloud for automated auth setup or a manual OAuth configuration"
+                                           ]
+                     },
+    "data_boundary":  {
+                          "credentials":  [
+                                              "OAuth client configuration",
+                                              "Encrypted local OAuth credentials or an access token",
+                                              "Optional service-account credential file",
+                                              "Optional file-backed encryption key when an OS keyring is unavailable"
+                                          ],
+                          "reads":  [
+                                        "Sensitive Gmail, Drive, Calendar, Sheets, Docs, Chat, Admin, and other selected Workspace API data allowed by the active account and OAuth scopes"
+                                    ],
+                          "writes":  [
+                                         "Remote writes through selected Workspace APIs, including email sends, messages, events, documents, spreadsheets, tasks, subscriptions, and file uploads",
+                                         "Overwrite or replacement methods exposed by selected APIs and helpers",
+                                         "Resource deletion methods exposed by selected Google Discovery APIs"
+                                     ]
+                      },
+    "capabilities":  {
+                         "read":  true,
+                         "sensitive_read":  true,
+                         "write":  true,
+                         "remote_write":  true,
+                         "publish":  false,
+                         "overwrite":  true,
+                         "delete":  true,
+                         "arbitrary_execution":  false,
+                         "oauth":  true,
+                         "destructive":  true,
+                         "details":  [
+                                         "The CLI builds commands from current Google Discovery documents, so enabled services can expose a wider method surface than a static guide lists",
+                                         "Context OS does not install or authenticate gws; at the pinned upstream revision verified here, the CLI does not expose the older gws mcp command",
+                                         "The Claude session-start adapter does not pre-approve Bash; every proposed CLI read goes through normal approval with its exact identifiers, limits, fields, and output flags visible",
+                                         "The documented login uses --readonly for the selected services and verifies the resulting account and scopes with gws auth status",
+                                         "OAuth scopes limit account access but do not provide per-action review; use narrow scopes and separate confirmation for every send, remote write, overwrite, and deletion",
+                                         "gws auth setup requires gcloud; the documented manual OAuth path is the fallback, and testing-mode apps can hit scope-count limits",
+                                         "Upstream supports dry-run for API methods and many mutating helpers, but availability must be checked for the exact command"
+                                     ]
+                     },
+    "confirmation":  {
+                         "required_for":  [
+                                              "credential_setup",
+                                              "external_install",
+                                              "read_sensitive",
+                                              "write",
+                                              "write_remote",
+                                              "overwrite",
+                                              "delete",
+                                              "oauth",
+                                              "destructive"
+                                          ],
+                         "notes":  "Confirm the exact Google account, Cloud project, services, and OAuth scopes; ask before broad sensitive reads, and separately confirm every send, upload, event creation, remote update, replacement, or deletion after showing the exact target and payload."
+                     },
+    "risk_tags":  [
+                      "sensitive-read",
+                      "remote-write",
+                      "overwrite-capable",
+                      "delete-capable",
+                      "oauth",
+                      "destructive-capable",
+                      "pre-v1",
+                      "dynamic-api-surface",
+                      "external-messages"
+                  ],
+    "maturity":  "verified",
+    "last_verified":  "2026-08-15",
+    "evidence":  [
+                     "https://github.com/googleworkspace/cli/blob/a3768d0e82ad83cca2da97724e46bea4ff0e6dbd/README.md",
+                     "https://github.com/googleworkspace/cli/blob/a3768d0e82ad83cca2da97724e46bea4ff0e6dbd/docs/skills.md",
+                     "https://github.com/googleworkspace/cli/blob/a3768d0e82ad83cca2da97724e46bea4ff0e6dbd/crates/google-workspace-cli/src/auth_commands.rs",
+                     "https://github.com/googleworkspace/cli/blob/a3768d0e82ad83cca2da97724e46bea4ff0e6dbd/CHANGELOG.md"
+                 ],
+    "health_check":  "Run gws --version and gws auth status, verify the active account and read-only scope list, then perform one approval-gated read with a single-result limit and no --page-all or --output; do not use a write for the initial check.",
+    "uninstall":  {
+                      "instructions":  "Remove installed gws skills or extensions, uninstall the CLI if desired, review then remove its local configuration, and revoke the Google OAuth grant; leave Workspace content unchanged.",
+                      "removes_user_data":  false
+                  }
+}

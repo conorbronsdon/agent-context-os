@@ -2,6 +2,80 @@
 
 ## [Unreleased]
 
+### Fixed
+- Refresh the social preview from the current runtime manifests, including
+  first-class OpenCode support, and keep both tracked PNG aliases byte-identical
+  to the 1280×640 source render (#195).
+- Freeze the apply-time clock in four coordination promotion tests so fixed-date
+  message fixtures do not expire as wall-clock time advances.
+- Pin validation actions to immutable commits and label the OpenClaw gateway
+  test token as synthetic without changing its authorization controls.
+- OpenCode live conformance dispatches registered commands with `--command`,
+  rejects failed skill loads and Windows fixture traversal, and requires
+  successful tool controls under both allowed and denied permission policies.
+  Host-generated dependency manifests are excluded from the fixture digest;
+  command sources and lifecycle artifacts remain covered.
+
+### Added
+- A repository-local SSOT CI pilot checks documented Python requirements against
+  the interpreter probe, warns about unregistered prose copies, and exercises
+  drift and exclusion controls in disposable fixtures.
+- A Codex workspace-companion plugin that routes to an explicitly selected
+  workspace without importing context or installing hooks. Distribution files
+  are development-owned and are not copied into composed workspaces.
+- An experimental three-file starter for sequential project work, with explicit
+  read/checkpoint prompts and a one-week guide for comparing it with one file.
+  The supplied-snapshot evidence remains tracked as development material and is
+  excluded from installed core files; full-template workflows remain available.
+- Source-attributed briefing previews and readable local receipt history expose
+  recorded freshness, selected context, and available proposal diffs. A guided
+  first handoff and constrained continuity benchmark compare project state
+  with a concise handoff-note baseline.
+- First-class OpenCode support now ships repository-native `AGENTS.md` and Agent
+  Skills discovery, typed `/context-*` adapters, setup and doctor registration,
+  explicit permission/privacy/memory boundaries, deterministic conformance, and
+  an opt-in exact-client live harness validated against OpenCode 1.18.27 (#169).
+- A deterministic, read-only integration evidence-freshness report now marks
+  entries as current, due soon, or stale and gives maintainers evidence links,
+  review dates, and explicit human-review actions without changing claims (#162).
+- Integration catalog contributions now use one authoritative JSON file per
+  entry. Deterministic aggregation generates the machine catalog, Markdown
+  reference, and component ownership records, while the chooser and changelog
+  remain explicit curated surfaces (#161).
+- Coordination messages can now become source-bound kernel proposals for an
+  explicit decision-log or session-handoff target. Apply requires the normal
+  exact digest and rejects changed, missing, or expired source messages while
+  tolerating unrelated board updates (#171).
+- Coordination `board sync` receipts now report content-free scan counts,
+  bytes, amplification, and elapsed time. The board contract records a
+  measured threshold for reconsidering physical inbox sharding while retaining
+  the flat layout at template scale (#172).
+- Public command provenance now uses documented `maintainer-core/...` logical
+  sync identifiers instead of naming an inaccessible maintainer repository;
+  public dream-lint attribution links directly to its pinned agent-memory-kit
+  source (#146).
+- `asana-mcp` integration catalog entry for Asana's official hosted V2 MCP server with pre-registered OAuth 2.0 clients, an all-tools authorization model, and explicit write/delete confirmation boundaries (#48).
+- `atlassian-rovo-mcp` integration catalog entry for Atlassian's official hosted Rovo MCP v2 server, covering every documented permission group from Jira and Confluence through Bitbucket Cloud, Loom, and Talent, with OAuth 2.1 and API-token credential boundaries (#47).
+- `todoist-cli` integration catalog entry for Doist's official CLI with a read-only OAuth login mode, opt-in app-management, backups, and billing scopes, and multi-agent skill support (#51).
+
+---
+
+## [0.13.1] — 2026-09-02 — Release recovery and coordination safety
+
+### Fixed
+- Release staging now recovers unpublished drafts through the authenticated
+  release-list API, walks all result pages before creating a release, and keeps
+  the existing exact-tag and duplicate-race checks fail-closed. The unreadable
+  v0.13.0 draft remains preserved; v0.13.1 is the replacement release target.
+- Coordination-board posting rejects the documented high-confidence credential
+  tripwires before any bootstrap or queue side effect. Validation redacts every
+  matching message field, identifier, path, and diagnostic instead of echoing
+  possible credential material in a report.
+
+---
+
+## [0.13.0] — 2026-09-02 — External-project and workspace evolution
+
 ### Added
 - External-project attachment now keeps Context OS in its own ContextRoot while
   binding an ordinary application as a read-only WorkingRoot. `project attach`
@@ -12,6 +86,16 @@
   including bounded application status and history. Claude and Codex lifecycle
   skills use the same provider-neutral kernel contract, while the existing
   colocated v0.12 command form remains compatible.
+- Workspace schema v2 records the selected component profile and detached bundle
+  digest. Guided `workspace reconcile` proposals make compatible migration,
+  composition, rollback, and recovery explicit rather than treating an installed
+  template as an opaque copy.
+- A coordination board gives concurrent agent runs bounded claims, lease expiry,
+  successor handoff, and degraded-reference handling without making a central
+  service the source of truth.
+- The generated integration catalog adds Shortcut, Slack, and GitLab MCP entries
+  with declared OAuth scopes, data access, side effects, and confirmation
+  boundaries.
 
 ### Changed
 - Aligned integration proposal, contributor guidance, and PR templates with catalog schema v2 (documentation and template changes only).
@@ -25,14 +109,6 @@
   hand-maintained prose.
 - The enabled Claude worktree guard now counts exact Claude executable names and identifies linked worktrees from Git's common-directory structure, with must-fire and must-not-fire controls for primary, linked, guarded, unguarded, and single-session paths.
 - Release draft staging now creates only after a classified HTTP 404, recovers duplicate-create races without re-uploading, and binds publication and recovery to an operator-supplied positive numeric release ID.
-
-### Added
-- `shortcut-mcp` integration catalog entry for Shortcut's hosted MCP server with
-  granular OAuth scopes and dedicated read-only mode (#49).
-- `slack-mcp` integration catalog entry for Slack's official first-party MCP server
-  with channel history, canvas, and granular message confirmation boundaries (#52).
-- `gitlab-mcp` integration catalog entry for GitLab's official Beta MCP server
-  with repository, MR, issue, and pipeline capabilities (#50).
 
 ---
 

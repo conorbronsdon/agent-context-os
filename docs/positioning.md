@@ -7,7 +7,7 @@ The product name and the repository slug are both **Context OS** (`agent-context
 ## One-line description
 
 Context OS is a Git-backed context and workflow layer shared across Claude Code,
-Codex, and OpenClaw, with experimental Hermes Agent, Cursor, and Devin adapters.
+Codex, OpenClaw, and OpenCode, with experimental Hermes Agent, Cursor, and Devin adapters.
 
 ## The problem
 
@@ -49,6 +49,15 @@ This is not a general knowledge base, a replacement for every notes app, or an a
 - "Secure by default." Describe concrete controls and data boundaries instead.
 - "Verified integration" without the date and evidence scope. Catalog validation checks internal consistency, not continuing upstream truth.
 - "Universal agent OS." The repository provides a context and workflow layer, not a complete runtime.
+
+## Experimental starter
+
+Offer the [three-file starter](minimal-starter.md) as an optional experiment for
+sequential work on one project. A single instruction file may be sufficient.
+Do not call either format the proven default or claim human time savings.
+Name the manual read/review requirements and keep full-template onboarding
+available. The starter uses direct file updates in a separate project, not
+the full template's proposal/apply lifecycle.
 
 ## Feature hierarchy
 

@@ -1,0 +1,81 @@
+{
+    "id":  "substack-mcp",
+    "name":  "Substack MCP",
+    "summary":  "An MCP server for reading Substack publication data, managing private drafts, and publishing short-form Notes.",
+    "source_url":  "https://github.com/conorbronsdon/substack-mcp",
+    "kind":  "mcp_server",
+    "supported_agents":  [
+                             "claude_code",
+                             "generic"
+                         ],
+    "installation":  {
+                         "automatic":  false,
+                         "scope":  "project",
+                         "prerequisites":  [
+                                               "Node.js with npm/npx",
+                                               "A Substack publication account"
+                                           ]
+                     },
+    "data_boundary":  {
+                          "credentials":  [
+                                              "Publication URL",
+                                              "Session token",
+                                              "User ID",
+                                              "Optional machine-bound browser-login session file"
+                                          ],
+                          "reads":  [
+                                        "Subscriber count, posts, drafts, comments, sections, analytics, and schedules"
+                                    ],
+                          "writes":  [
+                                         "Private long-form drafts",
+                                         "Publicly fetchable image uploads",
+                                         "Immediately public Notes"
+                                     ]
+                      },
+    "capabilities":  {
+                         "read":  true,
+                         "sensitive_read":  true,
+                         "write":  true,
+                         "remote_write":  true,
+                         "publish":  true,
+                         "overwrite":  false,
+                         "delete":  false,
+                         "arbitrary_execution":  false,
+                         "oauth":  false,
+                         "destructive":  false,
+                         "details":  [
+                                         "Long-form tooling is draft-only; scheduling and public-post mutation are unavailable",
+                                         "Note creation publishes immediately and has no server-side undo"
+                                     ]
+                     },
+    "confirmation":  {
+                         "required_for":  [
+                                              "credential_setup",
+                                              "external_install",
+                                              "read_sensitive",
+                                              "write",
+                                              "write_remote",
+                                              "publish"
+                                          ],
+                         "notes":  "Always confirm Note creation as an immediate public publish action; private draft writes use the normal external-write gate, and broad analytics or subscriber reads require a sensitive-read gate."
+                     },
+    "risk_tags":  [
+                      "credentials",
+                      "external-data",
+                      "sensitive-read",
+                      "remote-write",
+                      "publish-capable",
+                      "public-publish",
+                      "unofficial-api"
+                  ],
+    "maturity":  "verified",
+    "last_verified":  "2026-08-15",
+    "evidence":  [
+                     "https://github.com/conorbronsdon/substack-mcp"
+                 ],
+    "health_check":  "After explicit authentication, run the documented subscriber-count read and verify the expected publication account.",
+    "uninstall":  {
+                      "instructions":  "Remove the MCP client entry and, if used, review then remove the local browser-login session file.",
+                      "removes_user_data":  false
+                  }
+}

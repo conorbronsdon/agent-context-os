@@ -1,0 +1,31 @@
+# The executable interpreter probe owns the supported Python 3 minor floor.
+# History, test fixtures, templates and generated integration docs are not current claims.
+ignore_paths:
+  - "CHANGELOG.md"
+  - "tests/**"
+  - "docs/templates/**"
+  - "docs/evidence/**"
+  - "docs/releases/**"
+  - "references/integrations.md"
+  - ".ssot-tool/**"
+facts:
+  - name: minimum-python3-minor
+    type: integer
+    canonical:
+      file: scripts/python-env.sh
+      pattern: 'sys\.version_info >= \(3, (\d+)\)'
+    copies:
+      - file: CONTRIBUTING.md
+        pattern: 'Git, Bash, and Python 3\.(\d+) or newer'
+      - file: CONTRIBUTING.md
+        pattern: 'CI runs the suite on 3\.(\d+) so the floor stays real'
+      - file: docs/getting-started.md
+        pattern: 'You need Git, Bash, and Python 3\.(\d+) or newer'
+      - file: docs/getting-started.md
+        pattern: 'working Python 3\.(\d+)\+, setup'
+      - file: docs/first-handoff.md
+        pattern: 'Bash, Python 3\.(\d+)\+, and access'
+      - file: docs/continuity-benchmark.md
+        pattern: 'repository with Python 3\.(\d+)\+'
+      - file: .github/workflows/validate.yml
+        pattern: 'tests-minimum-python:[\s\S]*?python-version: ''3\.(\d+)'''

@@ -1,0 +1,64 @@
+{
+    "id":  "ai-tools-for-creators",
+    "name":  "AI Tools for Creators",
+    "summary":  "A discovery catalog for creator skills, MCP servers, benchmarks, and publishing tools.",
+    "source_url":  "https://github.com/conorbronsdon/ai-tools-for-creators",
+    "kind":  "resource_catalog",
+    "supported_agents":  [
+                             "generic"
+                         ],
+    "installation":  {
+                         "automatic":  false,
+                         "scope":  "none",
+                         "prerequisites":  [
+
+                                           ]
+                     },
+    "data_boundary":  {
+                          "credentials":  [
+
+                                          ],
+                          "reads":  [
+                                        "Public catalog documentation"
+                                    ],
+                          "writes":  [
+
+                                     ]
+                      },
+    "capabilities":  {
+                         "read":  true,
+                         "sensitive_read":  false,
+                         "write":  false,
+                         "remote_write":  false,
+                         "publish":  false,
+                         "overwrite":  false,
+                         "delete":  false,
+                         "arbitrary_execution":  false,
+                         "oauth":  false,
+                         "destructive":  false,
+                         "details":  [
+                                         "Discovery links only; every linked tool needs separate review"
+                                     ]
+                     },
+    "confirmation":  {
+                         "required_for":  [
+
+                                          ],
+                         "notes":  "A listing is not verification. Re-check the linked source before installing or authorizing it."
+                     },
+    "risk_tags":  [
+                      "catalog",
+                      "third-party-links",
+                      "drift-prone"
+                  ],
+    "maturity":  "listed",
+    "last_verified":  "2026-08-15",
+    "evidence":  [
+                     "https://github.com/conorbronsdon/ai-tools-for-creators"
+                 ],
+    "health_check":  "Open the linked project\u0027s current source and verify its own installation and safety claims.",
+    "uninstall":  {
+                      "instructions":  "No installation is performed by this catalog entry.",
+                      "removes_user_data":  false
+                  }
+}

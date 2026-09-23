@@ -6,9 +6,9 @@ Maintenance should keep context accurate and permissions narrow without creating
 
 ## Every working session
 
-1. Run `/start` in Claude Code or Hermes, or `$start` in Codex.
-2. Use `/update` or `$update` only when a long session needs a durable handoff.
-3. Finish with `/end` or `$end`, review the kernel proposal, and verify its receipt.
+1. Run your host's start command from the [lifecycle table](getting-started.md).
+2. Use its update command when a long session needs a durable handoff.
+3. Finish with its end command, review the kernel proposal, and verify its receipt.
 4. Inspect `git status` and the exact diff. Commit or push only after a separate approval and remote-audience check.
 
 ## Weekly
@@ -30,7 +30,7 @@ Maintenance should keep context accurate and permissions narrow without creating
 ## Portable continuity versus Claude memory
 
 `state/` and `sessions/` are the shared, version-controlled continuity layer for
-Claude Code, Codex, and Hermes. Native memory is host-local and often
+the [registered agents](getting-started.md). Native memory is host-local and often
 confidential. It is never synchronized by the lifecycle kernel.
 
 If you opt into `/dream`, first configure and verify the explicit path in [`auto-memory.md`](auto-memory.md). Run `/dream` on demand, then inspect its committed proposal artifact. `/dream-apply` is a separate live-memory write workflow with per-item review. The shipped curators are `rot`, `merge`, `split`, and `lint`; later curator designs are not current functionality.

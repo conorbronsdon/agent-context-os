@@ -56,6 +56,17 @@ client supports it. It is not the runtime path for Context OS or an account-wide
 importer. Preview every imported item and resolve duplicates against repository
 SSOTs.
 
+## Optional workspace-companion plugin
+
+The source repository also ships `.codex-plugin/plugin.json` and the
+`contextos-workspace` discovery skill. This is a companion to an existing
+repository-native installation, not a replacement for setup. It requires an
+explicitly selected Context OS workspace and follows that workspace's own
+instructions and kernel. Never keep personal state in a plugin cache.
+
+Installation does not import context, register hooks, or approve lifecycle
+writes. These distribution files are excluded from composed workspace bundles.
+
 ## Verify
 
 ```bash

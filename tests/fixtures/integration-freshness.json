@@ -1,0 +1,40 @@
+{
+  "as_of": "2026-09-03",
+  "cases": [
+    {
+      "id": "current-boundary",
+      "last_verified": "2026-07-06",
+      "expected_state": "current",
+      "expected_next_review": "2026-10-04",
+      "expected_days_remaining": 31
+    },
+    {
+      "id": "due-soon-start",
+      "last_verified": "2026-07-05",
+      "expected_state": "due_soon",
+      "expected_next_review": "2026-10-03",
+      "expected_days_remaining": 30
+    },
+    {
+      "id": "due-soon-end",
+      "last_verified": "2026-06-06",
+      "expected_state": "due_soon",
+      "expected_next_review": "2026-09-04",
+      "expected_days_remaining": 1
+    },
+    {
+      "id": "stale-boundary",
+      "last_verified": "2026-06-05",
+      "expected_state": "stale",
+      "expected_next_review": "2026-09-03",
+      "expected_days_remaining": 0
+    },
+    {
+      "id": "stale-overdue",
+      "last_verified": "2026-06-04",
+      "expected_state": "stale",
+      "expected_next_review": "2026-09-02",
+      "expected_days_remaining": -1
+    }
+  ]
+}

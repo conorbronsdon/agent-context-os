@@ -1,0 +1,84 @@
+{
+    "id":  "beads-gemini",
+    "name":  "Beads for Gemini CLI",
+    "summary":  "A Gemini integration for Beads issue graphs and persistent coordination state; project scope is available, but the documented setup default is user-global.",
+    "source_url":  "https://beads.gascity.com/integrations/gemini",
+    "kind":  "agent_extension",
+    "supported_agents":  [
+                             "gemini_cli"
+                         ],
+    "installation":  {
+                         "automatic":  false,
+                         "scope":  "project_or_user",
+                         "prerequisites":  [
+                                               "The bd CLI",
+                                               "A deliberately initialized Beads project",
+                                               "Gemini CLI"
+                                           ]
+                     },
+    "data_boundary":  {
+                          "credentials":  [
+                                              "Optional Dolt, Git, or cloud remote credentials stay with their configured clients"
+                                          ],
+                          "reads":  [
+                                        "Local issue descriptions, comments, dependencies, memories, readiness, and coordination state"
+                                    ],
+                          "writes":  [
+                                         "The project Beads database",
+                                         "Project or user Gemini hooks and instructions",
+                                         "Optional remote issue-history sync or push",
+                                         "Issue deletion, purge, migration, repair, or reset when explicitly invoked"
+                                     ]
+                      },
+    "capabilities":  {
+                         "read":  true,
+                         "sensitive_read":  false,
+                         "write":  true,
+                         "remote_write":  true,
+                         "publish":  false,
+                         "overwrite":  true,
+                         "delete":  true,
+                         "arbitrary_execution":  false,
+                         "oauth":  false,
+                         "destructive":  true,
+                         "details":  [
+                                         "bd setup gemini writes user-global hooks by default; prefer bd setup gemini --project for repository scope",
+                                         "bd init can modify agent instructions and configure a remote",
+                                         "bd dolt push --force can overwrite remote history",
+                                         "bd init --discard-remote authorizes a divergent local initialization; a later Dolt push is the separate remote-history replacement"
+                                     ]
+                     },
+    "confirmation":  {
+                         "required_for":  [
+                                              "credential_setup",
+                                              "external_install",
+                                              "write",
+                                              "write_remote",
+                                              "overwrite",
+                                              "delete",
+                                              "destructive"
+                                          ],
+                         "notes":  "Confirm initialization and setup after showing the project or user-config diff; separately confirm divergent local initialization with discard-remote and any later remote sync or push, especially force push, plus migration, fix, delete, purge, and reset."
+                     },
+    "risk_tags":  [
+                      "local-state",
+                      "hooks",
+                      "project-config",
+                      "remote-write",
+                      "overwrite-capable",
+                      "delete-capable",
+                      "destructive-capable"
+                  ],
+    "maturity":  "verified",
+    "last_verified":  "2026-08-15",
+    "evidence":  [
+                     "https://beads.gascity.com/integrations/gemini",
+                     "https://github.com/steveyegge/beads/blob/7505e173f2659ba6e1f955b86d81a4f9e21810ca/docs/cli-reference/dolt.md",
+                     "https://github.com/steveyegge/beads/blob/7505e173f2659ba6e1f955b86d81a4f9e21810ca/docs/recovery/init-safety.md"
+                 ],
+    "health_check":  "Run bd version, bd doctor, bd setup gemini --check, and a bounded bd ready --json query.",
+    "uninstall":  {
+                      "instructions":  "Remove only the Gemini integration with the documented project or user --remove command; preserve the Beads project database unless separate deletion is approved.",
+                      "removes_user_data":  false
+                  }
+}

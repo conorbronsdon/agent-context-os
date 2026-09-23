@@ -3,7 +3,7 @@ name: recover
 description: "Scan orphaned worktrees and stale branches, then offer explicit approval-gated cleanup."
 allowed-tools: "Read, Glob, Grep, Bash"
 disable-model-invocation: true
-x-source: "skills-sync/skills/recover/SKILL.md"
+x-source: "maintainer-core/skills/recover/SKILL.md"
 x-source-version: "7ae9852"
 ---
 

@@ -3,7 +3,7 @@ name: capture
 description: "Triage raw inbox notes into reviewed repository destinations without deleting their sources."
 allowed-tools: "Read, Write, Edit, Glob"
 disable-model-invocation: true
-x-source: "skills-sync/commands/capture.md"
+x-source: "maintainer-core/commands/capture.md"
 x-source-version: "40f7149"
 ---
 

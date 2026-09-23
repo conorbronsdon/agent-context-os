@@ -103,7 +103,7 @@ LOCAL_ARTIFACT_MODE = 0o600
 NEW_CONTENT_MODE = 0o666 if os.name == "nt" else 0o644
 LOCAL_BINDING_MODE = NEW_CONTENT_MODE if os.name == "nt" else LOCAL_ARTIFACT_MODE
 PROPOSAL_ID_RE = re.compile(
-    r"^\d{8}T\d{6}-(?:setup|update|end|agent-config)-[0-9a-f]{10}$"
+    r"^\d{8}T\d{6}-(?:setup|update|end|promotion|agent-config)-[0-9a-f]{10}$"
 )
 AGENT_MIGRATION_INVARIANTS = [
     "agent-workflow-path-policy",
@@ -129,6 +129,11 @@ CONTENT_BASE_INVARIANTS = [
     "exact-proposal-integrity",
 ]
 CONTENT_FRESHNESS_INVARIANTS = ["single-last-updated", "same-day-history"]
+PROMOTION_INVARIANT = "coordination-source-id-content-expiry-target"
+PROMOTION_SOURCE_KEYS = {
+    "type", "id", "path", "content_sha256", "expires",
+    "from", "kind", "observed_commit", "target_path",
+}
 PLACEHOLDER_DATE = "[DATE]"
 LAST_UPDATED_RE = re.compile(r"^\*\*Last Updated:\*\*\s*(.+?)\s*$", re.MULTILINE)
 REAL_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -145,6 +150,7 @@ LIFECYCLE_PRODUCT_ROOTS = {
     ".codex",
     ".cursor",
     ".github",
+    ".opencode",
     "adapters",
     "bundles",
     "components",
@@ -845,6 +851,120 @@ def _selection_components(root: Path, agents: Sequence[str]) -> list[str]:
         ) from exc
 
 
+def _decode_mountinfo_path(value: str) -> str:
+    """Decode the octal escapes used for path fields in proc mountinfo."""
+    escapes = (
+        ("\\040", " "),
+        ("\\011", "\t"),
+        ("\\012", "\n"),
+        ("\\134", "\\"),
+    )
+    for escaped, decoded in escapes:
+        value = value.replace(escaped, decoded)
+    return value
+
+
+def _mount_projects_windows_modes(
+    target: PurePosixPath,
+    release: str,
+    mountinfo: str,
+    expected_device: str | None = None,
+) -> bool:
+    """Classify only WSL Windows mounts that lack POSIX metadata support."""
+    if "microsoft" not in release.lower():
+        return False
+    best_mount: tuple[int, str, str, set[str], str] | None = None
+    for line in mountinfo.splitlines():
+        fields = line.split()
+        try:
+            separator = fields.index("-")
+        except ValueError:
+            return False
+        if separator < 6 or len(fields) < separator + 4:
+            return False
+        mount_point = PurePosixPath(_decode_mountinfo_path(fields[4]))
+        try:
+            target.relative_to(mount_point)
+        except ValueError:
+            continue
+        filesystem = fields[separator + 1]
+        source = _decode_mountinfo_path(fields[separator + 2])
+        option_fields = fields[5:separator] + fields[separator + 3 :]
+        options = {
+            option.lower()
+            for field in option_fields
+            for option in re.split("[,;]", field)
+        }
+        candidate = (len(mount_point.parts), filesystem, source, options, fields[2])
+        if best_mount is None or candidate[0] > best_mount[0]:
+            best_mount = candidate
+        elif candidate[0] == best_mount[0] and candidate[1:] != best_mount[1:]:
+            return False
+    if best_mount is None:
+        return False
+    _depth, filesystem, source, options, device = best_mount
+    windows_drive_source = (
+        len(source) >= 3
+        and source[0].isalpha()
+        and source[1:3] == ":\\"
+    )
+    windows_backed = source.lower().startswith("drvfs") or windows_drive_source
+    metadata_enabled = any(option.split("=", 1)[0] == "metadata" for option in options)
+    return (
+        filesystem in {"9p", "drvfs"}
+        and windows_backed
+        and not metadata_enabled
+        and (expected_device is None or device == expected_device)
+    )
+
+
+def _wsl_windows_mount_does_not_preserve_modes(
+    path: Path,
+    expected_st_dev: int,
+) -> bool:
+    """Detect a Windows-backed WSL mount that projects rather than stores modes."""
+    if os.name != "posix":
+        return False
+    try:
+        release = Path("/proc/sys/kernel/osrelease").read_text(encoding="utf-8")
+        mountinfo = Path("/proc/self/mountinfo").read_text(encoding="utf-8")
+        target = PurePosixPath(path.resolve(strict=False).as_posix())
+        expected_device = f"{os.major(expected_st_dev)}:{os.minor(expected_st_dev)}"
+        return _mount_projects_windows_modes(
+            target, release, mountinfo, expected_device=expected_device
+        )
+    except (OSError, UnicodeError, ValueError):
+        return False
+
+
+def _post_write_mode_matches(
+    path: Path,
+    expected_mode: int,
+    publication_anchor: Path,
+) -> bool:
+    observed_stat = path.stat()
+    actual_mode = observed_stat.st_mode & 0o7777
+    if actual_mode == expected_mode:
+        return True
+    permission_bits = actual_mode & 0o777
+    uniform_projection = (
+        actual_mode & 0o7000 == 0
+        and permission_bits >> 6 == permission_bits >> 3 & 0o7
+        and permission_bits >> 6 == permission_bits & 0o7
+    )
+    if (
+        expected_mode != 0o644
+        or not uniform_projection
+        or not os.path.samestat(observed_stat, publication_anchor.stat())
+        or not _same_file(path, publication_anchor)
+    ):
+        return False
+    projected = _wsl_windows_mount_does_not_preserve_modes(
+        path, observed_stat.st_dev
+    )
+    return projected and _same_file(path, publication_anchor)
+
+
 def _workspace_component_ids(root: Path) -> list[str] | None:
     component_path = safe_repo_path(root, "components/manifest.json")
     if not component_path.exists():
@@ -1338,6 +1458,66 @@ def render_end(workspace: Workspace, payload: dict[str, Any], now: datetime) -> 
     return pending
 
 
+def render_promotion(
+    workspace: Workspace,
+    target: str,
+    payload: dict[str, Any],
+    source: dict[str, Any],
+    now: datetime,
+) -> dict[Path, str]:
+    target_path = safe_repo_path(workspace.root, target)
+    target_relative = relative_path(workspace.root, target_path)
+    decision_relative = relative_path(
+        workspace.root, workspace.state_dir / "decisions.md"
+    )
+    session_relative = relative_path(
+        workspace.root,
+        workspace.sessions_dir / f"{now.strftime('%Y-%m-%d')}.md",
+    )
+    source_id = ensure_text(source.get("id"), "source.id")
+    today, clock = now.strftime("%Y-%m-%d"), now.strftime("%H:%M")
+
+    if target_relative == decision_relative:
+        allowed = {"decision", "rationale", "rejected_alternatives"}
+        if set(payload) - allowed:
+            raise ContextOSError("decision promotion input has unknown fields")
+        decision = ensure_text(payload.get("decision"), "decision").strip()
+        if not decision:
+            raise ContextOSError("decision must not be empty")
+        rationale = ensure_text(payload.get("rationale", ""), "rationale").strip()
+        rejected = ensure_text(
+            payload.get("rejected_alternatives", ""), "rejected_alternatives"
+        ).strip()
+        if not target_path.is_file():
+            raise ContextOSError(f"decision log does not exist: {target_relative}")
+        before = target_path.read_text(encoding="utf-8").rstrip()
+        provenance = f"coordination message {source_id}"
+        context = f"{rationale}; source: {provenance}" if rationale else f"source: {provenance}"
+        after = (
+            f"{before}\n| {today} | {_escape_table(decision)} | "
+            f"{_escape_table(context)} | {_escape_table(rejected)} |\n"
+        )
+        return {target_path: after}
+
+    if target_relative == session_relative:
+        if set(payload) != {"summary"}:
+            raise ContextOSError("handoff promotion input must contain only summary")
+        summary = ensure_string_list(payload.get("summary"), "summary", required=True)
+        if not summary:
+            raise ContextOSError("summary must contain at least one item")
+        block = (
+            f"## Coordination handoff: {clock}\n"
+            f"Source: coordination message `{source_id}`\n\n"
+            f"{_bullets(summary)}"
+        )
+        return {target_path: _session_append(target_path, block, today)}
+
+    raise ContextOSError(
+        "promotion target must be the decision log or today's session handoff: "
+        f"{target_relative}"
+    )
+
+
 def _is_populated(content: str) -> bool:
     stripped = re.sub(r"<!--.*?-->", "", content, flags=re.DOTALL)
     for raw_line in stripped.splitlines():
@@ -1414,6 +1594,8 @@ def build_changes(
 
 def _content_invariants(workflow: str, changes: Sequence[dict[str, Any]]) -> list[str]:
     invariants = list(CONTENT_BASE_INVARIANTS)
+    if workflow == "promotion":
+        invariants.append(PROMOTION_INVARIANT)
     if workflow in {"update", "end"} and any(
         isinstance(change, dict)
         and isinstance(change.get("path"), str)
@@ -1422,6 +1604,46 @@ def _content_invariants(workflow: str, changes: Sequence[dict[str, Any]]) -> lis
     ):
         invariants.extend(CONTENT_FRESHNESS_INVARIANTS)
     return invariants
+
+
+def create_coordination_promotion_proposal(
+    root: Path,
+    *,
+    target: str,
+    payload: dict[str, Any],
+    source: dict[str, Any],
+    now: datetime,
+) -> tuple[Path, dict[str, Any]]:
+    if now.tzinfo is None:
+        raise ContextOSError("Promotion timestamps must be timezone-aware")
+    workspace = load_workspace(root)
+    changes = build_changes(
+        root, render_promotion(workspace, target, payload, source, now)
+    )
+    if len(changes) != 1:
+        raise ContextOSError("promotion proposal must contain exactly one change")
+    _validate_change_path(workspace, "promotion", now, changes[0]["path"])
+    bound_source = dict(source)
+    bound_source["target_path"] = changes[0]["path"]
+    document: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "workflow": "promotion",
+        "created_at": now.isoformat(),
+        "proposal_id": proposal_id("promotion", now, changes, binding=bound_source),
+        "source": bound_source,
+        "changes": changes,
+        "invariants": _content_invariants("promotion", changes),
+    }
+    document["proposal_digest"] = sha256_text(canonical_json(document))
+    proposal_path = (
+        root / ".context-os" / "proposals" / f"{document['proposal_id']}.json"
+    )
+    _write_exclusive_text(
+        proposal_path,
+        json.dumps(document, indent=2, ensure_ascii=False) + "\n",
+        root=root,
+    )
+    return proposal_path, document
 
 
 def _content_change_diff(root: Path, relative: str, after_text: str) -> str:
@@ -1497,8 +1719,21 @@ def _validate_content_semantics(
         raise ContextOSError("same-day-history invariant failed")
 
 
-def proposal_id(workflow: str, now: datetime, changes: list[dict[str, Any]]) -> str:
-    seed = canonical_json({"workflow": workflow, "now": now.isoformat(), "changes": changes})
+def proposal_id(
+    workflow: str,
+    now: datetime,
+    changes: list[dict[str, Any]],
+    *,
+    binding: dict[str, Any] | None = None,
+) -> str:
+    identity: dict[str, Any] = {
+        "workflow": workflow,
+        "now": now.isoformat(),
+        "changes": changes,
+    }
+    if binding is not None:
+        identity["binding"] = binding
+    seed = canonical_json(identity)
     return f"{now.strftime('%Y%m%dT%H%M%S')}-{workflow}-{sha256_text(seed)[:10]}"
 
 
@@ -1904,14 +2139,20 @@ def _validate_change_path(workspace: Workspace, workflow: str, created_at: datet
             or (len(parts) >= 3 and parts[:2] == SETUP_SKILL_PREFIX)
         )
     else:
-        state_paths = {
-            relative_path(workspace.root, workspace.state_dir / name)
-            for name in ("current.md", "current-log.md")
-        }
+        state_paths: set[str] = set()
+        if workflow != "promotion":
+            state_paths.update(
+                relative_path(workspace.root, workspace.state_dir / name)
+                for name in ("current.md", "current-log.md")
+            )
         if workflow == "end":
             state_paths.update(
                 relative_path(workspace.root, workspace.state_dir / name)
                 for name in ("decisions.md", "blockers.md", "weekly-priorities.md")
+            )
+        elif workflow == "promotion":
+            state_paths.add(
+                relative_path(workspace.root, workspace.state_dir / "decisions.md")
             )
         session_path = relative_path(
             workspace.root, workspace.sessions_dir / f"{created_at.strftime('%Y-%m-%d')}.md"
@@ -2275,6 +2516,8 @@ def _validate_proposal_shape(
         "schema_version", "workflow", "created_at", "proposal_id",
         "changes", "invariants", "proposal_digest",
     }
+    if workflow == "promotion":
+        required.add("source")
     if workflow != AGENT_LIFECYCLE_WORKFLOW and (
         set(document) != required or document.get("schema_version") != SCHEMA_VERSION
     ):
@@ -2284,7 +2527,9 @@ def _validate_proposal_shape(
         or document.get("schema_version") != SCHEMA_VERSION
     ):
         raise ContextOSError("proposal has an unsupported schema version")
-    if workflow not in {"setup", "update", "end", AGENT_LIFECYCLE_WORKFLOW}:
+    if workflow not in {
+        "setup", "update", "end", "promotion", AGENT_LIFECYCLE_WORKFLOW
+    }:
         raise ContextOSError(f"unsupported proposal workflow: {workflow}")
     proposal_id_value = ensure_text(document.get("proposal_id"), "proposal_id")
     if not PROPOSAL_ID_RE.fullmatch(proposal_id_value):
@@ -2301,6 +2546,22 @@ def _validate_proposal_shape(
     changes = document.get("changes")
     if not isinstance(changes, list) or not changes:
         raise ContextOSError("proposal changes must be a non-empty list")
+    if workflow == "promotion":
+        source = document.get("source")
+        if not isinstance(source, dict) or set(source) != PROMOTION_SOURCE_KEYS:
+            raise ContextOSError("promotion source binding has an invalid shape")
+        if source.get("type") != "coordination-message":
+            raise ContextOSError("promotion source has an invalid type")
+        for field in (
+            "id", "path", "expires", "from", "kind", "observed_commit", "target_path"
+        ):
+            ensure_text(source.get(field), f"source.{field}")
+        if not isinstance(source.get("content_sha256"), str) or not re.fullmatch(
+            r"[0-9a-f]{64}", source["content_sha256"]
+        ):
+            raise ContextOSError("source.content_sha256 is invalid")
+        if len(changes) != 1 or source["target_path"] != changes[0].get("path"):
+            raise ContextOSError("promotion source target does not match its change")
     if workflow != AGENT_LIFECYCLE_WORKFLOW and document.get(
         "invariants"
     ) != _content_invariants(workflow, changes):
@@ -2804,6 +3065,8 @@ def _create_agent_journal(
                 "source_hashes": document["source_hashes"],
             }
             if workflow == AGENT_LIFECYCLE_WORKFLOW
+            else document["source"]
+            if workflow == "promotion"
             else None
         ),
     }
@@ -2851,7 +3114,9 @@ def _recover_agent_journal(
         or manifest.get("journal_version") != TRANSACTION_JOURNAL_VERSION
         or type(manifest.get("schema_version")) is not int
         or manifest.get("schema_version") != SCHEMA_VERSION
-        or workflow not in {"setup", "update", "end", AGENT_LIFECYCLE_WORKFLOW}
+        or workflow not in {
+            "setup", "update", "end", "promotion", AGENT_LIFECYCLE_WORKFLOW
+        }
         or manifest.get("proposal_id") != journal.name
         or not isinstance(manifest.get("proposal_id"), str)
         or PROPOSAL_ID_RE.fullmatch(manifest["proposal_id"]) is None
@@ -2896,6 +3161,23 @@ def _recover_agent_journal(
                 )
         elif manifest.get("invariants") != AGENT_MIGRATION_INVARIANTS:
             raise ContextOSError(f"invalid agent transaction evidence: {journal}")
+    elif workflow == "promotion":
+        evidence = manifest.get("agent_evidence")
+        if (
+            manifest.get("operation") != "content-lifecycle"
+            or not isinstance(evidence, dict)
+            or set(evidence) != PROMOTION_SOURCE_KEYS
+            or evidence.get("type") != "coordination-message"
+        ):
+            raise ContextOSError(f"invalid promotion transaction evidence: {journal}")
+        for field in (
+            "id", "path", "expires", "from", "kind", "observed_commit", "target_path"
+        ):
+            ensure_text(evidence.get(field), f"promotion source {field}")
+        if not isinstance(evidence.get("content_sha256"), str) or not re.fullmatch(
+            r"[0-9a-f]{64}", evidence["content_sha256"]
+        ):
+            raise ContextOSError(f"invalid promotion transaction evidence: {journal}")
     else:
         if (
             manifest.get("operation") != "content-lifecycle"
@@ -2920,6 +3202,11 @@ def _recover_agent_journal(
     }
     if not isinstance(entries, list) or not entries:
         raise ContextOSError(f"transaction journal has no entries: {journal}")
+    if workflow == "promotion" and (
+        len(entries) != 1
+        or manifest["agent_evidence"]["target_path"] != entries[0].get("path")
+    ):
+        raise ContextOSError(f"promotion journal target binding is invalid: {journal}")
     workspace = load_workspace(root) if workflow != AGENT_LIFECYCLE_WORKFLOW else None
     seen_paths: set[str] = set()
     seen_slots: set[str] = set()
@@ -3184,6 +3471,8 @@ def _recover_agent_journal(
             expected_receipt_keys.update(
                 {"workflow", "operation", "confirmation", "authorization"}
             )
+        elif workflow == "promotion":
+            expected_receipt_keys.update({"workflow", "source", "confirmation"})
         expected_files = [entry["receipt_entry"] for entry in entries]
         if (
             set(value) != expected_receipt_keys
@@ -3224,6 +3513,16 @@ def _recover_agent_journal(
             ):
                 raise ContextOSError(
                     f"journal receipt is not a valid agent commit marker: {receipt}"
+                )
+        elif workflow == "promotion":
+            if (
+                value.get("workflow") != "promotion"
+                or value.get("source") != manifest.get("agent_evidence")
+                or value.get("confirmation")
+                != {"method": "exact-digest-echo", "human_authenticated": False}
+            ):
+                raise ContextOSError(
+                    f"journal receipt is not a valid promotion commit marker: {receipt}"
                 )
         for entry, target, _content, _mode in recovered:
             if entry["action"] == "delete":
@@ -3875,6 +4174,10 @@ def apply_proposal(
                 created_at,
                 document["changes"],
             )
+            if workflow == "promotion":
+                from .coordination import validate_promotion_source
+
+                validate_promotion_source(root, document["source"])
         head_before = git_head(root)
         applied = []
         backups: dict[Path, bytes | None] = {}
@@ -3970,6 +4273,12 @@ def apply_proposal(
                 # long enough for an uncoordinated source edit. Rebind every
                 # source and target immediately before the first mutation.
                 _validate_agent_preflight(root, document)
+            elif workflow == "promotion":
+                # Re-fetch immediately before the first canonical mutation so
+                # staging time cannot hide a changed or newly expired source.
+                from .coordination import validate_promotion_source
+
+                validate_promotion_source(root, document["source"])
             for change in document["changes"]:
                 path = _transaction_target(
                     root, change["path"], document.get("operation")
@@ -4024,7 +4333,9 @@ def apply_proposal(
                     expected_mode = change["after_mode"]
                     if (
                         change["action"] == "write"
-                        and path.stat().st_mode & 0o7777 != expected_mode
+                        and not _post_write_mode_matches(
+                            path, expected_mode, publication_anchors[path]
+                        )
                     ):
                         raise ContextOSError(
                             f"agent-config post-write mode is invalid: {change['path']}"
@@ -4054,7 +4365,9 @@ def apply_proposal(
                         if backup_modes[path] is not None
                         else NEW_CONTENT_MODE
                     )
-                    if path.stat().st_mode & 0o7777 != expected_mode:
+                    if not _post_write_mode_matches(
+                        path, expected_mode, publication_anchors[path]
+                    ):
                         raise ContextOSError(
                             f"content post-write mode is invalid: {change['path']}"
                         )
@@ -4108,6 +4421,15 @@ def apply_proposal(
                             {"path": path, "sha256_raw": digest}
                             for path, digest in document["source_hashes"].items()
                         ],
+                    },
+                })
+            elif workflow == "promotion":
+                receipt.update({
+                    "workflow": workflow,
+                    "source": document["source"],
+                    "confirmation": {
+                        "method": "exact-digest-echo",
+                        "human_authenticated": False,
                     },
                 })
             receipt_path.parent.mkdir(parents=True, exist_ok=True)

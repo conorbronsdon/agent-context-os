@@ -1,0 +1,84 @@
+{
+    "id":  "pandoc",
+    "name":  "Pandoc",
+    "summary":  "A document-conversion CLI for turning reviewed Markdown into DOCX, PDF, EPUB, or HTML while keeping Markdown canonical in Git.",
+    "source_url":  "https://github.com/jgm/pandoc",
+    "kind":  "connector",
+    "supported_agents":  [
+                             "generic"
+                         ],
+    "installation":  {
+                         "automatic":  false,
+                         "scope":  "project_or_user",
+                         "prerequisites":  [
+                                               "Pandoc CLI",
+                                               "A separately installed and reviewed PDF engine when producing PDF output"
+                                           ]
+                     },
+    "data_boundary":  {
+                          "credentials":  [
+
+                                          ],
+                          "reads":  [
+                                        "Explicitly selected local input files and assets in the bounded profile",
+                                        "Absolute HTTP or HTTPS inputs, URL-valued resources, and local or remote iframe sources when those surfaces are used",
+                                        "Additional files and resources reachable by approved include directives, filters, custom writers, or PDF engines and their options"
+                                    ],
+                          "writes":  [
+                                         "Explicitly selected local output files, including overwrite of an existing output path when approved",
+                                         "Temporary files used during PDF production and any additional filesystem side effects introduced by approved filters, custom writers, or PDF engines"
+                                     ]
+                      },
+    "capabilities":  {
+                         "read":  true,
+                         "sensitive_read":  true,
+                         "write":  true,
+                         "remote_write":  false,
+                         "publish":  false,
+                         "overwrite":  true,
+                         "delete":  false,
+                         "arbitrary_execution":  true,
+                         "oauth":  false,
+                         "destructive":  true,
+                         "details":  [
+                                         "The bounded non-PDF profile uses --sandbox with one exact local input and a new exact local output path; reject remote inputs and resources, include directives, filters, custom writers, and overwrite",
+                                         "Pandoc accepts absolute HTTP or HTTPS inputs, and its HTML reader can fetch local or remote iframe sources; treat those as sensitive network reads outside the bounded profile",
+                                         "--sandbox limits reader and writer IO to files named on the command line, but does not constrain filters or PDF production and can prevent formats such as DOCX from loading filesystem data files",
+                                         "PDF output invokes a separately installed engine; audit and confirm the exact --pdf-engine and every --pdf-engine-opt because the engine can widen filesystem, network, and execution risk",
+                                         "Pandoc\u0027s full flag surface can enable arbitrary execution and additional side effects through filters, custom writers, and PDF engines"
+                                     ]
+                     },
+    "confirmation":  {
+                         "required_for":  [
+                                              "external_install",
+                                              "read_sensitive",
+                                              "write",
+                                              "overwrite",
+                                              "arbitrary_execution",
+                                              "destructive"
+                                          ],
+                         "notes":  "Confirm exact input and output paths before each run. Separately confirm any remote input or resource, include directive, filter, custom writer, overwrite, or PDF production; for PDF, name the reviewed engine and exact engine options."
+                     },
+    "risk_tags":  [
+                      "external-install",
+                      "local-data",
+                      "sensitive-read",
+                      "network-capable",
+                      "overwrite-capable",
+                      "arbitrary-execution",
+                      "destructive-capable",
+                      "open-world"
+                  ],
+    "maturity":  "verified",
+    "last_verified":  "2026-08-25",
+    "evidence":  [
+                     "https://github.com/jgm/pandoc",
+                     "https://github.com/jgm/pandoc/releases/tag/3.10.2",
+                     "https://pandoc.org/MANUAL.html"
+                 ],
+    "health_check":  "Run pandoc --version, then use --sandbox to convert one non-sensitive local Markdown fixture to a new local HTML output path without remote resources, includes, filters, custom writers, or PDF production.",
+    "uninstall":  {
+                      "instructions":  "Uninstall Pandoc using the platform package manager and keep generated documents unless the user explicitly asks to remove them; review any separately installed PDF engine independently.",
+                      "removes_user_data":  false
+                  }
+}

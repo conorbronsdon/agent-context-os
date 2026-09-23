@@ -153,6 +153,18 @@ def validate_command(path: Path, command_name: str) -> None:
             raise MetadataError(f"{field} contains a control or format character")
     if data["disable-model-invocation"] is not True:
         raise MetadataError("disable-model-invocation must be boolean true in frontmatter")
+    source = data.get("x-source")
+    source_version = data.get("x-source-version")
+    if (source is None) != (source_version is None):
+        raise MetadataError("x-source and x-source-version must appear together")
+    if source is not None:
+        if not re.fullmatch(
+            r"maintainer-core/(?:commands|skills)/[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*(?:/[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)*",
+            source,
+        ):
+            raise MetadataError("x-source must use a documented maintainer-core logical ID")
+        if not re.fullmatch(r"[0-9a-f]{7,64}", source_version):
+            raise MetadataError("x-source-version must be a lowercase hexadecimal revision")
     if command_name == "start" and data["allowed-tools"] != START_TOOLS:
         raise MetadataError("start must pre-approve only repository read tools")
 
