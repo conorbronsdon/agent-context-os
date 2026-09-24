@@ -31,10 +31,12 @@ responses nor the earlier copy is preserved here, so that comparison cannot be
 rechecked from these files.
 
 Prompts are stored as hashes, not text. Each `prompt_sha256` is the SHA-256 of
-`prepare --scenario long --profile <profile>` at the source commit, and
-`summarize` recomputes and checks it when it loads the records. The prompt
-files actually sent were that command's Windows standard output, so they used
-CRLF line endings and a trailing newline.
+the UTF-8 string returned by `prepare(scenario, profile)` for the long scenario.
+The orchestrator recomputed all three hashes from this fixture and they match;
+`summarize` does not recheck them for these records, because it only rescores
+records that lack `value_correct`. The prompt files actually sent were the
+Windows standard output of `prepare`, so they used CRLF line endings and a
+trailing newline. The hash identifies the prompt text, not those exact bytes.
 
 ## Scores
 
