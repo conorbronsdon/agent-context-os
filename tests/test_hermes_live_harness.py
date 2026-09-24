@@ -58,6 +58,9 @@ if phase in ('setup', 'update', 'end'):
     payload = ({'files': {'identity/hermes-fixture.md': '# Synthetic fixture identity'}} if phase == 'setup'
                else {'progress': ['Synthetic checkpoint']} if phase == 'update'
                else {'what_happened': ['Synthetic close']})
+    if phase == 'setup' and mode == 'propose-memory':
+        memory = (pathlib.Path(os.environ['HERMES_HOME']) / 'memories' / 'USER.md').read_text()
+        payload = {'files': {'identity/hermes-fixture.md': '# Synthetic fixture identity\n' + memory}}
     path = folder / (phase + '.json')
     path.write_text(json.dumps(payload))
     made = subprocess.run([sys.executable, '-m', 'contextos', 'propose', phase, '--input', str(path)], cwd=root, capture_output=True, text=True)
@@ -319,6 +322,16 @@ class HermesLiveHarnessTest(unittest.TestCase):
         _events, assistant, _skills, _self_read = live.stream_evidence(raw, (canary,))
         self.assertIn(canary, assistant)
 
+    def test_route_identifiers_are_recorded_verbatim(self) -> None:
+        for model in ("thinkingmachines/inkling:free", "nvidia/nemotron-3-ultra-550b-a55b:free"):
+            self.assertEqual(model, live.route_id(model, "model"))
+        for bad in ("sk-or-v1-" + "a" * 40, "model with spaces", "../../etc"):
+            with self.assertRaises(live.HarnessError):
+                live.route_id(bad, "model")
+        report = self.run_record()
+        self.assertEqual("fake/free", report["model"])
+        self.assertEqual("fake", report["provider"])
+
     def test_skill_view_name_is_redacted(self) -> None:
         raw = json.dumps({"type": "tool_use", "name": "skill_view", "input": {"name": "sk-abc"}})
         events, assistant, skills, self_read = live.stream_evidence(raw, ())
@@ -375,6 +388,14 @@ class HermesLiveHarnessTest(unittest.TestCase):
         report = self.run_record("mirror-memory")
         self.assertEqual("failed", report["controls"]["memory_separation"])
         self.assertIn("native memory canary", report["failure"])
+
+    def test_proposal_mirroring_native_memory_fails_before_approval(self) -> None:
+        approval_dir = self.base / "approval-memory"
+        approval_dir.mkdir()
+        report = self.run_record("propose-memory", approval_dir=approval_dir)
+        self.assertEqual("failed", report["controls"]["memory_separation"])
+        self.assertEqual("proposal mirrors Hermes native memory into repository state", report["failure"])
+        self.assertFalse((approval_dir / "setup.review.txt").exists())
 
     def test_wrong_digest_rejected_and_receipt_bound(self) -> None:
         report = self.run_record()

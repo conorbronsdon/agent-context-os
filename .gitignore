@@ -29,3 +29,6 @@ REPO_MAP.md
 
 # Local migration inventories may contain private workflow metadata
 .context-os/
+
+# Scratch root for tests/test_hermes_live_harness.py; left behind only by interrupted runs.
+.hermes-test-root/

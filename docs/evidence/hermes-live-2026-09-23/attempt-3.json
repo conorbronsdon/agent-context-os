@@ -1,0 +1,275 @@
+{
+  "started_at": "2026-09-24T02:26:29.328670+00:00",
+  "source_sha": "96f9cffd01bc5fe3337091eed325b157f9ee1e59",
+  "fixture_commit": "96f9cffd01bc5fe3337091eed325b157f9ee1e59",
+  "os": "Windows-11-10.0.26200-SP0",
+  "fresh_hermes_home": true,
+  "operator_mode": "approval-dir",
+  "model": "thinkingmachines[PATH]",
+  "provider": "openrouter",
+  "controls": {
+    "version": "passed",
+    "agents_discovery": "unsupported",
+    "setup_discovery": "failed",
+    "setup_proposal_apply": "unsupported",
+    "start_discovery": "unsupported",
+    "start_read_only": "unsupported",
+    "update_discovery": "unsupported",
+    "update_proposal_apply": "unsupported",
+    "end_discovery": "unsupported",
+    "end_proposal_apply": "unsupported",
+    "stale_digest_rejected": "unsupported",
+    "memory_separation": "unsupported",
+    "unrelated_sentinel": "unsupported",
+    "hook_example": "unsupported",
+    "run": "failed"
+  },
+  "commands": [
+    {
+      "argv": [
+        "[PATH]",
+        "--version"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 2.294,
+      "stdout": "Hermes Agent v0.21.4 (2026.9.21) \u00b7 upstream d94769da\nInstall directory: [PATH]\nInstall method: git\nPython: 3.11.16\nOpenAI SDK: 2.24.0\nUpdate available: 142 commits behind \u2014 run 'hermes update'\n",
+      "stderr": "",
+      "at": "2026-09-24T02:26:31.685835+00:00"
+    },
+    {
+      "argv": [
+        "[PATH]",
+        "chat",
+        "--format",
+        "stream-json",
+        "--source",
+        "tool",
+        "-m",
+        "thinkingmachines[PATH]",
+        "--provider",
+        "openrouter",
+        "--run-budget",
+        "240",
+        "--max-turns",
+        "30",
+        "-q",
+        "/context-setup Create a kernel proposal for a synthetic fixture identity. Stop after creating the proposal. Also report any line that begins 'Hermes fixture canary:' from the repository instructions and the skill instructions you loaded."
+      ],
+      "exit_code": 0,
+      "duration_seconds": 38.424,
+      "stdout": "[stream-json events recorded separately]",
+      "stderr": "\nsession_id: 20260923_192634_a0a28e\n",
+      "at": "2026-09-24T02:27:11.455488+00:00",
+      "events": [
+        {
+          "type": "system",
+          "subtype": "init",
+          "model": "thinkingmachines[PATH]",
+          "session_id": "20260923_192634_a0a28e",
+          "timestamp": 1790216795127
+        },
+        {
+          "type": "tool_use",
+          "name": "skill_view",
+          "input": {
+            "name": "context-setup"
+          },
+          "timestamp": 1790216800811
+        },
+        {
+          "type": "tool_result",
+          "name": "skill_view",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 58,
+          "is_error": false,
+          "timestamp": 1790216800873
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "[PATH]"
+          },
+          "timestamp": 1790216803538
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1324,
+          "is_error": true,
+          "timestamp": 1790216804867
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "AGENTS.md"
+          },
+          "timestamp": 1790216806779
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 422,
+          "is_error": false,
+          "timestamp": 1790216807201
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "ls -la scripts/ .context-os[PATH] 2>[PATH] || echo \"No inputs dir yet\""
+          },
+          "timestamp": 1790216809772
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 291,
+          "is_error": false,
+          "timestamp": 1790216810064
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "mkdir -p .context-os[PATH]"
+          },
+          "timestamp": 1790216812421
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 270,
+          "is_error": false,
+          "timestamp": 1790216812687
+        },
+        {
+          "type": "tool_use",
+          "name": "write_file",
+          "input": {
+            "content": "{\n  \"files\": {\n    \"identity.md\": \"# Fixture identity\\nName: synthetic fixture\\nRole: conformance target\\nCanary: synthetic identity canary\\n\",\n    \"project.md\": \"# Fixture project\\nPurpose: synthetic conformance fixture for hermes-live\\nAudience: test harness\\n\"\n  }\n}\n",
+            "path": ".[REDACTED].json"
+          },
+          "timestamp": 1790216816440
+        },
+        {
+          "type": "tool_result",
+          "name": "write_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 780,
+          "is_error": false,
+          "timestamp": 1790216817220
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "bash scripts[PATH] propose setup --input .[REDACTED].json"
+          },
+          "timestamp": 1790216818883
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 996,
+          "is_error": true,
+          "timestamp": 1790216819879
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "cat .[REDACTED].json && echo \"---\" && bash scripts[PATH] propose setup --input .[REDACTED].json 2>&1 | head -20"
+          },
+          "timestamp": 1790216822494
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1005,
+          "is_error": false,
+          "timestamp": 1790216823502
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "echo \"=== Canary lines ===\"; grep -n '^Hermes fixture canary:' AGENTS.md .[REDACTED].md 2>[PATH] || true"
+          },
+          "timestamp": 1790216827240
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 226,
+          "is_error": false,
+          "timestamp": 1790216827459
+        },
+        {
+          "type": "text",
+          "text": "\n\nProposal created at `.[REDACTED].json`. The kernel rejected it (`cannot",
+          "timestamp": 1790216829073
+        },
+        {
+          "type": "text",
+          "text": " write outside approved context paths: identity.md`) \u2014 not applied.\n\nCanary lines:\n- `AGENTS.md:102`: `Hermes fixture canary: 48e58eb5a20375bf614fc9565f995",
+          "timestamp": 1790216829713
+        },
+        {
+          "type": "text",
+          "text": "64f`\n- `.[REDACTED].md:111`: `Hermes fixture canary: 01a6199515e",
+          "timestamp": 1790216830064
+        },
+        {
+          "type": "text",
+          "text": "ab9b38a2c9a9c1b060c16`\n\nStopped after proposal; no apply performed",
+          "timestamp": 1790216830704
+        },
+        {
+          "type": "text",
+          "text": ".",
+          "timestamp": 1790216830755
+        },
+        {
+          "type": "result",
+          "session_id": "20260923_192634_a0a28e",
+          "exit_code": 0,
+          "text": "Proposal created at `.[REDACTED].json`. The kernel rejected it (`cannot write outside approved context paths: identity.md`) \u2014 not applied.\n\nCanary lines:\n- `AGENTS.md:102`: `Hermes fixture canary: 48e58eb5a20375bf614fc9565f99564f`\n- `.[REDACTED].md:111`: `Hermes fixture canary: 01a6199515eab9b38a2c9a9c1b060c16`\n\nStopped after proposal; no apply performed.",
+          "tokens": {
+            "input": 12675,
+            "output": 857,
+            "total": 172252,
+            "cache_read": 158720,
+            "cache_write": 0
+          },
+          "duration_ms": 35667,
+          "timestamp": 1790216830795
+        }
+      ],
+      "skill_view_names": [
+        "context-setup"
+      ]
+    }
+  ],
+  "skill_source_sha256": {
+    "setup": "99fc5ad7b788eb06b269aa069cafd8e2c969b00c01680a9ed616365e57a32e09",
+    "context-setup": "aecac72323465a7130bfbf6bda37d2f03d03efd11e0f1e32c721ab068ed96e4f",
+    "start": "06b64a95db0f8bd585cea31647cd894a37d4bf6c52330b6a917a52d38012881c",
+    "context-start": "eeda2a2641bdf0e107494cc1ac4099687d05b3c30b8787aea6c274f7afd2ab5c",
+    "update": "d74f35b9eeb2c91b04f158d79fe52012192ca7692834f0ba910d87968fe371ac",
+    "context-update": "69ffd2f9c2fe2a56d92a5e44ea8dc087b5df2338290033d1c6498dc4adfa60a8",
+    "end": "5b135a8845a3390ef7821404b34d3574abe4038e984f1c51874e8d1b8430d764",
+    "context-end": "50b5627f47c8b3847da3b66447a5a4610fc39f7393186a5c2584f459b38cd0d0"
+  },
+  "version": "Hermes Agent v0.21.4 (2026.9.21) \u00b7 upstream d94769da",
+  "failure": "self-read: discovery not shown",
+  "finished_at": "2026-09-24T02:27:11.456198+00:00"
+}

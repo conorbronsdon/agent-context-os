@@ -1,0 +1,237 @@
+{
+  "started_at": "2026-09-24T02:04:53.495469+00:00",
+  "source_sha": "19b2775c67bcf28ecd19c8ef1034312136abb635",
+  "fixture_commit": "19b2775c67bcf28ecd19c8ef1034312136abb635",
+  "os": "Windows-11-10.0.26200-SP0",
+  "fresh_hermes_home": true,
+  "operator_mode": "approval-dir",
+  "model": "thinkingmachines[PATH]",
+  "provider": "openrouter",
+  "controls": {
+    "version": "passed",
+    "agents_discovery": "unsupported",
+    "setup_discovery": "failed",
+    "setup_proposal_apply": "unsupported",
+    "start_discovery": "unsupported",
+    "start_read_only": "unsupported",
+    "update_discovery": "unsupported",
+    "update_proposal_apply": "unsupported",
+    "end_discovery": "unsupported",
+    "end_proposal_apply": "unsupported",
+    "stale_digest_rejected": "unsupported",
+    "memory_separation": "unsupported",
+    "unrelated_sentinel": "unsupported",
+    "hook_example": "unsupported",
+    "run": "failed"
+  },
+  "commands": [
+    {
+      "argv": [
+        "[PATH]",
+        "--version"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.477,
+      "stdout": "Hermes Agent v0.21.4 (2026.9.21) \u00b7 upstream d94769da\nInstall directory: [PATH]\nInstall method: git\nPython: 3.11.16\nOpenAI SDK: 2.24.0\nUpdate available: 130 commits behind \u2014 run 'hermes update'\n",
+      "stderr": "",
+      "at": "2026-09-24T02:04:54.034519+00:00"
+    },
+    {
+      "argv": [
+        "[PATH]",
+        "chat",
+        "--format",
+        "stream-json",
+        "--source",
+        "tool",
+        "-m",
+        "thinkingmachines[PATH]",
+        "--provider",
+        "openrouter",
+        "--run-budget",
+        "240",
+        "--max-turns",
+        "30",
+        "-q",
+        "/context-setup Create a kernel proposal for a synthetic fixture identity. Stop after creating the proposal. Also report any line that begins 'Hermes fixture canary:' from the instructions you loaded."
+      ],
+      "exit_code": 0,
+      "duration_seconds": 65.115,
+      "stdout": "[stream-json events recorded separately]",
+      "stderr": "\nsession_id: 20260923_190459_0bce3e\n",
+      "at": "2026-09-24T02:06:01.041895+00:00",
+      "events": [
+        {
+          "type": "system",
+          "subtype": "init",
+          "model": "thinkingmachines[PATH]",
+          "session_id": "20260923_190459_0bce3e",
+          "timestamp": 1790215499530
+        },
+        {
+          "type": "tool_use",
+          "name": "skill_view",
+          "input": {
+            "name": "context-setup"
+          },
+          "timestamp": 1790215508914
+        },
+        {
+          "type": "tool_result",
+          "name": "skill_view",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 62,
+          "is_error": false,
+          "timestamp": 1790215508979
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "ls -la && ls scripts/ 2>[PATH] || echo \"no scripts\""
+          },
+          "timestamp": 1790215517705
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1210,
+          "is_error": false,
+          "timestamp": 1790215518918
+        },
+        {
+          "type": "tool_use",
+          "name": "execute_code",
+          "input": {
+            "code": "mkdir -p .context-os[PATH]"
+          },
+          "timestamp": 1790215520338
+        },
+        {
+          "type": "tool_result",
+          "name": "execute_code",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 3,
+          "is_error": true,
+          "timestamp": 1790215520341
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "mkdir -p .context-os[PATH]"
+          },
+          "timestamp": 1790215549248
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 221,
+          "is_error": false,
+          "timestamp": 1790215549473
+        },
+        {
+          "type": "tool_use",
+          "name": "write_file",
+          "input": {
+            "content": "{\n  \"description\": \"Synthetic fixture identity proposal (stop after proposal)\",\n  \"files\": {\n    \"identity[PATH]\": \"# Synthetic Fixture Identity\\nName: Hermes Fixture\\nPurpose: Synthetic conformance fixture for hermes-live.\\nCanary: fixture identity.\\n\"\n  }\n}\n",
+            "path": ".[REDACTED].json"
+          },
+          "timestamp": 1790215553508
+        },
+        {
+          "type": "tool_result",
+          "name": "write_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 874,
+          "is_error": false,
+          "timestamp": 1790215554386
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "bash scripts[PATH] propose setup --input .[REDACTED].json"
+          },
+          "timestamp": 1790215555838
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 997,
+          "is_error": false,
+          "timestamp": 1790215556831
+        },
+        {
+          "type": "text",
+          "text": "\n\nProposal created (digest: 53c7864b...). Not applied \u2014 stopped as requested.\n\nCanary lines beginning with 'Hermes fixture canary:' found in loaded",
+          "timestamp": 1790215558663
+        },
+        {
+          "type": "text",
+          "text": " instructions:\n- SKILL.md (context-setup): Hermes fixture canary: 27b3a7600984a4ddd8818fb609f",
+          "timestamp": 1790215558974
+        },
+        {
+          "type": "text",
+          "text": "3b6d1\n- Memory: Fixture native memory canary: e",
+          "timestamp": 1790215559048
+        },
+        {
+          "type": "text",
+          "text": "85376dae1ff377edbfd",
+          "timestamp": 1790215559117
+        },
+        {
+          "type": "text",
+          "text": "6beabfbd7f88",
+          "timestamp": 1790215559303
+        },
+        {
+          "type": "text",
+          "text": "\n- User profile: Fixture native memory canary: f960aec18c02733601efcfbdae376",
+          "timestamp": 1790215559553
+        },
+        {
+          "type": "text",
+          "text": "5b3",
+          "timestamp": 1790215559618
+        },
+        {
+          "type": "result",
+          "session_id": "20260923_190459_0bce3e",
+          "exit_code": 0,
+          "text": "Proposal created (digest: 53c7864b...). Not applied \u2014 stopped as requested.\n\nCanary lines beginning with 'Hermes fixture canary:' found in loaded instructions:\n- SKILL.md (context-setup): Hermes fixture canary: 27b3a7600984a4ddd8818fb609f3b6d1\n- Memory: Fixture native memory canary: [REDACTED]\n- User profile: Fixture native memory canary: [REDACTED]",
+          "tokens": {
+            "input": 22719,
+            "output": 691,
+            "total": 116594,
+            "cache_read": 93184,
+            "cache_write": 0
+          },
+          "duration_ms": 60147,
+          "timestamp": 1790215559678
+        }
+      ],
+      "skill_view_names": [
+        "context-setup"
+      ]
+    }
+  ],
+  "skill_source_sha256": {
+    "setup": "99fc5ad7b788eb06b269aa069cafd8e2c969b00c01680a9ed616365e57a32e09",
+    "context-setup": "aecac72323465a7130bfbf6bda37d2f03d03efd11e0f1e32c721ab068ed96e4f",
+    "start": "06b64a95db0f8bd585cea31647cd894a37d4bf6c52330b6a917a52d38012881c",
+    "context-start": "eeda2a2641bdf0e107494cc1ac4099687d05b3c30b8787aea6c274f7afd2ab5c",
+    "update": "d74f35b9eeb2c91b04f158d79fe52012192ca7692834f0ba910d87968fe371ac",
+    "context-update": "69ffd2f9c2fe2a56d92a5e44ea8dc087b5df2338290033d1c6498dc4adfa60a8",
+    "end": "5b135a8845a3390ef7821404b34d3574abe4038e984f1c51874e8d1b8430d764",
+    "context-end": "50b5627f47c8b3847da3b66447a5a4610fc39f7393186a5c2584f459b38cd0d0"
+  },
+  "version": "Hermes Agent v0.21.4 (2026.9.21) \u00b7 upstream d94769da",
+  "failure": "self-read: discovery not shown",
+  "finished_at": "2026-09-24T02:06:01.042938+00:00"
+}

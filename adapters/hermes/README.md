@@ -24,6 +24,9 @@ and `/skill update`.
 
 ## Live conformance
 
+The first recorded attempts, and why none passed, are in
+[`docs/evidence/hermes-live-2026-09-23/`](../../docs/evidence/hermes-live-2026-09-23/README.md).
+
 From a clean, reviewed source commit, choose new sibling paths outside any
 Context OS checkout and run:
 

@@ -46,6 +46,13 @@ def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def route_id(value: str, field: str) -> str:
+    """Record an operator-chosen model or provider verbatim; evidence must name it exactly."""
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}", value) or clean(value) == "[REDACTED]":
+        raise HarnessError(f"{field} must be a plain route identifier")
+    return value
+
+
 def clean(text: str, known: Sequence[str] = ()) -> str:
     redacted = ENV_ASSIGN.sub("[REDACTED ENV]", BEARER.sub("[REDACTED]", SECRET.sub(r"\1[REDACTED]", text)))
     redacted = LONG_TOKEN.sub(lambda match: match.group() if match.group() in known else "[REDACTED]", redacted)
@@ -318,7 +325,7 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
     result = {"started_at": now(), "source_sha": manifest["source_sha"], "fixture_commit": manifest["fixture_commit"],
               "os": platform.platform(), "fresh_hermes_home": True,
               "operator_mode": "approval-dir" if approval_dir is not None else "interactive",
-              "model": clean(model), "provider": clean(provider),
+              "model": route_id(model, "model"), "provider": route_id(provider, "provider"),
               "controls": {name: "unsupported" for name in (
                   "version", "agents_discovery", "setup_discovery", "setup_proposal_apply",
                   "start_discovery", "start_read_only", "update_discovery", "update_proposal_apply",
@@ -380,6 +387,11 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
                 proposal_snapshot = sha(path)
                 if before != after:
                     raise HarnessError("proposal turn changed fixture files before operator apply")
+                current_control = "memory_separation"
+                proposed = "".join(change["path"] + change["diff"] for change in proposal["changes"])
+                if any(marker in proposed for marker in manifest["native_memory_canaries"].values()):
+                    raise HarnessError("proposal mirrors Hermes native memory into repository state")
+                current_control = f"{phase}_proposal_apply"
                 digest = proposal["proposal_digest"]
                 operator_approval(phase, path.relative_to(fixture), proposal, digest,
                                   input_fn, approval_dir, approval_timeout)
