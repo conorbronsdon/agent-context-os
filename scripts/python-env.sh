@@ -123,8 +123,8 @@ contextos_python_path() {
 # Convert path arguments for a Windows interpreter; WSL passes arguments to
 # Windows programs unmodified. Only values of the kernel's path options
 # (CONTEXTOS_PATH_OPTIONS, kept equal to the CLI's type=Path options by
-# tests/test-portability.sh) and existing positional paths are converted, so
-# message text such as "/note" is never rewritten. Sets CONTEXTOS_PYTHON_ARGS.
+# tests/test-portability.sh) and positional arguments that are existing paths
+# are converted, so message text such as "/note" is left alone. Sets CONTEXTOS_PYTHON_ARGS.
 CONTEXTOS_PATH_OPTIONS=" --context-root --current-lock --current-source --cursor-file --input --kernel-root --lock --proposal --root --source --target --working-root --workspace-config --workspace-config-input "
 
 _contextos_convertible_path() {
@@ -135,7 +135,7 @@ _contextos_convertible_path() {
 }
 
 contextos_python_args() {
-  local arg name value expect_path=0 previous=""
+  local arg name value expect_path=0
   CONTEXTOS_PYTHON_ARGS=()
   for arg in "$@"; do
     if [ "$CONTEXTOS_PYTHON_PLATFORM" = win32 ]; then
@@ -158,10 +158,7 @@ contextos_python_args() {
             esac
             ;;
           /*)
-            case "$previous" in
-              -*) ;;
-              *) if [ -e "$arg" ]; then arg=$(contextos_python_path "$arg") || return 1; fi ;;
-            esac
+            if [ -e "$arg" ]; then arg=$(contextos_python_path "$arg") || return 1; fi
             ;;
         esac
       fi
@@ -170,7 +167,6 @@ contextos_python_args() {
     case "$CONTEXTOS_PATH_OPTIONS" in
       *" $arg "*) expect_path=1 ;;
     esac
-    previous=$arg
     CONTEXTOS_PYTHON_ARGS+=("$arg")
   done
 }

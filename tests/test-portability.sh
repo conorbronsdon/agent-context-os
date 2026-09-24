@@ -246,9 +246,9 @@ SH
     chmod +x "$fake_wsl_bin/wslpath"
     mkdir -p "$portability_tmp/arg-dir"
     converted_args=$(PATH="$fake_wsl_bin:$PATH" WSL_DISTRO_NAME=Test "$resolved_bash" -c \
-      'source "$1"; CONTEXTOS_PYTHON_PLATFORM=win32; contextos_python_args "$2" "--root=$2" --input "$2/new.json" relative/path "/no/such/place/anywhere" --message /note "--message=$2" /note text; printf "%s|" "${CONTEXTOS_PYTHON_ARGS[@]}"' \
+      'source "$1"; CONTEXTOS_PYTHON_PLATFORM=win32; contextos_python_args "$2" "--root=$2" --input "$2/new.json" relative/path "/no/such/place/anywhere" --message /note "--message=$2" /note text --runtime=generic "$2" -- "$2"; printf "%s|" "${CONTEXTOS_PYTHON_ARGS[@]}"' \
       _ "$ROOT/scripts/python-env.sh" "$portability_tmp/arg-dir")
-    [ "$converted_args" = "W:$portability_tmp/arg-dir|--root=W:$portability_tmp/arg-dir|--input|W:$portability_tmp/arg-dir/new.json|relative/path|/no/such/place/anywhere|--message|/note|--message=$portability_tmp/arg-dir|/note|text|" ] \
+    [ "$converted_args" = "W:$portability_tmp/arg-dir|--root=W:$portability_tmp/arg-dir|--input|W:$portability_tmp/arg-dir/new.json|relative/path|/no/such/place/anywhere|--message|/note|--message=$portability_tmp/arg-dir|/note|text|--runtime=generic|W:$portability_tmp/arg-dir|--|W:$portability_tmp/arg-dir|" ] \
       || fail "WSL argument conversion changed the wrong arguments: $converted_args"
     linux_args=$(PATH="$fake_wsl_bin:$PATH" WSL_DISTRO_NAME=Test "$resolved_bash" -c \
       'source "$1"; CONTEXTOS_PYTHON_PLATFORM=linux; contextos_python_args "$2"; printf "%s|" "${CONTEXTOS_PYTHON_ARGS[@]}"' \
