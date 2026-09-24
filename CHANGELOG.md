@@ -17,6 +17,8 @@
   command sources and lifecycle artifacts remain covered.
 
 ### Added
+- A six-session synthetic continuity fixture, category-level scoring, raw-trial
+  JSONL recording, and Markdown summaries extend the four-question benchmark.
 - A repository-local SSOT CI pilot checks documented Python requirements against
   the interpreter probe, warns about unregistered prose copies, and exercises
   drift and exclusion controls in disposable fixtures.

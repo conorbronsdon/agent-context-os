@@ -61,3 +61,57 @@ The [first-handoff exercise](first-handoff.md) covers the user workflow and the
 adapter conformance suites cover runtime behavior. If a concise handoff note
 performs equally well, report that result and evaluate whether reviewability,
 history, and ongoing maintenance justify the added context.
+
+## Longer sequence
+
+`--scenario long` selects a second, synthetic fixture with six sessions and ten
+questions. Atlas changes its delivery decision from queue to cron to webhooks.
+Beacon has a separate cache decision. Both projects have unresolved items and
+interrupted work, and their export rules for customer IDs conflict. The
+questions identify retained and replaced decisions, unresolved assumptions,
+interrupted status, and cross-project constraints. The original four-question
+scenario remains the default.
+
+The three profiles use the same questions and model. `handoff` includes every
+answerable fact in one note. `contextos` includes canonical files and older
+sessions with superseded proposals. `instructions` contains no project facts.
+Each score reports `context_characters`, the sum of selected source lengths;
+these are character counts, not measured input tokens. Use a fresh session per
+trial, disable tools, keep the model and available facts fixed, and repeat each
+profile. The instructions baseline tests safe uncertainty, not retention.
+
+```bash
+python scripts/continuity-benchmark.py prepare --scenario long --profile handoff > handoff-prompt.txt
+python scripts/continuity-benchmark.py prepare --scenario long --profile contextos > contextos-prompt.txt
+python scripts/continuity-benchmark.py score --scenario long --profile contextos --response response.json
+```
+
+`score` reports grounded correctness, retention among the eight resolved
+questions, correct handling of replaced decisions (`corrections`), safe
+uncertainty, missed cross-project constraints, invented
+certainty on unresolved items, and format failure. An unparseable response or
+missing question ID is a format failure with no correctness score. A wrong but
+parseable answer is scored normally. Exact supporting sentences are required.
+
+Record each raw response, including failures, in a JSONL file. Supply the
+provider's exact model identifier, trial index, measured latency, and token
+counts when the provider reports them. Omit token flags when unavailable.
+`record` appends one line containing the scenario, profile, model/provider,
+trial index, SHA-256 of the prompt string, verbatim response text, score,
+latency, and nullable input/output token counts. The prompt hash excludes the
+trailing newline printed by the command-line `prepare` action.
+
+```bash
+python scripts/continuity-benchmark.py record --scenario long --profile contextos --response response.json --results trials.jsonl --model MODEL_ID --provider PROVIDER --trial 1 --latency 2.4 --input-tokens 900 --output-tokens 120
+python scripts/continuity-benchmark.py summarize --results trials.jsonl
+```
+
+The Markdown summary groups by model and profile and shows context characters.
+Correct, retention, safe uncertainty, and missed constraints are mean counts
+per parseable trial. Format failures remain in the trial count and have a
+separate count. Preserve the JSONL and fixture commit with any published
+results. Compare the compact note
+against the canonical files on the same model and fresh trials, then name a
+product change supported by the observations. Volunteer first-handoff
+observation belongs in a separate follow-up; these automated cases do not
+measure it. Installed-host conformance remains a separate test suite.

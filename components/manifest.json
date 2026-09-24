@@ -721,6 +721,10 @@
                     "policy": "development"
                 },
                 {
+                    "path": "tests/fixtures/continuity/long-sequence.json",
+                    "policy": "development"
+                },
+                {
                     "path": "tests/fixtures/continuity/scenario.json",
                     "policy": "development"
                 },
