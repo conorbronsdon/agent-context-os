@@ -35,6 +35,10 @@ FIXTURE_PATHS = (
     ".agents/skills/contextos-devin-live-control/SKILL.md",
     "AGENTS.md",
 )
+LOCAL_FIXTURE_FILES = {
+    FIXTURE_PATHS[0]: "SKILL.md.fixture",
+    FIXTURE_PATHS[1]: "AGENTS.md.fixture",
+}
 
 
 class HarnessError(RuntimeError):
@@ -185,7 +189,7 @@ def verify_public_fixture_content(
             remote = base64.b64decode("".join(content["content"].split()), validate=True)
         except ValueError as exc:
             raise HarnessError(f"GitHub returned invalid content for {path}") from exc
-        if remote != (LOCAL_FIXTURE / Path(path)).read_bytes():
+        if remote != (LOCAL_FIXTURE / LOCAL_FIXTURE_FILES[path]).read_bytes():
             raise HarnessError(f"public fixture content drifted from source: {path}")
         remote_hashes[path] = hashlib.sha256(remote).hexdigest()
     return canonical_hash(remote_hashes)
@@ -373,7 +377,7 @@ class DevinHarness:
         raise HarnessError("timed out waiting for Devin conformance output")
 
     def settle_implicit_output(self, session_id: str, observed_events: set[str]) -> set[str]:
-        """Reject delayed implicit output before the explicit skill turn begins."""
+        """Check delayed implicit output before the explicit skill turn begins."""
         observed = set(observed_events)
         for _ in range(2):
             messages = self.messages(session_id)
@@ -384,8 +388,6 @@ class DevinHarness:
             text = "\n".join(str(item.get("message", "")) for item in new)
             if SKILL_CANARY in text:
                 raise HarnessError("user-only Devin skill fired without explicit invocation")
-            if new:
-                raise HarnessError("implicit control emitted delayed output before explicit invocation")
             observed.update(str(item.get("event_id")) for item in messages)
             time.sleep(self.poll_interval)
         return observed
@@ -435,8 +437,8 @@ class DevinHarness:
                 "Read-only Context OS conformance in the supplied public synthetic repository. "
                 "Do not edit files, run setup, create a branch, commit, push, or open a PR. "
                 "Use the available Context OS control without an explicit @skills reference. "
-                f"Verify git rev-parse HEAD is exactly {self.fixture_sha}. Follow AGENTS.md and reply only "
-                "with the root instruction canary named there, followed by one space and that exact commit SHA."
+                "Run git rev-parse HEAD in the fixture checkout. Follow AGENTS.md and reply only "
+                "with the root instruction canary named there, followed by one space and the observed commit SHA."
             )
             created = self.client.request(
                 "POST",
@@ -538,10 +540,13 @@ class DevinHarness:
                         self.evidence.controls["session_terminated_after_archive_failure"] = True
                     except HarnessError as terminate_error:
                         raise HarnessError(
-                            "Devin cleanup failed: archive and fallback termination both failed"
+                            "Devin cleanup failed: archive: "
+                            f"{safe_error_detail(archive_error)}; fallback termination: "
+                            f"{safe_error_detail(terminate_error)}"
                         ) from terminate_error
                     raise HarnessError(
-                        "Devin session was terminated, but required archival failed"
+                        "Devin session was terminated, but required archival failed: "
+                        f"{safe_error_detail(archive_error)}"
                     ) from archive_error
         self.evidence.requests = list(self.client.requests)
         return self.evidence

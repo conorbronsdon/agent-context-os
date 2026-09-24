@@ -45,7 +45,7 @@ class FakeGitHub:
         marker = "/contents/"
         if marker in path:
             relative = urllib.parse.unquote(path.split(marker, 1)[1])
-            content = (ui.LOCAL_FIXTURE / Path(relative)).read_bytes()
+            content = (ui.LOCAL_FIXTURE / ui.LOCAL_FIXTURE_FILES[relative]).read_bytes()
             return {"encoding": "base64", "content": base64.b64encode(content).decode()}
         if path.endswith("/pulls"):
             return list(self.pulls)
@@ -95,8 +95,9 @@ class DevinUiHarnessTest(unittest.TestCase):
         manifest = self.prepare()
         self.assertEqual("session-ui", manifest["surface"])
         self.assertEqual(0, manifest["baseline_pull_count"])
-        self.assertIn(self.fixture_sha, manifest["prompts"]["root"])
+        self.assertNotIn(self.fixture_sha, manifest["prompts"]["root"])
         self.assertIn("root instruction canary named there", manifest["prompts"]["root"])
+        self.assertIn("git rev-parse HEAD", manifest["prompts"]["root"])
         self.assertNotIn(ui.ROOT_CANARY, manifest["prompts"]["root"])
         self.assertIn(f"@skills:{ui.SKILL_NAME}", manifest["prompts"]["explicit"])
         self.assertTrue(any("/git/trees/" in url for url in self.github.calls))
@@ -150,6 +151,20 @@ class DevinUiHarnessTest(unittest.TestCase):
         )
         with mock.patch.object(ui, "repository_source_sha", return_value=self.source_sha):
             with self.assertRaisesRegex(ui.HarnessError, "implicit-skill"):
+                ui.record(args, transport=self.github)
+
+    def test_record_rejects_wrong_observed_fixture_commit(self) -> None:
+        self.prepare()
+        observations = self.observations()
+        observations["root_response"] = f"{ui.ROOT_CANARY} {'c' * 40}"
+        path = self.root / "observations.json"
+        path.write_text(json.dumps(observations), encoding="utf-8")
+        args = argparse.Namespace(
+            manifest=self.manifest, observations=path, evidence=self.evidence,
+            allow_public_fixture_access=True, acknowledge_operator_attestation=True,
+        )
+        with mock.patch.object(ui, "repository_source_sha", return_value=self.source_sha):
+            with self.assertRaisesRegex(ui.HarnessError, "root"):
                 ui.record(args, transport=self.github)
 
     def test_record_requires_exact_devin_session_url(self) -> None:

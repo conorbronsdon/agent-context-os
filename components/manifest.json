@@ -1246,15 +1246,15 @@
                     "policy": "managed"
                 },
                 {
-                    "path": "adapters/devin/live-fixture/AGENTS.md",
+                    "path": "adapters/devin/live-fixture/AGENTS.md.fixture",
                     "policy": "development"
                 },
                 {
-                    "path": "adapters/devin/live-fixture/.agents/skills/contextos-devin-live-control/SKILL.md",
+                    "path": "adapters/devin/live-fixture/SKILL.md.fixture",
                     "policy": "development"
                 },
                 {
-                    "path": "adapters/devin/review-fixture/REVIEW.md",
+                    "path": "adapters/devin/review-fixture/REVIEW.md.fixture",
                     "policy": "development"
                 },
                 {

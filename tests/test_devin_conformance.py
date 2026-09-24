@@ -133,11 +133,25 @@ class DevinDescriptorTest(unittest.TestCase):
 
     def test_review_fixture_is_scoped_inert_and_unique(self) -> None:
         fixture = ROOT / "adapters/devin/review-fixture"
-        instructions = (fixture / "REVIEW.md").read_text(encoding="utf-8")
+        instructions = (fixture / "REVIEW.md.fixture").read_text(encoding="utf-8")
         control = (fixture / "control.txt").read_text(encoding="utf-8")
         self.assertIn("Do not propose or apply fixes", instructions)
         self.assertIn("CONTEXTOS_DEVIN_REVIEW_CANARY_63F0A2D8", instructions)
         self.assertEqual("CONTEXTOS_DEVIN_REVIEW_PROHIBITED_MARKER\n", control)
+
+    def test_local_fixture_instructions_are_not_repo_discoverable(self) -> None:
+        fixture_roots = (
+            ROOT / "adapters/devin/live-fixture",
+            ROOT / "adapters/devin/review-fixture",
+        )
+        discoverable = {"AGENTS.md", "SKILL.md", "REVIEW.md"}
+        for fixture in fixture_roots:
+            self.assertFalse(
+                [path for path in fixture.rglob("*") if path.is_file() and path.name in discoverable]
+            )
+        self.assertTrue((fixture_roots[0] / "AGENTS.md.fixture").is_file())
+        self.assertTrue((fixture_roots[0] / "SKILL.md.fixture").is_file())
+        self.assertTrue((fixture_roots[1] / "REVIEW.md.fixture").is_file())
 
 
 class DevinLiveAccountGateTest(unittest.TestCase):

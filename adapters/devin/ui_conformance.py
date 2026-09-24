@@ -33,6 +33,10 @@ FIXTURE_PATHS = (
     ".agents/skills/contextos-devin-live-control/SKILL.md",
     "AGENTS.md",
 )
+LOCAL_FIXTURE_FILES = {
+    FIXTURE_PATHS[0]: "SKILL.md.fixture",
+    FIXTURE_PATHS[1]: "AGENTS.md.fixture",
+}
 REPO_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 SHA_RE = re.compile(r"[0-9a-f]{40}")
 SESSION_RE = re.compile(r"https://app\.devin\.ai/sessions/[A-Za-z0-9_-]+/?")
@@ -159,7 +163,7 @@ class GitHubFixture:
                 remote = base64.b64decode(str(content["content"]), validate=False)
             except (ValueError, KeyError) as exc:
                 raise HarnessError(f"GitHub returned invalid content for {path}") from exc
-            local = (LOCAL_FIXTURE / Path(path)).read_bytes()
+            local = (LOCAL_FIXTURE / LOCAL_FIXTURE_FILES[path]).read_bytes()
             if remote != local:
                 raise HarnessError(f"public fixture content drifted from source: {path}")
             remote_hashes[path] = hashlib.sha256(remote).hexdigest()
@@ -212,8 +216,8 @@ def prepare(args: argparse.Namespace, *, transport: Transport = default_transpor
             "root": (
                 "Read-only conformance. Do not edit, branch, commit, push, or open a PR. "
                 "Use the available Context OS control without an explicit @skills reference. "
-                f"Verify git rev-parse HEAD is {args.fixture_sha}. Follow AGENTS.md and return only "
-                "the root instruction canary named there, followed by one space and that exact SHA."
+                "Run git rev-parse HEAD in the fixture checkout. Follow AGENTS.md and return only "
+                "the root instruction canary named there, followed by one space and the observed commit SHA."
             ),
             "explicit": f"@skills:{SKILL_NAME} Return only the canary required by this skill.",
         },

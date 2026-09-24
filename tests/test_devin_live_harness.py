@@ -27,7 +27,8 @@ class FakeTransport:
     def __init__(
         self, *, implicit_skill: bool = False, archive_fails: bool = False,
         extra_output: bool = False, implicit_skill_first: bool = False,
-        delayed_implicit_skill: bool = False,
+        delayed_implicit_skill: bool = False, delayed_status: bool = False,
+        terminate_fails: bool = False,
     ) -> None:
         self.phase = "implicit"
         self.implicit_skill = implicit_skill
@@ -35,6 +36,8 @@ class FakeTransport:
         self.extra_output = extra_output
         self.implicit_skill_first = implicit_skill_first
         self.delayed_implicit_skill = delayed_implicit_skill
+        self.delayed_status = delayed_status
+        self.terminate_fails = terminate_fails
         self.implicit_message_reads = 0
         self.explicit_prompt = ""
         self.calls: list[tuple[str, str, object, dict[str, str]]] = []
@@ -67,6 +70,11 @@ class FakeTransport:
                         {"event_id": "event-root", "source": "devin", "message": text},
                         {"event_id": "event-late-skill", "source": "devin", "message": live.SKILL_CANARY},
                     ]}
+                if self.delayed_status and self.implicit_message_reads > 1:
+                    return {"items": [
+                        {"event_id": "event-root", "source": "devin", "message": text},
+                        {"event_id": "event-status", "source": "devin", "message": "Status: ready"},
+                    ]}
                 if self.implicit_skill_first:
                     return {"items": [
                         {"event_id": "event-skill-leak", "source": "devin", "message": live.SKILL_CANARY},
@@ -93,6 +101,8 @@ class FakeTransport:
                 "is_archived": True,
             }
         if method == "DELETE" and path.endswith("/sessions/devin-fixture"):
+            if self.terminate_fails:
+                raise live.HarnessError("synthetic termination failure")
             return {"session_id": "devin-fixture", "status": "exit"}
         raise AssertionError((method, url, payload))
 
@@ -128,7 +138,7 @@ class FakeGitHub:
         marker = "/contents/"
         if marker in path:
             relative = urllib.parse.unquote(path.split(marker, 1)[1])
-            content = (live.LOCAL_FIXTURE / Path(relative)).read_bytes()
+            content = (live.LOCAL_FIXTURE / live.LOCAL_FIXTURE_FILES[relative]).read_bytes()
             if relative == self.drifted_path:
                 content += b"drift\n"
             return {"encoding": "base64", "content": base64.b64encode(content).decode()}
@@ -160,10 +170,8 @@ class DevinLiveHarnessTest(unittest.TestCase):
 
     def test_fixture_canaries_match_harness_and_skill_is_user_only(self) -> None:
         fixture = ROOT / "adapters/devin/live-fixture"
-        agents = (fixture / "AGENTS.md").read_text(encoding="utf-8")
-        skill = (
-            fixture / ".agents/skills/contextos-devin-live-control/SKILL.md"
-        ).read_text(encoding="utf-8")
+        agents = (fixture / "AGENTS.md.fixture").read_text(encoding="utf-8")
+        skill = (fixture / "SKILL.md.fixture").read_text(encoding="utf-8")
         self.assertIn(live.ROOT_CANARY, agents)
         self.assertIn(live.SKILL_CANARY, skill)
         self.assertIn(f"`{live.ROOT_CANARY}`", agents)
@@ -249,6 +257,11 @@ class DevinLiveHarnessTest(unittest.TestCase):
             harness.execute()
         self.assertFalse(any(call[1].endswith("/messages") for call in transport.calls))
 
+    def test_delayed_status_does_not_fail_the_implicit_control(self) -> None:
+        harness, transport = self.harness(FakeTransport(delayed_status=True))
+        self.assertTrue(harness.execute().controls["implicit_skill_must_not_fire"])
+        self.assertTrue(any(call[0] == "POST" and call[1].endswith("/messages") for call in transport.calls))
+
     def test_public_fixture_content_drift_fails_before_session_creation(self) -> None:
         harness, transport = self.harness(github=FakeGitHub(
             "a" * 40, drifted_path="AGENTS.md"
@@ -263,6 +276,20 @@ class DevinLiveHarnessTest(unittest.TestCase):
         create = next(call for call in transport.calls if call[0] == "POST" and call[1].endswith("/sessions"))
         self.assertIn("root instruction canary named there", create[2]["prompt"])
         self.assertNotIn(live.ROOT_CANARY, create[2]["prompt"])
+        self.assertNotIn(harness.fixture_sha, create[2]["prompt"])
+        self.assertIn("git rev-parse HEAD", create[2]["prompt"])
+
+    def test_root_response_must_match_local_fixture_sha(self) -> None:
+        class WrongHead(FakeTransport):
+            def __call__(self, method, url, payload, headers, timeout):
+                response = super().__call__(method, url, payload, headers, timeout)
+                if method == "GET" and url.endswith("/messages?first=200") and self.phase == "implicit":
+                    response["items"][0]["message"] = f"{live.ROOT_CANARY} {'c' * 40}"
+                return response
+
+        harness, _ = self.harness(WrongHead())
+        with self.assertRaisesRegex(live.HarnessError, "exact root and fixture"):
+            harness.execute()
 
     def test_extra_model_output_fails_exact_control_and_archives(self) -> None:
         harness, transport = self.harness(FakeTransport(extra_output=True))
@@ -282,6 +309,13 @@ class DevinLiveHarnessTest(unittest.TestCase):
         self.assertTrue(
             harness.evidence.controls["session_terminated_after_archive_failure"]
         )
+
+    def test_archive_and_termination_failures_are_both_reported(self) -> None:
+        harness, _ = self.harness(FakeTransport(archive_fails=True, terminate_fails=True))
+        with self.assertRaises(live.HarnessError) as raised:
+            harness.execute()
+        self.assertIn("synthetic archive failure", str(raised.exception))
+        self.assertIn("synthetic termination failure", str(raised.exception))
 
     def test_expected_build_and_exact_identifiers_are_required(self) -> None:
         client = live.DevinClient("cog_fixture", "org-fixture", transport=FakeTransport())

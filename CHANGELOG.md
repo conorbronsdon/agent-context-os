@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Devin live conformance obtains the fixture commit from `git rev-parse HEAD`
+  without prompting with the answer, accepts harmless delayed status messages,
+  and reports both cleanup failures. Local session and Review instruction
+  sources use inert filenames until placed in dedicated public fixtures.
 - Refresh the social preview from the current runtime manifests, including
   first-class OpenCode support, and keep both tracked PNG aliases byte-identical
   to the 1280×640 source render (#195).

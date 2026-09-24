@@ -84,10 +84,18 @@ documented special Devin session semantics and is not synchronized.
 
 The repository includes a sanitized fixture source under
 `adapters/devin/live-fixture/` and an opt-in v3 API harness at
-`adapters/devin/live_conformance.py`. Publish only that fixture tree to a
-dedicated public repository, without adding personal data or secrets, and bind
-the run to its exact remote commit. Do not use this repository or another user
-workspace as the fixture.
+`adapters/devin/live_conformance.py`. Publish only the materialized two-file
+fixture to a dedicated public repository, without adding personal data or
+secrets, and bind the run to its exact remote commit. Do not use this repository
+or another user workspace as the fixture.
+
+The checked-in instruction sources have `.fixture` suffixes so repository agents
+do not discover them as live instructions. In a separate disposable checkout of
+the dedicated public fixture repository, place `AGENTS.md.fixture` at `AGENTS.md`
+and `SKILL.md.fixture` at
+`.agents/skills/contextos-devin-live-control/SKILL.md`. Publish only those two
+files. Both session harnesses compare the public files with the checked-in source
+bytes before running a control.
 
 The API harness requires a currently supported `cog_` credential. Devin's
 current authentication documentation lists human PATs as closed beta, so a
@@ -158,7 +166,9 @@ separately approved Review fixture; neither may inherit this result.
 ## Review conformance fixture
 
 `adapters/devin/review-fixture/` is a separate inert control for the Review
-surface. Its scoped `REVIEW.md` requires one unique canary when a changed file
+surface. Its `REVIEW.md.fixture` source must be placed as `REVIEW.md` only in a
+dedicated disposable Review fixture checkout. That scoped instruction requires
+one unique canary when a changed file
 adds the benign prohibited marker in `control.txt`. A pull request containing
 both files can therefore prove instruction ingestion without using a private
 repository or real defect. Merely shipping the fixture does not trigger Review.
