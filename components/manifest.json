@@ -137,6 +137,10 @@
                     "policy": "managed"
                 },
                 {
+                    "path": "contextos/capabilities.py",
+                    "policy": "managed"
+                },
+                {
                     "path": "contextos/component_schema.py",
                     "policy": "managed"
                 },
@@ -657,6 +661,10 @@
                     "policy": "development"
                 },
                 {
+                    "path": "tests/test_capabilities.py",
+                    "policy": "development"
+                },
+                {
                     "path": "tests/test_workspace_config.py",
                     "policy": "development"
                 },
@@ -709,6 +717,18 @@
                     "policy": "managed"
                 },
                 {
+                    "path": "docs/evidence/continuity-long-2026-09-23/README.md",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/continuity-long-2026-09-23/fence-normalization.jsonl",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/continuity-long-2026-09-23/trials.jsonl",
+                    "policy": "development"
+                },
+                {
                     "path": "docs/continuity.md",
                     "policy": "managed"
                 },
@@ -718,6 +738,10 @@
                 },
                 {
                     "path": "scripts/continuity-benchmark.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/fixtures/continuity/long-sequence.json",
                     "policy": "development"
                 },
                 {

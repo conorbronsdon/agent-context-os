@@ -7,6 +7,30 @@ generated entry in [`references/integrations.md`](../references/integrations.md)
 
 Nothing in this guide installs, activates, authenticates, or grants permissions to an integration.
 
+## Host compatibility evidence
+
+Optional integration support is declared per integration and per host, separately
+from the core adapter's runtime tier. The [OpenClaw adapter](../adapters/openclaw/README.md)
+supports the Context OS lifecycle; it does not establish that any optional
+integration works through OpenClaw. Generic MCP transport support never implies
+support for a particular host.
+
+An integration-by-host evidence record must state the tested host surface and
+exact version, test date, credential model and storage location, network egress
+destinations, and all reachable side effects, marking writes and destructive
+actions. It must record the confirmation gates observed on that host, the
+health-check command and observed output shape, verified uninstall and credential
+revocation steps, and the location of the test evidence. Keep credentials and
+private data out of that record.
+
+The current catalog schema cannot express `openclaw` or per-host evidence. Until
+at least one real integration is tested through OpenClaw, the schema, generator,
+catalog, and chooser must not declare OpenClaw integration support. Contributors
+who have run that test can submit the optional host-evidence section of the
+[integration proposal](../.github/ISSUE_TEMPLATE/integration-proposal.md),
+including an evidence location for review. The first proven entry can then
+motivate a schema and rendering change; the core adapter remains separate.
+
 ## Outcome chooser
 
 | I want to… | Candidate | First boundary to review |

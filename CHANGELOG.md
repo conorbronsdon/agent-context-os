@@ -6,6 +6,11 @@
 - Hermes live conformance now invokes the available `/context-*` skills,
   checks stream events for self-read discovery, and supports digest files for
   non-interactive operator approval (#163).
+- Pass native paths to Windows Python from MSYS and Cygwin lifecycle wrappers
+  when shell argument conversion is disabled.
+- Capability install state now leaves native and advisory claims host-provided,
+  checks adapter claims against runtime-specific components, and accepts
+  comma-separated `capabilities --agent` selections (#182).
 - Refresh the social preview from the current runtime manifests, including
   first-class OpenCode support, and keep both tracked PNG aliases byte-identical
   to the 1280×640 source render (#195).
@@ -21,6 +26,16 @@
 
 ### Added
 - An opt-in Hermes live conformance harness prepares a disposable fixture from an exact clean commit and records bounded installed-client runs, operator-approved kernel receipts, and failure evidence. Deterministic Hermes controls and a runbook accompany it; support tiers remain unchanged (#163).
+- Per-trial value-correct and citation-rejected continuity counts, with
+  category breakdowns, summary columns, and a report of 27 long-sequence trials
+  that separates decision values from exact citation failures (#184).
+- A six-session synthetic continuity fixture, category-level scoring, raw-trial
+  JSONL recording, and Markdown summaries extend the four-question benchmark.
+- A read-only `capabilities` command compares selected agents' descriptor claims,
+  portable skills, surface support tiers, and recorded component install state (#182).
+- A per-integration, per-host evidence decision for optional OpenClaw
+  integrations, an optional proposal section for test records, and tests
+  that verify unsupported host claims stay out of the catalog and chooser (#147).
 - A repository-local SSOT CI pilot checks documented Python requirements against
   the interpreter probe, warns about unregistered prose copies, and exercises
   drift and exclusion controls in disposable fixtures.

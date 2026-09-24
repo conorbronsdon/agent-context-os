@@ -100,6 +100,27 @@ The catalog must describe the full surface; it does not disable tools or enforce
 - `instructions`:
 - `removes_user_data`: <!-- true | false -->
 
+## Optional host evidence
+
+<!--
+Fill this in only if you have tested this integration on a named host. An
+OpenClaw claim needs a real OpenClaw integration test; generic MCP support is
+not host evidence. This is proposal evidence, not a catalog field yet. Do not
+include credentials, private data, or account identifiers. See
+docs/integrations-guide.md#host-compatibility-evidence.
+-->
+
+- Integration and host:
+- Tested host surface and exact version:
+- Test date (YYYY-MM-DD):
+- Credential model and storage location (no secret values):
+- Network egress destinations:
+- Reachable side effects, identifying writes and destructive actions:
+- Confirmation gates observed on this host:
+- Health-check command and observed output shape (redacted):
+- Verified uninstall and credential revocation steps:
+- Evidence location (test log, reproducible steps, or reviewable artifact):
+
 ## What you could not verify
 
 <!--

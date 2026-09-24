@@ -159,6 +159,40 @@ fi
 resolved_bash=${BASH:?}
 resolved_python=$(command -v "$CONTEXTOS_PYTHON_CMD")
 resolver_tool_path=$PATH
+
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    if command -v cygpath >/dev/null 2>&1 &&
+      [ "$("$CONTEXTOS_PYTHON_CMD" -c 'import sys; print(sys.platform)')" = win32 ]; then
+      lifecycle_fixture="$portability_tmp/lifecycle path conversion"
+      mkdir -p "$lifecycle_fixture/scripts" "$lifecycle_fixture/state"
+      cp -R "$ROOT/contextos" "$lifecycle_fixture/contextos"
+      cp "$ROOT/AGENTS.md" "$lifecycle_fixture/AGENTS.md"
+      cp "$ROOT/scripts/contextos.sh" "$ROOT/scripts/python-env.sh" "$lifecycle_fixture/scripts/"
+      : > "$lifecycle_fixture/state/current.md"
+      for conversion_setting in MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL; do
+        if [ "$conversion_setting" = MSYS_NO_PATHCONV ]; then
+          lifecycle_output=$(cd "$lifecycle_fixture" &&
+            env -u MSYS2_ARG_CONV_EXCL MSYS_NO_PATHCONV=1 CONTEXTOS_PYTHON="$resolved_python" \
+              "$resolved_bash" scripts/contextos.sh start) \
+            || fail "lifecycle start failed with MSYS_NO_PATHCONV=1"
+        else
+          lifecycle_output=$(cd "$lifecycle_fixture" &&
+            env -u MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL='*' CONTEXTOS_PYTHON="$resolved_python" \
+              "$resolved_bash" scripts/contextos.sh start) \
+            || fail "lifecycle start failed with MSYS2_ARG_CONV_EXCL=*"
+        fi
+        printf '%s' "$lifecycle_output" | "$CONTEXTOS_PYTHON_CMD" -c \
+          'import json, sys; report = json.load(sys.stdin); assert report["schema_version"] >= 1 and isinstance(report["state"], dict)' \
+          || fail "lifecycle start returned invalid JSON with $conversion_setting"
+      done
+    else
+      echo "portability: skipping disabled MSYS conversion test (native Windows Python and cygpath required)"
+    fi
+    ;;
+  *) echo "portability: skipping disabled MSYS conversion test (MSYS or Cygwin required)" ;;
+esac
+
 printf '#!%s\nexit 1\n' "$resolved_bash" > "$python_fallback_bin/python3"
 printf '#!%s\nexec %q "$@"\n' "$resolved_bash" "$resolved_python" > "$python_fallback_bin/python"
 chmod +x "$python_fallback_bin/python3" "$python_fallback_bin/python"

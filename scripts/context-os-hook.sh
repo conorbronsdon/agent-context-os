@@ -10,4 +10,5 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/python-env.sh"
 
-exec "$CONTEXTOS_PYTHON_CMD" "$SCRIPT_DIR/context-os-hook.py" "$@"
+PYTHON_HOOK_SCRIPT="$(contextos_python_path "$SCRIPT_DIR/context-os-hook.py")"
+exec "$CONTEXTOS_PYTHON_CMD" "$PYTHON_HOOK_SCRIPT" "$@"
