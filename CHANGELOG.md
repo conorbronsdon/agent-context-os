@@ -7,6 +7,9 @@
   without prompting with the answer, accepts harmless delayed status messages,
   and reports both cleanup failures. Local session and Review instruction
   sources use inert filenames until placed in dedicated public fixtures.
+- Capability install state now leaves native and advisory claims host-provided,
+  checks adapter claims against runtime-specific components, and accepts
+  comma-separated `capabilities --agent` selections (#182).
 - Refresh the social preview from the current runtime manifests, including
   first-class OpenCode support, and keep both tracked PNG aliases byte-identical
   to the 1280×640 source render (#195).
@@ -29,6 +32,8 @@
   `triggers: ["user"]` so hosts that honor these fields invoke them only on
   explicit request; Devin sessions record explicit invocation as native from
   its documented skill frontmatter.
+- A read-only `capabilities` command compares selected agents' descriptor claims,
+  portable skills, surface support tiers, and recorded component install state (#182).
 - A per-integration, per-host evidence decision for optional OpenClaw
   integrations, an optional proposal section for test records, and tests
   that verify unsupported host claims stay out of the catalog and chooser (#147).
