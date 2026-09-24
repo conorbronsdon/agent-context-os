@@ -19,8 +19,8 @@ discovery by doctor is not installed-client conformance.
 Invoke `/context-setup`, `/context-start`, `/context-update`, and
 `/context-end`. On Hermes Agent v0.21.4, `hermes skills list --source local`
 reports that `/start` and `/update` are unavailable because built-ins take
-those names. Keep the short aliases installed; they load through `/skill start`
-and `/skill update`.
+those names and suggests `/skill start` and `/skill update`. Keep the short
+aliases installed; their invocation still needs a live control.
 
 ## Live conformance
 
@@ -40,7 +40,7 @@ credentials through environment variables, and run `hermes skills trust
 the fixture. Check the eight local skills. Then run from the source checkout:
 
 ```sh
-python adapters/hermes/live_conformance.py record --fixture <fixture> --home <new-hermes-home> --evidence <new-evidence.json> --binary <hermes-executable> --model <model-id> --provider <provider> --expected-version 'Hermes Agent v0.21.4' --run-budget 120 --max-turns 20
+python adapters/hermes/live_conformance.py record --fixture <fixture> --home <new-hermes-home> --manifest <manifest-path> --evidence <new-evidence.json> --binary <hermes-executable> --model <model-id> --provider <provider> --expected-version 'Hermes Agent v0.21.4' --run-budget 120 --max-turns 20
 ```
 
 `prepare` places two synthetic native-memory canaries under the fresh
@@ -48,8 +48,17 @@ python adapters/hermes/live_conformance.py record --fixture <fixture> --home <ne
 `record` makes bounded `hermes chat --format stream-json --source tool` calls in
 the fixture. It records version, commands, redacted events, discovery canaries,
 skill views, read-only start, kernel proposals, no file changes before operator
-apply, exact-digest apply receipts, wrong-digest rejection, memory separation,
-and a byte-identical sentinel. Inspect each printed proposal diff
+apply, exact-digest apply receipts, wrong-digest and stale-target rejection,
+memory separation,
+and a byte-identical sentinel. The manifest stays outside the fixture, and
+the canary edits are committed in the disposable fixture. Evidence names both
+the source and fixture commits. By default, pass-through is limited to
+`PATH`, `SYSTEMROOT`, `HOME`, `USERPROFILE`, `TEMP`, `TMP`, `APPDATA`,
+`LOCALAPPDATA`, provider `*_API_KEY` variables, and `HERMES_*` variables other
+than `HERMES_ACCEPT_HOOKS`.
+The harness sets `HERMES_HOME` and `PYTHONDONTWRITEBYTECODE`. Evidence lists
+passed variable names without values. Use `--env-allow NAME`
+for an additional required variable. Inspect each printed proposal diff
 and type its digest yourself. The evidence file is create-only and outside the
 checkout. A failed control remains failed; prepare a new fixture for another
 attempt. Model calls are opt-in and are not part of CI. The optional hook example

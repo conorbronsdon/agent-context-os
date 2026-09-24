@@ -8,10 +8,10 @@ dates, append behavior, optimistic hashes, locking, and receipts.
 
 | Job | Claude Code | Codex | Hermes | OpenClaw | Cursor IDE/CLI (experimental) | Devin session (experimental) | Deterministic operation |
 |---|---|---|---|---|---|---|---|
-| Initialize context | `/setup` | `$setup` | `/setup` | `/contextos <alias> setup` | `/context-setup` | `@skills:context-setup` | `contextos propose setup` then `apply` |
-| Start a session | `/start` | `$start` | `/start` | `/contextos <alias> start` | `/context-start` | `@skills:context-start` | read-only `contextos start` |
-| Checkpoint | `/update` | `$update` | `/update` | `/contextos <alias> update` | `/context-update` | `@skills:context-update` | `contextos propose update` then `apply` |
-| Close a session | `/end` | `$end` | `/end` | `/contextos <alias> end` | `/context-end` | `@skills:context-end` | `contextos propose end` then `apply` |
+| Initialize context | `/setup` | `$setup` | `/context-setup` | `/contextos <alias> setup` | `/context-setup` | `@skills:context-setup` | `contextos propose setup` then `apply` |
+| Start a session | `/start` | `$start` | `/context-start` | `/contextos <alias> start` | `/context-start` | `@skills:context-start` | read-only `contextos start` |
+| Checkpoint | `/update` | `$update` | `/context-update` | `/contextos <alias> update` | `/context-update` | `@skills:context-update` | `contextos propose update` then `apply` |
+| Close a session | `/end` | `$end` | `/context-end` | `/contextos <alias> end` | `/context-end` | `@skills:context-end` | `contextos propose end` then `apply` |
 
 The portable cores are `.agents/skills/context-setup`, `context-start`,
 `context-update`, and `context-end`. Short skill directories are thin aliases;

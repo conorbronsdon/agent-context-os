@@ -36,7 +36,9 @@ redacts the joined text once and records it as a single event.
 | [attempt-1.json](attempt-1.json) | `19b2775` | `thinkingmachines/inkling:free` | version | `self-read: discovery not shown` |
 | [attempt-2.json](attempt-2.json) | `db1330d` | `thinkingmachines/inkling:free` | version | `canary not reported: agents, context-setup` |
 | [attempt-3.json](attempt-3.json) | `96f9cff` | `thinkingmachines/inkling:free` | version | `self-read: discovery not shown` |
-| [attempt-4.json](attempt-4.json) | `96f9cff` | `nvidia/nemotron-3-ultra-550b-a55b:free` | version, agents discovery, setup discovery | `approval file did not contain the exact proposal digest` (operator rejection) |
+| [attempt-4.json](attempt-4.json) | `96f9cff` | `nvidia/nemotron-3-ultra-550b-a55b:free` | version, agents discovery\*, setup discovery\* | `approval file did not contain the exact proposal digest` (operator rejection) |
+
+\* Recorded as passed by a harness later found to allow false greens; see attempt 4 below.
 
 What each failure means:
 
@@ -53,9 +55,16 @@ What each failure means:
    the canaries, so discovery was correctly not credited. Its setup payload
    also targeted a path outside the approved context paths, and the kernel
    rejected it.
-4. **Attempt 4.** Both discovery controls passed without a self-read: the
-   `AGENTS.md` and `context-setup` canaries came back through Hermes's own
-   context and skill loading. The setup proposal was valid, but it copied both
+4. **Attempt 4.** The harness recorded both discovery controls as passed, and
+   the model reported the `AGENTS.md` and `context-setup` canaries. **Do not
+   treat this as discovery evidence.** An independent review later found
+   false-green paths in the harness used for all four attempts. The manifest
+   and uncommitted canary edits sat inside the fixture, where `cat`, `grep`,
+   or `git diff` could reveal them. Self-reads were only detected by exact
+   file names in three tools. Attempt 4's events include reads of two `.md`
+   files whose names were redacted, so the record cannot rule out a
+   self-read. The current harness closes these paths. The setup proposal was
+   valid in form, but it copied both
    synthetic native-memory canaries from `HERMES_HOME/memories/` (`MEMORY.md`,
    `USER.md`) into `identity/professional-background.md`. It also wrote the
    fixture's absolute path into `identity/who-i-am.md`. The operator rejected
@@ -85,6 +94,7 @@ client before these attempts; they are not recorded in the attempt files.
 ## What promotion still needs
 
 A run in which every control passes: discovery for all four phases, read-only
-start, operator-approved apply with receipts, stale-digest rejection, the
-sentinel check, and memory separation. The free routes above did not reach it.
+start, operator-approved apply with receipts, wrong-digest and stale-target
+rejection, the sentinel check, and memory separation. The free routes above did
+not reach it.
 A stronger model route through Hermes is the likely next step.

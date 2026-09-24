@@ -29,8 +29,8 @@ SECRET = re.compile(r"(?i)((?:api[_-]?key|token|password|secret|credential)\s*[:
 ENV_ASSIGN = re.compile(r"(?m)(?<![A-Za-z0-9_])([A-Za-z_][A-Za-z0-9_]*=)[^\s,;]+")
 BEARER = re.compile(r"(?i)(?:Bearer\s+[^\s,;]+|\b(?:sk|or)-[A-Za-z0-9._-]+)")
 LONG_TOKEN = re.compile(r"(?<![A-Za-z0-9+/=_-])[A-Za-z0-9+/_=-]{32,}(?![A-Za-z0-9+/=_-])")
-PATH = re.compile(r"(?:[A-Za-z]:[\\/]|/)[^\s\"']+")
-SELF_READ = re.compile(r"(?i)(?:AGENTS\.md|(?:^|[\\/])\.agents[\\/]skills(?:[\\/]|\b)|(?:^|[\\/])SKILL\.md\b)")
+PATH = re.compile(r"(?<![A-Za-z0-9.])(?:[A-Za-z]:[\\/]|/)[^\s\"']+")
+SELF_READ = re.compile(r"(?i)(?:AGENT(?:S|[*?])|SKILL\.md|\.agents|\.context-os-live-manifest|git\s+(?:diff|show|log\s+-p)\b)")
 SLASH_COMMANDS = {f"/context-{phase}" for phase in PHASES}
 
 
@@ -58,7 +58,12 @@ def route_id(value: str, field: str) -> str:
 
 def clean(text: str, known: Sequence[str] = ()) -> str:
     redacted = ENV_ASSIGN.sub("[REDACTED ENV]", BEARER.sub("[REDACTED]", SECRET.sub(r"\1[REDACTED]", text)))
-    redacted = LONG_TOKEN.sub(lambda match: match.group() if match.group() in known else "[REDACTED]", redacted)
+    redacted = LONG_TOKEN.sub(lambda match: match.group() if match.group() in known or
+                              re.match(r"\.[A-Za-z0-9]{1,8}\b", redacted[match.end():]) or
+                              match.group().startswith(("agents/", "docs/", "adapters/", "contextos/",
+                                                        "state/", "sessions/", "identity/", "projects/",
+                                                        "scripts/", "tests/", "runtimes/", "components/"))
+                              else "[REDACTED]", redacted)
     return PATH.sub(lambda match: match.group() if match.group() in SLASH_COMMANDS else "[PATH]", redacted)[:20000]
 
 
@@ -147,8 +152,13 @@ def stream_evidence(output: str, known: Sequence[str]) -> tuple[list[dict], str,
             detail = event.get("input", {})
             if name == "skill_view" and isinstance(detail, dict) and isinstance(detail.get("name"), str):
                 skills.append(clean(detail["name"], known))
-            if name in ("read_file", "search_files", "terminal") and any(SELF_READ.search(value) for value in strings(detail)):
+            detail_text = " ".join(strings(detail))
+            if (SELF_READ.search(detail_text) or
+                    (re.search(r"(?i)\b(?:grep|rg|findstr|Select-String)\b", detail_text)
+                     and re.search(r"(?i)Hermes fixture canary:", detail_text))):
                 self_read = True
+        if kind == "tool_result" and any(marker in value for value in strings(event) for marker in known):
+            self_read = True
         if kind in ("assistant", "assistant_message") or (kind == "message" and event.get("role") == "assistant"):
             content = event.get("content", event.get("text", ""))
             if isinstance(content, str):
@@ -201,7 +211,8 @@ def operator_approval(phase: str, path: Path, proposal: dict, digest: str,
     raise HarnessError("operator approval timed out")
 
 
-def prepare(source: Path, fixture: Path, home: Path, expected_commit: str) -> dict:
+def prepare(source: Path, fixture: Path, home: Path, expected_commit: str,
+            manifest_path: Path | None = None) -> dict:
     source = source.resolve(strict=True)
     if not re.fullmatch(r"[0-9a-f]{40}", expected_commit):
         raise HarnessError("expected commit must be a full lowercase SHA")
@@ -211,6 +222,13 @@ def prepare(source: Path, fixture: Path, home: Path, expected_commit: str) -> di
         raise HarnessError("fixture and HERMES_HOME must not exist")
     outside_checkouts(fixture, source)
     outside_checkouts(home, source)
+    manifest_raw = (manifest_path or fixture.parent / (fixture.name + "-manifest.json")).absolute()
+    if manifest_raw == fixture or fixture in manifest_raw.parents:
+        raise HarnessError("manifest must be new and outside fixture and HERMES_HOME")
+    manifest_path = manifest_raw.resolve(strict=False)
+    if manifest_path.exists() or manifest_path == fixture or fixture in manifest_path.parents or home in manifest_path.parents:
+        raise HarnessError("manifest must be new and outside fixture and HERMES_HOME")
+    outside_checkouts(manifest_path, source)
     if fixture.resolve(strict=False) in home.resolve(strict=False).parents or home.resolve(strict=False) in fixture.resolve(strict=False).parents:
         raise HarnessError("fixture and HERMES_HOME must be separate")
     fixture.parent.mkdir(parents=True, exist_ok=True)
@@ -235,26 +253,32 @@ def prepare(source: Path, fixture: Path, home: Path, expected_commit: str) -> di
         skill_digests[name] = sha(path)
         canaries[name] = secrets.token_hex(16)
         path.write_bytes(path.read_bytes() + f"\nHermes fixture canary: {canaries[name]}\n".encode())
-    manifest = {"source_sha": expected_commit, "fixture_commit": git(fixture, "rev-parse", "HEAD"),
+    git(fixture, "-c", "core.autocrlf=false", "add", "--", "AGENTS.md", *(f".agents/skills/{name}/SKILL.md" for name in SKILLS))
+    git(fixture, "-c", "user.name=Context OS Fixture", "-c", "user.email=fixture@example.invalid",
+        "commit", "-m", "Add synthetic Hermes discovery canaries")
+    fixture_commit = git(fixture, "rev-parse", "HEAD")
+    manifest = {"source_sha": expected_commit, "fixture_commit": fixture_commit,
                 "prepared_at": now(), "skill_source_sha256": skill_digests, "canaries": canaries,
                 "native_memory_canaries": memory_canaries,
                 "sentinel_sha256": sha(fixture / "unrelated-sentinel.txt"),
                 "prompts": {phase: prompt_for(phase) for phase in PHASES},
                 "commands": ["hermes skills trust <fixture>", "hermes skills list --source local",
-                             "python adapters/hermes/live_conformance.py record --fixture <fixture> --home <home> --evidence <new-json> --binary <hermes> --model <model> --provider <provider> --expected-version 'Hermes Agent v0.21.4' --run-budget 120 --max-turns 20"],
+                             "python adapters/hermes/live_conformance.py record --fixture <fixture> --home <home> --manifest <manifest> --evidence <new-json> --binary <hermes> --model <model> --provider <provider> --expected-version 'Hermes Agent v0.21.4' --run-budget 120 --max-turns 20"],
                 "steps": ["Set HERMES_HOME to the fresh home path printed by prepare.",
                           "Supply provider credentials through environment variables; do not copy credentials into the fixture.",
                           "Run hermes skills trust <fixture> yourself, then verify hermes skills list --source local.",
                           "Run record with --binary, --model, --provider, --run-budget, --max-turns and --evidence.",
                           "For each proposal, inspect the printed diff and type its exact digest."]}
-    (fixture / ".context-os-live-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    return {"fixture": str(fixture), "hermes_home": str(home), "manifest": manifest}
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    return {"fixture": str(fixture), "hermes_home": str(home), "manifest_path": str(manifest_path), "manifest": manifest}
 
 
-def tracked_state(fixture: Path) -> tuple[str, dict[str, str]]:
+def tracked_state(fixture: Path, include_kernel: bool = True) -> tuple[str, dict[str, str]]:
     status = git(fixture, "status", "--porcelain=v1", "--untracked-files=all")
     files = {p.relative_to(fixture).as_posix(): sha(p) for p in fixture.rglob("*")
-             if p.is_file() and ".git" not in p.relative_to(fixture).parts and ".context-os" not in p.relative_to(fixture).parts}
+             if p.is_file() and ".git" not in p.relative_to(fixture).parts
+             and (include_kernel or ".context-os" not in p.relative_to(fixture).parts)}
     return status, files
 
 
@@ -263,7 +287,7 @@ def check_memory(fixture: Path, home: Path, canaries: dict[str, str]) -> None:
         if any(p.name == name for p in fixture.rglob(name) if ".git" not in p.parts):
             raise HarnessError(f"fixture contains Hermes native {name}")
     state = {name: digest for name, digest in tracked_state(fixture)[1].items()
-             if name not in {MARKER, ".context-os-live-manifest.json", "unrelated-sentinel.txt"}}
+             if name not in {MARKER, "unrelated-sentinel.txt"}}
     for marker in canaries.values():
         if any(marker.encode() in (fixture / rel).read_bytes() for rel in state):
             raise HarnessError("Hermes native memory canary appeared in fixture state")
@@ -272,6 +296,29 @@ def check_memory(fixture: Path, home: Path, canaries: dict[str, str]) -> None:
             content = memory.read_bytes()
             if content and any(content in p.read_bytes() for rel in state for p in [fixture / rel]):
                 raise HarnessError("host memory appeared in fixture state")
+
+
+def native_memory_state(home: Path) -> dict[str, str]:
+    memories = home / "memories"
+    return {p.relative_to(memories).as_posix():
+            "link" if is_link_like(p) else "directory" if p.is_dir() else sha(p)
+            for p in memories.rglob("*")}
+
+
+def mirrors_memory(text: str, canaries: Sequence[str]) -> bool:
+    normalized = re.sub(r"[\s-]", "", text).lower()
+    return any(marker.lower() in normalized for marker in canaries)
+
+
+def hermes_environment(home: Path, allow: Sequence[str] = ()) -> dict[str, str]:
+    base = {"PATH", "SYSTEMROOT", "HOME", "USERPROFILE", "TEMP", "TMP", "APPDATA", "LOCALAPPDATA"}
+    names = base | set(allow)
+    env = {name: value for name, value in os.environ.items()
+           if name.upper() in names or name.upper().endswith("_API_KEY") or name.upper().startswith("HERMES_")}
+    env["HERMES_HOME"] = str(home)
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env.pop("HERMES_ACCEPT_HOOKS", None)
+    return env
 
 
 def new_proposal(fixture: Path, before: set[Path], phase: str) -> tuple[Path, dict]:
@@ -302,7 +349,8 @@ def new_proposal(fixture: Path, before: set[Path], phase: str) -> tuple[Path, di
 def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], model: str,
            provider: str, run_budget: int, max_turns: int, input_fn=input,
            expected_version: str = "", approval_dir: Path | None = None,
-           approval_timeout: float = 900) -> dict:
+           approval_timeout: float = 900, manifest_path: Path | None = None,
+           env_allow: Sequence[str] = ()) -> dict:
     fixture, home, evidence = fixture.resolve(), home.resolve(), evidence.resolve(strict=False)
     if not home.is_dir() or fixture in home.parents or home in fixture.parents:
         raise HarnessError("HERMES_HOME must be a separate existing directory")
@@ -316,14 +364,21 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
         if approval_dir == home or home in approval_dir.parents or approval_dir in home.parents:
             raise HarnessError("approval directory must be separate from HERMES_HOME")
 
-    manifest = json.loads((fixture / ".context-os-live-manifest.json").read_text(encoding="utf-8"))
+    manifest_raw = (manifest_path or fixture.parent / (fixture.name + "-manifest.json")).absolute()
+    if manifest_raw == fixture or fixture in manifest_raw.parents:
+        raise HarnessError("manifest must be outside fixture and HERMES_HOME")
+    manifest_path = manifest_raw.resolve(strict=False)
+    if manifest_path == fixture or fixture in manifest_path.parents or home in manifest_path.parents:
+        raise HarnessError("manifest must be outside fixture and HERMES_HOME")
+    outside_checkouts(manifest_path, fixture)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if (set(manifest.get("skill_source_sha256", {})) != set(SKILLS)
             or set(manifest.get("canaries", {})) != {"agents", *SKILLS}
             or set(manifest.get("native_memory_canaries", {})) != {"MEMORY.md", "USER.md"}
             or manifest.get("prompts") != {phase: prompt_for(phase) for phase in PHASES}):
         raise HarnessError("manifest lifecycle skill set is incomplete")
-    if (fixture / MARKER).read_text(encoding="utf-8").strip() != "disposable" or git(fixture, "rev-parse", "HEAD") != manifest["source_sha"]:
-        raise HarnessError("fixture marker or source commit mismatch")
+    if (fixture / MARKER).read_text(encoding="utf-8").strip() != "disposable" or git(fixture, "rev-parse", "HEAD") != manifest["fixture_commit"]:
+        raise HarnessError("fixture marker or fixture commit mismatch")
     for name, digest in manifest["skill_source_sha256"].items():
         content = (fixture / ".agents" / "skills" / name / "SKILL.md").read_bytes()
         if hashlib.sha256(content.split(b"\nHermes fixture canary:")[0]).hexdigest() != digest:
@@ -338,18 +393,21 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
               "controls": {name: "unsupported" for name in (
                   "version", "agents_discovery", "setup_discovery", "setup_proposal_apply",
                   "start_discovery", "start_read_only", "update_discovery", "update_proposal_apply",
-                  "end_discovery", "end_proposal_apply", "stale_digest_rejected",
+                  "end_discovery", "end_proposal_apply", "wrong_digest_rejected", "stale_target_rejected",
                   "memory_separation", "unrelated_sentinel", "hook_example")},
               "commands": [], "skill_source_sha256": manifest["skill_source_sha256"]}
-    env = os.environ.copy()
-    env["HERMES_HOME"] = str(home)
-    env["PYTHONDONTWRITEBYTECODE"] = "1"
-    env.pop("HERMES_ACCEPT_HOOKS", None)
+    env = hermes_environment(home, env_allow)
+    result["environment_names"] = sorted(env)
+    memory_before = native_memory_state(home)
     sentinel = sha(fixture / "unrelated-sentinel.txt")
     current_control = "version"
     try:
         version = command([*binary, "--version"], fixture, env)
         result["commands"].append(version)
+        current_control = "memory_separation"
+        if native_memory_state(home) != memory_before:
+            raise HarnessError("Hermes native memory changed")
+        current_control = "version"
         result["version"] = version["stdout"].splitlines()[0] if version["stdout"] else ""
         if (version["exit_code"] or not re.search(r"Hermes Agent v\d+\.\d+\.\d+", result["version"])
                 or (expected_version and not result["version"].startswith(expected_version))):
@@ -358,7 +416,7 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
         canaries = manifest["canaries"]
         for phase in PHASES:
             current_control = f"{phase}_discovery"
-            before = tracked_state(fixture)
+            before = tracked_state(fixture, include_kernel=phase == "start")
             proposals = set((fixture / ".context-os" / "proposals").glob("*.json"))
             prompt = prompt_for(phase)
             argv = [*binary, "chat", "--format", "stream-json", "--source", "tool", "-m", model, "--provider", provider,
@@ -367,6 +425,10 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
             raw = call.pop("_raw_stdout")
             call["stdout"] = "[stream-json events recorded separately]"
             result["commands"].append(call)
+            current_control = "memory_separation"
+            if native_memory_state(home) != memory_before:
+                raise HarnessError("Hermes native memory changed")
+            current_control = f"{phase}_discovery"
             if call["exit_code"]:
                 raise HarnessError(f"{phase} chat failed or timed out")
             events, assistant, skills, self_read = stream_evidence(raw, tuple(canaries.values()))
@@ -384,7 +446,9 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
                 result["controls"]["agents_discovery"] = "passed"
             current_control = "memory_separation"
             check_memory(fixture, home, manifest["native_memory_canaries"])
-            after = tracked_state(fixture)
+            if native_memory_state(home) != memory_before:
+                raise HarnessError("Hermes native memory changed")
+            after = tracked_state(fixture, include_kernel=phase == "start")
             if phase == "start":
                 current_control = "start_read_only"
                 if before != after:
@@ -397,8 +461,9 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
                 if before != after:
                     raise HarnessError("proposal turn changed fixture files before operator apply")
                 current_control = "memory_separation"
-                proposed = "".join(change["path"] + change["diff"] for change in proposal["changes"])
-                if any(marker in proposed for marker in manifest["native_memory_canaries"].values()):
+                proposed = "".join(change["path"] + change["diff"] + change.get("after_text", "")
+                                   for change in proposal["changes"])
+                if mirrors_memory(proposed, tuple(manifest["native_memory_canaries"].values())):
                     raise HarnessError("proposal mirrors Hermes native memory into repository state")
                 current_control = f"{phase}_proposal_apply"
                 digest = proposal["proposal_digest"]
@@ -408,12 +473,12 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
                     raise HarnessError("proposal changed after review")
                 wrong = "0" * 64 if digest != "0" * 64 else "1" * 64
                 relative = path.relative_to(fixture).as_posix()
+                current_control = "wrong_digest_rejected"
                 reject = command(["bash", "scripts/contextos.sh", "apply", relative, "--confirm", wrong, "--runtime", "hermes"], fixture, env)
                 result["commands"].append(reject)
-                current_control = "stale_digest_rejected"
                 if reject["exit_code"] == 0 or "--confirm must exactly match" not in (reject["stdout"] + reject["stderr"]):
-                    raise HarnessError("kernel did not reject stale digest")
-                result["controls"]["stale_digest_rejected"] = "passed"
+                    raise HarnessError("kernel did not reject wrong digest")
+                result["controls"]["wrong_digest_rejected"] = "passed"
                 current_control = f"{phase}_proposal_apply"
                 receipts_before = set((fixture / ".context-os" / "receipts").glob("*.json"))
                 applied = command(["bash", "scripts/contextos.sh", "apply", relative, "--confirm", digest, "--runtime", "hermes"], fixture, env)
@@ -425,18 +490,27 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
                 if receipt.get("proposal_digest") != digest or receipt.get("runtime") != "hermes":
                     raise HarnessError("receipt does not bind exact Hermes proposal")
                 result["controls"][f"{phase}_proposal_apply"] = "passed"
+                if phase != "setup":
+                    current_control = "stale_target_rejected"
+                    stale = command(["bash", "scripts/contextos.sh", "apply", relative, "--confirm", digest, "--runtime", "hermes"], fixture, env)
+                    result["commands"].append(stale)
+                    if stale["exit_code"] == 0 or "refusing stale proposal; file changed" not in (stale["stdout"] + stale["stderr"]):
+                        raise HarnessError("kernel accepted already-applied proposal")
+                    result["controls"]["stale_target_rejected"] = "passed"
             current_control = "unrelated_sentinel"
             if sha(fixture / "unrelated-sentinel.txt") != sentinel:
                 raise HarnessError("unrelated fixture sentinel changed")
             current_control = "memory_separation"
             check_memory(fixture, home, manifest["native_memory_canaries"])
+            if native_memory_state(home) != memory_before:
+                raise HarnessError("Hermes native memory changed")
         result["controls"]["memory_separation"] = "passed"
         result["controls"]["unrelated_sentinel"] = "passed"
         result["controls"]["hook_example"] = "unsupported"
-    except (HarnessError, OSError, ValueError, json.JSONDecodeError) as exc:
+    except Exception as exc:
         result["controls"][current_control] = "failed"
         result["controls"]["run"] = "failed"
-        result["failure"] = clean(str(exc))
+        result["failure"] = clean(f"{type(exc).__name__}: {exc}")
     else:
         result["controls"]["run"] = "passed"
     result["finished_at"] = now()
@@ -453,22 +527,26 @@ def main(argv: Sequence[str] | None = None) -> int:
     prep = commands.add_parser("prepare")
     for flag in ("source", "fixture", "home", "expected-commit"):
         prep.add_argument("--" + flag, required=True)
+    prep.add_argument("--manifest")
     run = commands.add_parser("record")
-    for flag in ("fixture", "home", "evidence", "binary", "model", "provider", "expected-version"):
+    for flag in ("fixture", "home", "manifest", "evidence", "binary", "model", "provider", "expected-version"):
         run.add_argument("--" + flag, required=True)
+    run.add_argument("--env-allow", action="append", default=[], metavar="NAME")
     run.add_argument("--run-budget", type=int, default=120)
     run.add_argument("--max-turns", type=int, default=20)
     run.add_argument("--approval-dir")
     args = parser.parse_args(argv)
     try:
         if args.action == "prepare":
-            print(json.dumps(prepare(Path(args.source), Path(args.fixture), Path(args.home), args.expected_commit), indent=2))
+            print(json.dumps(prepare(Path(args.source), Path(args.fixture), Path(args.home), args.expected_commit,
+                                     Path(args.manifest) if args.manifest else None), indent=2))
         else:
             if args.run_budget < 1 or args.max_turns < 1:
                 raise HarnessError("budgets must be positive")
             result = record(Path(args.fixture), Path(args.home), Path(args.evidence), [args.binary], args.model, args.provider, args.run_budget, args.max_turns,
                             expected_version=args.expected_version,
-                            approval_dir=Path(args.approval_dir) if args.approval_dir else None)
+                            approval_dir=Path(args.approval_dir) if args.approval_dir else None,
+                            manifest_path=Path(args.manifest), env_allow=args.env_allow)
             print(json.dumps({"controls": result["controls"], "evidence": args.evidence}, indent=2))
             return 0 if result["controls"]["run"] == "passed" else 1
     except HarnessError as exc:

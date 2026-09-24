@@ -60,7 +60,7 @@ this is guidance, not a host-enforced gate. The `$context-setup`, `$context-star
   short aliases and all four `context-*` cores together. Copied skills must be
   refreshed after source changes.
 - Invoke `/context-setup`, `/context-start`, `/context-update`, and `/context-end`.
-  Hermes v0.21.4 `hermes skills list --source local` reports built-in collisions for `/start` and `/update`; aliases still load via `/skill start` and `/skill update`.
+  Hermes v0.21.4 `hermes skills list --source local` reports built-in collisions for `/start` and `/update` and suggests `/skill start` and `/skill update`. Alias invocation needs a future live control.
 - Keep Hermes `MEMORY.md` and `USER.md` separate from repository state. See
   `docs/memory-across-agents.md`.
 - `.claude/hooks/` does not run in Hermes; its hooks are optional defense in depth.

@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Hermes live conformance now commits fixture canaries, keeps its manifest outside
+  the fixture, detects self-reads and native-memory mutation, includes kernel
+  state in read-only start checks, and records filtered environment names and
+  separate wrong-digest and stale-target controls (#163).
 - Hermes live conformance now invokes the available `/context-*` skills,
   checks stream events for self-read discovery, and supports digest files for
   non-interactive operator approval. Proposals that copy Hermes native memory
@@ -28,7 +32,7 @@
 
 ### Added
 - An opt-in Hermes live conformance harness prepares a disposable fixture from an exact clean commit and records bounded installed-client runs, operator-approved kernel receipts, and failure evidence. Deterministic Hermes controls and a runbook accompany it; support tiers remain unchanged (#163).
-- Four recorded Hermes Agent v0.21.4 live attempts on free OpenRouter routes, retained with their failures in `docs/evidence/hermes-live-2026-09-23/`. The best run passed instruction and skill discovery; its setup proposal copied native memory into repository files and was rejected, so Hermes remains experimental (#163).
+- Four recorded Hermes Agent v0.21.4 live attempts on free OpenRouter routes, retained with their failures in `docs/evidence/hermes-live-2026-09-23/`. None passed every control. In the last, the setup proposal copied native memory into repository files and was rejected. A later review found false-green paths in the harness those runs used, now closed, so their discovery results are not relied on. Hermes remains experimental (#163).
 - Per-trial value-correct and citation-rejected continuity counts, with
   category breakdowns, summary columns, and a report of 27 long-sequence trials
   that separates decision values from exact citation failures (#184).

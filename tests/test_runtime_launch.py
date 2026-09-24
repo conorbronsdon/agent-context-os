@@ -11,6 +11,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def hermes_start_contract(evidence: dict, manifest: dict) -> str:
+    if evidence["source_sha"] != manifest["source_sha"] or evidence["fixture_commit"] != manifest["fixture_commit"]:
+        raise AssertionError("Hermes evidence does not match fixture source and commit")
+    return "/context-start"
+
+
 class RuntimeLaunchTest(unittest.TestCase):
     """Opt-in, read-only smoke tests against installed runtime processes."""
 
@@ -63,7 +69,11 @@ class RuntimeLaunchTest(unittest.TestCase):
             self.skipTest("hermes is not installed")
         fixture = Path(fixture_name)
         evidence = json.loads(Path(evidence_name).read_text(encoding="utf-8"))
-        manifest = json.loads((fixture / ".context-os-live-manifest.json").read_text(encoding="utf-8"))
+        manifest_name = os.environ.get("CONTEXTOS_HERMES_MANIFEST")
+        if not manifest_name:
+            self.skipTest("set CONTEXTOS_HERMES_MANIFEST")
+        manifest = json.loads(Path(manifest_name).read_text(encoding="utf-8"))
+        prompt = hermes_start_contract(evidence, manifest)
         self.assertEqual("passed", evidence["controls"]["run"])
         environment = os.environ.copy()
         environment["HERMES_HOME"] = home_name
@@ -71,14 +81,19 @@ class RuntimeLaunchTest(unittest.TestCase):
                                  text=True, capture_output=True, timeout=30, check=False)
         self.assertEqual(0, version.returncode, version.stderr)
         self.assertEqual(evidence["version"], version.stdout.splitlines()[0])
-        prompt = "Read this repository's AGENTS.md and the local start and context-start skills. Give their exact fixture canaries."
         command = [binary, "chat", "-Q", "--source", "tool", "-m", evidence["model"],
                    "--provider", evidence["provider"], "--run-budget", "120", "--max-turns", "20", "-q", prompt]
         result = subprocess.run(command, cwd=fixture, env=environment, text=True,
                                 capture_output=True, timeout=150, check=False)
         self.assertEqual(0, result.returncode, result.stderr)
-        for name in ("agents", "start", "context-start"):
+        for name in ("agents", "context-start"):
             self.assertIn(manifest["canaries"][name], result.stdout)
+
+    def test_hermes_start_contract_uses_source_bound_bare_command(self) -> None:
+        evidence = {"source_sha": "a" * 40, "fixture_commit": "b" * 40}
+        self.assertEqual("/context-start", hermes_start_contract(evidence, evidence))
+        with self.assertRaisesRegex(AssertionError, "does not match"):
+            hermes_start_contract(evidence, {"source_sha": "c" * 40, "fixture_commit": "b" * 40})
 
 
 if __name__ == "__main__":

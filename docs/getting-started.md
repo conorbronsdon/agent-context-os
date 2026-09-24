@@ -122,10 +122,10 @@ openclaw gateway run
 agent
 ```
 
-Run `/setup` in Claude Code or Hermes, `/context-setup` in Cursor or OpenCode, `$setup` in
-Codex, or `/contextos <alias> setup` through an authorized OpenClaw messaging
-surface. OpenClaw first requires the separate private-workspace, verified skill
-synchronization, plugin installation, and configured project-alias binding
+Run `/setup` in Claude Code, `/context-setup` in Hermes, Cursor, or OpenCode,
+`$setup` in Codex, or `/contextos <alias> setup` through an authorized
+OpenClaw messaging surface. OpenClaw first requires the separate private-workspace,
+verified skill synchronization, plugin installation, and configured project-alias binding
 steps in its [adapter guide](../adapters/openclaw/README.md). The guided
 interview asks one question at a time, builds a deterministic proposal, and
 waits before applying the exact reviewed diff.
@@ -191,9 +191,9 @@ Commit and push only after the diff matches what you intend to preserve.
 
 | Moment | Claude Code | Codex | OpenCode | Hermes | OpenClaw | Cursor IDE/CLI (experimental) | Devin session (experimental) |
 |---|---|---|---|---|---|---|---|
-| Start work | `/start` | `$start` | `/context-start` | `/start` | `/contextos <alias> start` | `/context-start` | `@skills:context-start` |
-| Save progress without closing | `/update` | `$update` | `/context-update` | `/update` | `/contextos <alias> update` | `/context-update` | `@skills:context-update` |
-| End with a reviewed handoff | `/end` | `$end` | `/context-end` | `/end` | `/contextos <alias> end` | `/context-end` | `@skills:context-end` |
+| Start work | `/start` | `$start` | `/context-start` | `/context-start` | `/contextos <alias> start` | `/context-start` | `@skills:context-start` |
+| Save progress without closing | `/update` | `$update` | `/context-update` | `/context-update` | `/contextos <alias> update` | `/context-update` | `@skills:context-update` |
+| End with a reviewed handoff | `/end` | `$end` | `/context-end` | `/context-end` | `/contextos <alias> end` | `/context-end` | `@skills:context-end` |
 
 The lifecycle kernel writes shared continuity to `state/` and `sessions/` only
 after exact-proposal approval, then emits a local receipt. Each host retains
