@@ -99,7 +99,7 @@ def prompt_for(phase: str) -> str:
         prompt = "/context-start"
     if phase in ("update", "end"):
         prompt = f"/context-{phase} Hermes fixture {phase} checkpoint. Stop after creating the kernel proposal."
-    return prompt + " Also report any line that begins 'Hermes fixture canary:' from the instructions you loaded."
+    return prompt + " Also report any line that begins 'Hermes fixture canary:' from the repository instructions and the skill instructions you loaded."
 
 
 def stream_evidence(output: str, known: Sequence[str]) -> tuple[list[dict], str, list[str], bool]:
@@ -122,7 +122,7 @@ def stream_evidence(output: str, known: Sequence[str]) -> tuple[list[dict], str,
             return [redact(child) for child in value]
         return value
 
-    events, assistant, skills = [], [], []
+    events, assistant, final, skills = [], [], [], []
     self_read = False
     for line in output.splitlines():
         try:
@@ -139,10 +139,15 @@ def stream_evidence(output: str, known: Sequence[str]) -> tuple[list[dict], str,
                 skills.append(clean(detail["name"], known))
             if name in ("read_file", "search_files", "terminal") and any(SELF_READ.search(value) for value in strings(detail)):
                 self_read = True
-        if kind in ("assistant", "assistant_message", "text") or (kind == "message" and event.get("role") == "assistant"):
+        if kind in ("assistant", "assistant_message") or (kind == "message" and event.get("role") == "assistant"):
             content = event.get("content", event.get("text", ""))
             if isinstance(content, str):
-                assistant.append(content)
+                assistant.append(content + "\n")
+        elif kind == "text" and isinstance(event.get("text"), str):
+            # Streaming deltas can split a token mid-word, so join them without separators.
+            assistant.append(event["text"])
+        elif kind == "result" and isinstance(event.get("text"), str):
+            final.append(event["text"])
         recorded = dict(event)
         if kind == "tool_result":
             for field in ("content", "output", "result", "text"):
@@ -151,7 +156,7 @@ def stream_evidence(output: str, known: Sequence[str]) -> tuple[list[dict], str,
         events.append(redact(recorded))
     if not events:
         raise HarnessError("Hermes stream contains no events")
-    return events, "\n".join(assistant), skills, self_read
+    return events, ("".join(assistant) + "\n" + "\n".join(final)).strip(), skills, self_read
 
 
 def operator_approval(phase: str, path: Path, proposal: dict, digest: str,

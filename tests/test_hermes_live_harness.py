@@ -75,7 +75,11 @@ else:
     if mode == 'tool-result-canaries':
         emit({'type': 'tool_result', 'content': ' '.join(values)})
         values = ['No canaries in assistant text.']
-    emit({'type': 'assistant', 'content': ' '.join(values)})
+    text = ' '.join(values)
+    # Real Hermes stream-json sends small text deltas that can split a token, then a result event.
+    for start in range(0, len(text), 7):
+        emit({'type': 'text', 'text': text[start:start + 7]})
+    emit({'type': 'result', 'exit_code': 0, 'text': text})
     if mode == 'echo-secret':
         emit({'type': 'assistant', 'content': 'token=' + os.environ.get('OPENROUTER_API_KEY', '')})
 '''
@@ -305,6 +309,15 @@ class HermesLiveHarnessTest(unittest.TestCase):
         self.assertEqual("", assistant)
         self.assertEqual([], skills)
         self.assertFalse(self_read)
+
+    def test_split_text_deltas_rejoin_canaries(self) -> None:
+        canary = "c" * 16 + "d" * 16
+        raw = "\n".join(json.dumps({"type": "text", "text": canary[i:i + 5]}) for i in range(0, 32, 5))
+        _events, assistant, _skills, _self_read = live.stream_evidence(raw, (canary,))
+        self.assertIn(canary, assistant)
+        raw = json.dumps({"type": "result", "exit_code": 0, "text": "final " + canary})
+        _events, assistant, _skills, _self_read = live.stream_evidence(raw, (canary,))
+        self.assertIn(canary, assistant)
 
     def test_skill_view_name_is_redacted(self) -> None:
         raw = json.dumps({"type": "tool_use", "name": "skill_view", "input": {"name": "sk-abc"}})
