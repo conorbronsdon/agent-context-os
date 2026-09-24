@@ -25,8 +25,16 @@ before `record`; the stored `raw_response` is the unfenced body. Line endings
 were normalized to LF and trailing carriage returns removed; no stored
 `raw_response` contains a carriage return. An earlier copy of these records
 still carried CRLF because the response files were rewritten with Windows
-newline translation; the records were re-recorded from the same responses, and
-every score was unchanged. No other content edits were made.
+newline translation. The records were re-recorded from the same responses and
+the orchestrator saw every score unchanged, but neither the original fenced
+responses nor the earlier copy is preserved here, so that comparison cannot be
+rechecked from these files.
+
+Prompts are stored as hashes, not text. Each `prompt_sha256` is the SHA-256 of
+`prepare --scenario long --profile <profile>` at the source commit, and
+`summarize` recomputes and checks it when it loads the records. The prompt
+files actually sent were that command's Windows standard output, so they used
+CRLF line endings and a trailing newline.
 
 ## Scores
 
@@ -121,6 +129,17 @@ full sentence. Two handoff rejections and two Context OS rejections instead
 cited the current webhooks sentence for a question about an earlier decision.
 Those cases show a separate citation-selection error, so changing sentence
 shape alone is not guaranteed to remove every rejection.
+
+The handoff note is information-equivalent for these ten questions: each
+expected supporting sentence appears in it. It is not equivalent to the full
+fixture history. It omits superseded proposals and details kept in the older
+session files. These trials also do not isolate sentence shape as the cause
+of the citation gap, because the two informed profiles differ in more than
+sentence shape.
+
+The grounding rule accepts any quote that contains the required sentence and
+appears in the cited source, so a quote of an entire source document would
+pass. No trial here did that; the longest recorded quote is 118 characters.
 
 The supported product follow-up is to have lifecycle-written state and handoff
 entries use one self-contained sentence per fact, naming its subject in that

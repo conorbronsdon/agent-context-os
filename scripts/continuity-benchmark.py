@@ -242,7 +242,7 @@ def main() -> int:
         except OSError as exc:
             parser.exit(2, f"Cannot read response: {exc}\n")
         print(json.dumps(result, indent=2))
-        return 2 if result["format_failure"] else 0 if result["grounded_correct"] == result["questions"] else 1
+        return 2 if result.get("format_failure") else 0 if result["grounded_correct"] == result["questions"] else 1
     try:
         response = json.loads(args.response.read_text(encoding="utf-8-sig"))
         if not isinstance(response, dict):

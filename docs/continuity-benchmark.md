@@ -37,7 +37,9 @@ python scripts/continuity-benchmark.py score --profile contextos --response /pat
 Exit 0 means all four answers are grounded and correct; 1 means at least one
 failed; 2 means the response could not be scored. A correct choice without the
 required supporting sentence fails. The scorer accepts a longer verbatim quote
-containing that sentence. It deliberately does not grade arbitrary paraphrases.
+containing that sentence, up to the whole cited source, so check recorded
+quote lengths before treating grounding as precise citation. It deliberately
+does not grade arbitrary paraphrases.
 Wrong decisions, invented certainty, unsupported guesses, and missing question
 IDs have negative controls in the tests.
 
