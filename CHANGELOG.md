@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Capability install state now leaves native and advisory claims host-provided,
+  checks adapter claims against runtime-specific components, and accepts
+  comma-separated `capabilities --agent` selections (#182).
 - Refresh the social preview from the current runtime manifests, including
   first-class OpenCode support, and keep both tracked PNG aliases byte-identical
   to the 1280×640 source render (#195).

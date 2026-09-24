@@ -119,7 +119,7 @@ def parser() -> argparse.ArgumentParser:
     history.add_argument("--details", action="store_true", help="Include available proposal diffs after checking their digest binding")
 
     capabilities = commands.add_parser("capabilities", help="Compare selected agents' described capabilities and skills")
-    capabilities.add_argument("--agent", action="append", default=[], help="Registered agent id (repeatable); defaults to tracked selection")
+    capabilities.add_argument("--agent", action="append", default=[], help="Comma-separated registered agent ids (repeatable); defaults to tracked selection")
     capabilities.add_argument("--json", action="store_true", help="Print the report as JSON")
 
     propose = commands.add_parser("propose", help="Create a reviewable lifecycle proposal")

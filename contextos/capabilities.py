@@ -14,8 +14,8 @@ from .workspace_schema import load_workspace_config, strict_json_loads
 
 
 NOTE = (
-    "Availability is not permission or activation. Install state describes recorded "
-    "repository components, not host installation."
+    "Availability is not permission or activation. Component install state describes "
+    "recorded repository components, not host installation."
 )
 
 
@@ -32,12 +32,15 @@ def _installed_components(root: Path) -> set[str] | None:
 
 def _selection(root: Path, requested: list[str], known: list[str], components: dict[str, Any]) -> list[str]:
     if requested:
-        if len(requested) != len(set(requested)):
+        selected = [agent.strip() for value in requested for agent in value.split(",")]
+        if any(not agent for agent in selected):
+            raise ContextOSError("--agent selection must not contain empty ids")
+        if len(selected) != len(set(selected)):
             raise ContextOSError("duplicate --agent id")
-        unknown = sorted(set(requested) - set(known))
+        unknown = sorted(set(selected) - set(known))
         if unknown:
             raise ContextOSError("unknown agent id: " + ", ".join(unknown))
-        return sorted(requested)
+        return sorted(selected)
     path = root / "contextos.workspace.json"
     if not path.exists() and not path.is_symlink():
         raise ContextOSError("no agents selected; use --agent or select agents in contextos.workspace.json")
@@ -60,23 +63,47 @@ def _status(supported: bool, owners: set[str], installed: set[str] | None) -> st
     return "installed"
 
 
+def _runtime_specific_components(agent_id: str, descriptors: dict[str, dict[str, Any]]) -> set[str]:
+    shared = set().union(*(
+        set(descriptor["components"])
+        for other_id, descriptor in descriptors.items() if other_id != agent_id
+    ))
+    specific = set(descriptors[agent_id]["components"]) - shared
+    if not specific:
+        raise ContextOSError(f"no runtime-specific components for agent {agent_id}")
+    return specific
+
+
+def _capability_detail(value: str, adapter_components: set[str], installed: set[str] | None) -> dict[str, Any]:
+    if value == "unsupported":
+        return {"value": value, "install_state": "unsupported"}
+    if value in {"native", "advisory"}:
+        return {"value": value, "install_state": "host-provided"}
+    return {
+        "value": value,
+        "install_state": _status(True, adapter_components, installed),
+        "required_components": sorted(adapter_components),
+    }
+
+
 def capability_report(root: Path, requested: list[str]) -> dict[str, Any]:
     known = runtime_ids(root)
     components = load_component_manifest(root / "components/manifest.json", root=root, check_paths=False)
     selected = _selection(root, requested, known, components)
     owners = component_owners(components)
     installed = _installed_components(root)
+    descriptors = {
+        agent_id: runtime_manifest(root, agent_id, check_paths=False)
+        for agent_id in known
+    }
     agents: dict[str, Any] = {}
     for agent_id in selected:
-        descriptor = runtime_manifest(root, agent_id, check_paths=False)
-        required = set(descriptor["components"])
+        descriptor = descriptors[agent_id]
+        adapter_components = _runtime_specific_components(agent_id, descriptors)
         surfaces: dict[str, Any] = {}
         for surface_id, surface in sorted(descriptor["surfaces"].items()):
             capabilities = {
-                key: {
-                    "value": value,
-                    "install_state": _status(value != "unsupported", required, installed),
-                }
+                key: _capability_detail(value, adapter_components, installed)
                 for key, value in sorted(surface["capabilities"].items())
             }
             skills: dict[str, Any] = {}
@@ -168,7 +195,9 @@ def render_capabilities(report: dict[str, Any]) -> str:
         for surface_id, surface in agent["surfaces"].items():
             lines.append(f"  {surface_id} ({surface['kind']}) - {surface['support_tier']}")
             for key, detail in surface["capabilities"].items():
-                lines.append(f"    {key}: {detail['value']} [{detail['install_state']}]")
+                required = detail.get("required_components", [])
+                gate = f" (requires {', '.join(required)})" if required else ""
+                lines.append(f"    {key}: {detail['value']} [{detail['install_state']}]{gate}")
             lines.append("    skills:")
             for skill, detail in surface["skills"].items():
                 lines.append(f"      {skill}: {detail['component']} [{detail['install_state']}]")
@@ -188,5 +217,11 @@ def render_capabilities(report: dict[str, Any]) -> str:
     for agent, detail in comparison["per_agent_only"].items():
         lines.append(f"    {agent}: skills={', '.join(detail['skills']) or '(none)'}; "
                      f"capabilities={', '.join(detail['capabilities']) or '(none)'}")
+    lines.append("\nInstall states")
+    lines.append("  unsupported: capability is not claimed")
+    lines.append("  host-provided: native or advisory host claim; no repository component gate")
+    lines.append("  installed: required repository components are recorded")
+    lines.append("  not-installed: a required repository component is absent")
+    lines.append("  unknown-install-state: installed-bundle.json is absent")
     lines.append("\n" + report["note"])
     return "\n".join(lines)

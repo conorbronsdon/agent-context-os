@@ -46,16 +46,19 @@ The mutation protocol is always:
 Runtime manifests in `runtimes/` are machine-readable claims. Hooks are defense
 in depth: the kernel repeats mutation invariants during every proposal and apply.
 
-Run `bash scripts/contextos.sh capabilities --agent codex --agent hermes` to
-compare explicitly named agents, or omit `--agent` to use the agents selected in
-`contextos.workspace.json`. Add `--json` for the same report as structured data.
+Run `bash scripts/contextos.sh capabilities --agent codex,hermes` to compare
+explicitly named agents. Repeated `--agent` flags also work; omit them to use
+the agents selected in `contextos.workspace.json`. Add `--json` for structured data.
 The view lists each surface's support tier and capability values, portable skills
-from component ownership, common skills, and differences. `unsupported` means a
-descriptor does not claim a capability. `not-installed` means a required
-repository component is absent from `installed-bundle.json`;
-`unknown-install-state` means that file is absent. An `installed` status refers
-only to recorded repository components. Availability is not permission or
-activation, and this view does not verify a host installation.
+from component ownership, common skills, and differences. `unsupported` means the
+descriptor does not claim the capability. `host-provided` marks native and
+advisory capabilities, which do not depend on repository components. Adapter
+capabilities list their runtime-specific required components in JSON and text.
+`installed` means those components appear in `installed-bundle.json`;
+`not-installed` means at least one is absent. `unknown-install-state` means
+the file is absent. Skill install status uses each skill's owning component.
+Availability is not permission or activation, and this view does not verify a
+host installation.
 
 ## Portable skill index
 
