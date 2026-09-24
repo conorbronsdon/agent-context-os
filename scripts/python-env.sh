@@ -120,35 +120,57 @@ contextos_python_path() {
   printf '%s\n' "$path"
 }
 
-# Convert absolute local path arguments (and --option=/path values) for a
-# Windows interpreter; WSL passes arguments to Windows programs unmodified.
-# Only paths that exist, or whose parent exists, are converted, so text that
-# merely starts with "/" is left alone. Sets CONTEXTOS_PYTHON_ARGS.
-_contextos_is_local_path() {
-  [ -e "$1" ] || [ -d "$(dirname -- "$1")" ]
+# Convert path arguments for a Windows interpreter; WSL passes arguments to
+# Windows programs unmodified. Only values of the kernel's path options
+# (CONTEXTOS_PATH_OPTIONS, kept equal to the CLI's type=Path options by
+# tests/test-portability.sh) and existing positional paths are converted, so
+# message text such as "/note" is never rewritten. Sets CONTEXTOS_PYTHON_ARGS.
+CONTEXTOS_PATH_OPTIONS=" --context-root --current-lock --current-source --cursor-file --input --kernel-root --lock --proposal --root --source --target --working-root --workspace-config --workspace-config-input "
+
+_contextos_convertible_path() {
+  local parent
+  [ -e "$1" ] && return 0
+  parent=$(dirname -- "$1")
+  [ "$parent" != / ] && [ -d "$parent" ]
 }
 
 contextos_python_args() {
-  local arg name value
+  local arg name value expect_path=0 previous=""
   CONTEXTOS_PYTHON_ARGS=()
   for arg in "$@"; do
     if [ "$CONTEXTOS_PYTHON_PLATFORM" = win32 ]; then
-      case "$arg" in
-        --*=/*)
-          name=${arg%%=*}
-          value=${arg#*=}
-          if _contextos_is_local_path "$value"; then
-            value=$(contextos_python_path "$value") || return 1
-            arg="$name=$value"
-          fi
-          ;;
-        /*)
-          if _contextos_is_local_path "$arg"; then
-            arg=$(contextos_python_path "$arg") || return 1
-          fi
-          ;;
-      esac
+      if [ "$expect_path" = 1 ]; then
+        case "$arg" in
+          /*) if _contextos_convertible_path "$arg"; then arg=$(contextos_python_path "$arg") || return 1; fi ;;
+        esac
+      else
+        case "$arg" in
+          --*=/*)
+            name=${arg%%=*}
+            value=${arg#*=}
+            case "$CONTEXTOS_PATH_OPTIONS" in
+              *" $name "*)
+                if _contextos_convertible_path "$value"; then
+                  value=$(contextos_python_path "$value") || return 1
+                  arg="$name=$value"
+                fi
+                ;;
+            esac
+            ;;
+          /*)
+            case "$previous" in
+              -*) ;;
+              *) if [ -e "$arg" ]; then arg=$(contextos_python_path "$arg") || return 1; fi ;;
+            esac
+            ;;
+        esac
+      fi
     fi
+    expect_path=0
+    case "$CONTEXTOS_PATH_OPTIONS" in
+      *" $arg "*) expect_path=1 ;;
+    esac
+    previous=$arg
     CONTEXTOS_PYTHON_ARGS+=("$arg")
   done
 }

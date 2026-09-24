@@ -246,9 +246,9 @@ SH
     chmod +x "$fake_wsl_bin/wslpath"
     mkdir -p "$portability_tmp/arg-dir"
     converted_args=$(PATH="$fake_wsl_bin:$PATH" WSL_DISTRO_NAME=Test "$resolved_bash" -c \
-      'source "$1"; CONTEXTOS_PYTHON_PLATFORM=win32; contextos_python_args "$2" "--root=$2" relative/path "/no/such/place/anywhere" "text"; printf "%s|" "${CONTEXTOS_PYTHON_ARGS[@]}"' \
+      'source "$1"; CONTEXTOS_PYTHON_PLATFORM=win32; contextos_python_args "$2" "--root=$2" --input "$2/new.json" relative/path "/no/such/place/anywhere" --message /note "--message=$2" /note text; printf "%s|" "${CONTEXTOS_PYTHON_ARGS[@]}"' \
       _ "$ROOT/scripts/python-env.sh" "$portability_tmp/arg-dir")
-    [ "$converted_args" = "W:$portability_tmp/arg-dir|--root=W:$portability_tmp/arg-dir|relative/path|/no/such/place/anywhere|text|" ] \
+    [ "$converted_args" = "W:$portability_tmp/arg-dir|--root=W:$portability_tmp/arg-dir|--input|W:$portability_tmp/arg-dir/new.json|relative/path|/no/such/place/anywhere|--message|/note|--message=$portability_tmp/arg-dir|/note|text|" ] \
       || fail "WSL argument conversion changed the wrong arguments: $converted_args"
     linux_args=$(PATH="$fake_wsl_bin:$PATH" WSL_DISTRO_NAME=Test "$resolved_bash" -c \
       'source "$1"; CONTEXTOS_PYTHON_PLATFORM=linux; contextos_python_args "$2"; printf "%s|" "${CONTEXTOS_PYTHON_ARGS[@]}"' \
@@ -410,6 +410,26 @@ for nul_reply in 'linux:\0\342\234\223' 'lin\0ux:\342\234\223'; do
     fail "Python resolver accepted an embedded NUL in the platform probe: $nul_reply"
   fi
 done
+
+# The shell's path-option list must match the CLI's type=Path options.
+cli_path_options=$("$CONTEXTOS_PYTHON_CMD" - "$ROOT/contextos/cli.py" <<'PY'
+import ast, sys
+tree = ast.parse(open(sys.argv[1], encoding="utf-8").read())
+options = set()
+for node in ast.walk(tree):
+    if isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "add_argument":
+        keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+        kind = keywords.get("type")
+        if isinstance(kind, ast.Name) and kind.id == "Path":
+            options.update(arg.value for arg in node.args
+                           if isinstance(arg, ast.Constant) and str(arg.value).startswith("--"))
+print(" ".join(sorted(options)))
+PY
+)
+shell_path_options=$("$resolved_bash" -c 'source "$1"; printf "%s" "$CONTEXTOS_PATH_OPTIONS"' _ "$ROOT/scripts/python-env.sh" \
+  | tr ' ' '\n' | sed '/^$/d' | sort | tr '\n' ' ' | sed 's/ $//')
+[ "$cli_path_options" = "$shell_path_options" ] \
+  || fail "CONTEXTOS_PATH_OPTIONS drifted from the CLI path options: cli=[$cli_path_options] shell=[$shell_path_options]"
 
 # The lifecycle wrapper must run the kernel through the resolver.
 "$resolved_bash" "$ROOT/scripts/contextos.sh" doctor >/dev/null \
