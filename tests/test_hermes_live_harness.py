@@ -325,12 +325,22 @@ class HermesLiveHarnessTest(unittest.TestCase):
     def test_route_identifiers_are_recorded_verbatim(self) -> None:
         for model in ("thinkingmachines/inkling:free", "nvidia/nemotron-3-ultra-550b-a55b:free"):
             self.assertEqual(model, live.route_id(model, "model"))
-        for bad in ("sk-or-v1-" + "a" * 40, "model with spaces", "../../etc"):
+        for bad in ("sk-or-v1-" + "a" * 40, "openrouter:sk-or-v1-" + "a" * 40,
+                    "provider:" + "b" * 40, "openrouter:sk-or-v1-short1", "model with spaces", "../../etc"):
             with self.assertRaises(live.HarnessError):
                 live.route_id(bad, "model")
         report = self.run_record()
         self.assertEqual("fake/free", report["model"])
         self.assertEqual("fake", report["provider"])
+
+    def test_split_secret_is_redacted_in_recorded_events(self) -> None:
+        secret = "sk-or-v1-" + "e" * 40
+        raw = "\n".join(json.dumps({"type": "text", "text": secret[i:i + 6]}) for i in range(0, len(secret), 6))
+        events, _assistant, _skills, _self_read = live.stream_evidence(raw, ())
+        recorded = json.dumps(events)
+        self.assertNotIn("e" * 12, recorded)
+        self.assertNotIn("sk-or", recorded)
+        self.assertEqual([{"type": "text", "text": "[REDACTED]", "joined_deltas": True}], events)
 
     def test_skill_view_name_is_redacted(self) -> None:
         raw = json.dumps({"type": "tool_use", "name": "skill_view", "input": {"name": "sk-abc"}})

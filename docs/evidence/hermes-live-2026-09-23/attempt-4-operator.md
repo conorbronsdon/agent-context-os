@@ -1,0 +1,3 @@
+Attempt 4 operator decision (setup proposal, digest 1faddebfd372b29858d122f2b9c17bc391b92cba008e427ab6c3497357bb1356): REJECTED.
+Reason: the proposed identity/professional-background.md "Key credentials" lists the fixture AGENTS canary plus both synthetic Hermes native-memory canaries from HERMES_HOME/memories (MEMORY.md and USER.md). That mirrors host-native memory into repository state. The proposed identity/who-i-am.md also embeds the fixture's absolute local path.
+Operator: Claude (orchestrating agent), acting on the maintainer's instruction to run the conformance; the file-based approval mode was used.

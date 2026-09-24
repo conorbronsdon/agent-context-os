@@ -48,7 +48,10 @@ def sha(path: Path) -> str:
 
 def route_id(value: str, field: str) -> str:
     """Record an operator-chosen model or provider verbatim; evidence must name it exactly."""
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}", value) or clean(value) == "[REDACTED]":
+    segments = re.split(r"[/:]", value)
+    if (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}", value)
+            or SECRET.search(value) or BEARER.search(value) or ENV_ASSIGN.search(value)
+            or any(LONG_TOKEN.fullmatch(segment) for segment in segments)):
         raise HarnessError(f"{field} must be a plain route identifier")
     return value
 
@@ -155,12 +158,18 @@ def stream_evidence(output: str, known: Sequence[str]) -> tuple[list[dict], str,
             assistant.append(event["text"])
         elif kind == "result" and isinstance(event.get("text"), str):
             final.append(event["text"])
+        if kind == "text":
+            # Deltas can split a secret, so record them only after joining (below).
+            continue
         recorded = dict(event)
         if kind == "tool_result":
             for field in ("content", "output", "result", "text"):
                 if field in recorded:
                     recorded[field] = "[REDACTED TOOL RESULT]"
         events.append(redact(recorded))
+    deltas = "".join(assistant)
+    if deltas:
+        events.append({"type": "text", "text": clean(deltas, known), "joined_deltas": True})
     if not events:
         raise HarnessError("Hermes stream contains no events")
     return events, ("".join(assistant) + "\n" + "\n".join(final)).strip(), skills, self_read
