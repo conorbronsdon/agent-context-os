@@ -156,16 +156,21 @@ built-in `/update` command. A passing CLI artifact is not IDE evidence.
 User-level write or shell allowances and conflicting deny rules invalidate
 permission conformance; use a dedicated clean CLI configuration rather than
 changing the operator's normal permissions. Preflight inspects the effective
-`CURSOR_CONFIG_DIR` override (or `XDG_CONFIG_HOME/cursor` on non-Windows hosts),
-and rejects relative override paths. An injected config path must be named
-`cli-config.json` and is also passed to Cursor through `CURSOR_CONFIG_DIR`.
+`CURSOR_CONFIG_DIR` override (or `XDG_CONFIG_HOME/cursor`), matching the
+installed `2026.09.23-86fc751` build on all platforms. Blank overrides are
+ignored; relative override paths are rejected. An injected config path must be named
+`cli-config.json`. The inspected directory is always pinned for the child via
+`CURSOR_CONFIG_DIR`. The config hash records preflight contents; it does not
+attest that user configuration stayed unchanged throughout the run.
 Evidence identifies the supplied
 Cursor launcher by basename and SHA-256, including when Windows invokes it
 through `cmd.exe`. The hash covers that file, not every bundled dependency.
 The launcher is checked before each command and before evidence is written.
 If Windows retains a temporary-file handle after the controls finish, evidence
 records `workspace_cleanup: retained-cleanup-error` instead of discarding the
-result. Inspect and clean the retained temporary fixture after the client exits.
+result. Its local stderr diagnostic identifies the retained path; inspect and
+clean that fixture after the client exits. The path is omitted from shareable
+evidence.
 
 The IDE has a separate operator-assisted harness at
 `adapters/cursor/ide_conformance.py`. Its `prepare` command requires an exact

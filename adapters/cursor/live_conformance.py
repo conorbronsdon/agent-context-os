@@ -56,9 +56,9 @@ Runner = Callable[[Sequence[str], Path, Mapping[str, str], float], CommandResult
 
 def effective_cli_config(env: Mapping[str, str]) -> Path:
     override = env.get("CURSOR_CONFIG_DIR")
-    if override:
+    if override and override.strip():
         directory = Path(override)
-    elif os.name != "nt" and env.get("XDG_CONFIG_HOME"):
+    elif env.get("XDG_CONFIG_HOME", "").strip():
         directory = Path(env["XDG_CONFIG_HOME"]) / "cursor"
     else:
         directory = Path.home() / ".cursor"
@@ -281,6 +281,7 @@ class CursorHarness:
                 raise HarnessError("Cursor config override must name cli-config.json")
             self.env["CURSOR_CONFIG_DIR"] = str(user_cli_config.resolve().parent)
         self.user_cli_config = effective_cli_config(self.env)
+        self.env["CURSOR_CONFIG_DIR"] = str(self.user_cli_config.parent)
         self.evidence = Evidence(expected_version=expected_version, source_sha=source_sha)
         self.evidence.binary_name = self.binary.name
         self.evidence.binary_sha256 = hashlib.sha256(self.binary.read_bytes()).hexdigest()
@@ -301,6 +302,8 @@ class CursorHarness:
                 # Windows may retain a client file handle after a completed run.
                 # Preserve the control outcome (including any original exception).
                 self.evidence.workspace_cleanup = "retained-cleanup-error"
+                print(f"Cursor temporary fixture retained after cleanup failure: {temporary.name}",
+                      file=os.sys.stderr)
             else:
                 self.evidence.workspace_cleanup = "completed"
 
