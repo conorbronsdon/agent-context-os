@@ -437,8 +437,9 @@ class DevinHarness:
                 "Read-only Context OS conformance in the supplied public synthetic repository. "
                 "Do not edit files, run setup, create a branch, commit, push, or open a PR. "
                 "Use the available Context OS control without an explicit @skills reference. "
-                "Run git rev-parse HEAD in the fixture checkout. Follow AGENTS.md and reply only "
-                "with the root instruction canary named there, followed by one space and the observed commit SHA."
+                "Reply only with the root instruction canary from your repository instructions, "
+                "followed by one space and the observed commit SHA from git rev-parse HEAD "
+                "in the fixture checkout."
             )
             created = self.client.request(
                 "POST",
@@ -510,6 +511,10 @@ class DevinHarness:
                 "review_not_invoked": True,
             })
         finally:
+            control_error = sys.exc_info()[1]
+            control_detail = (
+                f"control: {safe_error_detail(control_error)}; " if control_error else ""
+            )
             if session_id:
                 try:
                     archived = self.client.request(
@@ -540,12 +545,13 @@ class DevinHarness:
                         self.evidence.controls["session_terminated_after_archive_failure"] = True
                     except HarnessError as terminate_error:
                         raise HarnessError(
-                            "Devin cleanup failed: archive: "
+                            f"Devin cleanup failed: {control_detail}archive: "
                             f"{safe_error_detail(archive_error)}; fallback termination: "
                             f"{safe_error_detail(terminate_error)}"
                         ) from terminate_error
                     raise HarnessError(
                         "Devin session was terminated, but required archival failed: "
+                        f"{control_detail}"
                         f"{safe_error_detail(archive_error)}"
                     ) from archive_error
         self.evidence.requests = list(self.client.requests)

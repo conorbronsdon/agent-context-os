@@ -68,6 +68,10 @@ class CursorIdeHarnessTest(unittest.TestCase):
         self.assertIn("disable-model-invocation: true", short_update)
         self.assertIn("/update", manifest["prompts"]["short_update"])
         self.assertIn("do not submit or execute", manifest["prompts"]["short_update"])
+        self.assertEqual(
+            "IDE control cannot exclude a direct read of the skill file",
+            manifest["unverified_controls"]["explicit_skill_must_fire"],
+        )
 
     def test_prepare_requires_exact_binary_hash_and_opt_ins(self) -> None:
         args = argparse.Namespace(
@@ -130,6 +134,11 @@ class CursorIdeHarnessTest(unittest.TestCase):
         self.assertTrue(evidence["verified_controls"]["fixture_mutation_is_scoped"])
         self.assertEqual(64, len(evidence["native_profile_snapshot_sha256"]))
         self.assertNotIn("canaries", evidence)
+        self.assertNotIn("explicit_skill_must_fire", evidence["attested_controls"])
+        self.assertEqual(
+            "IDE control cannot exclude a direct read of the skill file",
+            evidence["unverified_controls"]["explicit_skill_must_fire"],
+        )
 
     def test_record_rejects_denied_or_unexpected_writes(self) -> None:
         manifest = self.prepare()

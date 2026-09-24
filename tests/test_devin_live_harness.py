@@ -274,10 +274,15 @@ class DevinLiveHarnessTest(unittest.TestCase):
         harness, transport = self.harness()
         harness.execute()
         create = next(call for call in transport.calls if call[0] == "POST" and call[1].endswith("/sessions"))
-        self.assertIn("root instruction canary named there", create[2]["prompt"])
+        self.assertIn("root instruction canary from your repository instructions", create[2]["prompt"])
         self.assertNotIn(live.ROOT_CANARY, create[2]["prompt"])
         self.assertNotIn(harness.fixture_sha, create[2]["prompt"])
         self.assertIn("git rev-parse HEAD", create[2]["prompt"])
+        for instruction_file in (
+            "AGENTS.md", "AGENTS.override.md", "CLAUDE.md", "REVIEW.md", "SKILL.md"
+        ):
+            self.assertNotIn(instruction_file, create[2]["prompt"])
+        self.assertNotRegex(create[2]["prompt"], r"\b[\w.-]+\.(?:md|mdc)\b")
 
     def test_root_response_must_match_local_fixture_sha(self) -> None:
         class WrongHead(FakeTransport):
@@ -316,6 +321,49 @@ class DevinLiveHarnessTest(unittest.TestCase):
             harness.execute()
         self.assertIn("synthetic archive failure", str(raised.exception))
         self.assertIn("synthetic termination failure", str(raised.exception))
+
+    def test_control_failure_survives_both_cleanup_failures(self) -> None:
+        harness, _ = self.harness(FakeTransport(
+            implicit_skill=True, archive_fails=True, terminate_fails=True
+        ))
+        with self.assertRaises(live.HarnessError) as raised:
+            harness.execute()
+        detail = str(raised.exception)
+        self.assertIn("user-only Devin skill fired without explicit invocation", detail)
+        self.assertIn("synthetic archive failure", detail)
+        self.assertIn("synthetic termination failure", detail)
+
+    def test_control_failure_survives_archive_failure_and_termination(self) -> None:
+        harness, _ = self.harness(FakeTransport(implicit_skill=True, archive_fails=True))
+        with self.assertRaises(live.HarnessError) as raised:
+            harness.execute()
+        detail = str(raised.exception)
+        self.assertIn("user-only Devin skill fired without explicit invocation", detail)
+        self.assertIn("synthetic archive failure", detail)
+        self.assertIn("terminated", detail)
+
+    def test_main_prints_combined_failure_diagnostic(self) -> None:
+        diagnostic = (
+            "control: root mismatch; archive: synthetic archive failure; "
+            "fallback termination: synthetic termination failure"
+        )
+        with mock.patch.dict(os.environ, {"DEVIN_API_TOKEN": "cog_fixture"}):
+            with mock.patch.object(live, "repository_source_sha", return_value="a" * 40):
+                with mock.patch.object(live.DevinHarness, "execute", side_effect=live.HarnessError(diagnostic)):
+                    output = io.StringIO()
+                    with redirect_stderr(output):
+                        status = live.main([
+                            "--org-id", "org-fixture",
+                            "--repository", "owner/repo",
+                            "--fixture-sha", "b" * 40,
+                            "--source-sha", "a" * 40,
+                            "--expected-active-build", "build-fixture",
+                            "--evidence", str(self.root / "evidence.json"),
+                            "--allow-account-access", "--allow-session-create",
+                            "--acknowledge-public-fixture",
+                        ])
+        self.assertEqual(1, status)
+        self.assertIn(diagnostic, output.getvalue())
 
     def test_expected_build_and_exact_identifiers_are_required(self) -> None:
         client = live.DevinClient("cog_fixture", "org-fixture", transport=FakeTransport())

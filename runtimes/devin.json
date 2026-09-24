@@ -143,19 +143,19 @@
         "id": "devin-conformance",
         "type": "conformance",
         "location": "tests/test_devin_conformance.py",
-        "claims": ["explicit_invocation", "support"]
+        "claims": ["support"]
       },
       {
         "id": "devin-live-harness",
         "type": "conformance",
         "location": "adapters/devin/live_conformance.py",
-        "claims": ["instruction_sources"]
+        "claims": ["support"]
       },
       {
         "id": "devin-ui-harness",
         "type": "conformance",
         "location": "adapters/devin/ui_conformance.py",
-        "claims": ["instruction_sources"]
+        "claims": ["support"]
       }
     ]
   }

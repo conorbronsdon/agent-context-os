@@ -96,9 +96,14 @@ class DevinUiHarnessTest(unittest.TestCase):
         self.assertEqual("session-ui", manifest["surface"])
         self.assertEqual(0, manifest["baseline_pull_count"])
         self.assertNotIn(self.fixture_sha, manifest["prompts"]["root"])
-        self.assertIn("root instruction canary named there", manifest["prompts"]["root"])
+        self.assertIn("root instruction canary from your repository instructions", manifest["prompts"]["root"])
         self.assertIn("git rev-parse HEAD", manifest["prompts"]["root"])
         self.assertNotIn(ui.ROOT_CANARY, manifest["prompts"]["root"])
+        for instruction_file in (
+            "AGENTS.md", "AGENTS.override.md", "CLAUDE.md", "REVIEW.md", "SKILL.md"
+        ):
+            self.assertNotIn(instruction_file, manifest["prompts"]["root"])
+        self.assertNotRegex(manifest["prompts"]["root"], r"\b[\w.-]+\.(?:md|mdc)\b")
         self.assertIn(f"@skills:{ui.SKILL_NAME}", manifest["prompts"]["explicit"])
         self.assertTrue(any("/git/trees/" in url for url in self.github.calls))
         self.assertEqual(list(ui.FIXTURE_PATHS), sorted(ui.FIXTURE_PATHS))

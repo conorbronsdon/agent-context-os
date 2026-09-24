@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Devin root controls now ask for the repository instruction canary without
+  naming its file, and cleanup errors retain the original control failure.
+  Cursor IDE explicit-skill results stay unverified when a direct file read
+  cannot be excluded; unrun harnesses no longer claim capability evidence.
 - Devin live conformance obtains the fixture commit from `git rev-parse HEAD`
   without prompting with the answer, accepts harmless delayed status messages,
   and reports both cleanup failures. Local session and Review instruction

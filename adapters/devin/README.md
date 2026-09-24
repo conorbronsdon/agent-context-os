@@ -88,6 +88,8 @@ The repository includes a sanitized fixture source under
 fixture to a dedicated public repository, without adding personal data or
 secrets, and bind the run to its exact remote commit. Do not use this repository
 or another user workspace as the fixture.
+Republish the public fixture from the updated `.fixture` files before the next
+live run; the old public fixture bytes will fail the exact-content check.
 
 The checked-in instruction sources have `.fixture` suffixes so repository agents
 do not discover them as live instructions. In a separate disposable checkout of

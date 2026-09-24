@@ -97,6 +97,17 @@ class CursorDescriptorTest(unittest.TestCase):
         )
         self.assertNotIn("cursor-live-harness", ide_evidence)
 
+    def test_unrun_harnesses_do_not_claim_capability_evidence(self) -> None:
+        sources = {source["id"]: source for source in DESCRIPTOR["evidence"]["sources"]}
+        for name in ("cursor-ide-harness", "cursor-live-harness"):
+            self.assertEqual(["support"], sources[name]["claims"])
+
+    def test_guide_states_discovery_and_ide_file_read_limits(self) -> None:
+        guide = (ROOT / "adapters/cursor/README.md").read_text(encoding="utf-8")
+        self.assertIn("do not isolate\nautomatic discovery from a prompted file read", guide)
+        self.assertIn("cannot establish that the slash\ncommand resolved", guide)
+        self.assertIn("as `unverified`", guide)
+
     def test_adapter_does_not_ship_unverified_cursor_configuration(self) -> None:
         if os.environ.get("CONTEXTOS_VALIDATION_PROFILE") == "workspace":
             self.skipTest("workspace-owned .cursor configuration is permitted")

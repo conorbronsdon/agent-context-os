@@ -160,13 +160,13 @@
         "id": "cursor-ide-harness",
         "type": "conformance",
         "location": "adapters/cursor/ide_conformance.py",
-        "claims": ["instruction_sources", "agent_skills", "explicit_invocation", "execution_authorization"]
+        "claims": ["support"]
       },
       {
         "id": "cursor-live-harness",
         "type": "conformance",
         "location": "adapters/cursor/live_conformance.py",
-        "claims": ["instruction_sources", "agent_skills", "explicit_invocation", "execution_authorization"]
+        "claims": ["support"]
       }
     ]
   }

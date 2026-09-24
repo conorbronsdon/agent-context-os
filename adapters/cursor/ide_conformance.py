@@ -224,6 +224,9 @@ def prepare(args: argparse.Namespace) -> None:
             "project_hooks_absent": True,
             "short_update_must_not_execute": True,
         },
+        "unverified_controls": {
+            "explicit_skill_must_fire": "IDE control cannot exclude a direct read of the skill file"
+        },
     })
 
 
@@ -323,11 +326,13 @@ def record(args: argparse.Namespace) -> None:
             "project_rule_discovery": True,
             "instruction_rule_conflict_characterized": True,
             "implicit_skill_must_not_fire": True,
-            "explicit_skill_must_fire": True,
             "ask_mode_preserves_files": True,
             "interactive_denial_preserves_files": True,
             "interactive_approval_is_scoped": True,
             "short_update_alias_not_invoked": True,
+        },
+        "unverified_controls": {
+            "explicit_skill_must_fire": "IDE control cannot exclude a direct read of the skill file"
         },
     })
 

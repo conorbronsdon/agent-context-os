@@ -135,9 +135,12 @@ python adapters/cursor/live_conformance.py \
 ```
 
 The opt-in flag authorizes Cursor model traffic and writes only in a synthetic
-temporary workspace marked disposable. The harness proves exact structured root
-and nested instruction discovery, explicit-skill must-fire and implicit-skill
-must-not-fire behavior, read-only ask mode, the exact unattended write behavior
+temporary workspace marked disposable. The root, nested, and rule controls
+check exact canary responses in ask mode. Their prompts mention repository
+instructions or a project rule, and reads are allowed, so they do not isolate
+automatic discovery from a prompted file read. The harness also checks
+explicit-skill must-fire and implicit-skill must-not-fire behavior, read-only
+ask mode, the exact unattended write behavior
 without `--force`, a stream-observed denied write attempt under `--force`, and
 an exact allowed write. It does not treat a model merely choosing not to write
 as evidence that project denial precedence works.
@@ -158,9 +161,13 @@ workspace with the generated profile. Follow the prompts stored in the
 create-only manifest, record the exact synthetic observations in a JSON file,
 then use `record` with `--acknowledge-operator-attestation`. The recorder checks
 root and nested instructions, an always-applied project rule, installed-build
-instruction/rule conflict behavior, explicit-skill must-fire and implicit-skill
-must-not-fire controls, Ask-mode preservation, interactive denial and scoped
+instruction/rule conflict behavior, the explicit skill's exact canary response,
+implicit-skill must-not-fire behavior, Ask-mode preservation, interactive denial and scoped
 approval, native-profile isolation, and absence of project MCP and hook config.
+The prepared IDE workspace and profile do not deny direct reads of the skill
+file. A matching explicit response therefore cannot establish that the slash
+command resolved; the manifest and evidence record `explicit_skill_must_fire`
+as `unverified`.
 It accepts only one exact approved fixture write and emits create-only evidence
 outside the repository. Its artifact labels host observations as
 `operator-attested-with-local-verification`, separating them from the fixture

@@ -216,8 +216,9 @@ def prepare(args: argparse.Namespace, *, transport: Transport = default_transpor
             "root": (
                 "Read-only conformance. Do not edit, branch, commit, push, or open a PR. "
                 "Use the available Context OS control without an explicit @skills reference. "
-                "Run git rev-parse HEAD in the fixture checkout. Follow AGENTS.md and return only "
-                "the root instruction canary named there, followed by one space and the observed commit SHA."
+                "Return only the root instruction canary from your repository instructions, "
+                "followed by one space and the observed commit SHA from git rev-parse HEAD "
+                "in the fixture checkout."
             ),
             "explicit": f"@skills:{SKILL_NAME} Return only the canary required by this skill.",
         },
