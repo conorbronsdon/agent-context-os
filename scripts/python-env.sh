@@ -54,3 +54,18 @@ export PYTHONIOENCODING=utf-8
 # effect. Besides keeping working trees clean, this lets integrity checks treat
 # any new or changed .pyc file as a real mutation instead of normal operation.
 export PYTHONDONTWRITEBYTECODE=1
+
+# Native Windows Python needs a native path when MSYS argument conversion is off.
+contextos_python_path() {
+  local path="$1"
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+      if command -v cygpath >/dev/null 2>&1 &&
+        [ "$("$CONTEXTOS_PYTHON_CMD" -c 'import sys; print(sys.platform)' 2>/dev/null)" = win32 ]; then
+        cygpath -w "$path"
+        return
+      fi
+      ;;
+  esac
+  printf '%s\n' "$path"
+}

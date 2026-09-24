@@ -5,6 +5,7 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import sys
 import unittest
 from uuid import uuid4
 
@@ -178,7 +179,7 @@ class LongSequenceTest(unittest.TestCase):
         results = directory / f"results-{suffix}.jsonl"
         try:
             response.write_bytes(b"{broken\r\n")
-            command = ["python", str(benchmark.ROOT / "scripts/continuity-benchmark.py")]
+            command = [sys.executable, str(benchmark.ROOT / "scripts/continuity-benchmark.py")]
             recorded = subprocess.run(command + ["record", "--scenario", "long", "--profile", "contextos",
                                                 "--response", str(response), "--results", str(results),
                                                 "--model", "model-1", "--provider", "provider-1",

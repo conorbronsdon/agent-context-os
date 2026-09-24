@@ -11,6 +11,8 @@
   without prompting with the answer, accepts harmless delayed status messages,
   and reports both cleanup failures. Local session and Review instruction
   sources use inert filenames until placed in dedicated public fixtures.
+- Pass native paths to Windows Python from MSYS and Cygwin lifecycle wrappers
+  when shell argument conversion is disabled.
 - Capability install state now leaves native and advisory claims host-provided,
   checks adapter claims against runtime-specific components, and accepts
   comma-separated `capabilities --agent` selections (#182).
