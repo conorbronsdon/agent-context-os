@@ -1,7 +1,0 @@
-Resolve-Path : Cannot find path 'review-212b-pack.md' because it does not exist.
-At C:\Users\conor\personal-context\scripts\opencode-go-run.ps1:84 char:23
-+ ... olvedPrompt = Resolve-Path -LiteralPath $PromptFile -ErrorAction Stop
-+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : ObjectNotFound: (review-212b-pack.md:String) [Resolve-Path], ItemNotFoundException
-    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.ResolvePathCommand
- 
