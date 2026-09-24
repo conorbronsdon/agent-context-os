@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Hermes live conformance now invokes the available `/context-*` skills,
+  checks stream events for self-read discovery, and supports digest files for
+  non-interactive operator approval (#163).
 - Refresh the social preview from the current runtime manifests, including
   first-class OpenCode support, and keep both tracked PNG aliases byte-identical
   to the 1280×640 source render (#195).

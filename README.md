@@ -111,7 +111,7 @@ contract](docs/root-contract.md).
 |---|---|
 | New workspace in Claude Code | Run `/setup` |
 | New workspace in Codex | Run `$setup` |
-| New workspace in experimental Hermes support | Read the [evidence limit](adapters/hermes/README.md), then run `/setup` after exposing the repository skills |
+| New workspace in experimental Hermes support | Read the [evidence limit](adapters/hermes/README.md), then run `/context-setup` after exposing the repository skills |
 | New workspace in OpenClaw | Follow the [OpenClaw adapter](adapters/openclaw/README.md), then run `/contextos <alias> setup` through an authorized operator surface |
 | New workspace in OpenCode | Follow the [OpenCode adapter](adapters/opencode/README.md), then run `/context-setup` from the repository root |
 | New workspace in Cursor | Follow the separate [experimental IDE and CLI paths](adapters/cursor/README.md), then run `/context-setup` |
@@ -125,7 +125,7 @@ The setup interview fills the identity, first project, workflows, and weekly sta
 
 ![A start session in Claude Code: state files load and a session briefing comes back, using sample data from the included example musician project](docs/assets/start-demo.gif)
 
-`/start` in Claude Code or Hermes, `/context-start` in Cursor or OpenCode, `$start` in Codex,
+`/start` in Claude Code, `/context-start` in Hermes, Cursor, or OpenCode, `$start` in Codex,
 `/contextos <alias> start` in OpenClaw, and `@skills:context-start` in a Devin session read your state,
 priorities, decisions, blockers, and recent handoff. The result is grounded in
 files rather than reconstructed from chat.
@@ -140,10 +140,10 @@ Start small. Use the core loop for a week, add one active project, then turn a r
 
 | Moment | Claude Code | Codex | OpenCode | Hermes (experimental) | OpenClaw | Cursor IDE/CLI (experimental) | Devin session (experimental) | Shared result |
 |---|---|---|---|---|---|---|---|---|
-| First run or major refresh | `/setup` | `$setup` | `/context-setup` | `/setup` | `/contextos <alias> setup` | `/context-setup` | `@skills:context-setup` | Reviewed context proposal |
-| Start work | `/start` | `$start` | `/context-start` | `/start` | `/contextos <alias> start` | `/context-start` | `@skills:context-start` | Read-only continuity inventory and briefing |
-| Save a checkpoint | `/update` | `$update` | `/context-update` | `/update` | `/contextos <alias> update` | `/context-update` | `@skills:context-update` | Hash-checked update and receipt |
-| Finish work | `/end` | `$end` | `/context-end` | `/end` | `/contextos <alias> end` | `/context-end` | `@skills:context-end` | Hash-checked handoff, decisions, and receipt |
+| First run or major refresh | `/setup` | `$setup` | `/context-setup` | `/context-setup` | `/contextos <alias> setup` | `/context-setup` | `@skills:context-setup` | Reviewed context proposal |
+| Start work | `/start` | `$start` | `/context-start` | `/context-start` | `/contextos <alias> start` | `/context-start` | `@skills:context-start` | Read-only continuity inventory and briefing |
+| Save a checkpoint | `/update` | `$update` | `/context-update` | `/context-update` | `/contextos <alias> update` | `/context-update` | `@skills:context-update` | Hash-checked update and receipt |
+| Finish work | `/end` | `$end` | `/context-end` | `/context-end` | `/contextos <alias> end` | `/context-end` | `@skills:context-end` | Hash-checked handoff, decisions, and receipt |
 
 OpenClaw setup, update, and end can require multiple operator turns. Resume the
 owned workflow with `/contextos <alias> continue <session-key> <response>`, then

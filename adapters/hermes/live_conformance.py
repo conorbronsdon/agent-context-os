@@ -26,8 +26,12 @@ SKILLS = ("setup", "context-setup", "start", "context-start", "update", "context
 PHASES = ("setup", "start", "update", "end")
 MARKER = ".context-os-live-disposable"
 SECRET = re.compile(r"(?i)((?:api[_-]?key|token|password|secret|credential)\s*[:=]\s*)[^\s,;]+")
-BEARER = re.compile(r"(?i)(Bearer\s+|\b(?:sk|or)-)[A-Za-z0-9._-]{12,}")
+ENV_ASSIGN = re.compile(r"(?m)(?<![A-Za-z0-9_])([A-Za-z_][A-Za-z0-9_]*=)[^\s,;]+")
+BEARER = re.compile(r"(?i)(?:Bearer\s+[^\s,;]+|\b(?:sk|or)-[A-Za-z0-9._-]+)")
+LONG_TOKEN = re.compile(r"(?<![A-Za-z0-9+/=_-])[A-Za-z0-9+/_=-]{32,}(?![A-Za-z0-9+/=_-])")
 PATH = re.compile(r"(?:[A-Za-z]:[\\/]|/)[^\s\"']+")
+SELF_READ = re.compile(r"(?i)(?:AGENTS\.md|(?:^|[\\/])\.agents[\\/]skills(?:[\\/]|\b)|(?:^|[\\/])SKILL\.md\b)")
+SLASH_COMMANDS = {f"/context-{phase}" for phase in PHASES}
 
 
 class HarnessError(RuntimeError):
@@ -42,11 +46,14 @@ def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def clean(text: str) -> str:
-    return PATH.sub("[PATH]", BEARER.sub("[REDACTED]", SECRET.sub(r"\1[REDACTED]", text)))[:20000]
+def clean(text: str, known: Sequence[str] = ()) -> str:
+    redacted = ENV_ASSIGN.sub("[REDACTED ENV]", BEARER.sub("[REDACTED]", SECRET.sub(r"\1[REDACTED]", text)))
+    redacted = LONG_TOKEN.sub(lambda match: match.group() if match.group() in known else "[REDACTED]", redacted)
+    return PATH.sub(lambda match: match.group() if match.group() in SLASH_COMMANDS else "[PATH]", redacted)[:20000]
 
 
-def command(argv: Sequence[str], cwd: Path, env: dict[str, str] | None = None, timeout: int = 120) -> dict:
+def command(argv: Sequence[str], cwd: Path, env: dict[str, str] | None = None,
+            timeout: int = 120, raw_output: bool = False) -> dict:
     started = time.monotonic()
     try:
         result = subprocess.run(list(argv), cwd=cwd, env=env, capture_output=True,
@@ -54,9 +61,12 @@ def command(argv: Sequence[str], cwd: Path, env: dict[str, str] | None = None, t
         code, stdout, stderr = result.returncode, result.stdout, result.stderr
     except subprocess.TimeoutExpired as exc:
         code, stdout, stderr = 124, str(exc.stdout or b""), "timed out"
-    return {"argv": [clean(item) for item in argv], "exit_code": code,
+    result = {"argv": [clean(item) for item in argv], "exit_code": code,
             "duration_seconds": round(time.monotonic() - started, 3),
             "stdout": clean(stdout), "stderr": clean(stderr), "at": now()}
+    if raw_output:
+        result["_raw_stdout"] = stdout
+    return result
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -84,10 +94,90 @@ def outside_checkouts(path: Path, source: Path) -> None:
 
 def prompt_for(phase: str) -> str:
     if phase == "setup":
-        return "Read AGENTS.md and invoke /setup. Report the exact AGENTS, setup, and context-setup canaries. Create a kernel setup proposal for a new identity/hermes-fixture.md containing only a synthetic fixture identity. Stop before apply."
+        prompt = "/context-setup Create a kernel proposal for a synthetic fixture identity. Stop after creating the proposal."
     if phase == "start":
-        return "Invoke /start and the shared read-only kernel inventory. Report exact start and context-start skill canaries. Do not write anything."
-    return f"Invoke /{phase} with synthetic progress 'Hermes fixture {phase} checkpoint'. Read both {phase} and context-{phase} skills and report their exact canaries. Create a kernel proposal, show its path and digest, and stop before apply."
+        prompt = "/context-start"
+    if phase in ("update", "end"):
+        prompt = f"/context-{phase} Hermes fixture {phase} checkpoint. Stop after creating the kernel proposal."
+    return prompt + " Also report any line that begins 'Hermes fixture canary:' from the instructions you loaded."
+
+
+def stream_evidence(output: str, known: Sequence[str]) -> tuple[list[dict], str, list[str], bool]:
+    def strings(value):
+        if isinstance(value, str):
+            yield value
+        elif isinstance(value, dict):
+            for child in value.values():
+                yield from strings(child)
+        elif isinstance(value, list):
+            for child in value:
+                yield from strings(child)
+
+    def redact(value):
+        if isinstance(value, str):
+            return clean(value, known)
+        if isinstance(value, dict):
+            return {key: redact(child) for key, child in value.items()}
+        if isinstance(value, list):
+            return [redact(child) for child in value]
+        return value
+
+    events, assistant, skills = [], [], []
+    self_read = False
+    for line in output.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise HarnessError("Hermes stream contains invalid JSON") from exc
+        if not isinstance(event, dict) or not isinstance(event.get("type"), str):
+            raise HarnessError("Hermes stream contains an invalid event")
+        kind = event["type"]
+        if kind == "tool_use":
+            name = event.get("name")
+            detail = event.get("input", {})
+            if name == "skill_view" and isinstance(detail, dict) and isinstance(detail.get("name"), str):
+                skills.append(clean(detail["name"], known))
+            if name in ("read_file", "search_files", "terminal") and any(SELF_READ.search(value) for value in strings(detail)):
+                self_read = True
+        if kind in ("assistant", "assistant_message", "text") or (kind == "message" and event.get("role") == "assistant"):
+            content = event.get("content", event.get("text", ""))
+            if isinstance(content, str):
+                assistant.append(content)
+        recorded = dict(event)
+        if kind == "tool_result":
+            for field in ("content", "output", "result", "text"):
+                if field in recorded:
+                    recorded[field] = "[REDACTED TOOL RESULT]"
+        events.append(redact(recorded))
+    if not events:
+        raise HarnessError("Hermes stream contains no events")
+    return events, "\n".join(assistant), skills, self_read
+
+
+def operator_approval(phase: str, path: Path, proposal: dict, digest: str,
+                      input_fn, approval_dir: Path | None, timeout: float = 900) -> None:
+    review = f"Proposal: {path}\nDigest: {digest}\n" + "".join(
+        f"\n{change['path']}\n{change['diff']}\n" for change in proposal["changes"])
+    if approval_dir is None:
+        print(review)
+        if input_fn(f"Type the exact {phase} digest {digest} to approve: ").strip() != digest:
+            raise HarnessError("operator did not type the exact proposal digest")
+        return
+    if not approval_dir.is_dir():
+        raise HarnessError("approval directory must exist")
+    review_path, approve_path = approval_dir / f"{phase}.review.txt", approval_dir / f"{phase}.approve"
+    if approve_path.exists():
+        raise HarnessError("approval file existed before review")
+    with review_path.open("x", encoding="utf-8") as stream:
+        stream.write(review)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if approve_path.exists():
+            if approve_path.read_text(encoding="utf-8") != digest:
+                raise HarnessError("approval file did not contain the exact proposal digest")
+            return
+        time.sleep(1)
+    raise HarnessError("operator approval timed out")
 
 
 def prepare(source: Path, fixture: Path, home: Path, expected_commit: str) -> dict:
@@ -188,14 +278,10 @@ def new_proposal(fixture: Path, before: set[Path], phase: str) -> tuple[Path, di
     return path, document
 
 
-def require_canaries(output: str, *values: str) -> None:
-    if any(value not in output for value in values):
-        raise HarnessError("response omitted an exact discovery canary")
-
-
 def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], model: str,
            provider: str, run_budget: int, max_turns: int, input_fn=input,
-           expected_version: str = "") -> dict:
+           expected_version: str = "", approval_dir: Path | None = None,
+           approval_timeout: float = 900) -> dict:
     fixture, home, evidence = fixture.resolve(), home.resolve(), evidence.resolve(strict=False)
     if not home.is_dir() or fixture in home.parents or home in fixture.parents:
         raise HarnessError("HERMES_HOME must be a separate existing directory")
@@ -203,6 +289,12 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
     if evidence.exists() or fixture in evidence.parents or home in evidence.parents:
         raise HarnessError("evidence must be new and outside fixture and HERMES_HOME")
     outside_checkouts(evidence, fixture)
+    if approval_dir is not None:
+        approval_dir = approval_dir.resolve(strict=False)
+        outside_checkouts(approval_dir, fixture)
+        if approval_dir == home or home in approval_dir.parents or approval_dir in home.parents:
+            raise HarnessError("approval directory must be separate from HERMES_HOME")
+
     manifest = json.loads((fixture / ".context-os-live-manifest.json").read_text(encoding="utf-8"))
     if (set(manifest.get("skill_source_sha256", {})) != set(SKILLS)
             or set(manifest.get("canaries", {})) != {"agents", *SKILLS}
@@ -219,7 +311,9 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
         if marker not in (home / "memories" / name).read_text(encoding="utf-8"):
             raise HarnessError("synthetic native memory canary is missing")
     result = {"started_at": now(), "source_sha": manifest["source_sha"], "fixture_commit": manifest["fixture_commit"],
-              "os": platform.platform(), "model": model, "provider": provider,
+              "os": platform.platform(), "fresh_hermes_home": True,
+              "operator_mode": "approval-dir" if approval_dir is not None else "interactive",
+              "model": clean(model), "provider": clean(provider),
               "controls": {name: "unsupported" for name in (
                   "version", "agents_discovery", "setup_discovery", "setup_proposal_apply",
                   "start_discovery", "start_read_only", "update_discovery", "update_proposal_apply",
@@ -246,16 +340,20 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
             before = tracked_state(fixture)
             proposals = set((fixture / ".context-os" / "proposals").glob("*.json"))
             prompt = prompt_for(phase)
-            argv = [*binary, "chat", "-Q", "--source", "tool", "-m", model, "--provider", provider,
+            argv = [*binary, "chat", "--format", "stream-json", "--source", "tool", "-m", model, "--provider", provider,
                     "--run-budget", str(run_budget), "--max-turns", str(max_turns), "-q", prompt]
-            call = command(argv, fixture, env, timeout=run_budget + 30)
+            call = command(argv, fixture, env, timeout=run_budget + 30, raw_output=True)
+            raw = call.pop("_raw_stdout")
+            call["stdout"] = "[stream-json events recorded separately]"
             result["commands"].append(call)
             if call["exit_code"]:
                 raise HarnessError(f"{phase} chat failed or timed out")
-            required = [canaries[phase], canaries[f"context-{phase}"]]
-            if phase == "setup":
-                required.append(canaries["agents"])
-            require_canaries(call["stdout"], *required)
+            events, assistant, skills, self_read = stream_evidence(raw, tuple(canaries.values()))
+            call["events"] = events
+            call["skill_view_names"] = skills
+            required = [canaries["agents"], canaries[f"context-{phase}"]]
+            if self_read or any(value not in assistant for value in required):
+                raise HarnessError("self-read: discovery not shown")
             result["controls"][f"{phase}_discovery"] = "passed"
             if phase == "setup":
                 result["controls"]["agents_discovery"] = "passed"
@@ -271,14 +369,11 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
                 current_control = f"{phase}_proposal_apply"
                 path, proposal = new_proposal(fixture, proposals, phase)
                 proposal_snapshot = sha(path)
-                if any(k not in (".context-os",) and k not in before[1] for k in after[1]):
-                    raise HarnessError("proposal turn created an unrelated fixture file")
+                if before != after:
+                    raise HarnessError("proposal turn changed fixture files before operator apply")
                 digest = proposal["proposal_digest"]
-                print(f"\n{phase} proposal: {path.relative_to(fixture)}\nDigest: {digest}")
-                for change in proposal["changes"]:
-                    print(f"{change['path']}\n{change['diff']}")
-                if input_fn(f"Type the exact {phase} digest {digest} to approve: ").strip() != digest:
-                    raise HarnessError("operator did not type the exact proposal digest")
+                operator_approval(phase, path.relative_to(fixture), proposal, digest,
+                                  input_fn, approval_dir, approval_timeout)
                 if sha(path) != proposal_snapshot:
                     raise HarnessError("proposal changed after review")
                 wrong = "0" * 64 if digest != "0" * 64 else "1" * 64
@@ -333,6 +428,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         run.add_argument("--" + flag, required=True)
     run.add_argument("--run-budget", type=int, default=120)
     run.add_argument("--max-turns", type=int, default=20)
+    run.add_argument("--approval-dir")
     args = parser.parse_args(argv)
     try:
         if args.action == "prepare":
@@ -341,7 +437,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.run_budget < 1 or args.max_turns < 1:
                 raise HarnessError("budgets must be positive")
             result = record(Path(args.fixture), Path(args.home), Path(args.evidence), [args.binary], args.model, args.provider, args.run_budget, args.max_turns,
-                            expected_version=args.expected_version)
+                            expected_version=args.expected_version,
+                            approval_dir=Path(args.approval_dir) if args.approval_dir else None)
             print(json.dumps({"controls": result["controls"], "evidence": args.evidence}, indent=2))
             return 0 if result["controls"]["run"] == "passed" else 1
     except HarnessError as exc:

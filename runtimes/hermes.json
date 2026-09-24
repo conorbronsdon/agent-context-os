@@ -25,7 +25,7 @@
         {"scope": "repository", "role": "skills", "path": ".agents/skills", "precedence": 100},
         {"scope": "repository", "role": "additive", "path": "adapters/hermes", "precedence": 90}
       ],
-      "invocation": {"setup": "/setup", "start": "/start", "update": "/update", "end": "/end"},
+      "invocation": {"setup": "/context-setup", "start": "/context-start", "update": "/context-update", "end": "/context-end"},
       "capabilities": {
         "agent_skills": "adapter",
         "explicit_invocation": "advisory",

@@ -14,8 +14,17 @@ class HermesConformanceTest(unittest.TestCase):
     def test_lifecycle_is_complete_and_canonical(self) -> None:
         descriptor = json.loads((ROOT / "runtimes/hermes.json").read_text(encoding="utf-8"))
         self.assertEqual("experimental", descriptor["support_tier"])
-        self.assertEqual({phase: f"/{phase}" for phase in live.PHASES},
+        self.assertEqual({phase: f"/context-{phase}" for phase in live.PHASES},
                          descriptor["surfaces"]["cli"]["invocation"])
+        guide = (ROOT / "adapters/hermes/README.md").read_text(encoding="utf-8")
+        agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        for phase in live.PHASES:
+            self.assertIn(f"/context-{phase}", guide)
+            self.assertIn(f"/context-{phase}", agents)
+            self.assertIn(f"/context-{phase}", readme)
+        self.assertIn("hermes skills list --source local", guide)
+        self.assertIn("hermes skills list --source local", agents)
         self.assertEqual(8, len(live.SKILLS))
         for phase in live.PHASES:
             alias = (ROOT / ".agents/skills" / phase / "SKILL.md").read_text(encoding="utf-8")

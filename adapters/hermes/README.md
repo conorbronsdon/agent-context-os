@@ -16,6 +16,12 @@ every source revision and refresh changed copies. Run `bash scripts/contextos.sh
 doctor --runtime hermes` to inspect local runtime and descriptor state. Binary
 discovery by doctor is not installed-client conformance.
 
+Invoke `/context-setup`, `/context-start`, `/context-update`, and
+`/context-end`. On Hermes Agent v0.21.4, `hermes skills list --source local`
+reports that `/start` and `/update` are unavailable because built-ins take
+those names. Keep the short aliases installed; they load through `/skill start`
+and `/skill update`.
+
 ## Live conformance
 
 From a clean, reviewed source commit, choose new sibling paths outside any
@@ -36,14 +42,22 @@ python adapters/hermes/live_conformance.py record --fixture <fixture> --home <ne
 
 `prepare` places two synthetic native-memory canaries under the fresh
 `HERMES_HOME/memories/` path described by [Hermes memory documentation](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/memory.md).
-`record` makes bounded `hermes chat -Q --source tool` calls in the fixture. It
-records version, commands, redacted output, discovery canaries, read-only start,
-kernel proposals, exact-digest apply receipts, wrong-digest rejection, memory
-separation, and a byte-identical sentinel. Inspect each printed proposal diff
+`record` makes bounded `hermes chat --format stream-json --source tool` calls in
+the fixture. It records version, commands, redacted events, discovery canaries,
+skill views, read-only start, kernel proposals, no file changes before operator
+apply, exact-digest apply receipts, wrong-digest rejection, memory separation,
+and a byte-identical sentinel. Inspect each printed proposal diff
 and type its digest yourself. The evidence file is create-only and outside the
 checkout. A failed control remains failed; prepare a new fixture for another
 attempt. Model calls are opt-in and are not part of CI. The optional hook example
 is recorded as unsupported unless separately exercised and reviewed.
+
+For an operator watching another process, pass `--approval-dir <existing-dir>`
+to `record`. Keep that directory outside the fixture and `HERMES_HOME`.
+For each proposal, inspect `<phase>.review.txt`, then write only
+the exact digest, without a newline, to `<phase>.approve`. The harness waits up
+to 15 minutes for each approval and rejects any other content. Without this
+option, it prints the proposal and asks for the digest interactively.
 
 The optional [`hooks.example.yaml`](hooks.example.yaml) maps Hermes lifecycle
 and pre-write events to the same read-only policy checks used by the other
