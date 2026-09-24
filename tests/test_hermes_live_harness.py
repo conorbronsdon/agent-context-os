@@ -35,7 +35,17 @@ if sys.argv[sys.argv.index('--format') + 1] != 'stream-json':
 def emit(event):
     print(json.dumps(event))
 emit({'type': 'tool_use', 'id': 'skill-1', 'name': 'skill_view', 'input': {'name': 'context-' + phase}})
-emit({'type': 'tool_result', 'id': 'skill-1', 'name': 'skill_view', 'content': 'loaded'})
+skill = (root / '.agents' / 'skills' / ('context-' + phase) / 'SKILL.md').read_text()
+if mode == 'skill-view-other-phase':
+    skill += (root / '.agents' / 'skills' / 'context-start' / 'SKILL.md').read_text()
+if mode == 'skill-view-native-memory':
+    skill += (pathlib.Path(os.environ['HERMES_HOME']) / 'memories' / 'USER.md').read_text()
+emit({'type': 'tool_result', 'id': 'skill-1', 'name': 'skill_view', 'output': skill})
+if mode == 'write-agents-word':
+    emit({'type': 'tool_use', 'name': 'write_file', 'input': {'path': 'identity/hermes-fixture.md',
+          'content': 'The agents loaded .agents/skills/context-setup/SKILL.md'}})
+if mode == 'cat-agents':
+    emit({'type': 'tool_use', 'name': 'terminal', 'input': {'command': 'cat AGENTS.md'}})
 if mode == 'invalid-stream-env':
     print('FIXTURE_PRIVATE=veryprivate')
     sys.exit(0)
@@ -83,9 +93,10 @@ if phase in ('setup', 'update', 'end'):
     if phase == 'setup' and mode == 'propose-memory':
         memory = (pathlib.Path(os.environ['HERMES_HOME']) / 'memories' / 'USER.md').read_text()
         payload = {'files': {'identity/hermes-fixture.md': '# Synthetic fixture identity\n' + memory}}
-    if phase == 'setup' and mode == 'propose-memory-obfuscated':
+    if phase == 'setup' and mode in ('propose-memory-obfuscated', 'propose-memory-punctuated'):
         marker = manifest['native_memory_canaries']['USER.md'].upper()
-        payload = {'files': {'identity/hermes-fixture.md': '# Synthetic fixture identity\n' + ' -\n'.join(marker[i:i+4] for i in range(0, len(marker), 4))}}
+        separator = ' _:\n' if mode == 'propose-memory-punctuated' else ' -\n'
+        payload = {'files': {'identity/hermes-fixture.md': '# Synthetic fixture identity\n' + separator.join(marker[i:i+4] for i in range(0, len(marker), 4))}}
     path = folder / (phase + '.json')
     path.write_text(json.dumps(payload))
     made = subprocess.run([sys.executable, '-m', 'contextos', 'propose', phase, '--input', str(path)], cwd=root, capture_output=True, text=True)
@@ -251,7 +262,7 @@ class HermesLiveHarnessTest(unittest.TestCase):
             live.new_proposal(self.fixture, set(), "update")
 
     def run_record(self, mode: str = "", input_fn=None, approval_dir=None,
-                   approval_timeout=900) -> dict:
+                   approval_timeout=900, provider="fake") -> dict:
         original_command = live.command
         def kernel_command(argv, cwd, env=None, timeout=120, raw_output=False):
             if mode == "accept-wrong" and argv[:2] == ["bash", "scripts/contextos.sh"] and "0" * 64 in argv:
@@ -279,7 +290,7 @@ class HermesLiveHarnessTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {"FAKE_HERMES_MODE": mode, "HERMES_LIVE_MANIFEST": str(self.manifest_path)}), mock.patch.object(live, "git", side_effect=fixture_git), mock.patch.object(live, "command", side_effect=kernel_command), mock.patch.object(live, "outside_checkouts"):
             with contextlib.redirect_stdout(io.StringIO()):
                 return live.record(self.fixture, self.home, self.evidence,
-                                   [sys.executable, str(self.fake)], "fake/free", "fake", 30, 10,
+                                   [sys.executable, str(self.fake)], "fake/free", provider, 30, 10,
                                    input_fn=input_fn or (lambda prompt: prompt.split("digest ")[1].split()[0]),
                                    expected_version="Hermes Agent v0.21.4",
                                    approval_dir=approval_dir, approval_timeout=approval_timeout,
@@ -302,7 +313,8 @@ class HermesLiveHarnessTest(unittest.TestCase):
         for mode in ("self-read-agents", "self-read-skill", "self-read-terminal", "self-read-search",
                      "evasion-grep", "evasion-manifest", "evasion-diff", "evasion-skill-glob",
                      "evasion-agents-glob", "evasion-show", "evasion-log", "evasion-rg",
-                     "evasion-findstr", "evasion-select-string", "evasion-execute-code", "result-leak"):
+                     "evasion-findstr", "evasion-select-string", "evasion-execute-code", "result-leak",
+                     "skill-view-other-phase", "skill-view-native-memory", "cat-agents"):
             with self.subTest(mode=mode):
                 self.evidence.unlink(missing_ok=True)
                 report = self.run_record(mode)
@@ -311,6 +323,47 @@ class HermesLiveHarnessTest(unittest.TestCase):
                 self.assertEqual(["context-setup"], report["commands"][1]["skill_view_names"])
                 if mode == "result-leak":
                     self.assertIn("[REDACTED TOOL RESULT]", self.evidence.read_text(encoding="utf-8"))
+
+    def test_skill_view_result_is_not_self_read(self) -> None:
+        report = self.run_record("skill-view-valid")
+        self.assertEqual("passed", report["controls"]["run"], report.get("failure"))
+
+    def test_skill_view_native_memory_is_self_read(self) -> None:
+        report = self.run_record("skill-view-native-memory")
+        self.assertEqual("failed", report["controls"]["setup_discovery"])
+        self.assertIn("self-read", report["failure"])
+
+    def test_write_payload_is_not_self_read(self) -> None:
+        report = self.run_record("write-agents-word")
+        self.assertEqual("passed", report["controls"]["run"], report.get("failure"))
+
+    def test_skill_view_alias_and_result_id(self) -> None:
+        canaries = {"agents": "agent-marker", "setup": "alias-marker",
+                    "context-setup": "core-marker", "context-start": "other-marker",
+                    "native-USER.md": "memory-marker"}
+        use = {"type": "tool_use", "id": "skill-1", "name": "skill_view", "input": {"name": "setup"}}
+        result = {"type": "tool_result", "id": "skill-1", "name": "skill_view", "output": "alias-marker"}
+        raw = "\n".join(json.dumps(event) for event in (use, result))
+        self.assertFalse(live.stream_evidence(raw, canaries, "setup")[3])
+        result["output"] = "alias-marker other-marker"
+        self.assertTrue(live.stream_evidence("\n".join(json.dumps(event) for event in (use, result)), canaries, "setup")[3])
+        result["output"] = "alias-marker memory-marker"
+        self.assertTrue(live.stream_evidence("\n".join(json.dumps(event) for event in (use, result)), canaries, "setup")[3])
+        result["output"] = "alias-marker"
+        result["id"] = "skill-2"
+        self.assertTrue(live.stream_evidence("\n".join(json.dumps(event) for event in (use, result)), canaries, "setup")[3])
+
+    def test_fake_skill_view_returns_fixture_skill_text(self) -> None:
+        env = os.environ.copy()
+        env["HERMES_LIVE_MANIFEST"] = str(self.manifest_path)
+        env["HERMES_HOME"] = str(self.home)
+        result = subprocess.run([sys.executable, str(self.fake), "chat", "--format", "stream-json",
+                                 "-q", live.prompt_for("setup")], cwd=self.fixture, env=env,
+                                capture_output=True, text=True, check=False)
+        self.assertEqual(0, result.returncode, result.stderr)
+        events = [json.loads(line) for line in result.stdout.splitlines()]
+        skill = next(event for event in events if event.get("name") == "skill_view" and event["type"] == "tool_result")
+        self.assertEqual((self.fixture / ".agents/skills/context-setup/SKILL.md").read_text(), skill["output"])
 
     def test_only_assistant_canaries_count(self) -> None:
         report = self.run_record("tool-result-canaries")
@@ -404,14 +457,33 @@ class HermesLiveHarnessTest(unittest.TestCase):
     def test_environment_names_are_filtered(self) -> None:
         provider_value = "fixture-provider-" + uuid.uuid4().hex
         with mock.patch.dict(os.environ, {"PRIVATE_UNRELATED": "private", "OPENROUTER_API_KEY": provider_value}):
-            env = live.hermes_environment(self.home)
+            env = live.hermes_environment(self.home, "openrouter")
             self.assertNotIn("PRIVATE_UNRELATED", env)
             self.assertEqual(provider_value, env["OPENROUTER_API_KEY"])
-            self.assertIn("PRIVATE_UNRELATED", live.hermes_environment(self.home, ("PRIVATE_UNRELATED",)))
-            report = self.run_record()
+            self.assertIn("PRIVATE_UNRELATED", live.hermes_environment(self.home, "openrouter", ("PRIVATE_UNRELATED",)))
+            report = self.run_record(provider="openrouter")
         self.assertNotIn("PRIVATE_UNRELATED", report["environment_names"])
         self.assertIn("OPENROUTER_API_KEY", report["environment_names"])
+        self.assertEqual(["OPENROUTER_API_KEY"], report["api_key_names"])
         self.assertNotIn(provider_value, self.evidence.read_text(encoding="utf-8"))
+
+    def test_environment_only_passes_selected_provider_key_and_network_settings(self) -> None:
+        values = {"OPENROUTER_API_KEY": "fixture-openrouter", "OTHER_API_KEY": "fixture-other",
+                  "HERMES_OTHER_API_KEY": "fixture-hermes-other",
+                  "HTTP_PROXY": "http://proxy.invalid", "https_proxy": "http://proxy.invalid",
+                  "SSL_CERT_FILE": "fixture-ca.pem", "REQUESTS_CA_BUNDLE": "fixture-bundle.pem"}
+        with mock.patch.dict(os.environ, values):
+            env = live.hermes_environment(self.home, "openrouter")
+            self.assertIn("OPENROUTER_API_KEY", env)
+            self.assertNotIn("OTHER_API_KEY", env)
+            self.assertNotIn("HERMES_OTHER_API_KEY", env)
+            for name in ("HTTP_PROXY", "https_proxy", "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE"):
+                self.assertEqual(values[name], {key.upper(): value for key, value in env.items()}[name.upper()])
+            self.assertNotIn("OPENROUTER_API_KEY", live.hermes_environment(self.home, "fake"))
+            self.assertIn("OTHER_API_KEY", live.hermes_environment(self.home, "fake", ("OTHER_API_KEY",)))
+            report = self.run_record()
+        self.assertNotIn("OTHER_API_KEY", report["api_key_names"])
+        self.assertIn("api_key_names", report)
 
     def test_tool_results_do_not_record_environment(self) -> None:
         raw = json.dumps({"type": "tool_result", "content": "FIXTURE_VAR=fixture-value"})
@@ -433,6 +505,19 @@ class HermesLiveHarnessTest(unittest.TestCase):
                                       "input": {"pattern": "Hermes fixture canary:", "command": "grep"}})
         _events, _assistant, _skills, self_read = live.stream_evidence(reversed_fields, ())
         self.assertTrue(self_read)
+
+    def test_instruction_file_globs_count_as_self_read(self) -> None:
+        for command in ("cat AGENTS.md", "cat agents.MD", "cat AGENTS.?d", "cat *.md",
+                        "cat .agents/skills/context-setup/*"):
+            with self.subTest(command=command):
+                raw = json.dumps({"type": "tool_use", "name": "terminal", "input": {"command": command}})
+                self.assertTrue(live.stream_evidence(raw, ())[3])
+
+    def test_write_file_payload_does_not_trigger_self_read(self) -> None:
+        raw = json.dumps({"type": "tool_use", "name": "write_file",
+                          "input": {"path": "identity/hermes-fixture.md",
+                                    "content": "The agents read .agents/skills/context-setup/SKILL.md"}})
+        self.assertFalse(live.stream_evidence(raw, ())[3])
 
     def test_split_text_deltas_rejoin_canaries(self) -> None:
         canary = "c" * 16 + "d" * 16
@@ -492,6 +577,11 @@ class HermesLiveHarnessTest(unittest.TestCase):
                 report = self.run_record(mode)
                 self.assertEqual("failed", report["controls"]["memory_separation"])
                 self.assertIn("native memory changed", report["failure"])
+                self.assertTrue(report["native_memory_changes"])
+                changed = report["native_memory_changes"][0]
+                self.assertIn(changed["path"], ("USER.md", "extra.md"))
+                self.assertIn("--- before/", changed["diff"])
+                self.assertLessEqual(len(changed["diff"]), 2000)
                 (self.home / "memories" / "extra.md").unlink(missing_ok=True)
                 if mode in ("mutate-native-memory", "remove-native-memory"):
                     manifest = json.loads(self.manifest_path.read_text())
@@ -499,8 +589,33 @@ class HermesLiveHarnessTest(unittest.TestCase):
                     (self.home / "memories" / "USER.md").write_text(f"Fixture native memory canary: {marker}\n")
 
     def test_obfuscated_memory_in_proposal_detected(self) -> None:
-        report = self.run_record("propose-memory-obfuscated")
-        self.assertEqual("failed", report["controls"]["memory_separation"])
+        for mode in ("propose-memory-obfuscated", "propose-memory-punctuated"):
+            with self.subTest(mode=mode):
+                self.evidence.unlink(missing_ok=True)
+                report = self.run_record(mode)
+                self.assertEqual("failed", report["controls"]["memory_separation"])
+
+    def test_memory_normalization_catches_punctuation_in_fixture(self) -> None:
+        marker = json.loads(self.manifest_path.read_text())["native_memory_canaries"]["USER.md"]
+        obfuscated = "Fixture: " + " :\n_".join(marker.upper()[i:i + 4] for i in range(0, 32, 4))
+        path = self.fixture / "identity" / "memory-leak.md"
+        path.write_text(obfuscated, encoding="utf-8")
+        self.assertTrue(live.mirrors_memory(obfuscated, (marker,)))
+        with self.assertRaisesRegex(live.HarnessError, "native memory canary"):
+            live.check_memory(self.fixture, self.home, {"USER.md": marker})
+
+    def test_native_memory_diff_is_cleaned_and_capped(self) -> None:
+        before = live.native_memory_state(self.home)
+        contents = live.native_memory_contents(self.home)
+        (self.home / "memories" / "USER.md").write_text("token=fixture-secret\n" + "x" * 3000)
+        report = {}
+        with self.assertRaisesRegex(live.HarnessError, "native memory changed"):
+            live.check_native_memory(self.home, before, contents, report, ())
+        change = report["native_memory_changes"][0]
+        self.assertEqual("USER.md", change["path"])
+        self.assertNotIn("fixture-secret", change["diff"])
+        self.assertIn("[REDACTED]", change["diff"])
+        self.assertLessEqual(len(change["diff"]), 2000)
 
     def test_unexpected_control_exception_writes_evidence(self) -> None:
         with mock.patch.object(live, "stream_evidence", side_effect=AttributeError("synthetic bad event")):
@@ -632,7 +747,7 @@ class HermesLiveHarnessTest(unittest.TestCase):
     def test_credentials_never_written(self) -> None:
         secret = "test-secret-" + uuid.uuid4().hex
         with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": secret}):
-            self.run_record("echo-secret")
+            self.run_record("echo-secret", provider="openrouter")
         self.assertNotIn(secret, self.evidence.read_text(encoding="utf-8"))
         leaked = [p.relative_to(self.fixture).as_posix() for p in self.fixture.rglob("*")
                   if p.is_file() and ".git" not in p.parts
@@ -642,7 +757,7 @@ class HermesLiveHarnessTest(unittest.TestCase):
     def test_output_token_redacted(self) -> None:
         secret = "test-secret-" + uuid.uuid4().hex
         with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": secret}):
-            self.run_record("echo-secret")
+            self.run_record("echo-secret", provider="openrouter")
         self.assertNotIn(secret, self.evidence.read_text(encoding="utf-8"))
 
 

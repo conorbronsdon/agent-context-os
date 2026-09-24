@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import hashlib
 import json
 import os
@@ -30,7 +31,12 @@ ENV_ASSIGN = re.compile(r"(?m)(?<![A-Za-z0-9_])([A-Za-z_][A-Za-z0-9_]*=)[^\s,;]+
 BEARER = re.compile(r"(?i)(?:Bearer\s+[^\s,;]+|\b(?:sk|or)-[A-Za-z0-9._-]+)")
 LONG_TOKEN = re.compile(r"(?<![A-Za-z0-9+/=_-])[A-Za-z0-9+/_=-]{32,}(?![A-Za-z0-9+/=_-])")
 PATH = re.compile(r"(?<![A-Za-z0-9.])(?:[A-Za-z]:[\\/]|/)[^\s\"']+")
-SELF_READ = re.compile(r"(?i)(?:AGENT(?:S|[*?])|SKILL\.md|\.agents|\.context-os-live-manifest|git\s+(?:diff|show|log\s+-p)\b)")
+SELF_READ = re.compile(
+    r"(?i)(?:\bAGENTS\.md\b|\bAGENTS?[?*][\w.?*]*|\bAGENTS\.\?d\b|"
+    r"\.agents[/\\]skills[/\\][^\s\"']*(?:SKILL\.md\b|\*)|\.context-os-live-manifest(?:\.json)?\b|"
+    r"(?<![/\\\w])\*\.md\b|git\s+(?:diff|show|log\s+-p)\b)"
+)
+READ_TOOLS = {"read_file", "search_files", "terminal", "execute_code", "delegate_task"}
 SLASH_COMMANDS = {f"/context-{phase}" for phase in PHASES}
 
 
@@ -117,7 +123,9 @@ def prompt_for(phase: str) -> str:
     return prompt + " Also report any line that begins 'Hermes fixture canary:' from the repository instructions and the skill instructions you loaded."
 
 
-def stream_evidence(output: str, known: Sequence[str]) -> tuple[list[dict], str, list[str], bool]:
+def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
+                    phase: str | None = None) -> tuple[list[dict], str, list[str], bool]:
+    markers = tuple(known.values()) if isinstance(known, dict) else tuple(known)
     def strings(value):
         if isinstance(value, str):
             yield value
@@ -130,7 +138,7 @@ def stream_evidence(output: str, known: Sequence[str]) -> tuple[list[dict], str,
 
     def redact(value):
         if isinstance(value, str):
-            return clean(value, known)
+            return clean(value, markers)
         if isinstance(value, dict):
             return {key: redact(child) for key, child in value.items()}
         if isinstance(value, list):
@@ -139,6 +147,7 @@ def stream_evidence(output: str, known: Sequence[str]) -> tuple[list[dict], str,
 
     events, assistant, final, skills = [], [], [], []
     self_read = False
+    requested_skill = None
     for line in output.splitlines():
         try:
             event = json.loads(line)
@@ -150,15 +159,27 @@ def stream_evidence(output: str, known: Sequence[str]) -> tuple[list[dict], str,
         if kind == "tool_use":
             name = event.get("name")
             detail = event.get("input", {})
+            requested_skill = None
             if name == "skill_view" and isinstance(detail, dict) and isinstance(detail.get("name"), str):
-                skills.append(clean(detail["name"], known))
-            detail_text = " ".join(strings(detail))
-            if (SELF_READ.search(detail_text) or
-                    (re.search(r"(?i)\b(?:grep|rg|findstr|Select-String)\b", detail_text)
-                     and re.search(r"(?i)Hermes fixture canary:", detail_text))):
+                requested_skill = (detail["name"], event.get("id"))
+                skills.append(clean(requested_skill[0], markers))
+            if name != "write_file" and (name in READ_TOOLS or (isinstance(detail, dict) and
+                                      any(key in detail for key in ("path", "command", "pattern", "code")))):
+                detail_text = " ".join(strings(detail))
+                if (SELF_READ.search(detail_text) or
+                        (re.search(r"(?i)\b(?:grep|rg|findstr|Select-String)\b", detail_text)
+                         and re.search(r"(?i)Hermes fixture canary:", detail_text))):
+                    self_read = True
+        if kind == "tool_result":
+            found = {marker for value in strings(event) for marker in markers if marker in value}
+            allowed = set()
+            if (event.get("name") == "skill_view" and requested_skill
+                    and requested_skill[0] in (phase, f"context-{phase}")
+                    and event.get("id") == requested_skill[1] and isinstance(known, dict)):
+                allowed = {known[requested_skill[0]]}
+            if found - allowed:
                 self_read = True
-        if kind == "tool_result" and any(marker in value for value in strings(event) for marker in known):
-            self_read = True
+            requested_skill = None
         if kind in ("assistant", "assistant_message") or (kind == "message" and event.get("role") == "assistant"):
             content = event.get("content", event.get("text", ""))
             if isinstance(content, str):
@@ -179,7 +200,7 @@ def stream_evidence(output: str, known: Sequence[str]) -> tuple[list[dict], str,
         events.append(redact(recorded))
     deltas = "".join(assistant)
     if deltas:
-        events.append({"type": "text", "text": clean(deltas, known), "joined_deltas": True})
+        events.append({"type": "text", "text": clean(deltas, markers), "joined_deltas": True})
     if not events:
         raise HarnessError("Hermes stream contains no events")
     return events, ("".join(assistant) + "\n" + "\n".join(final)).strip(), skills, self_read
@@ -289,7 +310,8 @@ def check_memory(fixture: Path, home: Path, canaries: dict[str, str]) -> None:
     state = {name: digest for name, digest in tracked_state(fixture)[1].items()
              if name not in {MARKER, "unrelated-sentinel.txt"}}
     for marker in canaries.values():
-        if any(marker.encode() in (fixture / rel).read_bytes() for rel in state):
+        if any(mirrors_memory((fixture / rel).read_text(encoding="utf-8", errors="replace"), (marker,))
+               for rel in state):
             raise HarnessError("Hermes native memory canary appeared in fixture state")
     for name in ("MEMORY.md", "USER.md"):
         for memory in home.rglob(name):
@@ -305,16 +327,45 @@ def native_memory_state(home: Path) -> dict[str, str]:
             for p in memories.rglob("*")}
 
 
+def native_memory_contents(home: Path) -> dict[str, str]:
+    memories = home / "memories"
+    return {p.relative_to(memories).as_posix(): p.read_bytes()[:10000].decode("utf-8", errors="replace")
+            for p in memories.rglob("*") if p.is_file() and not is_link_like(p)}
+
+
+def check_native_memory(home: Path, before: dict[str, str], contents: dict[str, str],
+                        result: dict, canaries: Sequence[str]) -> None:
+    after = native_memory_state(home)
+    if after == before:
+        return
+    after_contents = native_memory_contents(home)
+    result["native_memory_changes"] = []
+    for name in sorted(set(before) | set(after)):
+        if before.get(name) == after.get(name):
+            continue
+        diff = "".join(difflib.unified_diff(
+            contents.get(name, "").splitlines(keepends=True),
+            after_contents.get(name, "").splitlines(keepends=True),
+            fromfile=f"before/{name}", tofile=f"after/{name}"))
+        result["native_memory_changes"].append({"path": clean(name), "diff": clean(diff, canaries)[:2000]})
+    raise HarnessError("Hermes native memory changed")
+
+
 def mirrors_memory(text: str, canaries: Sequence[str]) -> bool:
-    normalized = re.sub(r"[\s-]", "", text).lower()
+    normalized = re.sub(r"[^0-9a-f]", "", text.lower())
     return any(marker.lower() in normalized for marker in canaries)
 
 
-def hermes_environment(home: Path, allow: Sequence[str] = ()) -> dict[str, str]:
-    base = {"PATH", "SYSTEMROOT", "HOME", "USERPROFILE", "TEMP", "TMP", "APPDATA", "LOCALAPPDATA"}
-    names = base | set(allow)
+def hermes_environment(home: Path, provider: str, allow: Sequence[str] = ()) -> dict[str, str]:
+    base = {"PATH", "SYSTEMROOT", "HOME", "USERPROFILE", "TEMP", "TMP", "APPDATA", "LOCALAPPDATA",
+            "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "SSL_CERT_FILE", "SSL_CERT_DIR",
+            "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"}
+    names = base | {name.upper() for name in allow}
+    if provider.lower() == "openrouter":
+        names.add("OPENROUTER_API_KEY")
     env = {name: value for name, value in os.environ.items()
-           if name.upper() in names or name.upper().endswith("_API_KEY") or name.upper().startswith("HERMES_")}
+           if (name.upper() in names or name.upper().startswith("HERMES_"))
+           and (not name.upper().endswith("_API_KEY") or name.upper() in names)}
     env["HERMES_HOME"] = str(home)
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env.pop("HERMES_ACCEPT_HOOKS", None)
@@ -396,17 +447,19 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
                   "end_discovery", "end_proposal_apply", "wrong_digest_rejected", "stale_target_rejected",
                   "memory_separation", "unrelated_sentinel", "hook_example")},
               "commands": [], "skill_source_sha256": manifest["skill_source_sha256"]}
-    env = hermes_environment(home, env_allow)
+    env = hermes_environment(home, provider, env_allow)
     result["environment_names"] = sorted(env)
+    result["api_key_names"] = sorted(name for name in env if name.upper().endswith("_API_KEY"))
     memory_before = native_memory_state(home)
+    memory_contents = native_memory_contents(home)
     sentinel = sha(fixture / "unrelated-sentinel.txt")
     current_control = "version"
     try:
         version = command([*binary, "--version"], fixture, env)
         result["commands"].append(version)
         current_control = "memory_separation"
-        if native_memory_state(home) != memory_before:
-            raise HarnessError("Hermes native memory changed")
+        check_native_memory(home, memory_before, memory_contents, result,
+                            tuple(manifest["native_memory_canaries"].values()))
         current_control = "version"
         result["version"] = version["stdout"].splitlines()[0] if version["stdout"] else ""
         if (version["exit_code"] or not re.search(r"Hermes Agent v\d+\.\d+\.\d+", result["version"])
@@ -414,6 +467,8 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
             raise HarnessError("Hermes version was not verified")
         result["controls"]["version"] = "passed"
         canaries = manifest["canaries"]
+        stream_canaries = {**canaries, **{f"native-{name}": marker
+                                         for name, marker in manifest["native_memory_canaries"].items()}}
         for phase in PHASES:
             current_control = f"{phase}_discovery"
             before = tracked_state(fixture, include_kernel=phase == "start")
@@ -426,12 +481,12 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
             call["stdout"] = "[stream-json events recorded separately]"
             result["commands"].append(call)
             current_control = "memory_separation"
-            if native_memory_state(home) != memory_before:
-                raise HarnessError("Hermes native memory changed")
+            check_native_memory(home, memory_before, memory_contents, result,
+                                tuple(manifest["native_memory_canaries"].values()))
             current_control = f"{phase}_discovery"
             if call["exit_code"]:
                 raise HarnessError(f"{phase} chat failed or timed out")
-            events, assistant, skills, self_read = stream_evidence(raw, tuple(canaries.values()))
+            events, assistant, skills, self_read = stream_evidence(raw, stream_canaries, phase)
             call["events"] = events
             call["skill_view_names"] = skills
             required = [canaries["agents"], canaries[f"context-{phase}"]]
@@ -446,8 +501,8 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
                 result["controls"]["agents_discovery"] = "passed"
             current_control = "memory_separation"
             check_memory(fixture, home, manifest["native_memory_canaries"])
-            if native_memory_state(home) != memory_before:
-                raise HarnessError("Hermes native memory changed")
+            check_native_memory(home, memory_before, memory_contents, result,
+                                tuple(manifest["native_memory_canaries"].values()))
             after = tracked_state(fixture, include_kernel=phase == "start")
             if phase == "start":
                 current_control = "start_read_only"
@@ -502,8 +557,8 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
                 raise HarnessError("unrelated fixture sentinel changed")
             current_control = "memory_separation"
             check_memory(fixture, home, manifest["native_memory_canaries"])
-            if native_memory_state(home) != memory_before:
-                raise HarnessError("Hermes native memory changed")
+            check_native_memory(home, memory_before, memory_contents, result,
+                                tuple(manifest["native_memory_canaries"].values()))
         result["controls"]["memory_separation"] = "passed"
         result["controls"]["unrelated_sentinel"] = "passed"
         result["controls"]["hook_example"] = "unsupported"

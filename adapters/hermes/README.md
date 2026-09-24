@@ -54,10 +54,13 @@ and a byte-identical sentinel. The manifest stays outside the fixture, and
 the canary edits are committed in the disposable fixture. Evidence names both
 the source and fixture commits. By default, pass-through is limited to
 `PATH`, `SYSTEMROOT`, `HOME`, `USERPROFILE`, `TEMP`, `TMP`, `APPDATA`,
-`LOCALAPPDATA`, provider `*_API_KEY` variables, and `HERMES_*` variables other
-than `HERMES_ACCEPT_HOOKS`.
+`LOCALAPPDATA`, `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` (including lowercase
+forms), `SSL_CERT_FILE`, `SSL_CERT_DIR`, `REQUESTS_CA_BUNDLE`,
+`CURL_CA_BUNDLE`, and `HERMES_*` variables other than `HERMES_ACCEPT_HOOKS`.
+For `openrouter`, it also passes `OPENROUTER_API_KEY`. Other provider keys
+require an explicit `--env-allow NAME`.
 The harness sets `HERMES_HOME` and `PYTHONDONTWRITEBYTECODE`. Evidence lists
-passed variable names without values. Use `--env-allow NAME`
+passed variable names and API key names without values. Use `--env-allow NAME`
 for an additional required variable. Inspect each printed proposal diff
 and type its digest yourself. The evidence file is create-only and outside the
 checkout. A failed control remains failed; prepare a new fixture for another

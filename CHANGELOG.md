@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Hermes live conformance accepts the requested skill's canary in its native
+  `skill_view` result while still rejecting self-reads, limits provider key
+  pass-through, detects punctuation-obfuscated memory copies, and records
+  changed native-memory paths with cleaned diffs (#163).
 - Hermes live conformance now commits fixture canaries, keeps its manifest outside
   the fixture, detects self-reads and native-memory mutation, includes kernel
   state in read-only start checks, and records filtered environment names and
