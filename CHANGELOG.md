@@ -22,6 +22,9 @@
   that separates decision values from exact citation failures (#184).
 - A six-session synthetic continuity fixture, category-level scoring, raw-trial
   JSONL recording, and Markdown summaries extend the four-question benchmark.
+- A per-integration, per-host evidence decision for optional OpenClaw
+  integrations, an optional proposal section for test records, and tests
+  that verify unsupported host claims stay out of the catalog and chooser (#147).
 - A repository-local SSOT CI pilot checks documented Python requirements against
   the interpreter probe, warns about unregistered prose copies, and exercises
   drift and exclusion controls in disposable fixtures.
