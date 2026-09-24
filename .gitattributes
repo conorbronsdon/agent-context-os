@@ -4,6 +4,8 @@
 # or directory" on the shebang.
 *.sh text eol=lf
 *.tape text eol=lf
+adapters/devin/live-fixture/** text eol=lf
+adapters/devin/review-fixture/** text eol=lf
 integrations/catalog.json text eol=lf
 components/manifest.json text eol=lf
 references/integrations.md text eol=lf

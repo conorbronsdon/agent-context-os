@@ -1,6 +1,8 @@
 ---
 name: context-end
 description: Close a workspace session by reviewing a proposed summary, recording approved outcomes, updating state and decisions, and checking repository safety. Use only when the user explicitly asks to end, close, or hand off the current session.
+disable-model-invocation: true
+triggers: ["user"]
 ---
 
 # End a workspace session

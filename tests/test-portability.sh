@@ -125,6 +125,7 @@ grep -Fq 'autoMemoryEnabled: false' .claude/commands/setup.md \
   || fail "Claude setup adapter omits the auto-memory opt-out"
 
 portability_tmp_parent=""
+wsl_drive_tmp=""
 if command -v cygpath >/dev/null 2>&1; then
   # Managed Windows workspaces may deny writes to the user's native temp tree.
   # Keep Git-Bash fixtures in ignored repository-local state and retain the
@@ -141,6 +142,12 @@ else
 fi
 cleanup_portability_tmp() {
   rm -rf -- "$portability_tmp"
+  if [ -n "$wsl_drive_tmp" ]; then
+    rm -rf -- "$wsl_drive_tmp"
+    if [ "$drive_test_parent" = "$ROOT/.context-os/portability-tests" ]; then
+      rmdir "$drive_test_parent" 2>/dev/null || true
+    fi
+  fi
   if [ -n "$portability_tmp_parent" ]; then
     rmdir "$portability_tmp_parent" 2>/dev/null || true
     rmdir "$ROOT/.context-os" 2>/dev/null || true
@@ -192,6 +199,130 @@ case "$(uname -s)" in
     ;;
   *) echo "portability: skipping disabled MSYS conversion test (MSYS or Cygwin required)" ;;
 esac
+
+reported_platform=$(
+  "$resolved_bash" -c 'source "$1"; printf "%s" "$CONTEXTOS_PYTHON_PLATFORM"' _ "$ROOT/scripts/python-env.sh"
+)
+actual_platform=$("$CONTEXTOS_PYTHON_CMD" -c 'import sys; sys.stdout.write(sys.platform)')
+[ "$reported_platform" = "$actual_platform" ] \
+  || fail "Python resolver did not export the interpreter platform"
+
+case "$(uname -s)" in
+  Linux)
+    fake_wsl_bin="$portability_tmp/fake-wsl-bin"
+    mkdir -p "$fake_wsl_bin"
+    printf '#!%s\n' "$resolved_bash" > "$fake_wsl_bin/wslpath"
+    cat >> "$fake_wsl_bin/wslpath" <<'SH'
+printf '%s\n' 'C:\converted\path'
+SH
+    chmod +x "$fake_wsl_bin/wslpath"
+    passthrough_path=$(PATH="$fake_wsl_bin:$PATH" WSL_DISTRO_NAME=Test \
+      "$resolved_bash" -c 'source "$1"; CONTEXTOS_PYTHON_PLATFORM=linux; contextos_python_path /tmp/example' \
+      _ "$ROOT/scripts/python-env.sh")
+    [ "$passthrough_path" = /tmp/example ] \
+      || fail "Linux Python path changed in a simulated WSL shell"
+    converted_path=$(PATH="$fake_wsl_bin:$PATH" WSL_DISTRO_NAME=Test \
+      "$resolved_bash" -c 'source "$1"; CONTEXTOS_PYTHON_PLATFORM=win32; contextos_python_path /tmp/example' \
+      _ "$ROOT/scripts/python-env.sh")
+    [ "$converted_path" = 'C:\converted\path' ] \
+      || fail "WSL path conversion did not use wslpath"
+    printf '#!%s\nexit 7\n' "$resolved_bash" > "$fake_wsl_bin/wslpath"
+    conversion_error=$(PATH="$fake_wsl_bin:$PATH" WSL_DISTRO_NAME=Test \
+      "$resolved_bash" -c 'source "$1"; CONTEXTOS_PYTHON_PLATFORM=win32; contextos_python_path /tmp/example' \
+      _ "$ROOT/scripts/python-env.sh" 2>&1) && fail "failed wslpath conversion passed"
+    [ "$conversion_error" = 'contextos_python_path: wslpath -w failed for /tmp/example' ] \
+      || fail "failed wslpath conversion lacked a one-line path diagnostic"
+    printf '#!%s\nexit 0\n' "$resolved_bash" > "$fake_wsl_bin/wslpath"
+    conversion_error=$(PATH="$fake_wsl_bin:$PATH" WSL_DISTRO_NAME=Test \
+      "$resolved_bash" -c 'source "$1"; CONTEXTOS_PYTHON_PLATFORM=win32; contextos_python_path /tmp/example' \
+      _ "$ROOT/scripts/python-env.sh" 2>&1) && fail "empty wslpath conversion passed"
+    [ "$conversion_error" = 'contextos_python_path: wslpath -w failed for /tmp/example' ] \
+      || fail "empty wslpath conversion lacked a one-line path diagnostic"
+    wslenv_value=$(WSL_DISTRO_NAME=Test WSLENV='PYTHONIOENCODING/u:OTHER/p:CONTEXTOS_CONTEXT_ROOT' \
+      "$resolved_bash" -c 'source "$1"; printf "%s" "$WSLENV"' _ "$ROOT/scripts/python-env.sh")
+    [ "$wslenv_value" = 'OTHER/p:PYTHONIOENCODING:PYTHONDONTWRITEBYTECODE:CONTEXTOS_CONTEXT_ROOT/p:CONTEXTOS_WORKING_ROOT/p' ] \
+      || fail "WSL did not forward Python and kernel settings through WSLENV: $wslenv_value"
+    printf '#!%s\nprintf "W:%%s\\n" "$2"\n' "$resolved_bash" > "$fake_wsl_bin/wslpath"
+    chmod +x "$fake_wsl_bin/wslpath"
+    mkdir -p "$portability_tmp/arg-dir"
+    converted_args=$(PATH="$fake_wsl_bin:$PATH" WSL_DISTRO_NAME=Test "$resolved_bash" -c \
+      'source "$1"; CONTEXTOS_PYTHON_PLATFORM=win32; contextos_python_args "$2" "--root=$2" --input "$2/new.json" relative/path "/no/such/place/anywhere" --message /note "--message=$2" /note text --runtime=generic "$2" -- "$2"; printf "%s|" "${CONTEXTOS_PYTHON_ARGS[@]}"' \
+      _ "$ROOT/scripts/python-env.sh" "$portability_tmp/arg-dir")
+    [ "$converted_args" = "W:$portability_tmp/arg-dir|--root=W:$portability_tmp/arg-dir|--input|W:$portability_tmp/arg-dir/new.json|relative/path|/no/such/place/anywhere|--message|/note|--message=$portability_tmp/arg-dir|/note|text|--runtime=generic|W:$portability_tmp/arg-dir|--|W:$portability_tmp/arg-dir|" ] \
+      || fail "WSL argument conversion changed the wrong arguments: $converted_args"
+    linux_args=$(PATH="$fake_wsl_bin:$PATH" WSL_DISTRO_NAME=Test "$resolved_bash" -c \
+      'source "$1"; CONTEXTOS_PYTHON_PLATFORM=linux; contextos_python_args "$2"; printf "%s|" "${CONTEXTOS_PYTHON_ARGS[@]}"' \
+      _ "$ROOT/scripts/python-env.sh" "$portability_tmp/arg-dir")
+    [ "$linux_args" = "$portability_tmp/arg-dir|" ] \
+      || fail "Linux Python arguments changed in a simulated WSL shell"
+    ;;
+esac
+
+if [ "$(uname -s)" = Linux ] &&
+  { [ -n "${WSL_INTEROP:-}${WSL_DISTRO_NAME:-}" ] ||
+    { [ -r /proc/version ] && grep -Eiq 'microsoft|wsl' /proc/version; }; } &&
+  command -v wslpath >/dev/null 2>&1; then
+  windows_python=${CONTEXTOS_TEST_WINDOWS_PYTHON:-$(command -v python.exe || true)}
+  if [ -n "$windows_python" ] &&
+    [ "$("$windows_python" -c 'import sys; sys.stdout.write(sys.platform)' 2>/dev/null || true)" = win32 ]; then
+    wsl_fixture="$portability_tmp/wsl-lifecycle"
+    mkdir -p "$wsl_fixture/scripts" "$wsl_fixture/state"
+    cp -R "$ROOT/contextos" "$wsl_fixture/contextos"
+    cp "$ROOT/AGENTS.md" "$wsl_fixture/AGENTS.md"
+    cp "$ROOT/scripts/contextos.sh" "$ROOT/scripts/python-env.sh" "$wsl_fixture/scripts/"
+    : > "$wsl_fixture/state/current.md"
+    unc_kernel_path=$(wslpath -w "$wsl_fixture") \
+      || fail "wslpath could not convert the Linux filesystem fixture"
+    [ "${unc_kernel_path:0:2}" = '\\' ] \
+      || fail "Linux filesystem fixture did not map to a WSL UNC path"
+    wsl_output=$(cd "$wsl_fixture" && CONTEXTOS_PYTHON="$windows_python" \
+      "$resolved_bash" scripts/contextos.sh --root "$wsl_fixture" start) \
+      || fail "WSL UNC lifecycle start failed with Windows Python"
+    printf '%s' "$wsl_output" | "$CONTEXTOS_PYTHON_CMD" -c \
+      'import json, sys; report = json.load(sys.stdin); assert report["schema_version"] >= 1 and isinstance(report["state"], dict)' \
+      || fail "WSL UNC lifecycle start returned invalid JSON"
+    drive_test_parent=""
+    case "$ROOT" in
+      /mnt/[a-zA-Z]/*) drive_test_parent="$ROOT/.context-os/portability-tests" ;;
+      *) if [ -w /mnt/c ]; then drive_test_parent=/mnt/c; fi ;;
+    esac
+    if [ -n "$drive_test_parent" ]; then
+      mkdir -p "$drive_test_parent"
+      wsl_drive_tmp=$(mktemp -d "$drive_test_parent/contextos-drive.XXXXXX")
+      mkdir -p "$wsl_drive_tmp/scripts" "$wsl_drive_tmp/state"
+      cp -R "$ROOT/contextos" "$wsl_drive_tmp/contextos"
+      cp "$ROOT/AGENTS.md" "$wsl_drive_tmp/AGENTS.md"
+      cp "$ROOT/scripts/contextos.sh" "$ROOT/scripts/python-env.sh" "$wsl_drive_tmp/scripts/"
+      : > "$wsl_drive_tmp/state/current.md"
+      drive_kernel_path=$(wslpath -w "$wsl_drive_tmp") \
+        || fail "wslpath could not convert the drive fixture"
+      [[ "$drive_kernel_path" =~ ^[A-Za-z]: ]] \
+        || fail "drive fixture did not map to a Windows drive path"
+      drive_output=$(cd "$wsl_drive_tmp" && CONTEXTOS_PYTHON="$windows_python" \
+        "$resolved_bash" scripts/contextos.sh start) \
+        || fail "WSL drive lifecycle start failed"
+      printf '%s' "$drive_output" | "$CONTEXTOS_PYTHON_CMD" -c \
+        'import json, sys; report = json.load(sys.stdin); assert report["schema_version"] >= 1 and isinstance(report["state"], dict)' \
+        || fail "WSL drive lifecycle start returned invalid JSON"
+      case "$ROOT" in
+        /mnt/[a-zA-Z]/*)
+          checkout_output=$(cd "$ROOT" && CONTEXTOS_PYTHON="$windows_python" \
+            "$resolved_bash" scripts/contextos.sh start) \
+            || fail "WSL drive checkout lifecycle start failed"
+          printf '%s' "$checkout_output" | "$CONTEXTOS_PYTHON_CMD" -c \
+            'import json, sys; report = json.load(sys.stdin); assert report["schema_version"] >= 1 and isinstance(report["state"], dict)' \
+            || fail "WSL drive checkout lifecycle start returned invalid JSON"
+          ;;
+      esac
+    else
+      echo "portability: skipping WSL drive checkout test (no writable /mnt/<drive> fixture parent)"
+    fi
+  else
+    echo "portability: skipping WSL Windows Python test (native Windows python.exe not reachable)"
+  fi
+else
+  echo "portability: skipping WSL Windows Python test (WSL and wslpath required)"
+fi
 
 printf '#!%s\nexit 1\n' "$resolved_bash" > "$python_fallback_bin/python3"
 printf '#!%s\nexec %q "$@"\n' "$resolved_bash" "$resolved_python" > "$python_fallback_bin/python"
@@ -269,6 +400,36 @@ if PATH="$nul_python_path:$resolver_tool_path" CONTEXTOS_PYTHON="$nul_python_pat
   "$resolved_bash" -c 'source "$1"' _ "$ROOT/scripts/python-env.sh" >/dev/null 2>&1; then
   fail "explicit NUL-delimited CONTEXTOS_PYTHON silently fell back to another interpreter"
 fi
+# A NUL inside an otherwise valid "<platform>:<check mark>" reply must also fail;
+# command substitution would silently drop it.
+for nul_reply in 'linux:\0\342\234\223' 'lin\0ux:\342\234\223'; do
+  printf '#!%s\nprintf '"'"'%s'"'"'\n' "$resolved_bash" "$nul_reply" > "$nul_python_bin/python3"
+  chmod +x "$nul_python_bin/python3"
+  if PATH="$nul_python_path:$resolver_tool_path" CONTEXTOS_PYTHON="$nul_python_path/python3" \
+    "$resolved_bash" -c 'source "$1"' _ "$ROOT/scripts/python-env.sh" >/dev/null 2>&1; then
+    fail "Python resolver accepted an embedded NUL in the platform probe: $nul_reply"
+  fi
+done
+
+# The shell's path-option list must match the CLI's type=Path options.
+cli_path_options=$("$CONTEXTOS_PYTHON_CMD" - "$ROOT/contextos/cli.py" <<'PY'
+import ast, sys
+tree = ast.parse(open(sys.argv[1], encoding="utf-8").read())
+options = set()
+for node in ast.walk(tree):
+    if isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "add_argument":
+        keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+        kind = keywords.get("type")
+        if isinstance(kind, ast.Name) and kind.id == "Path":
+            options.update(arg.value for arg in node.args
+                           if isinstance(arg, ast.Constant) and str(arg.value).startswith("--"))
+print(" ".join(sorted(options)))
+PY
+)
+shell_path_options=$("$resolved_bash" -c 'source "$1"; printf "%s" "$CONTEXTOS_PATH_OPTIONS"' _ "$ROOT/scripts/python-env.sh" \
+  | tr ' ' '\n' | sed '/^$/d' | sort | tr '\n' ' ' | sed 's/ $//')
+[ "$cli_path_options" = "$shell_path_options" ] \
+  || fail "CONTEXTOS_PATH_OPTIONS drifted from the CLI path options: cli=[$cli_path_options] shell=[$shell_path_options]"
 
 # The lifecycle wrapper must run the kernel through the resolver.
 "$resolved_bash" "$ROOT/scripts/contextos.sh" doctor >/dev/null \

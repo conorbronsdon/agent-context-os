@@ -1,6 +1,8 @@
 ---
 name: context-start
 description: Load this workspace's current state, recent decisions, blockers, priorities, and session continuity, then give a concise briefing. Use only when the user explicitly asks to begin or resume a workspace session.
+disable-model-invocation: true
+triggers: ["user"]
 ---
 
 # Start a workspace session

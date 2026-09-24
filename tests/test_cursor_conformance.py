@@ -10,6 +10,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DESCRIPTOR = json.loads((ROOT / "runtimes/cursor.json").read_text(encoding="utf-8"))
+LIFECYCLE_SKILLS = tuple(
+    ROOT / ".agents" / "skills" / name / "SKILL.md"
+    for name in (
+        "context-setup", "context-start", "context-update", "context-end",
+        "setup", "start", "update", "end",
+    )
+)
 LIFECYCLE = {
     name: f"/context-{name}" for name in ("setup", "start", "update", "end")
 }
@@ -51,6 +58,12 @@ class CursorDescriptorTest(unittest.TestCase):
                 self.assertEqual("native", surface["capabilities"]["agent_skills"])
                 self.assertEqual("native", surface["capabilities"]["explicit_invocation"])
 
+    def test_every_lifecycle_skill_is_explicit_only_in_cursor(self) -> None:
+        for skill in LIFECYCLE_SKILLS:
+            with self.subTest(skill=skill.parent.name):
+                frontmatter = skill.read_text(encoding="utf-8").split("---", 2)[1]
+                self.assertIn("disable-model-invocation: true", frontmatter)
+
     def test_unverified_hooks_memory_and_collisions_are_not_claimed(self) -> None:
         self.assertEqual([], DESCRIPTOR["evidence"]["tested_versions"])
         for surface_name, surface in DESCRIPTOR["surfaces"].items():
@@ -75,6 +88,25 @@ class CursorDescriptorTest(unittest.TestCase):
         install_text = "\n".join(DESCRIPTOR["install"]["next_steps"])
         self.assertNotIn("--trust", install_text)
         self.assertNotIn("--force", install_text)
+        cli = DESCRIPTOR["surfaces"]["cli"]
+        self.assertIn("tests/test_cursor_live_harness.py", cli["conformance_tests"])
+        self.assertIn("cursor-live-harness", cli["evidence"])
+        self.assertNotIn(
+            "tests/test_cursor_live_harness.py",
+            DESCRIPTOR["surfaces"]["ide"]["conformance_tests"],
+        )
+        self.assertNotIn("cursor-live-harness", ide_evidence)
+
+    def test_unrun_harnesses_do_not_claim_capability_evidence(self) -> None:
+        sources = {source["id"]: source for source in DESCRIPTOR["evidence"]["sources"]}
+        for name in ("cursor-ide-harness", "cursor-live-harness"):
+            self.assertEqual(["support"], sources[name]["claims"])
+
+    def test_guide_states_discovery_and_ide_file_read_limits(self) -> None:
+        guide = (ROOT / "adapters/cursor/README.md").read_text(encoding="utf-8")
+        self.assertIn("do not isolate\nautomatic discovery from a prompted file read", guide)
+        self.assertIn("cannot establish that the slash\ncommand resolved", guide)
+        self.assertIn("as `unverified`", guide)
 
     def test_adapter_does_not_ship_unverified_cursor_configuration(self) -> None:
         if os.environ.get("CONTEXTOS_VALIDATION_PROFILE") == "workspace":
@@ -106,7 +138,7 @@ class CursorDescriptorTest(unittest.TestCase):
             "explicit deny wins an allow",
             "not approval of a Context OS proposal",
             "ships no Cursor hook adapter",
-            "failClosed",
+            "otherwise fail open by default",
             "No Cursor-native memory is synchronized",
             "Never run a `--force` conformance check against a real context repository",
             "exact-version conformance for both surfaces",
@@ -115,7 +147,8 @@ class CursorDescriptorTest(unittest.TestCase):
             "Cursor CLI also reads a root `CLAUDE.md`",
             "removable seed",
             "Project-owned `.cursor/` configuration is permitted",
-            "portable skill frontmatter does not currently enforce",
+            "Every shipped lifecycle core and short alias",
+            "A passing CLI artifact is not IDE evidence",
         ):
             with self.subTest(required=required):
                 self.assertIn(required, normalized)

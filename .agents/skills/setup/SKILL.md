@@ -1,6 +1,8 @@
 ---
 name: setup
 description: Initialize or refresh this context workspace through the canonical guided review. Use only when the user explicitly invokes setup.
+disable-model-invocation: true
+triggers: ["user"]
 ---
 
 # Set up workspace context

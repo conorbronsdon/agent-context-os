@@ -43,11 +43,12 @@
       ],
       "conformance_tests": [
         "tests/test_cursor_conformance.py",
+        "tests/test_cursor_ide_harness.py",
         "tests/test_contextos_kernel.py"
       ],
       "evidence": [
-        "cursor-rules", "cursor-skills", "cursor-mcp", "cursor-run-modes",
-        "cursor-kernel", "cursor-conformance"
+        "cursor-rules", "cursor-skills", "cursor-hooks", "cursor-mcp", "cursor-run-modes",
+        "cursor-kernel", "cursor-conformance", "cursor-ide-harness"
       ]
     },
     "cli": {
@@ -75,16 +76,18 @@
       "binary_probes": [],
       "conformance_tests": [
         "tests/test_cursor_conformance.py",
+        "tests/test_cursor_live_harness.py",
         "tests/test_contextos_kernel.py"
       ],
       "evidence": [
-        "cursor-cli-using", "cursor-skills", "cursor-cli-slash-commands", "cursor-cli-headless",
-        "cursor-cli-permissions", "cursor-mcp", "cursor-kernel", "cursor-conformance"
+        "cursor-cli-using", "cursor-skills", "cursor-hooks", "cursor-cli-slash-commands", "cursor-cli-headless",
+        "cursor-cli-permissions", "cursor-mcp", "cursor-kernel", "cursor-conformance",
+        "cursor-live-harness"
       ]
     }
   },
   "evidence": {
-    "checked_on": "2026-08-27",
+    "checked_on": "2026-09-01",
     "tested_versions": [],
     "sources": [
       {
@@ -98,6 +101,12 @@
         "type": "official",
         "location": "https://cursor.com/docs/skills",
         "claims": ["agent_skills", "explicit_invocation", "skill_sources", "invocation"]
+      },
+      {
+        "id": "cursor-hooks",
+        "type": "official",
+        "location": "https://cursor.com/docs/hooks",
+        "claims": ["project_hooks", "blocking_pre_tool_hook"]
       },
       {
         "id": "cursor-cli-using",
@@ -145,6 +154,18 @@
         "id": "cursor-conformance",
         "type": "conformance",
         "location": "tests/test_cursor_conformance.py",
+        "claims": ["support"]
+      },
+      {
+        "id": "cursor-ide-harness",
+        "type": "conformance",
+        "location": "adapters/cursor/ide_conformance.py",
+        "claims": ["support"]
+      },
+      {
+        "id": "cursor-live-harness",
+        "type": "conformance",
+        "location": "adapters/cursor/live_conformance.py",
         "claims": ["support"]
       }
     ]

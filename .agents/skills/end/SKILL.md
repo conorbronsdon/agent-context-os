@@ -1,6 +1,8 @@
 ---
 name: end
 description: Close this context workspace through the canonical reviewed handoff workflow. Use only when the user explicitly invokes end.
+disable-model-invocation: true
+triggers: ["user"]
 ---
 
 # End a workspace session

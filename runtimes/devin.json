@@ -32,7 +32,7 @@
       },
       "capabilities": {
         "agent_skills": "native",
-        "explicit_invocation": "advisory",
+        "explicit_invocation": "native",
         "project_hooks": "unsupported",
         "blocking_pre_tool_hook": "unsupported",
         "mcp": "unsupported",
@@ -45,13 +45,21 @@
       "binary_probes": [],
       "conformance_tests": [
         "tests/test_devin_conformance.py",
+        "tests/test_devin_live_harness.py",
+        "tests/test_devin_ui_harness.py",
         "tests/test_contextos_kernel.py"
       ],
       "evidence": [
         "devin-agents",
         "devin-skills",
+        "devin-api-auth",
+        "devin-api-sessions",
+        "devin-api-overview",
+        "devin-api-release-notes",
         "devin-kernel",
-        "devin-conformance"
+        "devin-conformance",
+        "devin-live-harness",
+        "devin-ui-harness"
       ]
     },
     "review": {
@@ -80,7 +88,7 @@
     }
   },
   "evidence": {
-    "checked_on": "2026-08-27",
+    "checked_on": "2026-09-01",
     "tested_versions": [],
     "sources": [
       {
@@ -93,13 +101,37 @@
         "id": "devin-skills",
         "type": "official",
         "location": "https://docs.devin.ai/product-guides/skills",
-        "claims": ["agent_skills", "skill_sources", "invocation"]
+        "claims": ["agent_skills", "explicit_invocation", "skill_sources", "invocation"]
       },
       {
         "id": "devin-review",
         "type": "official",
         "location": "https://docs.devin.ai/work-with-devin/devin-review",
         "claims": ["instruction_sources", "support"]
+      },
+      {
+        "id": "devin-api-auth",
+        "type": "official",
+        "location": "https://docs.devin.ai/api-reference/authentication",
+        "claims": ["support"]
+      },
+      {
+        "id": "devin-api-sessions",
+        "type": "official",
+        "location": "https://docs.devin.ai/api-reference/v3/sessions/post-organizations-sessions-archive",
+        "claims": ["support"]
+      },
+      {
+        "id": "devin-api-overview",
+        "type": "official",
+        "location": "https://docs.devin.ai/api-reference/overview",
+        "claims": ["support"]
+      },
+      {
+        "id": "devin-api-release-notes",
+        "type": "official",
+        "location": "https://docs.devin.ai/api-reference/release-notes",
+        "claims": ["support"]
       },
       {
         "id": "devin-kernel",
@@ -111,7 +143,19 @@
         "id": "devin-conformance",
         "type": "conformance",
         "location": "tests/test_devin_conformance.py",
-        "claims": ["explicit_invocation", "support"]
+        "claims": ["support"]
+      },
+      {
+        "id": "devin-live-harness",
+        "type": "conformance",
+        "location": "adapters/devin/live_conformance.py",
+        "claims": ["support"]
+      },
+      {
+        "id": "devin-ui-harness",
+        "type": "conformance",
+        "location": "adapters/devin/ui_conformance.py",
+        "claims": ["support"]
       }
     ]
   }

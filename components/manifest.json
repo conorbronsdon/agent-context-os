@@ -1263,11 +1263,27 @@
                     "policy": "managed"
                 },
                 {
+                    "path": "adapters/cursor/live_conformance.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "adapters/cursor/ide_conformance.py",
+                    "policy": "managed"
+                },
+                {
                     "path": "runtimes/cursor.json",
                     "policy": "managed"
                 },
                 {
                     "path": "tests/test_cursor_conformance.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_cursor_live_harness.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_cursor_ide_harness.py",
                     "policy": "development"
                 }
             ]
@@ -1286,11 +1302,43 @@
                     "policy": "managed"
                 },
                 {
+                    "path": "adapters/devin/live_conformance.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "adapters/devin/ui_conformance.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "adapters/devin/live-fixture/AGENTS.md.fixture",
+                    "policy": "development"
+                },
+                {
+                    "path": "adapters/devin/live-fixture/SKILL.md.fixture",
+                    "policy": "development"
+                },
+                {
+                    "path": "adapters/devin/review-fixture/REVIEW.md.fixture",
+                    "policy": "development"
+                },
+                {
+                    "path": "adapters/devin/review-fixture/control.txt",
+                    "policy": "development"
+                },
+                {
                     "path": "runtimes/devin.json",
                     "policy": "managed"
                 },
                 {
                     "path": "tests/test_devin_conformance.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_devin_live_harness.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_devin_ui_harness.py",
                     "policy": "development"
                 }
             ]

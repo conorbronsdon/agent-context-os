@@ -16,6 +16,19 @@
   non-interactive operator approval. Proposals that copy Hermes native memory
   into repository files fail before approval, and route identifiers are
   recorded verbatim in evidence (#163).
+- Windows Python launched from WSL now works from both `/mnt/<drive>` and
+  Linux-filesystem checkouts: the encoding, bytecode, and root settings are
+  forwarded through `WSLENV`, kernel and hook paths are converted with
+  `wslpath -w`, failed conversions name the path, and platform detection reuses
+  the interpreter probe (#210).
+- Devin root controls now ask for the repository instruction canary without
+  naming its file, and cleanup errors retain the original control failure.
+  Cursor IDE explicit-skill results stay unverified when a direct file read
+  cannot be excluded; unrun harnesses no longer claim capability evidence.
+- Devin live conformance obtains the fixture commit from `git rev-parse HEAD`
+  without prompting with the answer, accepts harmless delayed status messages,
+  and reports both cleanup failures. Local session and Review instruction
+  sources use inert filenames until placed in dedicated public fixtures.
 - Pass native paths to Windows Python from MSYS and Cygwin lifecycle wrappers
   when shell argument conversion is disabled.
 - Capability install state now leaves native and advisory claims host-provided,
@@ -37,6 +50,14 @@
 ### Added
 - An opt-in Hermes live conformance harness prepares a disposable fixture from an exact clean commit and records bounded installed-client runs, operator-approved kernel receipts, and failure evidence. Deterministic Hermes controls and a runbook accompany it; support tiers remain unchanged (#163).
 - Five recorded Hermes Agent v0.21.4 live attempts on free OpenRouter routes, retained with their failures in `docs/evidence/hermes-live-2026-09-23/`. None passed every control. In the last, the setup proposal copied native memory into repository files and was rejected. A later review found false-green paths in the harness those runs used, now closed, so their discovery results are not relied on. Hermes remains experimental (#163).
+- Opt-in, operator-assisted live conformance harnesses for the experimental
+  Cursor IDE and Agent CLI surfaces and for Devin sessions and Review. They
+  record create-only evidence outside the checkout and never run in CI or
+  against paid accounts by default; no support tier changes (#71, #73).
+- Lifecycle skills declare `disable-model-invocation: true` and
+  `triggers: ["user"]` so hosts that honor these fields invoke them only on
+  explicit request; Devin sessions record explicit invocation as native from
+  its documented skill frontmatter.
 - Per-trial value-correct and citation-rejected continuity counts, with
   category breakdowns, summary columns, and a report of 27 long-sequence trials
   that separates decision values from exact citation failures (#184).

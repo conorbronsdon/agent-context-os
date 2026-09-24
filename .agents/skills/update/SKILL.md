@@ -1,6 +1,8 @@
 ---
 name: update
 description: Save a concise checkpoint through the canonical workspace update workflow. Use only when the user explicitly invokes update.
+disable-model-invocation: true
+triggers: ["user"]
 ---
 
 # Update a workspace session
