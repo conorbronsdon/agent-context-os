@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Capability install state now leaves native and advisory claims host-provided,
+  checks adapter claims against runtime-specific components, and accepts
+  comma-separated `capabilities --agent` selections (#182).
 - Refresh the social preview from the current runtime manifests, including
   first-class OpenCode support, and keep both tracked PNG aliases byte-identical
   to the 1280×640 source render (#195).
@@ -22,6 +25,8 @@
   that separates decision values from exact citation failures (#184).
 - A six-session synthetic continuity fixture, category-level scoring, raw-trial
   JSONL recording, and Markdown summaries extend the four-question benchmark.
+- A read-only `capabilities` command compares selected agents' descriptor claims,
+  portable skills, surface support tiers, and recorded component install state (#182).
 - A per-integration, per-host evidence decision for optional OpenClaw
   integrations, an optional proposal section for test records, and tests
   that verify unsupported host claims stay out of the catalog and chooser (#147).

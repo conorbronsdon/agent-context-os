@@ -7,6 +7,8 @@ from pathlib import Path
 
 from . import __version__
 from .continuity import briefing_report, history_report, render_briefing, render_history
+from .capabilities import capability_report, render_capabilities
+from .component_schema import ComponentManifestError
 from .attachment import AttachmentError, RootRoles, resolve_root_roles
 from .bundle_schema import (
     BundleError,
@@ -115,6 +117,10 @@ def parser() -> argparse.ArgumentParser:
     history.add_argument("--limit", type=int, default=10)
     history.add_argument("--path", help="Filter by one repository-relative changed path")
     history.add_argument("--details", action="store_true", help="Include available proposal diffs after checking their digest binding")
+
+    capabilities = commands.add_parser("capabilities", help="Compare selected agents' described capabilities and skills")
+    capabilities.add_argument("--agent", action="append", default=[], help="Comma-separated registered agent ids (repeatable); defaults to tracked selection")
+    capabilities.add_argument("--json", action="store_true", help="Print the report as JSON")
 
     propose = commands.add_parser("propose", help="Create a reviewable lifecycle proposal")
     propose.add_argument("workflow", choices=("setup", "update", "end"))
@@ -920,6 +926,9 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "history":
             report = history_report(root, limit=args.limit, path=args.path, details=args.details)
             _print_report(render_history(report)) if args.format == "markdown" else emit(report)
+        elif args.command == "capabilities":
+            report = capability_report(root, args.agent)
+            emit(report) if args.json else _print_report(render_capabilities(report))
         elif args.command == "propose":
             path, document = create_proposal(root, args.workflow, read_json(args.input), parse_now(args.now))
             emit({
@@ -1134,6 +1143,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     except (
         ContextOSError,
+        ComponentManifestError,
+        InstalledStateError,
         BundleError,
         WorkspaceConfigError,
         WorkspaceCompositionError,
