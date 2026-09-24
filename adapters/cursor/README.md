@@ -5,7 +5,7 @@ IDE and the Agent CLI. Both discover the repository-root `AGENTS.md` and project
 skills under `.agents/skills/`, but they have different binaries, permissions,
 configuration, and conformance gates. A green CLI check is not IDE evidence.
 
-No installed Cursor version was available for this release. The descriptor is
+No installed-version conformance pass is recorded for this release. The descriptor is
 therefore capability-gated, has no tested version, and must not be promoted to
 first-class until the opt-in controls pass against exact IDE and CLI versions.
 
@@ -237,12 +237,23 @@ official setup flow requires installing the desktop app and signing in with a
 Cursor account; see [onboarding](https://cursor.com/docs/grok-bot/get-started)
 and [working with Bots](https://cursor.com/docs/grok-bot/work).
 
-The September 24 setup attempt reached the download dialog, but Chrome blocked
+The initial September 24 setup attempt reached the download dialog, but Chrome blocked
 the official installer with `ERR_BLOCKED_BY_CLIENT`. No Bot task or lifecycle
-control was run. A supported individual Bot conversation API was not established
+control was run at that point. A supported individual Bot conversation API was not established
 by the documentation reviewed. No Bot adapter or runtime declaration is shipped.
 
-Once the application is available, use this bounded first task:
+Later that day, the operator downloaded the installer. Desktop version `0.58.0`
+was installed after its Anysphere signature was verified. Native desktop UI
+automation successfully submitted a bounded task and retrieved the response.
+The Bot reported host build `8b0b203`, the source commit above, a clean disposable
+checkout, and exit status zero from `bash scripts/contextos.sh start`. Its returned
+inventory had `initialized: false`. It reported explicitly reading the repository
+instructions and skills rather than receiving them automatically. A follow-up
+returned the requested command outputs, but the cloud filesystem and tool trace
+were not independently inspected. These are Bot-reported smoke-test observations;
+native discovery, proposal/apply approval, and persistence remain unverified.
+
+For a new disposable checkout, use this bounded first task:
 
 > In a disposable cloud checkout of the public agent-context-os repository,
 > record the exact commit and your Bot build. Follow the repository instructions
