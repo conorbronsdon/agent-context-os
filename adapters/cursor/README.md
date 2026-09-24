@@ -153,6 +153,20 @@ version drift, missing authentication, evidence overwrite, unexpected fixture
 mutation, and the real repository as a target. It never invokes Cursor's
 built-in `/update` command. A passing CLI artifact is not IDE evidence.
 
+User-level write or shell allowances and conflicting deny rules invalidate
+permission conformance; use a dedicated clean CLI configuration rather than
+changing the operator's normal permissions. Preflight inspects the effective
+`CURSOR_CONFIG_DIR` override (or `XDG_CONFIG_HOME/cursor` on non-Windows hosts),
+and rejects relative override paths. An injected config path must be named
+`cli-config.json` and is also passed to Cursor through `CURSOR_CONFIG_DIR`.
+Evidence identifies the supplied
+Cursor launcher by basename and SHA-256, including when Windows invokes it
+through `cmd.exe`. The hash covers that file, not every bundled dependency.
+The launcher is checked before each command and before evidence is written.
+If Windows retains a temporary-file handle after the controls finish, evidence
+records `workspace_cleanup: retained-cleanup-error` instead of discarding the
+result. Inspect and clean the retained temporary fixture after the client exits.
+
 The IDE has a separate operator-assisted harness at
 `adapters/cursor/ide_conformance.py`. Its `prepare` command requires an exact
 clean source commit, installed binary hash, disposable workspace, isolated
@@ -186,3 +200,58 @@ skill frontmatter, interactive must-fire and must-not-fire approval controls,
 headless ask, no-`--force`, and `--force` behavior, deny precedence, MCP scope,
 native-state isolation, and either a tested Cursor-specific hook adapter or a
 continuing explicit no-hook claim.
+
+### September 24, 2026 live diagnostics
+
+These observations used clean source commit
+`4ea28a6901d168b884f6c8621d90a1f897b4e99f`; they are failed or incomplete
+diagnostics, not passing conformance artifacts. Support remains experimental.
+
+- CLI `2026.09.23-86fc751`: the first run failed the exact nested canary.
+  A second run passed that control, then stopped because the denial stream did
+  not establish a rejected write attempt. A model declining to write does not
+  prove enforcement. The baseline also accepted a user `Shell(ls)` allowance,
+  so permission conclusions from these runs are confounded. The changes above
+  reject that setup before model traffic.
+- IDE `3.18.25`, executable SHA-256
+  `7acc54201db5ba24bb4fab2e1cd41fabd6a25fd43c7923b96efb235c370c009e`:
+  root, nested-file-context, and project-rule prompts returned their canaries
+  in an isolated profile and synthetic workspace. During the implicit-skill
+  control, the IDE read the external test manifest and prior observation file.
+  That run is contaminated and cannot establish discovery or skill isolation.
+  Workspace and profile separation alone do not prevent reads outside them.
+  Repeat with the expected answers inaccessible to model tools before using
+  results for promotion. Interactive write and slash-menu controls were not
+  completed.
+
+### Grok Bot research (#170)
+
+Grok Bot is a separate application with a persistent cloud computer. Calling a
+Grok model through Cursor CLI does not establish Bot runtime support. The
+official setup flow requires installing the desktop app and signing in with a
+Cursor account; see [onboarding](https://cursor.com/docs/grok-bot/get-started)
+and [working with Bots](https://cursor.com/docs/grok-bot/work).
+
+The September 24 setup attempt reached the download dialog, but Chrome blocked
+the official installer with `ERR_BLOCKED_BY_CLIENT`. No Bot task or lifecycle
+control was run. A supported individual Bot conversation API was not established
+by the documentation reviewed. No Bot adapter or runtime declaration is shipped.
+
+Once the application is available, use this bounded first task:
+
+> In a disposable cloud checkout of the public agent-context-os repository,
+> record the exact commit and your Bot build. Follow the repository instructions
+> and report which instruction files and skills you actually discover, including
+> how they were loaded. Run the read-only lifecycle start inventory. Using only
+> synthetic session data, prepare an update proposal and show its diff and digest.
+> Stop before apply, commit, push, or connecting any private account. Report the
+> exact commands, tool results, changed files, and approval prompts.
+
+Then test an explicitly rejected proposal and an approved exact-digest proposal
+in that same disposable checkout, preserving before/after state and the receipt.
+Test explicit lifecycle invocation separately from ordinary prompts; an ordinary
+prompt must not invoke a user-only lifecycle skill. Keep expected canaries and
+operator evidence outside the Bot's accessible storage. Record persistence across
+conversations and the boundary between Bot memory and repository state. Those
+observations determine whether a Bot adapter is needed; they must not be inferred
+from the IDE or CLI results.

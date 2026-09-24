@@ -14,6 +14,7 @@ import os
 import secrets
 import subprocess
 import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -42,12 +43,28 @@ class Evidence:
     expected_version: str
     source_sha: str
     binary_version: str = ""
+    binary_name: str = ""
+    binary_sha256: str = ""
+    workspace_cleanup: str = "not-attempted"
     user_cli_config_sha256: str | None = None
     commands: list[dict[str, object]] = field(default_factory=list)
     controls: dict[str, bool] = field(default_factory=dict)
 
 
 Runner = Callable[[Sequence[str], Path, Mapping[str, str], float], CommandResult]
+
+
+def effective_cli_config(env: Mapping[str, str]) -> Path:
+    override = env.get("CURSOR_CONFIG_DIR")
+    if override:
+        directory = Path(override)
+    elif os.name != "nt" and env.get("XDG_CONFIG_HOME"):
+        directory = Path(env["XDG_CONFIG_HOME"]) / "cursor"
+    else:
+        directory = Path.home() / ".cursor"
+    if not directory.is_absolute():
+        raise HarnessError("Cursor config directory must be absolute for conformance")
+    return directory / "cli-config.json"
 
 
 def executable_command(binary: Path, *arguments: str) -> list[str]:
@@ -259,10 +276,36 @@ class CursorHarness:
         self.runner = runner
         self.timeout = timeout
         self.env = dict(os.environ)
-        self.user_cli_config = user_cli_config or (Path.home() / ".cursor" / "cli-config.json")
+        if user_cli_config is not None:
+            if user_cli_config.name != "cli-config.json":
+                raise HarnessError("Cursor config override must name cli-config.json")
+            self.env["CURSOR_CONFIG_DIR"] = str(user_cli_config.resolve().parent)
+        self.user_cli_config = effective_cli_config(self.env)
         self.evidence = Evidence(expected_version=expected_version, source_sha=source_sha)
+        self.evidence.binary_name = self.binary.name
+        self.evidence.binary_sha256 = hashlib.sha256(self.binary.read_bytes()).hexdigest()
+
+    def verify_binary(self) -> None:
+        if hashlib.sha256(self.binary.read_bytes()).hexdigest() != self.evidence.binary_sha256:
+            raise HarnessError("Cursor binary changed during conformance")
+
+    @contextmanager
+    def disposable_workspace(self):
+        temporary = tempfile.TemporaryDirectory(prefix="contextos-cursor-live-")
+        try:
+            yield Path(temporary.name).resolve()
+        finally:
+            try:
+                temporary.cleanup()
+            except OSError:
+                # Windows may retain a client file handle after a completed run.
+                # Preserve the control outcome (including any original exception).
+                self.evidence.workspace_cleanup = "retained-cleanup-error"
+            else:
+                self.evidence.workspace_cleanup = "completed"
 
     def run(self, cwd: Path, *arguments: str) -> CommandResult:
+        self.verify_binary()
         result = self.runner(
             executable_command(self.binary, *arguments), cwd, self.env, self.timeout
         )
@@ -286,12 +329,22 @@ class CursorHarness:
                 config = json.loads(config_bytes.decode("utf-8"))
             except (UnicodeDecodeError, json.JSONDecodeError) as exc:
                 raise HarnessError("Cursor user CLI configuration is not valid JSON") from exc
-            permissions = config.get("permissions") if isinstance(config, dict) else None
+            if not isinstance(config, dict):
+                raise HarnessError("Cursor user CLI configuration must be a JSON object")
+            permissions = config.get("permissions")
             if permissions is not None and not isinstance(permissions, dict):
                 raise HarnessError(
                     "Cursor user CLI permissions would confound project permission conformance"
                 )
             denied = permissions.get("deny", []) if permissions else []
+            allowed = permissions.get("allow", []) if permissions else []
+            if not isinstance(allowed, list) or any(
+                not isinstance(rule, str) or rule.startswith(("Write(", "Shell("))
+                for rule in allowed
+            ):
+                raise HarnessError(
+                    "Cursor user CLI permissions would confound project permission conformance"
+                )
             if not isinstance(denied, list) or any(
                 not isinstance(rule, str) or rule.startswith(("Write(", "Shell(", "Read(.agents"))
                 for rule in denied
@@ -328,7 +381,7 @@ class CursorHarness:
             name: f"CONTEXTOS_CURSOR_{name.upper()}_{secrets.token_hex(8)}"
             for name in ("root", "nested", "skill")
         }
-        with tempfile.TemporaryDirectory(prefix="contextos-cursor-live-") as temporary:
+        with self.disposable_workspace() as temporary:
             workspace = Path(temporary).resolve() / "workspace"
             workspace.mkdir()
             self.preflight(workspace)
@@ -468,6 +521,9 @@ def write_evidence(path: Path, evidence: Evidence) -> None:
         "source_sha": evidence.source_sha,
         "expected_version": evidence.expected_version,
         "binary_version": evidence.binary_version,
+        "binary_name": evidence.binary_name,
+        "binary_sha256": evidence.binary_sha256,
+        "workspace_cleanup": evidence.workspace_cleanup,
         "user_cli_config_sha256": evidence.user_cli_config_sha256,
         "commands": evidence.commands,
         "controls": evidence.controls,
@@ -505,6 +561,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         harness = CursorHarness(args.binary, args.expected_version, actual_sha)
         evidence = harness.execute()
+        harness.verify_binary()
         if repository_source_sha() != actual_sha:
             raise HarnessError("source commit changed during Cursor live conformance")
         write_evidence(args.evidence, evidence)

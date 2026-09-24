@@ -68,7 +68,7 @@ class CursorLiveHarnessTest(unittest.TestCase):
         ])
         harness = live.CursorHarness(
             self.binary, "2026.08.31-4057e58", "a" * 40,
-            runner=lambda *_: next(responses), user_cli_config=self.root / "no-user-config.json",
+            runner=lambda *_: next(responses), user_cli_config=self.root / "missing" / "cli-config.json",
         )
         harness.preflight(self.root)
         self.assertTrue(harness.evidence.controls["authenticated"])
@@ -94,7 +94,7 @@ class CursorLiveHarnessTest(unittest.TestCase):
         ])
         harness = live.CursorHarness(
             self.binary, "2026.08.31-4057e58", "a" * 40,
-            runner=lambda *_: next(responses), user_cli_config=self.root / "no-user-config.json",
+            runner=lambda *_: next(responses), user_cli_config=self.root / "missing" / "cli-config.json",
         )
         with self.assertRaisesRegex(live.HarnessError, "not authenticated"):
             harness.preflight(self.root)
@@ -107,7 +107,7 @@ class CursorLiveHarnessTest(unittest.TestCase):
         ])
         harness = live.CursorHarness(
             self.binary, "2026.08.31-4057e58", "a" * 40,
-            runner=lambda *_: next(responses), user_cli_config=self.root / "no-user-config.json",
+            runner=lambda *_: next(responses), user_cli_config=self.root / "missing" / "cli-config.json",
         )
         with self.assertRaisesRegex(live.HarnessError, "positively confirm"):
             harness.preflight(self.root)
@@ -131,6 +131,102 @@ class CursorLiveHarnessTest(unittest.TestCase):
         )
         with self.assertRaisesRegex(live.HarnessError, "did not return"):
             live.require_canary(result, "CANARY", "root")
+
+    def test_preflight_rejects_user_allowances_before_running_cursor(self) -> None:
+        config = self.root / "cli-config.json"
+        for allowance in (["Write(*)"], ["Shell(ls)"], "Shell(*)", [None]):
+            with self.subTest(allowance=allowance):
+                config.write_text(json.dumps({"permissions": {"allow": allowance}}))
+                runner = mock.Mock(side_effect=[
+                    live.CommandResult([], 0, "v1", ""),
+                    live.CommandResult([], 0, " ".join(live.REQUIRED_FLAGS), ""),
+                    live.CommandResult([], 0, "Logged in", ""),
+                ])
+                harness = live.CursorHarness(
+                    self.binary, "v1", "a" * 40, runner=runner, user_cli_config=config,
+                )
+                with self.assertRaisesRegex(live.HarnessError, "confound"):
+                    harness.preflight(self.root)
+                runner.assert_not_called()
+
+    def test_preflight_accepts_empty_permissions(self) -> None:
+        config = self.root / "cli-config.json"
+        config.write_text('{"permissions": {"allow": [], "deny": []}}')
+        responses = iter([
+            live.CommandResult([], 0, "v1", ""),
+            live.CommandResult([], 0, " ".join(live.REQUIRED_FLAGS), ""),
+            live.CommandResult([], 0, "Logged in", ""),
+        ])
+        harness = live.CursorHarness(
+            self.binary, "v1", "a" * 40,
+            runner=lambda *_: next(responses), user_cli_config=config,
+        )
+        harness.preflight(self.root)
+        self.assertTrue(harness.evidence.controls["authenticated"])
+
+    def test_cleanup_lock_preserves_evidence_and_original_failures(self) -> None:
+        harness = live.CursorHarness(self.binary, "v1", "a" * 40)
+        temporary = mock.Mock(name=str(self.root))
+        temporary.name = str(self.root)
+        temporary.cleanup.side_effect = PermissionError("Windows file lock")
+        with mock.patch.object(live.tempfile, "TemporaryDirectory", return_value=temporary):
+            with harness.disposable_workspace() as path:
+                self.assertEqual(self.root, path)
+                harness.evidence.controls["completed"] = True
+            target = self.root / "completed.json"
+            live.write_evidence(target, harness.evidence)
+            result = json.loads(target.read_text())
+            self.assertTrue(result["controls"]["completed"])
+            self.assertEqual("retained-cleanup-error", result["workspace_cleanup"])
+            with self.assertRaisesRegex(live.HarnessError, "original control failed"):
+                with harness.disposable_workspace():
+                    raise live.HarnessError("original control failed")
+
+    def test_cleanup_success_is_recorded(self) -> None:
+        harness = live.CursorHarness(self.binary, "v1", "a" * 40)
+        with harness.disposable_workspace() as path:
+            self.assertTrue(path.is_dir())
+        self.assertFalse(path.exists())
+        self.assertEqual("completed", harness.evidence.workspace_cleanup)
+
+    def test_evidence_identifies_cursor_binary_instead_of_batch_bridge(self) -> None:
+        harness = live.CursorHarness(self.binary, "v1", "a" * 40)
+        harness.evidence.commands.append(live.output_summary(
+            live.CommandResult(["cmd.exe", "/c", "agent.cmd --version"], 0, "v1", "")
+        ))
+        target = self.root / "identity.json"
+        live.write_evidence(target, harness.evidence)
+        result = json.loads(target.read_text())
+        self.assertEqual(self.binary.name, result["binary_name"])
+        self.assertEqual(live.hashlib.sha256(b"fixture").hexdigest(), result["binary_sha256"])
+
+    def test_binary_drift_is_rejected(self) -> None:
+        harness = live.CursorHarness(self.binary, "v1", "a" * 40)
+        self.binary.write_text("changed", encoding="utf-8")
+        with self.assertRaisesRegex(live.HarnessError, "binary changed"):
+            harness.verify_binary()
+
+    def test_effective_config_follows_cursor_directory_override(self) -> None:
+        override = self.root / "override"
+        with mock.patch.dict(os.environ, {"CURSOR_CONFIG_DIR": str(override)}):
+            harness = live.CursorHarness(self.binary, "v1", "a" * 40)
+        self.assertEqual(override / "cli-config.json", harness.user_cli_config)
+        self.assertEqual(str(override), harness.env["CURSOR_CONFIG_DIR"])
+        with self.assertRaisesRegex(live.HarnessError, "absolute"):
+            live.effective_cli_config({"CURSOR_CONFIG_DIR": "relative"})
+
+    def test_explicit_config_is_also_used_by_child(self) -> None:
+        config = self.root / "explicit" / "cli-config.json"
+        harness = live.CursorHarness(self.binary, "v1", "a" * 40, user_cli_config=config)
+        self.assertEqual(config, harness.user_cli_config)
+        self.assertEqual(str(config.parent), harness.env["CURSOR_CONFIG_DIR"])
+        with self.assertRaisesRegex(live.HarnessError, "must name"):
+            live.CursorHarness(self.binary, "v1", "a" * 40, user_cli_config=self.root / "other.json")
+
+    def test_xdg_override_matches_platform(self) -> None:
+        directory = self.root / "xdg"
+        expected = directory / "cursor/cli-config.json" if os.name != "nt" else Path.home() / ".cursor/cli-config.json"
+        self.assertEqual(expected, live.effective_cli_config({"XDG_CONFIG_HOME": str(directory)}))
 
     def test_require_canary_rejects_substring_and_non_json_output(self) -> None:
         substring = live.CommandResult(
@@ -221,7 +317,7 @@ class CursorLiveHarnessTest(unittest.TestCase):
 
         harness = live.CursorHarness(
             self.binary, "v1", "a" * 40, runner=runner,
-            user_cli_config=self.root / "no-user-config.json",
+            user_cli_config=self.root / "missing" / "cli-config.json",
         )
         evidence = harness.execute()
         self.assertTrue(evidence.controls["project_deny_rejected_a_write_attempt"])

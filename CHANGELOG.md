@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Fixed
+- Cursor CLI conformance rejects confounding user write/shell allowances,
+  inspects the same configuration directory used by the child process,
+  records the logical launcher name and SHA-256 across the Windows batch
+  bridge, and preserves completed evidence when temporary cleanup hits a
+  Windows file lock (#73). Added failure and success controls for these cases.
 - Hermes lifecycle invocation is documented as `/context-setup`,
   `/context-start`, `/context-update`, and `/context-end`: Hermes Agent
   v0.21.4 reserves `/start` and `/update` for built-ins (#163).
