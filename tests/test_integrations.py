@@ -66,6 +66,38 @@ class IntegrationCatalogTests(unittest.TestCase):
         self.assertTrue(rendered.endswith("\n"))
         self.assertFalse(rendered.endswith("\n\n"))
 
+    def test_openclaw_host_claims_wait_for_host_evidence_schema(self) -> None:
+        guide = (ROOT / "docs" / "integrations-guide.md").read_text(encoding="utf-8")
+        self.assertIn(
+            "The current catalog schema cannot express `openclaw` or per-host evidence.",
+            guide,
+        )
+        self.assertNotIn("openclaw", MODULE.AGENTS)
+        self.assertNotIn("openclaw", {item["id"] for item in self.catalog["integrations"]})
+        self.assertTrue(
+            all("openclaw" not in item["supported_agents"] for item in self.catalog["integrations"])
+        )
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][0]["supported_agents"].append("openclaw")
+        )
+        self.assert_invalid(
+            lambda catalog: catalog["integrations"][0].update({"host_evidence": {}})
+        )
+        runtime = json.loads((ROOT / "runtimes" / "openclaw.json").read_text(encoding="utf-8"))
+        self.assertEqual(runtime["support_tier"], "first-class")
+
+    def test_mcp_entries_do_not_render_openclaw_support(self) -> None:
+        self.assertTrue(any(item["kind"] == "mcp_server" for item in self.catalog["integrations"]))
+        self.assertNotIn('"openclaw"', MODULE.render_catalog(self.catalog))
+        rendered = MODULE.render_reference(self.catalog)
+        self.assertNotIn("`openclaw`", rendered)
+
+    def test_mcp_chooser_does_not_imply_openclaw_support(self) -> None:
+        guide = (ROOT / "docs" / "integrations-guide.md").read_text(encoding="utf-8")
+        chooser = guide.split("## Outcome chooser\n\n", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("MCP", chooser)
+        self.assertNotIn("OpenClaw", chooser)
+
     def test_markitdown_mcp_is_read_only_but_open_world(self) -> None:
         item = self.entry("markitdown-mcp")
         self.assertTrue(item["capabilities"]["read"])
