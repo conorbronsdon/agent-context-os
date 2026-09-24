@@ -21,6 +21,14 @@
   command sources and lifecycle artifacts remain covered.
 
 ### Added
+- Opt-in, operator-assisted live conformance harnesses for the experimental
+  Cursor IDE and Agent CLI surfaces and for Devin sessions and Review. They
+  record create-only evidence outside the checkout and never run in CI or
+  against paid accounts by default; no support tier changes (#71, #73).
+- Lifecycle skills declare `disable-model-invocation: true` and
+  `triggers: ["user"]` so hosts that honor these fields invoke them only on
+  explicit request; Devin sessions record explicit invocation as native from
+  its documented skill frontmatter.
 - A per-integration, per-host evidence decision for optional OpenClaw
   integrations, an optional proposal section for test records, and tests
   that verify unsupported host claims stay out of the catalog and chooser (#147).
