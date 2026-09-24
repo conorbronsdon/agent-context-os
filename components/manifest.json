@@ -137,6 +137,10 @@
                     "policy": "managed"
                 },
                 {
+                    "path": "contextos/capabilities.py",
+                    "policy": "managed"
+                },
+                {
                     "path": "contextos/component_schema.py",
                     "policy": "managed"
                 },
@@ -654,6 +658,10 @@
                 },
                 {
                     "path": "tests/test_runtime_manifests.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_capabilities.py",
                     "policy": "development"
                 },
                 {

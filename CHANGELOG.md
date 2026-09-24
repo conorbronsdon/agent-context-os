@@ -17,6 +17,8 @@
   command sources and lifecycle artifacts remain covered.
 
 ### Added
+- A read-only `capabilities` command compares selected agents' descriptor claims,
+  portable skills, surface support tiers, and recorded component install state (#182).
 - A repository-local SSOT CI pilot checks documented Python requirements against
   the interpreter probe, warns about unregistered prose copies, and exercises
   drift and exclusion controls in disposable fixtures.
