@@ -137,6 +137,11 @@ fixture identifiers, never the token or session messages. Missing credentials,
 opt-ins, repository access, or build identity fail as unverified. The harness
 does not enable, trigger, or inspect Devin Review.
 
+The root prompt names no instruction file, but Devin can still read files on
+request and the harness cannot deny those reads. A passing root control shows
+that Devin returned the canary from repository instructions. It does not prove
+that Devin loaded `AGENTS.md` before the prompt asked for it.
+
 For an account without API credentials, use the operator-assisted web-session
 recorder at `adapters/devin/ui_conformance.py`. `prepare` verifies that the
 dedicated public repository still contains exactly the two synthetic fixture

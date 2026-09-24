@@ -183,7 +183,7 @@ class DevinDescriptorTest(unittest.TestCase):
             name = parts[-1]
             discoverable = (
                 name in {"AGENTS.md", "AGENTS.override.md", "REVIEW.md"}
-                or (name == "CLAUDE.md" and len(parts) > 1)
+                or name == "CLAUDE.md"
                 or (
                     name == "SKILL.md" and len(parts) >= 4
                     and parts[-4:-2] in ((".agents", "skills"), (".claude", "skills"))
