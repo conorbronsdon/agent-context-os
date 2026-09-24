@@ -400,6 +400,16 @@ if PATH="$nul_python_path:$resolver_tool_path" CONTEXTOS_PYTHON="$nul_python_pat
   "$resolved_bash" -c 'source "$1"' _ "$ROOT/scripts/python-env.sh" >/dev/null 2>&1; then
   fail "explicit NUL-delimited CONTEXTOS_PYTHON silently fell back to another interpreter"
 fi
+# A NUL inside an otherwise valid "<platform>:<check mark>" reply must also fail;
+# command substitution would silently drop it.
+for nul_reply in 'linux:\0\342\234\223' 'lin\0ux:\342\234\223'; do
+  printf '#!%s\nprintf '"'"'%s'"'"'\n' "$resolved_bash" "$nul_reply" > "$nul_python_bin/python3"
+  chmod +x "$nul_python_bin/python3"
+  if PATH="$nul_python_path:$resolver_tool_path" CONTEXTOS_PYTHON="$nul_python_path/python3" \
+    "$resolved_bash" -c 'source "$1"' _ "$ROOT/scripts/python-env.sh" >/dev/null 2>&1; then
+    fail "Python resolver accepted an embedded NUL in the platform probe: $nul_reply"
+  fi
+done
 
 # The lifecycle wrapper must run the kernel through the resolver.
 "$resolved_bash" "$ROOT/scripts/contextos.sh" doctor >/dev/null \

@@ -33,21 +33,28 @@ if [ "$(uname -s)" = Linux ] && { [ -n "${WSL_INTEROP:-}" ] || [ -n "${WSL_DISTR
 fi
 
 _contextos_python_works() {
-  local probe_output probe_hex probe_platform
+  local probe_hex prefix byte platform=""
   command -v "$1" >/dev/null 2>&1 || return 1
-  # The trailing "." keeps command substitution from stripping extra newlines,
-  # so the check stays byte-exact.
-  probe_output=$(PYTHONIOENCODING=utf-8 "$1" -c \
-    'import sys; sys.version_info >= (3, 10) or sys.exit(1); sys.stdout.write(sys.platform + ":" + chr(0x2713))' \
-    2>/dev/null && printf .) || return 1
-  probe_output=${probe_output%.}
-  case "$probe_output" in *:*) ;; *) return 1 ;; esac
-  probe_platform=${probe_output%%:*}
+  # Pipe the raw bytes to od: command substitution would drop NUL bytes and
+  # trailing newlines, so only a byte-level check keeps the probe exact.
   probe_hex=$(set -o pipefail
-    printf '%s' "${probe_output#*:}" | od -An -v -tx1 | tr -d '[:space:]'
+    PYTHONIOENCODING=utf-8 "$1" -c \
+      'import sys; sys.version_info >= (3, 10) or sys.exit(1); sys.stdout.write(sys.platform + ":" + chr(0x2713))' \
+      2>/dev/null | od -An -v -tx1 | tr -d '[:space:]'
   ) || return 1
-  [ -n "$probe_platform" ] && [ "$probe_hex" = 'e29c93' ] || return 1
-  CONTEXTOS_PYTHON_PLATFORM="$probe_platform"
+  # Expect "<platform>:" then the UTF-8 check mark (3a e2 9c 93); the platform
+  # may contain only lowercase ASCII letters and digits.
+  prefix=${probe_hex%3ae29c93}
+  [ -n "$prefix" ] && [ "$prefix" != "$probe_hex" ] || return 1
+  while [ -n "$prefix" ]; do
+    byte=${prefix:0:2}
+    prefix=${prefix:2}
+    case "$byte" in
+      3[0-9]|6[1-9a-f]|7[0-9a]) platform="$platform$(printf "\\x$byte")" ;;
+      *) return 1 ;;
+    esac
+  done
+  CONTEXTOS_PYTHON_PLATFORM="$platform"
 }
 
 if [ -n "${CONTEXTOS_PYTHON:-}" ]; then
