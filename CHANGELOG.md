@@ -36,6 +36,11 @@
   `triggers: ["user"]` so hosts that honor these fields invoke them only on
   explicit request; Devin sessions record explicit invocation as native from
   its documented skill frontmatter.
+- Per-trial value-correct and citation-rejected continuity counts, with
+  category breakdowns, summary columns, and a report of 27 long-sequence trials
+  that separates decision values from exact citation failures (#184).
+- A six-session synthetic continuity fixture, category-level scoring, raw-trial
+  JSONL recording, and Markdown summaries extend the four-question benchmark.
 - A read-only `capabilities` command compares selected agents' descriptor claims,
   portable skills, surface support tiers, and recorded component install state (#182).
 - A per-integration, per-host evidence decision for optional OpenClaw

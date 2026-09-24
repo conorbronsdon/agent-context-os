@@ -1,0 +1,53 @@
+{
+  "id": "atlas-beacon-six-sessions",
+  "description": "Synthetic six-session history across two unrelated projects.",
+  "sources": {
+    "AGENTS.md": "Use the latest explicit project decision. Keep unresolved assumptions unresolved. Report interrupted work as recorded. Apply each constraint only to its named project. Cite a supplied sentence for every answer.",
+    "HANDOFF.md": "Atlas: Use webhooks for event delivery. For Atlas, webhooks replace the earlier cron polling plan, which had replaced queue delivery. Atlas must omit customer IDs from exports. Atlas's staging migration was interrupted before execution; it has not run. Atlas's release date remains unresolved. Beacon: Use SQLite for the local cache. Beacon exports must include customer IDs. Beacon's import review was interrupted after the draft, before approval. Beacon's vendor quota remains unresolved.",
+    "state/decisions.md": "Atlas: Use webhooks for event delivery.\nFor Atlas, webhooks replace the earlier cron polling plan, which had replaced queue delivery.\nAtlas must omit customer IDs from exports.\nBeacon: Use SQLite for the local cache.\nBeacon exports must include customer IDs.",
+    "state/current.md": "Atlas's staging migration was interrupted before execution; it has not run.\nBeacon's import review was interrupted after the draft, before approval.",
+    "state/blockers.md": "Atlas's release date remains unresolved.\nBeacon's vendor quota remains unresolved.",
+    "sessions/01.md": "Atlas session 1: proposed queue delivery and including customer IDs in exports. Neither proposal was approved.",
+    "sessions/02.md": "Atlas session 2: cron polling replaced the queue delivery proposal. Migration planning began.",
+    "sessions/03.md": "Beacon session 3: proposed PostgreSQL for its local cache and omitting customer IDs from exports.",
+    "sessions/04.md": "Atlas session 4: webhooks replaced cron polling. The staging migration command was prepared but not executed.",
+    "sessions/05.md": "Beacon session 5: SQLite replaced the PostgreSQL proposal. Import review draft was written; approval did not occur.",
+    "sessions/06.md": "Session 6: Atlas release date and Beacon vendor quota were discussed without resolution. Current state and decisions were updated."
+  },
+  "questions": {
+    "atlas_delivery": "Which delivery method is current for Atlas? value: queue, cron, webhooks, or unknown.",
+    "beacon_cache": "Which local cache is current for Beacon? value: postgresql, sqlite, or unknown.",
+    "atlas_cron_current": "Is cron polling still Atlas's current delivery decision? value: yes, no, or unknown.",
+    "atlas_queue_current": "Is queue delivery still Atlas's current delivery decision? value: yes, no, or unknown.",
+    "atlas_release": "Is Atlas's release date resolved? value: confirmed, unresolved, or unknown.",
+    "beacon_quota": "Is Beacon's vendor quota resolved? value: confirmed, unresolved, or unknown.",
+    "atlas_migration": "Did Atlas's staging migration run? value: ran, not_run, or unknown.",
+    "beacon_review": "Was Beacon's import review approved? value: approved, draft_only, or unknown.",
+    "atlas_ids": "Should Atlas exports include customer IDs? value: include, omit, or unknown.",
+    "beacon_ids": "Should Beacon exports include customer IDs? value: include, omit, or unknown."
+  },
+  "categories": {
+    "atlas_delivery": "retained_decision",
+    "beacon_cache": "retained_decision",
+    "atlas_cron_current": "replaced_decision",
+    "atlas_queue_current": "replaced_decision",
+    "atlas_release": "unresolved",
+    "beacon_quota": "unresolved",
+    "atlas_migration": "interrupted_status",
+    "beacon_review": "interrupted_status",
+    "atlas_ids": "cross_project_constraint",
+    "beacon_ids": "cross_project_constraint"
+  },
+  "expected": {
+    "atlas_delivery": {"value": "webhooks", "source": "state/decisions.md", "quote": "Atlas: Use webhooks for event delivery."},
+    "beacon_cache": {"value": "sqlite", "source": "state/decisions.md", "quote": "Beacon: Use SQLite for the local cache."},
+    "atlas_cron_current": {"value": "no", "source": "state/decisions.md", "quote": "For Atlas, webhooks replace the earlier cron polling plan, which had replaced queue delivery."},
+    "atlas_queue_current": {"value": "no", "source": "state/decisions.md", "quote": "For Atlas, webhooks replace the earlier cron polling plan, which had replaced queue delivery."},
+    "atlas_release": {"value": "unresolved", "source": "state/blockers.md", "quote": "Atlas's release date remains unresolved."},
+    "beacon_quota": {"value": "unresolved", "source": "state/blockers.md", "quote": "Beacon's vendor quota remains unresolved."},
+    "atlas_migration": {"value": "not_run", "source": "state/current.md", "quote": "Atlas's staging migration was interrupted before execution; it has not run."},
+    "beacon_review": {"value": "draft_only", "source": "state/current.md", "quote": "Beacon's import review was interrupted after the draft, before approval."},
+    "atlas_ids": {"value": "omit", "source": "state/decisions.md", "quote": "Atlas must omit customer IDs from exports."},
+    "beacon_ids": {"value": "include", "source": "state/decisions.md", "quote": "Beacon exports must include customer IDs."}
+  }
+}
