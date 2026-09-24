@@ -14,8 +14,10 @@ included.
   path conversion, which broke every kernel call until the fix in #209; all
   attempts ran with that fix.
 - Provider: OpenRouter zero-priced (`:free`) routes, tools enabled inside the
-  fixture only. The model received no credentials; the key was supplied to the
-  Hermes process through the environment.
+  fixture only. The OpenRouter key was supplied to the Hermes process through
+  its environment and was never written into the fixture or a prompt. Nothing
+  here verifies whether Hermes removes it from its terminal subprocesses, so a
+  model with terminal access could have been able to read it.
 - Operator: the orchestrating agent (Claude), acting on the maintainer's
   instruction to run conformance, using the file-based approval mode.
 
@@ -24,7 +26,7 @@ The recorded `model` field in attempts 1-4 is over-redacted
 identifiers verbatim. The exact routes, from the command lines, are listed
 below.
 
-These files also predate joined redaction of streamed text. Their `text`
+Attempts 1-4 also predate joined redaction of streamed text. Their `text`
 events were redacted one delta at a time, so they contain fragments of the
 synthetic native-memory canaries. They contain no credentials. The harness now
 redacts the joined text once and records it as a single event.
@@ -37,8 +39,10 @@ redacts the joined text once and records it as a single event.
 | [attempt-2.json](attempt-2.json) | `db1330d` | `thinkingmachines/inkling:free` | version | `canary not reported: agents, context-setup` |
 | [attempt-3.json](attempt-3.json) | `96f9cff` | `thinkingmachines/inkling:free` | version | `self-read: discovery not shown` |
 | [attempt-4.json](attempt-4.json) | `96f9cff` | `nvidia/nemotron-3-ultra-550b-a55b:free` | version, agents discovery\*, setup discovery\* | `approval file did not contain the exact proposal digest` (operator rejection) |
+| [attempt-5.json](attempt-5.json) | `a2b7577` (fixture `8f67ea5`) | `nvidia/nemotron-3-ultra-550b-a55b:free` | version | `HarnessError: self-read: discovery not shown` |
 
 \* Recorded as passed by a harness later found to allow false greens; see attempt 4 below.
+Attempt 5 used the final harness in this PR.
 
 What each failure means:
 
@@ -58,7 +62,7 @@ What each failure means:
 4. **Attempt 4.** The harness recorded both discovery controls as passed, and
    the model reported the `AGENTS.md` and `context-setup` canaries. **Do not
    treat this as discovery evidence.** An independent review later found
-   false-green paths in the harness used for all four attempts. The manifest
+   false-green paths in the harness used for attempts 1-4. The manifest
    and uncommitted canary edits sat inside the fixture, where `cat`, `grep`,
    or `git diff` could reveal them. Self-reads were only detected by exact
    file names in three tools. Attempt 4's events include reads of two `.md`
@@ -71,12 +75,23 @@ What each failure means:
    it by supplying a non-matching approval; the recorded failure is that
    mismatch, and the reason is in [attempt-4-operator.md](attempt-4-operator.md). The harness now fails `memory_separation` when a proposal diff contains
    a native-memory canary, before approval is requested.
+5. **Attempt 5**, on the final harness: the manifest was outside the fixture, the
+   canaries were committed, self-reads were checked across all read-like tools
+   and raw tool results, and the environment was filtered. Hermes loaded
+   `context-setup` through `skill_view`. The model read ordinary repository
+   files, which the evidence now names (`scripts/contextos.sh`,
+   `contextos/kernel.py`, `ROUTING.md`, `TODO.md`). It created a setup
+   proposal through the kernel after several payload corrections. Before
+   answering, it ran `search_files` for the literal `Hermes fixture canary:`
+   prefix. That is a self-read under the harness rules, so discovery was not
+   credited and the run stopped there. The run also shows that the final
+   harness processes real Hermes stream output: `skill_view` results, joined
+   text deltas, readable relative paths, and names-only environment evidence.
 
 ## Findings that do not depend on the model
 
-The first two points below come from separate diagnostic runs on the same
+The first three points below come from separate diagnostic runs on the same
 client before these attempts; they are not recorded in the attempt files.
-
 
 - Hermes v0.21.4 reserves `/start` and `/update` for built-ins
   (`hermes skills list --source local`: "slash command /start unavailable —

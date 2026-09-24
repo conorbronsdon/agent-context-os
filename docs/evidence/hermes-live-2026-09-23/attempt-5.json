@@ -1,0 +1,494 @@
+{
+  "started_at": "2026-09-24T05:16:59.024693+00:00",
+  "source_sha": "a2b75779edc837abbc902f25fb9c10a4ba1fc988",
+  "fixture_commit": "8f67ea5a9048daa79850a03be46ae163dd5eb976",
+  "os": "Windows-11-10.0.26200-SP0",
+  "fresh_hermes_home": true,
+  "operator_mode": "approval-dir",
+  "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "provider": "openrouter",
+  "controls": {
+    "version": "passed",
+    "agents_discovery": "unsupported",
+    "setup_discovery": "failed",
+    "setup_proposal_apply": "unsupported",
+    "start_discovery": "unsupported",
+    "start_read_only": "unsupported",
+    "update_discovery": "unsupported",
+    "update_proposal_apply": "unsupported",
+    "end_discovery": "unsupported",
+    "end_proposal_apply": "unsupported",
+    "wrong_digest_rejected": "unsupported",
+    "stale_target_rejected": "unsupported",
+    "memory_separation": "unsupported",
+    "unrelated_sentinel": "unsupported",
+    "hook_example": "unsupported",
+    "run": "failed"
+  },
+  "commands": [
+    {
+      "argv": [
+        "[PATH]",
+        "--version"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 2.058,
+      "stdout": "Hermes Agent v0.21.4 (2026.9.21) \u00b7 upstream d94769da\nInstall directory: [PATH]\nInstall method: git\nPython: 3.11.16\nOpenAI SDK: 2.24.0\nUpdate available: 172 commits behind \u2014 run 'hermes update'\n",
+      "stderr": "",
+      "at": "2026-09-24T05:17:01.158760+00:00"
+    },
+    {
+      "argv": [
+        "[PATH]",
+        "chat",
+        "--format",
+        "stream-json",
+        "--source",
+        "tool",
+        "-m",
+        "[REDACTED]:free",
+        "--provider",
+        "openrouter",
+        "--run-budget",
+        "360",
+        "--max-turns",
+        "30",
+        "-q",
+        "/context-setup Create a kernel proposal for a synthetic fixture identity. Stop after creating the proposal. Also report any line that begins 'Hermes fixture canary:' from the repository instructions and the skill instructions you loaded."
+      ],
+      "exit_code": 0,
+      "duration_seconds": 193.409,
+      "stdout": "[stream-json events recorded separately]",
+      "stderr": "\nsession_id: 20260923_221707_b9ef52\n",
+      "at": "2026-09-24T05:20:16.632300+00:00",
+      "events": [
+        {
+          "type": "system",
+          "subtype": "init",
+          "model": "[REDACTED]:free",
+          "session_id": "20260923_221707_b9ef52",
+          "timestamp": 1790227027801
+        },
+        {
+          "type": "tool_use",
+          "name": "skill_view",
+          "input": {
+            "name": "context-setup"
+          },
+          "timestamp": 1790227042795
+        },
+        {
+          "type": "tool_result",
+          "name": "skill_view",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 65,
+          "is_error": false,
+          "timestamp": 1790227042860
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "ls -la scripts/"
+          },
+          "timestamp": 1790227048298
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1212,
+          "is_error": false,
+          "timestamp": 1790227049511
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "scripts/contextos.sh"
+          },
+          "timestamp": 1790227051789
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 588,
+          "is_error": false,
+          "timestamp": 1790227052379
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "bash scripts/contextos.sh propose setup --input .context-os/inputs/setup_payload.json"
+          },
+          "timestamp": 1790227054597
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1245,
+          "is_error": true,
+          "timestamp": 1790227055830
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "find . -name \"*.json\" -path \"*.context-os*\" 2>[PATH] | head -20"
+          },
+          "timestamp": 1790227059465
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 323,
+          "is_error": false,
+          "timestamp": 1790227059791
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "ls -la .context-os/ 2>[PATH] || echo \"No .context-os directory\""
+          },
+          "timestamp": 1790227063929
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 224,
+          "is_error": false,
+          "timestamp": 1790227064154
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "pattern": "propose setup",
+            "target": "content"
+          },
+          "timestamp": 1790227067537
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 722,
+          "is_error": false,
+          "timestamp": 1790227068263
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "pattern": "setup.*payload|propose.*setup",
+            "target": "content",
+            "file_glob": "*.py"
+          },
+          "timestamp": 1790227070286
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 513,
+          "is_error": false,
+          "timestamp": 1790227070800
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "limit": 100,
+            "offset": 1520,
+            "path": "contextos/kernel.py"
+          },
+          "timestamp": 1790227075921
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 419,
+          "is_error": false,
+          "timestamp": 1790227076344
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "pattern": "SETUP_ROOTS|SETUP_FILES",
+            "target": "content"
+          },
+          "timestamp": 1790227081630
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 505,
+          "is_error": false,
+          "timestamp": 1790227082137
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "mkdir -p .context-os/inputs"
+          },
+          "timestamp": 1790227087505
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 219,
+          "is_error": false,
+          "timestamp": 1790227087728
+        },
+        {
+          "type": "tool_use",
+          "name": "write_file",
+          "input": {
+            "path": ".context-os/inputs/setup_payload.json",
+            "content": "{\n  \"files\": {\n    \"identity/who-i-am.md\": \"# Identity\\n\\n**Name:** Synthetic Fixture Agent\\n**Role:** Test fixture for Hermes conformance validation\\n**Pronouns:** it/its\\n\\n## Background\\nThis is a synthetic identity created for automated testing of the Hermes agent lifecycle.\\n\\n## Verifiable Proof Points\\n- Fixture canary: 84ba6095829dade5e53d18ca1d17f637\\n- Created: {{TODAY}}\\n\\n## Approved Public Links\\n- https:[PATH]\",\n    \"projects/index.md\": \"# Project Index\\n\\n## Active Projects\\n\\n### hermes-live-conformance\\n**Purpose:** Validate Hermes Agent runtime conformance against synthetic fixtures\\n**Audience:** Hermes core team, CI systems\\n**Current Focus:** Kernel proposal/apply lifecycle, skill loading, memory isolation\\n**Non-Goals:** Production feature development, user-facing workflows\\n\\n## Recurring Workflows\\n- Context lifecycle: setup \u2192 start \u2192 update \u2192 end\\n- Skill validation: load, execute, verify\\n- Memory boundary checks: native vs repository\",\n    \"state/current.md\": \"# Current State\\n\\n**Last Updated:** {{TODAY}}\\n\\n## Top of Mind\\n- Creating kernel proposal for synthetic fixture identity\\n- Verifying context-setup workflow produces valid proposal\\n- Checking Hermes fixture canaries in loaded context\",\n    \"state/weekly.md\": \"# Weekly Priorities\\n\\n**Week of {{TODAY}}**\\n\\n## Outcomes\\n- [ ] Complete context-setup proposal for fixture\\n- [ ] Verify context-start loads fixture identity\\n- [ ] Confirm context-end produces valid summary\\n\\n## Non-Goals\\n- No production feature work\\n- No external integrations\\n\\n## Success Criteria\\n- All lifecycle commands execute without error\\n- Proposal digests match expected format\\n- Canaries present in loaded context\",\n    \"ROUTING.md\": \"# Routing\\n\\nThis file maps task types to their canonical context files.\\n\\n## Identity\\n- Who I am \u2192 `identity/who-i-am.md`\\n\\n## Projects\\n- Active project index \u2192 `projects/index.md`\\n\\n## State\\n- Current focus \u2192 `state/current.md`\\n- Weekly plan \u2192 `state/weekly.md`\\n\\n## Skills\\n- Portable workflows \u2192 `.agents/skills/`\\n\\n## Integrations\\n- Optional integrations \u2192 `references/integrations.md`\",\n    \"TODO.md\": \"# TODO\\n\\n## Backlog\\n- [ ] Validate context-setup proposal creation\\n- [ ] Validate context-start loads identity\\n- [ ] Validate context-update checkpoints\\n- [ ] Validate context-end summary\\n- [ ] Verify all Hermes fixture canaries load correctly\"\n  }\n}"
+          },
+          "timestamp": 1790227114323
+        },
+        {
+          "type": "tool_result",
+          "name": "write_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 913,
+          "is_error": false,
+          "timestamp": 1790227115238
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "bash scripts/contextos.sh propose setup --input .context-os/inputs/setup_payload.json"
+          },
+          "timestamp": 1790227117740
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 991,
+          "is_error": true,
+          "timestamp": 1790227118733
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "state/current.md"
+          },
+          "timestamp": 1790227122678
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 395,
+          "is_error": false,
+          "timestamp": 1790227123075
+        },
+        {
+          "type": "tool_use",
+          "name": "patch",
+          "input": {
+            "path": ".context-os/inputs/setup_payload.json",
+            "old_string": "{\n  \"files\": {",
+            "new_string": "{\n  \"files\": {"
+          },
+          "timestamp": 1790227125816
+        },
+        {
+          "type": "tool_result",
+          "name": "patch",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 232,
+          "is_error": false,
+          "timestamp": 1790227126051
+        },
+        {
+          "type": "tool_use",
+          "name": "patch",
+          "input": {
+            "new_string": "{\n  \"files\": {\n    \"identity/who-i-am.md\": \"# Identity\\n\\n**Name:** Synthetic Fixture Agent\\n**Role:** Test fixture for Hermes conformance validation\\n**Pronouns:** it/its\\n\\n## Background\\nThis is a synthetic identity created for automated testing of the Hermes agent lifecycle.\\n\\n## Verifiable Proof Points\\n- Fixture canary: 84ba6095829dade5e53d18ca1d17f637\\n- Created: {{TODAY}}\\n\\n## Approved Public Links\\n- https:[PATH]\",\n    \"projects/index.md\": \"# Project Index\\n\\n## Active Projects\\n\\n### hermes-live-conformance\\n**Purpose:** Validate Hermes Agent runtime conformance against synthetic fixtures\\n**Audience:** Hermes core team, CI systems\\n**Current Focus:** Kernel proposal/apply lifecycle, skill loading, memory isolation\\n**Non-Goals:** Production feature development, user-facing workflows\\n\\n## Recurring Workflows\\n- Context lifecycle: setup \u2192 start \u2192 update \u2192 end\\n- Skill validation: load, execute, verify\\n- Memory boundary checks: native vs repository\",\n    \"state/current.md\": \"# Current State\\n\\n**Last Updated:** {{TODAY}}\\n\\n## Top of Mind\\n- Creating kernel proposal for synthetic fixture identity\\n- Verifying context-setup workflow produces valid proposal\\n- Checking Hermes fixture canaries in loaded context\",\n    \"state/weekly.md\": \"# Weekly Priorities\\n\\n**Week of {{TODAY}}**\\n\\n## Outcomes\\n- [ ] Complete context-setup proposal for fixture\\n- [ ] Verify context-start loads fixture identity\\n- [ ] Confirm context-end produces valid summary\\n\\n## Non-Goals\\n- No production feature work\\n- No external integrations\\n\\n## Success Criteria\\n- All lifecycle commands execute without error\\n- Proposal digests match expected format\\n- Canaries present in loaded context\",\n    \"ROUTING.md\": \"# Routing\\n\\nThis file maps task types to their canonical context files.\\n\\n## Identity\\n- Who I am \u2192 `identity/who-i-am.md`\\n\\n## Projects\\n- Active project index \u2192 `projects/index.md`\\n\\n## State\\n- Current focus \u2192 `state/current.md`\\n- Weekly plan \u2192 `state/weekly.md`\\n\\n## Skills\\n- Portable workflows \u2192 `.agents/skills/`\\n\\n## Integrations\\n- Optional integrations \u2192 `references/integrations.md`\",\n    \"TODO.md\": \"# TODO\\n\\n## Backlog\\n- [ ] Validate context-setup proposal creation\\n- [ ] Validate context-start loads identity\\n- [ ] Validate context-update checkpoints\\n- [ ] Validate context-end summary\\n- [ ] Verify all Hermes fixture canaries load correctly\"\n  },\n  \"replace_populated\": [\"state/current.md\"]\n}",
+            "path": ".context-os/inputs/setup_payload.json",
+            "old_string": "{\n  \"files\": {\n    \"identity/who-i-am.md\": \"# Identity\\n\\n**Name:** Synthetic Fixture Agent\\n**Role:** Test fixture for Hermes conformance validation\\n**Pronouns:** it/its\\n\\n## Background\\nThis is a synthetic identity created for automated testing of the Hermes agent lifecycle.\\n\\n## Verifiable Proof Points\\n- Fixture canary: 84ba6095829dade5e53d18ca1d17f637\\n- Created: {{TODAY}}\\n\\n## Approved Public Links\\n- https:[PATH]\",\n    \"projects/index.md\": \"# Project Index\\n\\n## Active Projects\\n\\n### hermes-live-conformance\\n**Purpose:** Validate Hermes Agent runtime conformance against synthetic fixtures\\n**Audience:** Hermes core team, CI systems\\n**Current Focus:** Kernel proposal/apply lifecycle, skill loading, memory isolation\\n**Non-Goals:** Production feature development, user-facing workflows\\n\\n## Recurring Workflows\\n- Context lifecycle: setup \u2192 start \u2192 update \u2192 end\\n- Skill validation: load, execute, verify\\n- Memory boundary checks: native vs repository\",\n    \"state/current.md\": \"# Current State\\n\\n**Last Updated:** {{TODAY}}\\n\\n## Top of Mind\\n- Creating kernel proposal for synthetic fixture identity\\n- Verifying context-setup workflow produces valid proposal\\n- Checking Hermes fixture canaries in loaded context\",\n    \"state/weekly.md\": \"# Weekly Priorities\\n\\n**Week of {{TODAY}}**\\n\\n## Outcomes\\n- [ ] Complete context-setup proposal for fixture\\n- [ ] Verify context-start loads fixture identity\\n- [ ] Confirm context-end produces valid summary\\n\\n## Non-Goals\\n- No production feature work\\n- No external integrations\\n\\n## Success Criteria\\n- All lifecycle commands execute without error\\n- Proposal digests match expected format\\n- Canaries present in loaded context\",\n    \"ROUTING.md\": \"# Routing\\n\\nThis file maps task types to their canonical context files.\\n\\n## Identity\\n- Who I am \u2192 `identity/who-i-am.md`\\n\\n## Projects\\n- Active project index \u2192 `projects/index.md`\\n\\n## State\\n- Current focus \u2192 `state/current.md`\\n- Weekly plan \u2192 `state/weekly.md`\\n\\n## Skills\\n- Portable workflows \u2192 `.agents/skills/`\\n\\n## Integrations\\n- Optional integrations \u2192 `references/integrations.md`\",\n    \"TODO.md\": \"# TODO\\n\\n## Backlog\\n- [ ] Validate context-setup proposal creation\\n- [ ] Validate context-start loads identity\\n- [ ] Validate context-update checkpoints\\n- [ ] Validate context-end summary\\n- [ ] Verify all Hermes fixture canaries load correctly\"\n  }\n}"
+          },
+          "timestamp": 1790227171289
+        },
+        {
+          "type": "tool_result",
+          "name": "patch",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1507,
+          "is_error": false,
+          "timestamp": 1790227172798
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "bash scripts/contextos.sh propose setup --input .context-os/inputs/setup_payload.json"
+          },
+          "timestamp": 1790227176284
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 988,
+          "is_error": true,
+          "timestamp": 1790227177276
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "ROUTING.md"
+          },
+          "timestamp": 1790227179904
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 394,
+          "is_error": false,
+          "timestamp": 1790227180301
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "TODO.md"
+          },
+          "timestamp": 1790227182881
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 421,
+          "is_error": false,
+          "timestamp": 1790227183303
+        },
+        {
+          "type": "tool_use",
+          "name": "patch",
+          "input": {
+            "path": ".context-os/inputs/setup_payload.json",
+            "old_string": "},\n  \"replace_populated\": [\"state/current.md\"]\n}",
+            "new_string": "},\n  \"replace_populated\": [\"state/current.md\", \"ROUTING.md\", \"TODO.md\"]\n}"
+          },
+          "timestamp": 1790227187194
+        },
+        {
+          "type": "tool_result",
+          "name": "patch",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1352,
+          "is_error": false,
+          "timestamp": 1790227188548
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "bash scripts/contextos.sh propose setup --input .context-os/inputs/setup_payload.json"
+          },
+          "timestamp": 1790227192338
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1024,
+          "is_error": false,
+          "timestamp": 1790227193365
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "target": "content",
+            "pattern": "Hermes fixture canary:"
+          },
+          "timestamp": 1790227203407
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 565,
+          "is_error": false,
+          "timestamp": 1790227203974
+        },
+        {
+          "type": "result",
+          "session_id": "20260923_221707_b9ef52",
+          "exit_code": 0,
+          "text": "The kernel proposal has been created successfully:\n\n**Proposal Created:**\n- **Path:** `.context-os/proposals/20260923T221953-setup-cdfd7f8478.json`\n- **Proposal ID:** `[REDACTED]`\n- **Digest:** `[REDACTED]`\n- **Changes:** 6 files (ROUTING.md, TODO.md, identity/who-i-am.md, projects/index.md, state/current.md, state/weekly.md)\n\n---\n\n**Hermes fixture canary lines found:**\n\nFrom **AGENTS.md** (repository instructions):\n- `Hermes fixture canary: 84ba6095829dade5e53d18ca1d17f637` (line 102)\n\nFrom **context-setup SKILL.md** (skill instructions loaded):\n- `Hermes fixture canary: c93c8a03ee747a5512172cfbf2d6db99` (at end of skill content)\n\nAlso present in session context (MEMORY and USER_PROFILE):\n- `Fixture native memory canary: ebe1ebb61d405ad519f952139519685c` (MEMORY)\n- `Fixture native memory canary: c8bbca5edc9d9406283bd22d181d16f9` (USER_PROFILE)\n\nStopped after proposal creation as requested \u2014 no apply performed.",
+          "tokens": {
+            "input": 197434,
+            "output": 4126,
+            "total": 547160,
+            "cache_read": 345600,
+            "cache_write": 0
+          },
+          "duration_ms": 187434,
+          "timestamp": 1790227215235
+        },
+        {
+          "type": "text",
+          "text": "\n\nThe proposal has been created successfully. Now let me report the Hermes fixture canary lines found in the loaded context.\n\n\nThe kernel proposal has been created successfully:\n\n**Proposal Created:**\n- **Path:** `.context-os/proposals/20260923T221953-setup-cdfd7f8478.json`\n- **Proposal ID:** `[REDACTED]`\n- **Digest:** `[REDACTED]`\n- **Changes:** 6 files (ROUTING.md, TODO.md, identity/who-i-am.md, projects/index.md, state/current.md, state/weekly.md)\n\n---\n\n**Hermes fixture canary lines found:**\n\nFrom **AGENTS.md** (repository instructions):\n- `Hermes fixture canary: 84ba6095829dade5e53d18ca1d17f637` (line 102)\n\nFrom **context-setup SKILL.md** (skill instructions loaded):\n- `Hermes fixture canary: c93c8a03ee747a5512172cfbf2d6db99` (at end of skill content)\n\nAlso present in session context (MEMORY and USER_PROFILE):\n- `Fixture native memory canary: ebe1ebb61d405ad519f952139519685c` (MEMORY)\n- `Fixture native memory canary: c8bbca5edc9d9406283bd22d181d16f9` (USER_PROFILE)\n\nStopped after proposal creation as requested \u2014 no apply performed.",
+          "joined_deltas": true
+        }
+      ],
+      "skill_view_names": [
+        "context-setup"
+      ]
+    }
+  ],
+  "skill_source_sha256": {
+    "setup": "99fc5ad7b788eb06b269aa069cafd8e2c969b00c01680a9ed616365e57a32e09",
+    "context-setup": "aecac72323465a7130bfbf6bda37d2f03d03efd11e0f1e32c721ab068ed96e4f",
+    "start": "06b64a95db0f8bd585cea31647cd894a37d4bf6c52330b6a917a52d38012881c",
+    "context-start": "eeda2a2641bdf0e107494cc1ac4099687d05b3c30b8787aea6c274f7afd2ab5c",
+    "update": "d74f35b9eeb2c91b04f158d79fe52012192ca7692834f0ba910d87968fe371ac",
+    "context-update": "69ffd2f9c2fe2a56d92a5e44ea8dc087b5df2338290033d1c6498dc4adfa60a8",
+    "end": "5b135a8845a3390ef7821404b34d3574abe4038e984f1c51874e8d1b8430d764",
+    "context-end": "50b5627f47c8b3847da3b66447a5a4610fc39f7393186a5c2584f459b38cd0d0"
+  },
+  "environment_names": [
+    "APPDATA",
+    "HERMES_GIT_BASH_PATH",
+    "HERMES_HOME",
+    "HOME",
+    "LOCALAPPDATA",
+    "OPENROUTER_API_KEY",
+    "PATH",
+    "PYTHONDONTWRITEBYTECODE",
+    "SYSTEMROOT",
+    "TEMP",
+    "TMP",
+    "USERPROFILE"
+  ],
+  "api_key_names": [
+    "OPENROUTER_API_KEY"
+  ],
+  "version": "Hermes Agent v0.21.4 (2026.9.21) \u00b7 upstream d94769da",
+  "failure": "HarnessError: self-read: discovery not shown",
+  "finished_at": "2026-09-24T05:20:16.637102+00:00"
+}
