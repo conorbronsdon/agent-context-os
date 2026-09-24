@@ -200,7 +200,7 @@ class HermesLiveHarnessTest(unittest.TestCase):
     def test_generic_text_fails_canary(self) -> None:
         report = self.run_record("generic")
         self.assertEqual("failed", report["controls"]["run"])
-        self.assertIn("discovery not shown", report["failure"])
+        self.assertIn("canary not reported", report["failure"])
 
     def test_prompts_are_bare_commands_without_file_names(self) -> None:
         for phase in live.PHASES:
@@ -222,11 +222,12 @@ class HermesLiveHarnessTest(unittest.TestCase):
     def test_only_assistant_canaries_count(self) -> None:
         report = self.run_record("tool-result-canaries")
         self.assertEqual("failed", report["controls"]["setup_discovery"])
-        self.assertIn("discovery not shown", report["failure"])
+        self.assertIn("canary not reported", report["failure"])
 
     def test_agents_canary_required(self) -> None:
         report = self.run_record("omit-agents")
         self.assertEqual("failed", report["controls"]["setup_discovery"])
+        self.assertEqual("canary not reported: agents", report["failure"])
 
     def test_approval_dir_exact_digest_passes(self) -> None:
         approval_dir = self.base / "approval"

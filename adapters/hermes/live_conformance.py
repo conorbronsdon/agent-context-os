@@ -352,8 +352,12 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
             call["events"] = events
             call["skill_view_names"] = skills
             required = [canaries["agents"], canaries[f"context-{phase}"]]
-            if self_read or any(value not in assistant for value in required):
+            if self_read:
                 raise HarnessError("self-read: discovery not shown")
+            missing = [name for name, value in (("agents", canaries["agents"]), (f"context-{phase}", canaries[f"context-{phase}"]))
+                       if value not in assistant]
+            if missing:
+                raise HarnessError(f"canary not reported: {', '.join(missing)}")
             result["controls"][f"{phase}_discovery"] = "passed"
             if phase == "setup":
                 result["controls"]["agents_discovery"] = "passed"
