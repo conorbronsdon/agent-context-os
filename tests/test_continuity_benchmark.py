@@ -75,6 +75,9 @@ class LongSequenceTest(unittest.TestCase):
             with self.subTest(profile=profile):
                 result = benchmark.score(LONG, profile, self.answer(profile))
                 self.assertEqual(10, result["grounded_correct"])
+                self.assertEqual(10, result["value_correct"])
+                self.assertEqual(0, result["citation_rejected"])
+                self.assertEqual(2, result["category_counts"]["retained_decision"]["value_correct"])
                 self.assertEqual(8 if profile != "instructions" else 0,
                                  result["decision_retention"])
                 self.assertEqual(2 if profile != "instructions" else 10,
@@ -109,8 +112,25 @@ class LongSequenceTest(unittest.TestCase):
 
     def test_quote_and_format_controls(self):
         response = self.answer()
-        response["answers"]["beacon_review"]["quote"] = ""
-        self.assertEqual(9, benchmark.score(LONG, "contextos", response)["grounded_correct"])
+        response["answers"]["beacon_review"]["quote"] = "before approval."
+        result = benchmark.score(LONG, "contextos", response)
+        self.assertEqual(9, result["grounded_correct"])
+        self.assertEqual(10, result["value_correct"])
+        self.assertEqual(1, result["citation_rejected"])
+        self.assertEqual(1, result["category_counts"]["interrupted_status"]["citation_rejected"])
+        self.assertTrue(next(item for item in result["results"] if item["question"] == "beacon_review")["citation_rejected"])
+        response["answers"]["beacon_review"]["value"] = "approved"
+        wrong = benchmark.score(LONG, "contextos", response)
+        self.assertEqual(9, wrong["value_correct"])
+        self.assertEqual(0, wrong["citation_rejected"])
+        self.assertEqual(9, wrong["grounded_correct"])
+        instructions = self.answer("instructions")
+        instructions["answers"]["atlas_delivery"] = {
+            "value": "unknown", "source": "AGENTS.md", "quote": "Use the latest explicit project decision."}
+        unsupported = benchmark.score(LONG, "instructions", instructions)
+        self.assertEqual(10, unsupported["value_correct"])
+        self.assertEqual(1, unsupported["citation_rejected"])
+        self.assertEqual(9, unsupported["grounded_correct"])
         malformed = benchmark.evaluate(LONG, "contextos", "{broken")
         self.assertTrue(malformed["format_failure"])
         self.assertNotIn("grounded_correct", malformed)
@@ -130,7 +150,14 @@ class LongSequenceTest(unittest.TestCase):
         self.assertEqual(100, good["input_tokens"])
         self.assertTrue(bad["score"]["format_failure"])
         table = benchmark.summarize([good, bad])
-        self.assertIn(f"| model-1 | contextos | {good['score']['context_characters']} | 2 | 10.00 | 8.00 | 2.00 | 0.00 | 1 |", table)
+        self.assertIn(f"| model-1 | contextos | {good['score']['context_characters']} | 2 | 10.00 | 10.00 | 0.00 | 8.00 | 2.00 | 0.00 | 1 |", table)
+        old = copy.deepcopy(good)
+        del old["score"]["value_correct"]
+        del old["score"]["citation_rejected"]
+        self.assertEqual(benchmark.summarize([good]), benchmark.summarize([old]))
+        old["prompt_sha256"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "stored prompt"):
+            benchmark.summarize([old])
         for trial, latency, input_tokens, model in ((0, 1.0, None, "model-1"),
                                                     (1, -1.0, None, "model-1"),
                                                     (1, 1.0, -1, "model-1"),
@@ -164,7 +191,7 @@ class LongSequenceTest(unittest.TestCase):
             summary = subprocess.run(command + ["summarize", "--results", str(results)],
                                      capture_output=True, text=True)
             self.assertEqual(0, summary.returncode, summary.stderr)
-            self.assertIn("| 1 | n/a | n/a | n/a | n/a | 1 |", summary.stdout)
+            self.assertIn("| 1 | n/a | n/a | n/a | n/a | n/a | n/a | 1 |", summary.stdout)
         finally:
             response.unlink(missing_ok=True)
             results.unlink(missing_ok=True)

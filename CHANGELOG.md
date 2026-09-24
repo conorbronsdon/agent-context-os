@@ -17,6 +17,9 @@
   command sources and lifecycle artifacts remain covered.
 
 ### Added
+- Per-trial value-correct and citation-rejected continuity counts, with
+  category breakdowns, summary columns, and a report of 27 long-sequence trials
+  that separates decision values from exact citation failures (#184).
 - A six-session synthetic continuity fixture, category-level scoring, raw-trial
   JSONL recording, and Markdown summaries extend the four-question benchmark.
 - A repository-local SSOT CI pilot checks documented Python requirements against

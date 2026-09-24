@@ -92,6 +92,9 @@ uncertainty, missed cross-project constraints, invented
 certainty on unresolved items, and format failure. An unparseable response or
 missing question ID is a format failure with no correctness score. A wrong but
 parseable answer is scored normally. Exact supporting sentences are required.
+It also reports `value_correct`, which checks only the expected answer value,
+and `citation_rejected`, which counts correct values that fail grounding. For
+the instructions-only profile, the expected value is `unknown`.
 
 Record each raw response, including failures, in a JSONL file. Supply the
 provider's exact model identifier, trial index, measured latency, and token
@@ -107,7 +110,8 @@ python scripts/continuity-benchmark.py summarize --results trials.jsonl
 ```
 
 The Markdown summary groups by model and profile and shows context characters.
-Correct, retention, safe uncertainty, and missed constraints are mean counts
+Grounded correct, value correct, citation rejected, retention, safe uncertainty,
+and missed constraints are mean counts
 per parseable trial. Format failures remain in the trial count and have a
 separate count. Preserve the JSONL and fixture commit with any published
 results. Compare the compact note
@@ -115,3 +119,6 @@ against the canonical files on the same model and fresh trials, then name a
 product change supported by the observations. Volunteer first-handoff
 observation belongs in a separate follow-up; these automated cases do not
 measure it. Installed-host conformance remains a separate test suite.
+
+The [2026-09-23 long-sequence evidence](evidence/continuity-long-2026-09-23/README.md)
+reports 27 fresh-session trials, category counts, rejected answers, and limits.

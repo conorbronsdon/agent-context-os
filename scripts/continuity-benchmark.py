@@ -59,6 +59,7 @@ def score(scenario: dict[str, Any], profile: str, response: dict[str, Any]) -> d
     invented_certainty = 0
     corrections = 0
     resolved = 0
+    category_counts: dict[str, dict[str, int]] = {}
     for key, expected in scenario["expected"].items():
         answer = answers[key]
         if not isinstance(answer, dict) or set(answer) != {"value", "source", "quote"}:
@@ -68,6 +69,8 @@ def score(scenario: dict[str, Any], profile: str, response: dict[str, Any]) -> d
         if answer["source"] is not None and not isinstance(answer["source"], str):
             raise ValueError(f"{key}: source must be a string or null")
         category = categories.get(key)
+        expected_value = "unknown" if profile == "instructions" else expected["value"]
+        value_correct = answer["value"] == expected_value
         if profile == "instructions":
             correct = answer == {"value": "unknown", "source": None, "quote": ""}
         else:
@@ -89,15 +92,26 @@ def score(scenario: dict[str, Any], profile: str, response: dict[str, Any]) -> d
                 missed_constraints += 1
             if category == "unresolved" and profile != "instructions" and answer["value"] not in ("unknown", expected["value"]):
                 invented_certainty += 1
-        results.append({"question": key, "category": category, "grounded_correct": correct, "answer": answer})
+            counts = category_counts.setdefault(category, {"questions": 0, "value_correct": 0,
+                                                           "citation_rejected": 0, "grounded_correct": 0})
+            counts["questions"] += 1
+            counts["value_correct"] += value_correct
+            counts["citation_rejected"] += value_correct and not correct
+            counts["grounded_correct"] += correct
+        results.append({"question": key, "category": category, "grounded_correct": correct,
+                        "value_correct": value_correct,
+                        "citation_rejected": value_correct and not correct, "answer": answer})
     result = {"scenario": scenario["id"], "profile": profile,
             "grounded_correct": sum(item["grounded_correct"] for item in results), "questions": len(results),
+            "value_correct": sum(item["value_correct"] for item in results),
+            "citation_rejected": sum(item["citation_rejected"] for item in results),
             "known_decisions_retained": retained, "known_decisions": 3,
             "context_characters": sum(len(text) for text in sources.values()),
             "results": results,
             "scope": "Four constrained decisions with exact supporting sentences; not a general semantic-quality or live handoff score."}
     if categories:
         result.update(decision_retention=retained, resolved_questions=resolved,
+                      category_counts=category_counts,
                       corrections=corrections,
                       safe_uncertainty=safe_uncertainty,
                       uncertainty_questions=len(answers) if profile == "instructions" else
@@ -144,9 +158,23 @@ def record(scenario: dict[str, Any], profile: str, raw_response: str,
 def summarize(lines: list[dict[str, Any]]) -> str:
     groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for line in lines:
-        groups.setdefault((line["model_id"], line["profile"]), []).append(line["score"])
-    rows = ["| Model | Profile | Context chars | Trials | Mean correct | Retention | Safe uncertainty | Missed constraints | Format failures |",
-            "|---|---|---:|---:|---:|---:|---:|---:|---:|"]
+        score_result = line["score"]
+        if "value_correct" not in score_result and not score_result.get("format_failure"):
+            scenario_path = LONG_SCENARIO if line["scenario"] == "atlas-beacon-six-sessions" else SCENARIO
+            scenario = json.loads(scenario_path.read_text(encoding="utf-8"))
+            if scenario["id"] != line["scenario"]:
+                raise ValueError("unknown scenario in results JSONL")
+            prompt_hash = hashlib.sha256(prepare(scenario, line["profile"]).encode("utf-8")).hexdigest()
+            if prompt_hash != line["prompt_sha256"]:
+                raise ValueError("stored prompt does not match current scenario fixture")
+            updated = evaluate(scenario, line["profile"], line["raw_response"])
+            if updated.get("format_failure"):
+                raise ValueError("stored parseable response failed rescoring")
+            score_result = {**score_result, "value_correct": updated["value_correct"],
+                            "citation_rejected": updated["citation_rejected"]}
+        groups.setdefault((line["model_id"], line["profile"]), []).append(score_result)
+    rows = ["| Model | Profile | Context chars | Trials | Mean correct | Value correct | Citation rejected | Retention | Safe uncertainty | Missed constraints | Format failures |",
+            "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for (model, profile), scores in sorted(groups.items()):
         valid = [item for item in scores if not item.get("format_failure")]
         escaped_model = model.replace("|", "\\|")
@@ -156,7 +184,8 @@ def summarize(lines: list[dict[str, Any]]) -> str:
             return f"{sum(values) / len(valid):.2f}" if valid else "n/a"
         context_chars = scores[0]["context_characters"]
         rows.append(f"| {escaped_model} | {profile} | {context_chars} | {len(scores)} | "
-                    f"{mean('grounded_correct')} | {mean('decision_retention')} | "
+                    f"{mean('grounded_correct')} | {mean('value_correct')} | "
+                    f"{mean('citation_rejected')} | {mean('decision_retention')} | "
                     f"{mean('safe_uncertainty')} | {mean('missed_constraints')} | "
                     f"{len(scores) - len(valid)} |")
     return "\n".join(rows)
