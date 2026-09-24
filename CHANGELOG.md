@@ -3,19 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
-- Hermes live conformance accepts the requested skill's canary in its native
-  `skill_view` result while still rejecting self-reads, limits provider key
-  pass-through, detects punctuation-obfuscated memory copies, and records
-  changed native-memory paths with cleaned diffs (#163).
-- Hermes live conformance now commits fixture canaries, keeps its manifest outside
-  the fixture, detects self-reads and native-memory mutation, includes kernel
-  state in read-only start checks, and records filtered environment names and
-  separate wrong-digest and stale-target controls (#163).
-- Hermes live conformance now invokes the available `/context-*` skills,
-  checks stream events for self-read discovery, and supports digest files for
-  non-interactive operator approval. Proposals that copy Hermes native memory
-  into repository files fail before approval, and route identifiers are
-  recorded verbatim in evidence (#163).
+- Hermes lifecycle invocation is documented as `/context-setup`,
+  `/context-start`, `/context-update`, and `/context-end`: Hermes Agent
+  v0.21.4 reserves `/start` and `/update` for built-ins (#163).
 - Windows Python launched from WSL now works from both `/mnt/<drive>` and
   Linux-filesystem checkouts: the encoding, bytecode, and root settings are
   forwarded through `WSLENV`, kernel and hook paths are converted with
@@ -48,8 +38,16 @@
   command sources and lifecycle artifacts remain covered.
 
 ### Added
-- An opt-in Hermes live conformance harness prepares a disposable fixture from an exact clean commit and records bounded installed-client runs, operator-approved kernel receipts, and failure evidence. Deterministic Hermes controls and a runbook accompany it; support tiers remain unchanged (#163).
-- Five recorded Hermes Agent v0.21.4 live attempts on free OpenRouter routes, retained with their failures in `docs/evidence/hermes-live-2026-09-23/`. None passed every control. In the last, the setup proposal copied native memory into repository files and was rejected. A later review found false-green paths in the harness those runs used, now closed, so their discovery results are not relied on. Hermes remains experimental (#163).
+- An opt-in, operator-driven Hermes live conformance harness. It prepares a
+  disposable fixture with committed canaries and an external manifest, sends
+  bare `/context-*` commands, credits discovery only without self-reads across
+  read-like tools and raw tool results, checks read-only start (including
+  kernel state), exact-digest apply with receipts, wrong-digest and
+  stale-target rejection, and native-memory separation, and writes
+  create-only, redacted evidence with a filtered environment (#163).
+- Five recorded Hermes Agent v0.21.4 live attempts on free OpenRouter routes,
+  retained with their failures in `docs/evidence/hermes-live-2026-09-23/`.
+  None passed every control, so Hermes remains experimental (#163).
 - Opt-in, operator-assisted live conformance harnesses for the experimental
   Cursor IDE and Agent CLI surfaces and for Devin sessions and Review. They
   record create-only evidence outside the checkout and never run in CI or
