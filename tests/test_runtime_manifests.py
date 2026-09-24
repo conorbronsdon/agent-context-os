@@ -47,7 +47,8 @@ class RuntimeManifestTest(unittest.TestCase):
                     self.assertEqual(CAPABILITY_KEYS, set(surface["capabilities"]))
 
     def test_short_aliases_match_cli_surface_invocations(self) -> None:
-        for runtime, prefix in (("claude", "/"), ("codex", "$"), ("hermes", "/")):
+        for runtime, prefix in (("claude", "/"), ("codex", "$"), ("hermes", "/context-")):
+            # Hermes v0.21.4 reserves /start and /update for built-ins.
             invocation = load(runtime)["surfaces"]["cli"]["invocation"]
             for name in ("setup", "start", "update", "end"):
                 self.assertEqual(f"{prefix}{name}", invocation[name])
