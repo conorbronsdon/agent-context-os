@@ -238,10 +238,23 @@ SH
       _ "$ROOT/scripts/python-env.sh" 2>&1) && fail "empty wslpath conversion passed"
     [ "$conversion_error" = 'contextos_python_path: wslpath -w failed for /tmp/example' ] \
       || fail "empty wslpath conversion lacked a one-line path diagnostic"
-    wslenv_value=$(WSL_DISTRO_NAME=Test WSLENV='PYTHONIOENCODING:OTHER' \
+    wslenv_value=$(WSL_DISTRO_NAME=Test WSLENV='PYTHONIOENCODING/u:OTHER/p:CONTEXTOS_CONTEXT_ROOT' \
       "$resolved_bash" -c 'source "$1"; printf "%s" "$WSLENV"' _ "$ROOT/scripts/python-env.sh")
-    [ "$wslenv_value" = 'PYTHONIOENCODING:OTHER:PYTHONDONTWRITEBYTECODE:CONTEXTOS_CONTEXT_ROOT/p:CONTEXTOS_WORKING_ROOT/p' ] \
+    [ "$wslenv_value" = 'OTHER/p:PYTHONIOENCODING:PYTHONDONTWRITEBYTECODE:CONTEXTOS_CONTEXT_ROOT/p:CONTEXTOS_WORKING_ROOT/p' ] \
       || fail "WSL did not forward Python and kernel settings through WSLENV: $wslenv_value"
+    printf '#!%s\nprintf "W:%%s\\n" "$2"\n' "$resolved_bash" > "$fake_wsl_bin/wslpath"
+    chmod +x "$fake_wsl_bin/wslpath"
+    mkdir -p "$portability_tmp/arg-dir"
+    converted_args=$(PATH="$fake_wsl_bin:$PATH" WSL_DISTRO_NAME=Test "$resolved_bash" -c \
+      'source "$1"; CONTEXTOS_PYTHON_PLATFORM=win32; contextos_python_args "$2" "--root=$2" relative/path "/no/such/place/anywhere" "text"; printf "%s|" "${CONTEXTOS_PYTHON_ARGS[@]}"' \
+      _ "$ROOT/scripts/python-env.sh" "$portability_tmp/arg-dir")
+    [ "$converted_args" = "W:$portability_tmp/arg-dir|--root=W:$portability_tmp/arg-dir|relative/path|/no/such/place/anywhere|text|" ] \
+      || fail "WSL argument conversion changed the wrong arguments: $converted_args"
+    linux_args=$(PATH="$fake_wsl_bin:$PATH" WSL_DISTRO_NAME=Test "$resolved_bash" -c \
+      'source "$1"; CONTEXTOS_PYTHON_PLATFORM=linux; contextos_python_args "$2"; printf "%s|" "${CONTEXTOS_PYTHON_ARGS[@]}"' \
+      _ "$ROOT/scripts/python-env.sh" "$portability_tmp/arg-dir")
+    [ "$linux_args" = "$portability_tmp/arg-dir|" ] \
+      || fail "Linux Python arguments changed in a simulated WSL shell"
     ;;
 esac
 
@@ -263,7 +276,7 @@ if [ "$(uname -s)" = Linux ] &&
     [ "${unc_kernel_path:0:2}" = '\\' ] \
       || fail "Linux filesystem fixture did not map to a WSL UNC path"
     wsl_output=$(cd "$wsl_fixture" && CONTEXTOS_PYTHON="$windows_python" \
-      "$resolved_bash" scripts/contextos.sh start) \
+      "$resolved_bash" scripts/contextos.sh --root "$wsl_fixture" start) \
       || fail "WSL UNC lifecycle start failed with Windows Python"
     printf '%s' "$wsl_output" | "$CONTEXTOS_PYTHON_CMD" -c \
       'import json, sys; report = json.load(sys.stdin); assert report["schema_version"] >= 1 and isinstance(report["state"], dict)' \

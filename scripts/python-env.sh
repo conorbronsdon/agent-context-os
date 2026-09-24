@@ -16,23 +16,31 @@ CONTEXTOS_PYTHON_PLATFORM=""
 # WSL passes only variables named in WSLENV to Windows programs, so a Windows
 # python.exe would otherwise lose the encoding and bytecode settings below and
 # the kernel's root overrides. /p translates a path value for Windows.
+# Existing entries for these names are replaced, because a flag such as /u
+# (Windows to WSL only) or a missing /p would defeat the forwarding.
 if [ "$(uname -s)" = Linux ] && { [ -n "${WSL_INTEROP:-}" ] || [ -n "${WSL_DISTRO_NAME:-}" ]; }; then
-  for _contextos_wslenv in PYTHONIOENCODING PYTHONDONTWRITEBYTECODE CONTEXTOS_CONTEXT_ROOT/p CONTEXTOS_WORKING_ROOT/p; do
-    case ":${WSLENV:-}:" in
-      *":${_contextos_wslenv%%/*}:"*|*":${_contextos_wslenv%%/*}/"*) ;;
-      *) WSLENV="${WSLENV:+$WSLENV:}$_contextos_wslenv" ;;
+  _contextos_wslenv=""
+  IFS=: read -r -a _contextos_wslenv_parts <<< "${WSLENV:-}"
+  for _contextos_wslenv_part in ${_contextos_wslenv_parts[@]+"${_contextos_wslenv_parts[@]}"}; do
+    case "${_contextos_wslenv_part%%/*}" in
+      ""|PYTHONIOENCODING|PYTHONDONTWRITEBYTECODE|CONTEXTOS_CONTEXT_ROOT|CONTEXTOS_WORKING_ROOT) ;;
+      *) _contextos_wslenv="${_contextos_wslenv:+$_contextos_wslenv:}$_contextos_wslenv_part" ;;
     esac
   done
-  unset _contextos_wslenv
+  WSLENV="${_contextos_wslenv:+$_contextos_wslenv:}PYTHONIOENCODING:PYTHONDONTWRITEBYTECODE:CONTEXTOS_CONTEXT_ROOT/p:CONTEXTOS_WORKING_ROOT/p"
+  unset _contextos_wslenv _contextos_wslenv_part _contextos_wslenv_parts
   export WSLENV
 fi
 
 _contextos_python_works() {
   local probe_output probe_hex probe_platform
   command -v "$1" >/dev/null 2>&1 || return 1
+  # The trailing "." keeps command substitution from stripping extra newlines,
+  # so the check stays byte-exact.
   probe_output=$(PYTHONIOENCODING=utf-8 "$1" -c \
     'import sys; sys.version_info >= (3, 10) or sys.exit(1); sys.stdout.write(sys.platform + ":" + chr(0x2713))' \
-    2>/dev/null) || return 1
+    2>/dev/null && printf .) || return 1
+  probe_output=${probe_output%.}
   case "$probe_output" in *:*) ;; *) return 1 ;; esac
   probe_platform=${probe_output%%:*}
   probe_hex=$(set -o pipefail
@@ -103,4 +111,37 @@ contextos_python_path() {
     return
   fi
   printf '%s\n' "$path"
+}
+
+# Convert absolute local path arguments (and --option=/path values) for a
+# Windows interpreter; WSL passes arguments to Windows programs unmodified.
+# Only paths that exist, or whose parent exists, are converted, so text that
+# merely starts with "/" is left alone. Sets CONTEXTOS_PYTHON_ARGS.
+_contextos_is_local_path() {
+  [ -e "$1" ] || [ -d "$(dirname -- "$1")" ]
+}
+
+contextos_python_args() {
+  local arg name value
+  CONTEXTOS_PYTHON_ARGS=()
+  for arg in "$@"; do
+    if [ "$CONTEXTOS_PYTHON_PLATFORM" = win32 ]; then
+      case "$arg" in
+        --*=/*)
+          name=${arg%%=*}
+          value=${arg#*=}
+          if _contextos_is_local_path "$value"; then
+            value=$(contextos_python_path "$value") || return 1
+            arg="$name=$value"
+          fi
+          ;;
+        /*)
+          if _contextos_is_local_path "$arg"; then
+            arg=$(contextos_python_path "$arg") || return 1
+          fi
+          ;;
+      esac
+    fi
+    CONTEXTOS_PYTHON_ARGS+=("$arg")
+  done
 }
