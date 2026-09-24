@@ -17,6 +17,7 @@
   command sources and lifecycle artifacts remain covered.
 
 ### Added
+- An opt-in Hermes live conformance harness prepares a disposable fixture from an exact clean commit and records bounded installed-client runs, operator-approved kernel receipts, and failure evidence. Deterministic Hermes controls and a runbook accompany it; support tiers remain unchanged (#163).
 - A repository-local SSOT CI pilot checks documented Python requirements against
   the interpreter probe, warns about unregistered prose copies, and exercises
   drift and exclusion controls in disposable fixtures.

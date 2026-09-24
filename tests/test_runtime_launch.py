@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 import shutil
 import subprocess
 import unittest
@@ -50,7 +51,34 @@ class RuntimeLaunchTest(unittest.TestCase):
         self.assertIn("CONTEXT_OS_RUNTIME=codex", self.run_runtime("codex"))
 
     def test_hermes_discovers_contract(self) -> None:
-        self.assertIn("CONTEXT_OS_RUNTIME=hermes", self.run_runtime("hermes"))
+        if os.environ.get("CONTEXT_OS_RUNTIME_TESTS") != "1":
+            self.skipTest("set CONTEXT_OS_RUNTIME_TESTS=1 for installed-client launch")
+        fixture_name = os.environ.get("CONTEXTOS_HERMES_FIXTURE")
+        home_name = os.environ.get("CONTEXTOS_HERMES_HOME")
+        evidence_name = os.environ.get("CONTEXTOS_HERMES_EVIDENCE")
+        if not all((fixture_name, home_name, evidence_name)):
+            self.skipTest("set CONTEXTOS_HERMES_FIXTURE, CONTEXTOS_HERMES_HOME, and CONTEXTOS_HERMES_EVIDENCE")
+        binary = shutil.which("hermes")
+        if not binary:
+            self.skipTest("hermes is not installed")
+        fixture = Path(fixture_name)
+        evidence = json.loads(Path(evidence_name).read_text(encoding="utf-8"))
+        manifest = json.loads((fixture / ".context-os-live-manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual("passed", evidence["controls"]["run"])
+        environment = os.environ.copy()
+        environment["HERMES_HOME"] = home_name
+        version = subprocess.run([binary, "--version"], cwd=fixture, env=environment,
+                                 text=True, capture_output=True, timeout=30, check=False)
+        self.assertEqual(0, version.returncode, version.stderr)
+        self.assertEqual(evidence["version"], version.stdout.splitlines()[0])
+        prompt = "Read this repository's AGENTS.md and the local start and context-start skills. Give their exact fixture canaries."
+        command = [binary, "chat", "-Q", "--source", "tool", "-m", evidence["model"],
+                   "--provider", evidence["provider"], "--run-budget", "120", "--max-turns", "20", "-q", prompt]
+        result = subprocess.run(command, cwd=fixture, env=environment, text=True,
+                                capture_output=True, timeout=150, check=False)
+        self.assertEqual(0, result.returncode, result.stderr)
+        for name in ("agents", "start", "context-start"):
+            self.assertIn(manifest["canaries"][name], result.stdout)
 
 
 if __name__ == "__main__":

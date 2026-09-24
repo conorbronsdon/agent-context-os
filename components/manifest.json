@@ -1058,7 +1058,7 @@
         },
         {
             "id": "hermes-adapter",
-            "description": "Hermes installation guidance, optional hooks, and runtime descriptor.",
+            "description": "Hermes installation guidance, live conformance harness, optional hooks, and runtime descriptor.",
             "depends_on": [
                 "core",
                 "portable-skills",
@@ -1074,8 +1074,20 @@
                     "policy": "managed"
                 },
                 {
+                    "path": "adapters/hermes/live_conformance.py",
+                    "policy": "managed"
+                },
+                {
                     "path": "runtimes/hermes.json",
                     "policy": "managed"
+                },
+                {
+                    "path": "tests/test_hermes_conformance.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_hermes_live_harness.py",
+                    "policy": "development"
                 }
             ]
         },
