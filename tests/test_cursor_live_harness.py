@@ -185,9 +185,13 @@ class CursorLiveHarnessTest(unittest.TestCase):
                 return live.CommandResult([], 0, "--print --force --workspace --trust --mode --output-format", "")
             if command.endswith(" status"):
                 return live.CommandResult([], 0, "Logged in", "")
-            workspace_text = command.split("--workspace ", 1)[1].split(" --", 1)[0].strip('"')
-            workspace = Path(workspace_text)
-            prompt = command.rsplit('"', 2)[1] if command.count('"') >= 2 else command.rsplit(" ", 1)[-1]
+            if Path(argv[0]).name.lower() in {"cmd", "cmd.exe"}:
+                # The Windows batch bridge folds every argument into one quoted string.
+                workspace = Path(command.split("--workspace ", 1)[1].split(" --", 1)[0].strip('"'))
+                prompt = command.rsplit('"', 2)[1] if command.count('"') >= 2 else command.rsplit(" ", 1)[-1]
+            else:
+                workspace = Path(argv[list(argv).index("--workspace") + 1])
+                prompt = argv[-1]
             if "ROOT_INSTRUCTION_CANARY in the repository" in prompt:
                 value = (workspace / "AGENTS.md").read_text().split("=", 1)[1].splitlines()[0]
                 return live.CommandResult([], 0, json_result(value), "")
