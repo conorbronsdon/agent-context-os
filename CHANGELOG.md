@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Convert kernel and hook paths for Windows Python launched from WSL, report
+  failed conversions and unsupported UNC checkouts clearly, and reuse the
+  interpreter probe for platform detection (#210).
 - Devin root controls now ask for the repository instruction canary without
   naming its file, and cleanup errors retain the original control failure.
   Cursor IDE explicit-skill results stay unverified when a direct file read
