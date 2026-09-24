@@ -18,8 +18,8 @@
 
 ### Added
 - A per-integration, per-host evidence decision for optional OpenClaw
-  integrations, an optional proposal section for test records, and controls
-  that keep unsupported host claims out of the catalog and chooser (#147).
+  integrations, an optional proposal section for test records, and tests
+  that verify unsupported host claims stay out of the catalog and chooser (#147).
 - A repository-local SSOT CI pilot checks documented Python requirements against
   the interpreter probe, warns about unregistered prose copies, and exercises
   drift and exclusion controls in disposable fixtures.
