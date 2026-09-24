@@ -27,7 +27,8 @@ class CursorLiveHarnessTest(unittest.TestCase):
         environment.start()
         self.addCleanup(environment.stop)
         self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        # Windows CI may return an 8.3 alias; the harness resolves its paths.
+        self.root = Path(self.temporary.name).resolve()
         self.binary = self.root / ("agent.cmd" if os.name == "nt" else "agent")
         self.binary.write_text("fixture", encoding="utf-8")
 
