@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import base64
 import io
 import json
 import os
@@ -492,6 +493,28 @@ class HermesLiveHarnessTest(unittest.TestCase):
         self.assertEqual("", assistant)
         self.assertEqual([], skills)
         self.assertFalse(self_read)
+
+    def test_transformed_tool_result_canaries_are_self_reads(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        variants = (
+            marker.upper(),
+            "-".join(marker[i:i + 4] for i in range(0, len(marker), 4)),
+            base64.b64encode(marker.encode()).decode(),
+            base64.urlsafe_b64encode(("prefix " + marker + " suffix").encode()).decode(),
+        )
+        for value in variants:
+            with self.subTest(value=value):
+                raw = json.dumps({"type": "tool_result", "name": "terminal", "output": value})
+                events, assistant, skills, self_read = live.stream_evidence(raw, (marker,))
+                self.assertTrue(self_read)
+                self.assertEqual("[REDACTED TOOL RESULT]", events[0]["output"])
+                self.assertEqual("", assistant)
+                self.assertEqual([], skills)
+
+    def test_unrelated_encoded_tool_result_is_not_self_read(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        raw = json.dumps({"type": "tool_result", "output": base64.b64encode(b"ordinary fixture data").decode()})
+        self.assertFalse(live.stream_evidence(raw, (marker,))[3])
 
     def test_delegate_task_input_counts_as_self_read(self) -> None:
         raw = json.dumps({"type": "tool_use", "name": "delegate_task", "input": {"task": "cat AGENT*"}})
