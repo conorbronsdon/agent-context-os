@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import difflib
 import hashlib
 import json
@@ -145,6 +146,25 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
             return [redact(child) for child in value]
         return value
 
+    def marker_hits(value: str) -> set[str]:
+        # A tool can transform instruction text before returning it. Check the
+        # original and simple encodings before redacting the result from evidence.
+        normalized = re.sub(r"[^0-9a-f]", "", value.lower())
+        found = {marker for marker in markers if marker in value or
+                 (re.fullmatch(r"[0-9a-f]{32}", marker) and marker.lower() in normalized)}
+        for token in re.findall(r"[A-Za-z0-9+/_-]{24,}={0,2}", value):
+            if len(token) > 2_000_000:
+                continue
+            try:
+                decoded = base64.b64decode(token.replace("-", "+").replace("_", "/") + "=" * (-len(token) % 4), validate=True)
+            except (ValueError, base64.binascii.Error):
+                continue
+            decoded_text = decoded.decode("utf-8", errors="replace")
+            normalized_decoded = re.sub(r"[^0-9a-f]", "", decoded_text.lower())
+            found.update(marker for marker in markers if marker in decoded_text or
+                         (re.fullmatch(r"[0-9a-f]{32}", marker) and marker.lower() in normalized_decoded))
+        return found
+
     events, assistant, final, skills = [], [], [], []
     self_read = False
     requested_skill = None
@@ -171,7 +191,7 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
                          and re.search(r"(?i)Hermes fixture canary:", detail_text))):
                     self_read = True
         if kind == "tool_result":
-            found = {marker for value in strings(event) for marker in markers if marker in value}
+            found = {marker for value in strings(event) for marker in marker_hits(value)}
             allowed = set()
             if (event.get("name") == "skill_view" and requested_skill
                     and requested_skill[0] in (phase, f"context-{phase}")
