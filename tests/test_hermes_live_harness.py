@@ -607,6 +607,26 @@ class HermesLiveHarnessTest(unittest.TestCase):
         raw = json.dumps({"type": "tool_result", "name": "terminal", "output": "\n".join(lines)})
         self.assertTrue(live.stream_evidence(raw, (marker,))[3])
 
+    def test_corrupt_or_truncated_gzip_member_is_still_scanned(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        member = bytearray(gzip.compress(("prefix " + marker).encode()))
+        member[-8] ^= 0xFF  # corrupt the CRC-32 trailer
+        for payload in (bytes(member), bytes(member[:-8])):
+            with self.subTest(length=len(payload)):
+                raw = json.dumps({"type": "tool_result", "name": "terminal", "output": base64.b64encode(payload).decode()})
+                self.assertTrue(live.stream_evidence(raw, (marker,))[3])
+
+    def test_member_allowance_counts_overlapping_views(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+
+        def unpadded(count: int) -> str:
+            data = b"".join(gzip.compress(bytes([index + 1])) for index in range(count))
+            data += b"\0" * ((-len(data)) % 3)
+            return base64.b64encode(data).decode()
+
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": "\n".join((unpadded(1), unpadded(17), unpadded(1)))})
+        self.assertFalse(live.stream_evidence(raw, (marker,))[3])
+
     def test_many_empty_gzip_members_fail_closed_quickly(self) -> None:
         marker = "abcdef0123456789abcdef0123456789"
         payload = gzip.compress(b"") * 5000

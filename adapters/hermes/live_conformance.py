@@ -155,23 +155,53 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
             return [redact(child) for child in value]
         return value
 
+    def gzip_header_length(data: bytes, start: int) -> int | None:
+        # Length of the gzip member header at start, or None when unreadable.
+        if len(data) - start < 10 or data[start:start + 3] != b"\x1f\x8b\x08":
+            return None
+        flags, position = data[start + 3], start + 10
+        if flags & 4:
+            if len(data) < position + 2:
+                return None
+            position += 2 + int.from_bytes(data[position:position + 2], "little")
+        for flag in (8, 16):
+            if flags & flag:
+                end = data.find(b"\0", position)
+                if end < 0:
+                    return None
+                position = end + 1
+        if flags & 2:
+            position += 2
+        return position - start if position <= len(data) else None
+
     def inflate_gzip_members(data: bytes, limit: int, members: list[int]) -> tuple[bytes, bool]:
-        # Inflate concatenated gzip members until the byte limit or the shared
-        # member allowance (members[0]) runs out. Returns the text so far and
-        # whether every member was fully inflated.
-        output = bytearray()
-        while data[:2] == b"\x1f\x8b":
+        # Inflate concatenated gzip members as raw deflate streams, fed in small
+        # chunks, until the byte limit or the shared member allowance
+        # (members[0]) runs out. Skipping the CRC check and feeding chunks keep
+        # every decodable byte of a corrupt or truncated member for scanning.
+        # Returns the text so far and False only when inspection stopped early.
+        output, position = bytearray(), 0
+        while data[position:position + 2] == b"\x1f\x8b":
             if members[0] <= 0:
                 return bytes(output), False
             members[0] -= 1
-            inflater = zlib.decompressobj(16 + zlib.MAX_WBITS)
-            try:
-                output += inflater.decompress(data, max(limit - len(output), 1))
-            except zlib.error:
+            header = gzip_header_length(data, position)
+            if header is None:
                 return bytes(output), True
-            if inflater.unconsumed_tail or len(output) >= limit:
-                return bytes(output), False
-            data = inflater.unused_data
+            position += header
+            inflater = zlib.decompressobj(-zlib.MAX_WBITS)
+            while position < len(data) and not inflater.eof:
+                chunk = data[position:position + 65536]
+                try:
+                    output += inflater.decompress(chunk, max(limit - len(output), 1))
+                except zlib.error:
+                    return bytes(output), True
+                if inflater.unconsumed_tail or len(output) >= limit:
+                    return bytes(output), False
+                position += len(chunk) - len(inflater.unused_data)
+            if not inflater.eof:
+                return bytes(output), True
+            position += 8  # CRC-32 and ISIZE trailer
         return bytes(output), True
 
     def decoded_views(value: str) -> tuple[list[str], bool]:
@@ -212,7 +242,8 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
         # most OVERLAPPING_VIEWS views. The total cap is that many times the
         # content allowance: legitimate content within the allowance is never
         # over-charged, and total inflated work stays bounded.
-        remaining, members = OVERLAPPING_VIEWS * MAX_INFLATED_TOOL_TEXT, [MAX_GZIP_MEMBERS]
+        remaining = OVERLAPPING_VIEWS * MAX_INFLATED_TOOL_TEXT
+        members = [OVERLAPPING_VIEWS * MAX_GZIP_MEMBERS]
         sources = [source for variants, lines in groups for source in (*variants, *lines)]
         for source in (*sources, value):
             for token in re.findall(r"[A-Za-z0-9+/_-]{24,}={0,2}", source):
