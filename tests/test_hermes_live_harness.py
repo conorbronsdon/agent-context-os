@@ -643,6 +643,21 @@ class HermesLiveHarnessTest(unittest.TestCase):
         raw = json.dumps({"type": "tool_result", "name": "terminal", "output": base64.b64encode(stored).decode()})
         self.assertTrue(live.stream_evidence(raw, (marker,))[3])
 
+    def test_reversed_byte_dump_of_a_canary_is_self_read(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        dump = " ".join("0x" + marker[index:index + 2] for index in range(0, 32, 2))
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": dump[::-1]})
+        self.assertTrue(live.stream_evidence(raw, (marker,))[3])
+
+    def test_nested_members_are_each_inflated_once(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        inner = b"".join(gzip.compress(bytes([index + 1]) * 1_000_000) for index in range(9))
+        compressor = zlib.compressobj(0, zlib.DEFLATED, -zlib.MAX_WBITS)  # stored blocks keep inner members verbatim
+        stored = compressor.compress(inner) + compressor.flush()
+        outer = b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\xff" + stored + b"\x00" * 8
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": base64.b64encode(outer).decode()})
+        self.assertFalse(live.stream_evidence(raw, (marker,))[3])
+
     def test_harmless_truncated_or_padded_gzip_is_not_self_read(self) -> None:
         marker = "abcdef0123456789abcdef0123456789"
         member = gzip.compress(b"harmless text only")

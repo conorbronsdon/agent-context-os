@@ -281,7 +281,10 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
                         while start >= 0:
                             if members[0] <= 0:
                                 return views, True
-                            nested, _ = inflate_gzip_members(blob[start:], remaining, members)
+                            # One member per signature keeps the queue linear;
+                            # each following member has its own signature.
+                            members[0] -= 1
+                            nested, _ = inflate_gzip_members(blob[start:], remaining, [1])
                             remaining -= len(nested)
                             if remaining <= 0:
                                 return views, True
@@ -304,11 +307,13 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
         for view in views:
             lowered = view.lower()
             normalized = lowered.replace("0x", "").encode("ascii", "ignore").translate(None, NON_HEX_BYTES)
+            # A reversed "0x" dump reads "x0", so the reversed check strips that form.
+            reversed_normalized = lowered.replace("x0", "").encode("ascii", "ignore").translate(None, NON_HEX_BYTES)
             for marker in markers:
                 folded = marker.lower()
                 if (marker in view or folded in lowered or folded[::-1] in lowered
                         or (HEX_CANARY.fullmatch(marker)
-                            and (folded.encode() in normalized or folded[::-1].encode() in normalized))):
+                            and (folded.encode() in normalized or folded[::-1].encode() in reversed_normalized))):
                     found.add(marker)
         return found, inconclusive
 
