@@ -12,12 +12,17 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 SCENARIO = ROOT / "tests/fixtures/continuity/scenario.json"
 LONG_SCENARIO = ROOT / "tests/fixtures/continuity/long-sequence.json"
-PROFILES = ("instructions", "handoff", "contextos")
+PROFILES = ("instructions", "handoff", "contextos", "handoff-sentences")
 
 
 def selected_sources(scenario: dict[str, Any], profile: str) -> dict[str, str]:
     if profile not in PROFILES:
         raise ValueError("unknown context profile")
+    if profile == "handoff-sentences":
+        if profile not in scenario.get("sources_by_profile", {}):
+            raise ValueError("handoff-sentences requires --scenario long")
+        return {"AGENTS.md": scenario["sources"]["AGENTS.md"],
+                **scenario["sources_by_profile"][profile]}
     return {path: text for path, text in scenario["sources"].items()
             if path == "AGENTS.md" or (profile == "handoff" and path == "HANDOFF.md")
             or (profile == "contextos" and path != "HANDOFF.md")}
@@ -74,10 +79,11 @@ def score(scenario: dict[str, Any], profile: str, response: dict[str, Any]) -> d
         if profile == "instructions":
             correct = answer == {"value": "unknown", "source": None, "quote": ""}
         else:
-            source = "HANDOFF.md" if profile == "handoff" else expected["source"]
+            evidence = scenario.get("expected_by_profile", {}).get(profile, {}).get(key, expected)
+            source = "HANDOFF.md" if profile == "handoff" else evidence["source"]
             quote = answer["quote"]
             correct = (answer["value"] == expected["value"] and answer["source"] == source
-                       and expected["quote"] in quote and quote in sources[source])
+                       and evidence["quote"] in quote and quote in sources[source])
             resolved_question = category != "unresolved" if category else key != "launch"
             if correct and resolved_question:
                 retained += 1
@@ -217,6 +223,10 @@ def main() -> int:
     if not args.profile:
         parser.error("prepare, score, and record require --profile")
     scenario = json.loads((SCENARIO if args.scenario == "short" else LONG_SCENARIO).read_text(encoding="utf-8"))
+    try:
+        selected_sources(scenario, args.profile)
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.action == "prepare":
         print(prepare(scenario, args.profile))
         return 0

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import unittest
@@ -28,7 +30,7 @@ class BenchmarkTest(unittest.TestCase):
         return {"answers": answers}
 
     def test_valid_answers_and_equal_information_handoff_baseline(self):
-        for profile in benchmark.PROFILES:
+        for profile in ("instructions", "handoff", "contextos"):
             with self.subTest(profile=profile):
                 result = benchmark.score(SCENARIO, profile, self.answer(profile))
                 self.assertEqual(4, result["grounded_correct"])
@@ -65,6 +67,8 @@ class LongSequenceTest(unittest.TestCase):
         if profile == "handoff":
             for answer in answers.values():
                 answer["source"] = "HANDOFF.md"
+        for key, evidence in LONG.get("expected_by_profile", {}).get(profile, {}).items():
+            answers[key].update(evidence)
         if profile == "instructions":
             answers = {key: {"value": "unknown", "source": None, "quote": ""} for key in answers}
         return {"answers": answers}
@@ -89,6 +93,95 @@ class LongSequenceTest(unittest.TestCase):
         self.assertNotIn("state/decisions.md", benchmark.prepare(LONG, "handoff"))
         self.assertNotIn("HANDOFF.md", benchmark.prepare(LONG, "contextos"))
         self.assertIn("keyed by the 10 question IDs", benchmark.prepare(LONG, "contextos"))
+
+    def test_sentence_handoff_information_and_sentence_shape(self):
+        sources = benchmark.selected_sources(LONG, "handoff-sentences")
+        self.assertEqual({"AGENTS.md", "HANDOFF.md"}, set(sources))
+        self.assertEqual(LONG["sources"]["AGENTS.md"], sources["AGENTS.md"])
+        note = sources["HANDOFF.md"]
+        self.assertNotRegex(note, r"(?:^|[.!?]\s+)\w+:")
+        sentences = re.findall(r"[^.!?]+[.!?]", note)
+        sentences = [sentence.strip() for sentence in sentences]
+        for sentence in sentences:
+            self.assertRegex(sentence, r"^(Atlas|Beacon)(?:'s)? ")
+        overrides = LONG["expected_by_profile"]
+        self.assertEqual({"handoff-sentences"}, set(overrides))
+        self.assertEqual(set(LONG["questions"]), set(overrides["handoff-sentences"]))
+        for key, evidence in overrides["handoff-sentences"].items():
+            with self.subTest(question=key):
+                self.assertEqual({"source", "quote"}, set(evidence))
+                self.assertEqual("HANDOFF.md", evidence["source"])
+                self.assertIn(evidence["quote"], sentences)
+        # Preserve interruption details as well as the ten answer sentences.
+        self.assertEqual(set(sentences), {
+            evidence["quote"] for evidence in overrides["handoff-sentences"].values()
+        } | {"Atlas's staging migration was interrupted before execution.",
+             "Beacon's import review was interrupted after the draft."})
+
+    def test_sentence_handoff_grounding_controls(self):
+        profile = "handoff-sentences"
+        for key in LONG["questions"]:
+            for field, value in (("quote", self.answer(profile)["answers"][key]["quote"].split(" ", 1)[1]),
+                                 ("quote", self.answer(profile)["answers"][key]["quote"] + " Invented detail."),
+                                 ("source", "AGENTS.md"), ("value", "wrong")):
+                with self.subTest(question=key, field=field, value=value):
+                    response = self.answer(profile)
+                    response["answers"][key][field] = value
+                    result = benchmark.score(LONG, profile, response)
+                    self.assertEqual(9, result["grounded_correct"])
+                    self.assertEqual(9 if field == "value" else 10, result["value_correct"])
+                    self.assertEqual(0 if field == "value" else 1, result["citation_rejected"])
+        response = self.answer(profile)
+        for answer in response["answers"].values():
+            answer["quote"] = benchmark.selected_sources(LONG, profile)["HANDOFF.md"]
+        self.assertEqual(10, benchmark.score(LONG, profile, response)["grounded_correct"])
+
+    def test_september_23_raw_rescore_reproduces_evidence_table(self):
+        directory = ROOT / "docs/evidence/continuity-long-2026-09-23"
+        lines = [json.loads(line) for line in (directory / "trials.jsonl").read_text(encoding="utf-8").splitlines()]
+        readme = (directory / "README.md").read_text(encoding="utf-8")
+        table = next(block for block in readme.split("\n\n") if block.startswith("| Model | Profile |"))
+        for line in lines:
+            prompt = benchmark.prepare(LONG, line["profile"])
+            self.assertEqual(line["prompt_sha256"], hashlib.sha256(prompt.encode("utf-8")).hexdigest())
+            # Replace cached scores so every summary column exercises today's scorer.
+            line["score"] = benchmark.evaluate(LONG, line["profile"], line["raw_response"])
+        self.assertEqual(table, benchmark.summarize(lines))
+
+    def test_sentence_handoff_cli_prepare_record_and_summarize(self):
+        directory = ROOT / "tests/fixtures/continuity"
+        suffix = uuid4().hex
+        response = directory / f"response-{suffix}.txt"
+        results = directory / f"results-{suffix}.jsonl"
+        command = [sys.executable, str(ROOT / "scripts/continuity-benchmark.py")]
+        try:
+            prepared = subprocess.run(command + ["prepare", "--scenario", "long", "--profile", "handoff-sentences"],
+                                      capture_output=True, text=True)
+            self.assertEqual(0, prepared.returncode, prepared.stderr)
+            self.assertEqual(benchmark.prepare(LONG, "handoff-sentences") + "\n", prepared.stdout)
+            self.assertNotIn('"expected_by_profile"', prepared.stdout)
+            self.assertNotIn('"state/decisions.md"', prepared.stdout)
+            response.write_text(json.dumps(self.answer("handoff-sentences")), encoding="utf-8")
+            recorded = subprocess.run(command + ["record", "--scenario", "long", "--profile", "handoff-sentences",
+                                                "--response", str(response), "--results", str(results),
+                                                "--model", "model-1", "--provider", "provider-1",
+                                                "--trial", "1", "--latency", "1.0"],
+                                      capture_output=True, text=True)
+            self.assertEqual(0, recorded.returncode, recorded.stderr)
+            line = json.loads(results.read_text(encoding="utf-8"))
+            self.assertEqual(10, line["score"]["grounded_correct"])
+            self.assertEqual(771, line["score"]["context_characters"])
+            summary = subprocess.run(command + ["summarize", "--results", str(results)],
+                                     capture_output=True, text=True)
+            self.assertEqual(0, summary.returncode, summary.stderr)
+            self.assertIn("| model-1 | handoff-sentences | 771 | 1 | 10.00 | 10.00 | 0.00 | 8.00 | 2.00 | 0.00 | 0 |", summary.stdout)
+            unsupported = subprocess.run(command + ["prepare", "--profile", "handoff-sentences"],
+                                         capture_output=True, text=True)
+            self.assertEqual(2, unsupported.returncode)
+            self.assertIn("handoff-sentences requires --scenario long", unsupported.stderr)
+        finally:
+            response.unlink(missing_ok=True)
+            results.unlink(missing_ok=True)
 
     def test_negative_controls_each_category(self):
         controls = (("atlas_delivery", "queue", "retained_decision"),

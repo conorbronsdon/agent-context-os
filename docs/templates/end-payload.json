@@ -1,15 +1,15 @@
 {
   "what_happened": [
-    "Replace this with one approved factual outcome."
+    "Write one approved outcome as a sentence that names its subject and states one fact."
   ],
   "decisions": [
     {
-      "decision": "Replace or remove this example decision.",
-      "rationale": "Why this choice matters later.",
-      "rejected_alternatives": "Leave blank when there was no real branch point."
+      "decision": "Write one approved decision as a sentence that names its subject and states one choice.",
+      "rationale": "State one reason for that decision in a sentence naming its subject.",
+      "rejected_alternatives": "Name one rejected alternative in a self-contained sentence, or leave this blank."
     }
   ],
   "next_time": [
-    "Replace this with the highest-value next action."
+    "Name the subject and one highest-value next action in a complete sentence."
   ]
 }
