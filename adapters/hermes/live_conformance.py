@@ -200,53 +200,57 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
                 group.append(stripped)
                 continue
             if len(group) > 1:
-                groups.append(("".join(group), "".join(group[1:]), "".join(group[:-1])))
+                groups.append((("".join(group), "".join(group[1:]), "".join(group[:-1])), list(group)))
                 group_lines.update(group)
             group = []
         # Plain base64 decoding is bounded by the input size. Only gzip expansion
         # draws on the budget, and gzip members share one allowance; exhausting
-        # either fails closed instead of skipping content. Each wrapped group is
-        # charged once (its largest variant), and its lines are not decoded again
-        # on their own, so one payload is never charged twice.
+        # either fails closed instead of skipping content. Tokens within one
+        # source never overlap, so their expansion is summed. A wrapped group is
+        # decoded as its joined variants and also line by line (a misaligned
+        # join can hide a line); both views cover the same bytes, so the group
+        # is charged max(largest variant sum, line sum), never their total.
         budget, members = MAX_INFLATED_TOOL_TEXT, [MAX_GZIP_MEMBERS]
 
-        def decode(sources, skip_lines, charge_each):
-            # charge_each: draw every inflation from the budget as it happens
-            # (independent tokens); otherwise return the largest inflation so a
-            # wrapped group's variants are charged once by the caller.
-            nonlocal budget
-            largest = 0
-            for source in sources:
-                for token in re.findall(r"[A-Za-z0-9+/_-]{24,}={0,2}", source):
-                    if token in seen or token in skip_lines:
-                        continue
-                    seen.add(token)
-                    try:
-                        decoded = base64.b64decode(
-                            token.replace("-", "+").replace("_", "/") + "=" * (-len(token) % 4), validate=True)
-                    except (ValueError, binascii.Error):
-                        continue
-                    if decoded[:2] == b"\x1f\x8b":
-                        decoded, complete = inflate_gzip_members(decoded, budget, members)
-                        if not complete:
-                            return None
-                        if charge_each:
-                            budget -= len(decoded)
-                            if budget <= 0:
-                                return None
-                        largest = max(largest, len(decoded))
-                    text = decoded.decode("utf-8", errors="replace")
-                    views.extend((text, text[::-1]))
-            return largest
+        def decode(source, skip_lines, limit):
+            # Decode every new token in one source; return its summed gzip
+            # expansion, or None when the source cannot be inspected in full.
+            total = 0
+            for token in re.findall(r"[A-Za-z0-9+/_-]{24,}={0,2}", source):
+                if token in seen or token in skip_lines:
+                    continue
+                seen.add(token)
+                try:
+                    decoded = base64.b64decode(
+                        token.replace("-", "+").replace("_", "/") + "=" * (-len(token) % 4), validate=True)
+                except (ValueError, binascii.Error):
+                    continue
+                if decoded[:2] == b"\x1f\x8b":
+                    decoded, complete = inflate_gzip_members(decoded, max(limit - total, 1), members)
+                    total += len(decoded)
+                    if not complete or total >= limit:
+                        return None
+                text = decoded.decode("utf-8", errors="replace")
+                views.extend((text, text[::-1]))
+            return total
 
-        for variants in groups:
-            charged = decode(variants, (), charge_each=False)
-            if charged is None:
-                return views, True
-            budget -= charged
+        for variants, lines in groups:
+            variant_cost = 0
+            for variant in variants:
+                total = decode(variant, (), budget)
+                if total is None:
+                    return views, True
+                variant_cost = max(variant_cost, total)
+            line_cost = 0
+            for line in lines:
+                total = decode(line, (), budget - line_cost)
+                if total is None:
+                    return views, True
+                line_cost += total
+            budget -= max(variant_cost, line_cost)
             if budget <= 0:
                 return views, True
-        if decode((value,), group_lines, charge_each=True) is None:
+        if decode(value, group_lines, budget) is None:
             return views, True
         return views, inconclusive
 

@@ -561,9 +561,51 @@ class HermesLiveHarnessTest(unittest.TestCase):
     def test_wrapped_gzip_is_charged_once(self) -> None:
         marker = "abcdef0123456789abcdef0123456789"
         encoded = base64.b64encode(gzip.compress(b"ghijklmnopqrstuv" * 687_500)).decode()
-        half = len(encoded) - 40  # the first line alone inflates nearly everything
-        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": encoded[:half] + "\n" + encoded[half:]})
+        # Three lines: the first alone inflates nearly everything and is not one
+        # of the group's joined variants, so both passes see the same payload.
+        first, second = len(encoded) - 80, len(encoded) - 40
+        output = "\n".join((encoded[:first], encoded[first:second], encoded[second:]))
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": output})
         self.assertFalse(live.stream_evidence(raw, (marker,))[3])
+
+    def test_many_gzip_tokens_in_one_wrapped_group_share_the_budget(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        lines = []
+        for index in range(25):
+            data = gzip.compress(bytes([65 + index]) * 1_000_000)
+            data += b"\0" * ((1 - len(data)) % 3)  # force "==" padding so the joined group splits per line
+            lines.append(base64.b64encode(data).decode())
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": "\n".join(lines)})
+        self.assertTrue(live.stream_evidence(raw, (marker,))[3])
+
+    def test_unpadded_gzip_lines_in_one_group_share_the_budget(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+
+        def encoded(index: int, padded: bool) -> str:
+            data = gzip.compress(bytes([65 + index]) * 1_000_000)
+            data += b"\0" * (((1 if padded else 0) - len(data)) % 3)
+            return base64.b64encode(data).decode()
+
+        # Fifteen unpadded lines form one group that only the line pass can
+        # inflate; ten standalone tokens then push the total past the budget.
+        group = "\n".join(encoded(index, padded=False) for index in range(15))
+        standalone = "\n\n".join(encoded(index, padded=True) for index in range(15, 25))
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": group + "\n\n" + standalone})
+        self.assertTrue(live.stream_evidence(raw, (marker,))[3])
+
+    def test_padded_tokens_inside_a_group_are_each_checked(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        lines = [base64.b64encode(("filler " * 5 + str(index)).encode()).decode() for index in range(3)]
+        lines[1] = base64.b64encode(("prefix " + marker).encode()).decode()
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": "\n".join(lines)})
+        self.assertTrue(live.stream_evidence(raw, (marker,))[3])
+
+    def test_misaligned_unpadded_group_line_is_checked(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        texts = ["x" * 32, "y" * 32, marker, "z" * 32]  # 43 unpadded chars each: the join is misaligned
+        lines = [base64.urlsafe_b64encode(text.encode()).decode().rstrip("=") for text in texts]
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": "\n".join(lines)})
+        self.assertTrue(live.stream_evidence(raw, (marker,))[3])
 
     def test_many_empty_gzip_members_fail_closed_quickly(self) -> None:
         marker = "abcdef0123456789abcdef0123456789"
