@@ -44,7 +44,7 @@ before creating a proposal.
 
 ### 2. Build the deterministic proposal
 
-Create a reviewed JSON payload under `<ContextRoot>/.context-os/inputs/` with:
+Create a reviewed JSON payload under `<ContextRoot>/.context-os/inputs/`. Write each lifecycle fact as one self-contained sentence that names its subject; avoid label-prefixed fragments such as `Atlas: ...` and sentences that combine multiple facts. Keep a status and its qualifiers in the same sentence (for example, "Beacon's import review stopped after the draft, before approval."). This applies to handoff prose as well as the payload arrays. The payload contains:
 
 - `what_happened`: approved factual strings;
 - `decisions`: durable objects containing `decision`, `rationale`, and optional

@@ -14,6 +14,25 @@
     "sessions/05.md": "Beacon session 5: SQLite replaced the PostgreSQL proposal. Import review draft was written; approval did not occur.",
     "sessions/06.md": "Session 6: Atlas release date and Beacon vendor quota were discussed without resolution. Current state and decisions were updated."
   },
+  "sources_by_profile": {
+    "handoff-sentences": {
+      "HANDOFF.md": "Atlas uses webhooks for event delivery. Atlas replaced its cron polling plan with webhooks. Atlas had earlier replaced queue delivery with cron polling. Atlas must omit customer IDs from exports. Atlas's staging migration was interrupted before execution. Atlas's staging migration has not run. Atlas's release date remains unresolved. Beacon uses SQLite for the local cache. Beacon exports must include customer IDs. Beacon's import review was interrupted after the draft. Beacon's import review has not been approved. Beacon's vendor quota remains unresolved."
+    }
+  },
+  "expected_by_profile": {
+    "handoff-sentences": {
+      "atlas_delivery": {"source": "HANDOFF.md", "quote": "Atlas uses webhooks for event delivery."},
+      "beacon_cache": {"source": "HANDOFF.md", "quote": "Beacon uses SQLite for the local cache."},
+      "atlas_cron_current": {"source": "HANDOFF.md", "quote": "Atlas replaced its cron polling plan with webhooks."},
+      "atlas_queue_current": {"source": "HANDOFF.md", "quote": "Atlas had earlier replaced queue delivery with cron polling."},
+      "atlas_release": {"source": "HANDOFF.md", "quote": "Atlas's release date remains unresolved."},
+      "beacon_quota": {"source": "HANDOFF.md", "quote": "Beacon's vendor quota remains unresolved."},
+      "atlas_migration": {"source": "HANDOFF.md", "quote": "Atlas's staging migration has not run."},
+      "beacon_review": {"source": "HANDOFF.md", "quote": "Beacon's import review has not been approved."},
+      "atlas_ids": {"source": "HANDOFF.md", "quote": "Atlas must omit customer IDs from exports."},
+      "beacon_ids": {"source": "HANDOFF.md", "quote": "Beacon exports must include customer IDs."}
+    }
+  },
   "questions": {
     "atlas_delivery": "Which delivery method is current for Atlas? value: queue, cron, webhooks, or unknown.",
     "beacon_cache": "Which local cache is current for Beacon? value: postgresql, sqlite, or unknown.",
