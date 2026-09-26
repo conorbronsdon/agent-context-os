@@ -61,26 +61,34 @@ or missed constraints.
 
 ## Interpretation
 
-- **The September 23 gap did not reproduce.** On that date, the original
-  `handoff` note lost 16/90 answers on citations. Today it lost 2/90, with the
-  same prompt text and model routes. That difference is larger than anything
-  the profiles show today, so run-to-run variation (or provider-side model
-  changes) dominates at this sample size.
+- **The September 23 gap did not reproduce in this run.** On September 23 the
+  original `handoff` note lost 16/90 answers on citations; here it lost 2/90,
+  with the same prompt text and model routes. Nine trials per profile cannot
+  say why. Run-to-run variation and provider-side model changes are both
+  possible.
 - **The rule removed the failure it targeted.** No `handoff-sentences` answer
   was rejected as a label-prefix fragment; both original `handoff` rejections
   were exactly that.
-- **The rewrite introduced a different ambiguity.** In the new note, some
-  answers are supported by two sentences: "was interrupted before execution"
-  and "has not run" both establish `not_run`. The fixture accepts only one
-  quote per question, so correct citations of the companion sentence were
-  rejected. This is a scorer and fixture limit, not model confusion.
-- **Conclusion:** at nine trials per profile, this rerun shows no measurable
-  drop in citation rejections from the rule. The guidance is still kept as
-  writing hygiene, because it removes the label-prefix failure mode. It is not
+- **Splitting a compound status created a new citation problem.** The rewrite
+  split two status facts across two sentences each. "Atlas's staging migration
+  was interrupted before execution." plus "…has not run." together establish
+  `not_run`. "Beacon's import review was interrupted after the draft." plus
+  "…has not been approved." together establish `draft_only`. Neither sentence
+  alone carries the whole answer. The companion citations were therefore
+  partial, not correct answers wrongly rejected. The fixture's accepted
+  `draft_only` quote ("has not been approved") is also partial, because it
+  does not show that a draft existed. For status facts, "one fact per
+  sentence" should keep a status and its qualifiers in one sentence, such as
+  "Beacon's import review stopped after the draft, before approval."
+- **Conclusion:** this run observed no reduction in total citation rejections
+  (2/90 vs 4/90). It cannot estimate the rule's underlying effect. The
+  guidance is kept because it removes label-prefix fragments. It is not
   presented as a demonstrated improvement.
 
 Limits: one synthetic scenario, three models, three trials per model and
 profile, one day. There were no token counts for the Hermes route.
 
-Suggested follow-up: let a question accept any sentence in the source that
-establishes the answer, so correct companion citations are not rejected.
+Suggested follow-up: have the lifecycle guidance keep a status and its
+qualifiers in one sentence, fix the `handoff-sentences` fixture so each
+compound status is one sentence with a full-answer expected quote, and rerun
+with more trials per profile.

@@ -97,7 +97,7 @@ python scripts/continuity-benchmark.py score --scenario long --profile contextos
 ```
 
 The [September 26 rerun](evidence/continuity-rerun-2026-09-26/README.md) compares the three
-informed profiles on the same day. It found no measurable drop in citation
+informed profiles on the same day. It observed no reduction in citation
 rejections from the self-contained-sentence rule.
 
 `score` reports grounded correctness, retention among the eight resolved

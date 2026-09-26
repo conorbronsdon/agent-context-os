@@ -46,8 +46,8 @@
 - Lifecycle templates, the starter handoff, and the end and update skills ask
   for one self-contained sentence per fact that names its subject (#206).
 - A same-day continuity rerun (`docs/evidence/continuity-rerun-2026-09-26/`)
-  found no measurable drop in citation rejections from that rule at nine
-  trials per profile; the September 23 handoff gap did not reproduce (#206).
+  observed no reduction in citation rejections from that rule at nine trials
+  per profile; the September 23 handoff gap did not reproduce (#206).
 - A long-scenario `handoff-sentences` continuity profile preserves the compact
   handoff facts in separate sentences with named subjects, with per-profile
   citation expectations for the #206 rerun and September 23 rescore controls.

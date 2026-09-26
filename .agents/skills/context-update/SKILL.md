@@ -39,7 +39,7 @@ Save continuity with minimal churn through the deterministic lifecycle kernel.
    thread changed. Do not invent progress.
 2. Create a reviewed JSON payload under
    `<ContextRoot>/.context-os/inputs/` with `progress` as one to three factual
-   strings. Make each progress entry one self-contained sentence naming its subject and stating one fact; avoid label-prefixed fragments and multiple facts in one sentence. Apply the same rule to handoff prose. Include `current_markdown` only when a priority shifted, a thread
+   strings. Make each progress entry one self-contained sentence naming its subject and stating one fact; avoid label-prefixed fragments and multiple facts in one sentence, but keep a status and its qualifiers in the same sentence. Apply the same rule to handoff prose. Include `current_markdown` only when a priority shifted, a thread
    opened or closed, or a tracked task completed. When present, it is the
    complete desired ContextRoot `current.md` before the kernel advances its date
    and history. Preserve unrelated content and ordering.
