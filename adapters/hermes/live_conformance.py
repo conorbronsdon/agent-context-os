@@ -42,7 +42,8 @@ SELF_READ = re.compile(
     r"(?<![/\\\w])\*\.md\b|git\s+(?:diff|show|log\s+-p)\b)"
 )
 READ_TOOLS = {"read_file", "search_files", "terminal", "execute_code", "delegate_task"}
-MAX_INFLATED_TOOL_TEXT = 20_000_000
+MAX_INFLATED_TOOL_TEXT = 10_000_000
+OVERLAPPING_VIEWS = 4
 MAX_GZIP_MEMBERS = 64
 MAX_TOOL_RESULT_TEXT = 20_000_000
 BASE64_LINE = re.compile(r"[A-Za-z0-9+/_-]+={0,2}")
@@ -203,21 +204,19 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
                 groups.append((("".join(group), "".join(group[1:]), "".join(group[:-1])), list(group)))
                 group_lines.update(group)
             group = []
-        # Plain base64 decoding is bounded by the input size. Only gzip expansion
-        # draws on the budget, and gzip members share one allowance; exhausting
-        # either fails closed instead of skipping content. Tokens within one
-        # source never overlap, so their expansion is summed. A wrapped group is
-        # decoded as its joined variants and also line by line (a misaligned
-        # join can hide a line); both views cover the same bytes, so the group
-        # is charged max(largest variant sum, line sum), never their total.
-        budget, members = MAX_INFLATED_TOOL_TEXT, [MAX_GZIP_MEMBERS]
-
-        def decode(source, skip_lines, limit):
-            # Decode every new token in one source; return its summed gzip
-            # expansion, or None when the source cannot be inspected in full.
-            total = 0
+        # Plain base64 decoding is bounded by the input size. Every gzip
+        # inflation is charged to one running total, and gzip members share one
+        # allowance; exhausting either fails closed instead of skipping content.
+        # A wrapped group is decoded as its joined variants and also line by line
+        # (a misaligned join can hide a line), so one payload can appear in at
+        # most OVERLAPPING_VIEWS views. The total cap is that many times the
+        # content allowance: legitimate content within the allowance is never
+        # over-charged, and total inflated work stays bounded.
+        remaining, members = OVERLAPPING_VIEWS * MAX_INFLATED_TOOL_TEXT, [MAX_GZIP_MEMBERS]
+        sources = [source for variants, lines in groups for source in (*variants, *lines)]
+        for source in (*sources, value):
             for token in re.findall(r"[A-Za-z0-9+/_-]{24,}={0,2}", source):
-                if token in seen or token in skip_lines:
+                if token in seen or (source is value and token in group_lines):
                     continue
                 seen.add(token)
                 try:
@@ -226,32 +225,12 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
                 except (ValueError, binascii.Error):
                     continue
                 if decoded[:2] == b"\x1f\x8b":
-                    decoded, complete = inflate_gzip_members(decoded, max(limit - total, 1), members)
-                    total += len(decoded)
-                    if not complete or total >= limit:
-                        return None
+                    decoded, complete = inflate_gzip_members(decoded, remaining, members)
+                    remaining -= len(decoded)
+                    if not complete or remaining <= 0:
+                        return views, True
                 text = decoded.decode("utf-8", errors="replace")
                 views.extend((text, text[::-1]))
-            return total
-
-        for variants, lines in groups:
-            variant_cost = 0
-            for variant in variants:
-                total = decode(variant, (), budget)
-                if total is None:
-                    return views, True
-                variant_cost = max(variant_cost, total)
-            line_cost = 0
-            for line in lines:
-                total = decode(line, (), budget - line_cost)
-                if total is None:
-                    return views, True
-                line_cost += total
-            budget -= max(variant_cost, line_cost)
-            if budget <= 0:
-                return views, True
-        if decode(value, group_lines, budget) is None:
-            return views, True
         return views, inconclusive
 
     def marker_hits(value: str) -> tuple[set[str], bool]:

@@ -571,8 +571,8 @@ class HermesLiveHarnessTest(unittest.TestCase):
     def test_many_gzip_tokens_in_one_wrapped_group_share_the_budget(self) -> None:
         marker = "abcdef0123456789abcdef0123456789"
         lines = []
-        for index in range(25):
-            data = gzip.compress(bytes([65 + index]) * 1_000_000)
+        for index in range(45):
+            data = gzip.compress(bytes([1 + index]) * 1_000_000)
             data += b"\0" * ((1 - len(data)) % 3)  # force "==" padding so the joined group splits per line
             lines.append(base64.b64encode(data).decode())
         raw = json.dumps({"type": "tool_result", "name": "terminal", "output": "\n".join(lines)})
@@ -582,14 +582,14 @@ class HermesLiveHarnessTest(unittest.TestCase):
         marker = "abcdef0123456789abcdef0123456789"
 
         def encoded(index: int, padded: bool) -> str:
-            data = gzip.compress(bytes([65 + index]) * 1_000_000)
+            data = gzip.compress(bytes([1 + index]) * 1_000_000)
             data += b"\0" * (((1 if padded else 0) - len(data)) % 3)
             return base64.b64encode(data).decode()
 
-        # Fifteen unpadded lines form one group that only the line pass can
-        # inflate; ten standalone tokens then push the total past the budget.
-        group = "\n".join(encoded(index, padded=False) for index in range(15))
-        standalone = "\n\n".join(encoded(index, padded=True) for index in range(15, 25))
+        # Thirty unpadded lines form one group that only the line pass can
+        # inflate; fifteen standalone tokens then push the total past the cap.
+        group = "\n".join(encoded(index, padded=False) for index in range(30))
+        standalone = "\n\n".join(encoded(index, padded=True) for index in range(30, 45))
         raw = json.dumps({"type": "tool_result", "name": "terminal", "output": group + "\n\n" + standalone})
         self.assertTrue(live.stream_evidence(raw, (marker,))[3])
 
@@ -618,7 +618,7 @@ class HermesLiveHarnessTest(unittest.TestCase):
     def test_gzip_expansion_beyond_budget_fails_closed(self) -> None:
         marker = "abcdef0123456789abcdef0123456789"
         tokens = [base64.b64encode(gzip.compress(bytes([index + 1]) * 1_000_000 + str(index).encode())).decode()
-                  for index in range(30)]
+                  for index in range(45)]
         raw = json.dumps({"type": "tool_result", "name": "terminal", "output": "\n\n".join(tokens)})
         self.assertTrue(live.stream_evidence(raw, (marker,))[3])
 
