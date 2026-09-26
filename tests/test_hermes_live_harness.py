@@ -558,6 +558,13 @@ class HermesLiveHarnessTest(unittest.TestCase):
         raw = json.dumps({"type": "tool_result", "name": "terminal", "output": "A" * 7_000_000 + "\n" + "B" * 7_000_000})
         self.assertFalse(live.stream_evidence(raw, (marker,))[3])
 
+    def test_wrapped_gzip_is_charged_once(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        encoded = base64.b64encode(gzip.compress(b"ghijklmnopqrstuv" * 687_500)).decode()
+        half = len(encoded) - 40  # the first line alone inflates nearly everything
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": encoded[:half] + "\n" + encoded[half:]})
+        self.assertFalse(live.stream_evidence(raw, (marker,))[3])
+
     def test_many_empty_gzip_members_fail_closed_quickly(self) -> None:
         marker = "abcdef0123456789abcdef0123456789"
         payload = gzip.compress(b"") * 5000

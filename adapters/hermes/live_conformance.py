@@ -193,36 +193,61 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
         # Rejoin wrapped base64 with one linear pass: group consecutive lines made
         # only of base64 characters, then try the group with and without its
         # first or last line, so a stray header or footer cannot spoil the decode.
-        wrapped, group = [], []
+        groups, group_lines, group = [], set(), []
         for line in [*value.splitlines(), ""]:
             stripped = line.strip()
             if stripped and BASE64_LINE.fullmatch(stripped):
                 group.append(stripped)
                 continue
             if len(group) > 1:
-                wrapped.extend(("".join(group), "".join(group[1:]), "".join(group[:-1])))
+                groups.append(("".join(group), "".join(group[1:]), "".join(group[:-1])))
+                group_lines.update(group)
             group = []
         # Plain base64 decoding is bounded by the input size. Only gzip expansion
         # draws on the budget, and gzip members share one allowance; exhausting
-        # either fails closed instead of skipping content.
+        # either fails closed instead of skipping content. Each wrapped group is
+        # charged once (its largest variant), and its lines are not decoded again
+        # on their own, so one payload is never charged twice.
         budget, members = MAX_INFLATED_TOOL_TEXT, [MAX_GZIP_MEMBERS]
-        for source in (value, *wrapped):
-            for token in re.findall(r"[A-Za-z0-9+/_-]{24,}={0,2}", source):
-                if token in seen:
-                    continue
-                seen.add(token)
-                try:
-                    decoded = base64.b64decode(
-                        token.replace("-", "+").replace("_", "/") + "=" * (-len(token) % 4), validate=True)
-                except (ValueError, binascii.Error):
-                    continue
-                if decoded[:2] == b"\x1f\x8b":
-                    decoded, complete = inflate_gzip_members(decoded, budget, members)
-                    budget -= len(decoded)
-                    if not complete or budget <= 0:
-                        return views, True
-                text = decoded.decode("utf-8", errors="replace")
-                views.extend((text, text[::-1]))
+
+        def decode(sources, skip_lines, charge_each):
+            # charge_each: draw every inflation from the budget as it happens
+            # (independent tokens); otherwise return the largest inflation so a
+            # wrapped group's variants are charged once by the caller.
+            nonlocal budget
+            largest = 0
+            for source in sources:
+                for token in re.findall(r"[A-Za-z0-9+/_-]{24,}={0,2}", source):
+                    if token in seen or token in skip_lines:
+                        continue
+                    seen.add(token)
+                    try:
+                        decoded = base64.b64decode(
+                            token.replace("-", "+").replace("_", "/") + "=" * (-len(token) % 4), validate=True)
+                    except (ValueError, binascii.Error):
+                        continue
+                    if decoded[:2] == b"\x1f\x8b":
+                        decoded, complete = inflate_gzip_members(decoded, budget, members)
+                        if not complete:
+                            return None
+                        if charge_each:
+                            budget -= len(decoded)
+                            if budget <= 0:
+                                return None
+                        largest = max(largest, len(decoded))
+                    text = decoded.decode("utf-8", errors="replace")
+                    views.extend((text, text[::-1]))
+            return largest
+
+        for variants in groups:
+            charged = decode(variants, (), charge_each=False)
+            if charged is None:
+                return views, True
+            budget -= charged
+            if budget <= 0:
+                return views, True
+        if decode((value,), group_lines, charge_each=True) is None:
+            return views, True
         return views, inconclusive
 
     def marker_hits(value: str) -> tuple[set[str], bool]:
