@@ -42,7 +42,7 @@ SELF_READ = re.compile(
     r"(?<![/\\\w])\*\.md\b|git\s+(?:diff|show|log\s+-p)\b)"
 )
 READ_TOOLS = {"read_file", "search_files", "terminal", "execute_code", "delegate_task"}
-MAX_DECODED_TOOL_TEXT = 2_000_000
+MAX_DECODED_TOOL_TEXT = 20_000_000
 MAX_TOOL_RESULT_TEXT = 20_000_000
 BASE64_LINE = re.compile(r"[A-Za-z0-9+/_-]+={0,2}")
 SLASH_COMMANDS = {f"/context-{phase}" for phase in PHASES}
@@ -153,6 +153,21 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
             return [redact(child) for child in value]
         return value
 
+    def inflate_gzip_members(data: bytes, limit: int) -> tuple[bytes, bool]:
+        # Inflate every concatenated gzip member, stopping at the byte limit.
+        # Returns the text so far and whether all members were fully inflated.
+        output = bytearray()
+        while data[:2] == b"\x1f\x8b":
+            inflater = zlib.decompressobj(16 + zlib.MAX_WBITS)
+            try:
+                output += inflater.decompress(data, max(limit - len(output), 1))
+            except zlib.error:
+                return bytes(output), True
+            if inflater.unconsumed_tail or len(output) >= limit:
+                return bytes(output), False
+            data = inflater.unused_data
+        return bytes(output), True
+
     def decoded_views(value: str) -> tuple[list[str], bool]:
         # A tool can transform instruction text before returning it. Build the
         # plausible decoded views, bounded; anything too large to inspect makes
@@ -182,27 +197,25 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
             if len(group) > 1:
                 wrapped.extend(("".join(group), "".join(group[1:]), "".join(group[:-1])))
             group = []
+        # One decode budget covers every token and gzip member in this result;
+        # exhausting it fails closed instead of skipping content.
+        budget = MAX_DECODED_TOOL_TEXT
         for source in (value, *wrapped):
             for token in re.findall(r"[A-Za-z0-9+/_-]{24,}={0,2}", source):
                 if token in seen:
                     continue
                 seen.add(token)
-                if len(token) > MAX_DECODED_TOOL_TEXT:
-                    inconclusive = True
-                    continue
                 try:
                     decoded = base64.b64decode(
                         token.replace("-", "+").replace("_", "/") + "=" * (-len(token) % 4), validate=True)
                 except (ValueError, binascii.Error):
                     continue
                 if decoded[:2] == b"\x1f\x8b":
-                    inflater = zlib.decompressobj(16 + zlib.MAX_WBITS)
-                    try:
-                        decoded = inflater.decompress(decoded, MAX_DECODED_TOOL_TEXT)
-                    except zlib.error:
-                        continue
-                    if inflater.unconsumed_tail:
-                        inconclusive = True
+                    decoded, complete = inflate_gzip_members(decoded, budget)
+                    inconclusive = inconclusive or not complete
+                budget -= len(decoded)
+                if budget < 0:
+                    return views, True
                 text = decoded.decode("utf-8", errors="replace")
                 views.extend((text, text[::-1]))
         return views, inconclusive

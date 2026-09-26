@@ -541,6 +541,25 @@ class HermesLiveHarnessTest(unittest.TestCase):
             self.assertFalse(live.stream_evidence(raw, (marker,))[3])
             self.assertLess(time.monotonic() - started, 5)
 
+    def test_large_single_line_and_joined_lines_are_not_self_reads(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        for output in ("A" * 2_000_001, "\n".join(uuid.uuid4().hex for _ in range(68000))):
+            raw = json.dumps({"type": "tool_result", "name": "terminal", "output": output})
+            self.assertFalse(live.stream_evidence(raw, (marker,))[3])
+
+    def test_gzip_canary_in_later_member_is_self_read(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        payload = gzip.compress(b"harmless text") + gzip.compress(("prefix " + marker).encode())
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": base64.b64encode(payload).decode()})
+        self.assertTrue(live.stream_evidence(raw, (marker,))[3])
+
+    def test_gzip_expansion_beyond_budget_fails_closed(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        tokens = [base64.b64encode(gzip.compress(bytes([index + 1]) * 1_000_000 + str(index).encode())).decode()
+                  for index in range(30)]
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": "\n\n".join(tokens)})
+        self.assertTrue(live.stream_evidence(raw, (marker,))[3])
+
     def test_large_plain_text_tool_result_is_not_self_read(self) -> None:
         marker = "abcdef0123456789abcdef0123456789"
         raw = json.dumps({"type": "tool_result", "name": "terminal", "output": "abcd " * 500001})
