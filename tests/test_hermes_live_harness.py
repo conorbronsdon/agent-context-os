@@ -553,6 +553,19 @@ class HermesLiveHarnessTest(unittest.TestCase):
         raw = json.dumps({"type": "tool_result", "name": "terminal", "output": base64.b64encode(payload).decode()})
         self.assertTrue(live.stream_evidence(raw, (marker,))[3])
 
+    def test_large_wrapped_lines_are_not_double_charged(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": "A" * 7_000_000 + "\n" + "B" * 7_000_000})
+        self.assertFalse(live.stream_evidence(raw, (marker,))[3])
+
+    def test_many_empty_gzip_members_fail_closed_quickly(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        payload = gzip.compress(b"") * 5000
+        started = time.monotonic()
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": base64.b64encode(payload).decode()})
+        self.assertTrue(live.stream_evidence(raw, (marker,))[3])
+        self.assertLess(time.monotonic() - started, 5)
+
     def test_gzip_expansion_beyond_budget_fails_closed(self) -> None:
         marker = "abcdef0123456789abcdef0123456789"
         tokens = [base64.b64encode(gzip.compress(bytes([index + 1]) * 1_000_000 + str(index).encode())).decode()
@@ -567,7 +580,7 @@ class HermesLiveHarnessTest(unittest.TestCase):
 
     def test_uninspectable_encoded_tool_result_fails_closed(self) -> None:
         marker = "abcdef0123456789abcdef0123456789"
-        huge = base64.b64encode(b"x" * (live.MAX_DECODED_TOOL_TEXT)).decode()
+        huge = base64.b64encode(b"x" * live.MAX_TOOL_RESULT_TEXT).decode()
         raw = json.dumps({"type": "tool_result", "name": "terminal", "output": huge})
         self.assertTrue(live.stream_evidence(raw, (marker,))[3])
 

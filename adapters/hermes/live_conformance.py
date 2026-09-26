@@ -42,7 +42,8 @@ SELF_READ = re.compile(
     r"(?<![/\\\w])\*\.md\b|git\s+(?:diff|show|log\s+-p)\b)"
 )
 READ_TOOLS = {"read_file", "search_files", "terminal", "execute_code", "delegate_task"}
-MAX_DECODED_TOOL_TEXT = 20_000_000
+MAX_INFLATED_TOOL_TEXT = 20_000_000
+MAX_GZIP_MEMBERS = 64
 MAX_TOOL_RESULT_TEXT = 20_000_000
 BASE64_LINE = re.compile(r"[A-Za-z0-9+/_-]+={0,2}")
 SLASH_COMMANDS = {f"/context-{phase}" for phase in PHASES}
@@ -153,11 +154,15 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
             return [redact(child) for child in value]
         return value
 
-    def inflate_gzip_members(data: bytes, limit: int) -> tuple[bytes, bool]:
-        # Inflate every concatenated gzip member, stopping at the byte limit.
-        # Returns the text so far and whether all members were fully inflated.
+    def inflate_gzip_members(data: bytes, limit: int, members: list[int]) -> tuple[bytes, bool]:
+        # Inflate concatenated gzip members until the byte limit or the shared
+        # member allowance (members[0]) runs out. Returns the text so far and
+        # whether every member was fully inflated.
         output = bytearray()
         while data[:2] == b"\x1f\x8b":
+            if members[0] <= 0:
+                return bytes(output), False
+            members[0] -= 1
             inflater = zlib.decompressobj(16 + zlib.MAX_WBITS)
             try:
                 output += inflater.decompress(data, max(limit - len(output), 1))
@@ -197,9 +202,10 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
             if len(group) > 1:
                 wrapped.extend(("".join(group), "".join(group[1:]), "".join(group[:-1])))
             group = []
-        # One decode budget covers every token and gzip member in this result;
-        # exhausting it fails closed instead of skipping content.
-        budget = MAX_DECODED_TOOL_TEXT
+        # Plain base64 decoding is bounded by the input size. Only gzip expansion
+        # draws on the budget, and gzip members share one allowance; exhausting
+        # either fails closed instead of skipping content.
+        budget, members = MAX_INFLATED_TOOL_TEXT, [MAX_GZIP_MEMBERS]
         for source in (value, *wrapped):
             for token in re.findall(r"[A-Za-z0-9+/_-]{24,}={0,2}", source):
                 if token in seen:
@@ -211,11 +217,10 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
                 except (ValueError, binascii.Error):
                     continue
                 if decoded[:2] == b"\x1f\x8b":
-                    decoded, complete = inflate_gzip_members(decoded, budget)
-                    inconclusive = inconclusive or not complete
-                budget -= len(decoded)
-                if budget < 0:
-                    return views, True
+                    decoded, complete = inflate_gzip_members(decoded, budget, members)
+                    budget -= len(decoded)
+                    if not complete or budget <= 0:
+                        return views, True
                 text = decoded.decode("utf-8", errors="replace")
                 views.extend((text, text[::-1]))
         return views, inconclusive
