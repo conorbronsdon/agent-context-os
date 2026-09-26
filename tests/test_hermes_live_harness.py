@@ -635,6 +635,14 @@ class HermesLiveHarnessTest(unittest.TestCase):
                 raw = json.dumps({"type": "tool_result", "name": "terminal", "output": base64.b64encode(payload).decode()})
                 self.assertTrue(live.stream_evidence(raw, (marker,))[3])
 
+    def test_member_swallowed_by_a_stored_block_is_inflated(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        canary_member = gzip.compress(("prefix " + marker).encode())
+        stored = (b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\xff" + b"\x00"
+                  + (65535).to_bytes(2, "little") + (0).to_bytes(2, "little") + b"harmless" + canary_member)
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": base64.b64encode(stored).decode()})
+        self.assertTrue(live.stream_evidence(raw, (marker,))[3])
+
     def test_harmless_truncated_or_padded_gzip_is_not_self_read(self) -> None:
         marker = "abcdef0123456789abcdef0123456789"
         member = gzip.compress(b"harmless text only")

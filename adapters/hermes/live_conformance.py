@@ -267,6 +267,27 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
                     remaining -= len(decoded)
                     if not complete or remaining <= 0:
                         return views, True
+                    # A member can carry another member's bytes verbatim, for
+                    # example in a stored block. Inflate every gzip signature in
+                    # inflated output as well; these attempts are speculative, so
+                    # their errors are ignored, but they share the budget and
+                    # the member allowance, which bounds the queue.
+                    pending = [decoded]
+                    while pending:
+                        blob = pending.pop()
+                        start = blob.find(b"\x1f\x8b\x08")
+                        while start >= 0:
+                            if members[0] <= 0:
+                                return views, True
+                            nested, _ = inflate_gzip_members(blob[start:], remaining, members)
+                            remaining -= len(nested)
+                            if remaining <= 0:
+                                return views, True
+                            if nested:
+                                text = nested.decode("utf-8", errors="replace")
+                                views.extend((text, text[::-1]))
+                                pending.append(nested)
+                            start = blob.find(b"\x1f\x8b\x08", start + 1)
                 text = decoded.decode("utf-8", errors="replace")
                 views.extend((text, text[::-1]))
         return views, inconclusive
