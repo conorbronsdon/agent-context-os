@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Fixed
+- The Hermes live harness treats fixture canaries that reach tool results in
+  transformed form (case, separators or `0x`, reversed, percent or `\u`
+  escapes, base64/base64url including wrapped output, and gzip members) as
+  self-reads, scans in linear time, and fails closed when a result exceeds its
+  decode budget (#213).
 - Cursor CLI conformance rejects confounding user write/shell allowances,
   inspects the same configuration directory used by the child process,
   records the logical launcher name and SHA-256 across the Windows batch
