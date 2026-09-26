@@ -43,6 +43,8 @@ SELF_READ = re.compile(
 )
 READ_TOOLS = {"read_file", "search_files", "terminal", "execute_code", "delegate_task"}
 MAX_DECODED_TOOL_TEXT = 2_000_000
+MAX_TOOL_RESULT_TEXT = 20_000_000
+BASE64_LINE = re.compile(r"[A-Za-z0-9+/_-]+={0,2}")
 SLASH_COMMANDS = {f"/context-{phase}" for phase in PHASES}
 
 
@@ -155,6 +157,8 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
         # A tool can transform instruction text before returning it. Build the
         # plausible decoded views, bounded; anything too large to inspect makes
         # the result inconclusive, which counts as a self-read (fail closed).
+        if len(value) > MAX_TOOL_RESULT_TEXT:
+            return [value], True
         views, inconclusive = [value, value[::-1]], False
         if "%" in value:
             views.append(urllib.parse.unquote(value))
@@ -164,7 +168,21 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
             except (UnicodeDecodeError, ValueError):
                 pass
         seen = set()
-        for source in (value, re.sub(r"\s+", "", value)):
+        # Wrapped base64 is rejoined only across line breaks between base64-looking
+        # lines, so ordinary space-separated text is never merged into one token.
+        # Rejoin wrapped base64 with one linear pass: group consecutive lines made
+        # only of base64 characters, then try the group with and without its
+        # first or last line, so a stray header or footer cannot spoil the decode.
+        wrapped, group = [], []
+        for line in [*value.splitlines(), ""]:
+            stripped = line.strip()
+            if stripped and BASE64_LINE.fullmatch(stripped):
+                group.append(stripped)
+                continue
+            if len(group) > 1:
+                wrapped.extend(("".join(group), "".join(group[1:]), "".join(group[:-1])))
+            group = []
+        for source in (value, *wrapped):
             for token in re.findall(r"[A-Za-z0-9+/_-]{24,}={0,2}", source):
                 if token in seen:
                     continue
@@ -225,11 +243,12 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
                          and re.search(r"(?i)Hermes fixture canary:", detail_text))):
                     self_read = True
         if kind == "tool_result":
-            found = set()
-            for value in strings(event):
-                hits, inconclusive = marker_hits(value)
-                found |= hits
-                self_read = self_read or inconclusive
+            # Join every string field so content split across parts is scanned whole.
+            content = "\n".join(text for key, child in event.items()
+                                if key not in ("type", "name", "id", "tool_use_id", "timestamp")
+                                for text in strings(child))
+            found, inconclusive = marker_hits(content)
+            self_read = self_read or inconclusive
             allowed = set()
             if (event.get("name") == "skill_view" and requested_skill
                     and requested_skill[0] in (phase, f"context-{phase}")

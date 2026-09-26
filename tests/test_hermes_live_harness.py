@@ -7,6 +7,7 @@ import io
 import json
 import os
 import shutil
+import time
 import uuid
 import subprocess
 import sys
@@ -518,6 +519,32 @@ class HermesLiveHarnessTest(unittest.TestCase):
                 self.assertEqual("[REDACTED TOOL RESULT]", events[0]["output"])
                 self.assertEqual("", assistant)
                 self.assertEqual([], skills)
+
+    def test_wrapped_base64_split_across_parts_and_armor_is_self_read(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        encoded = base64.b64encode(marker.encode()).decode()
+        split = {"type": "tool_result", "name": "terminal", "content": [encoded[:22], encoded[22:]]}
+        armored = {"type": "tool_result", "name": "terminal",
+                   "output": "-----BEGIN DATA-----\n" + encoded[:22] + "\n" + encoded[22:] + "\n-----END DATA-----"}
+        headed = {"type": "tool_result", "name": "terminal",
+                  "output": "RESULT\n" + encoded[:22] + "\n" + encoded[22:]}
+        for event in (split, armored, headed):
+            with self.subTest(event=event):
+                self.assertTrue(live.stream_evidence(json.dumps(event), (marker,))[3])
+
+    def test_tool_result_scanning_stays_linear_on_ordinary_output(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        outputs = ("a" * 40000, "\n".join(base64.encodebytes(bytes([i]) * 9000).decode() for i in range(20)))
+        for output in outputs:
+            started = time.monotonic()
+            raw = json.dumps({"type": "tool_result", "name": "terminal", "output": output})
+            self.assertFalse(live.stream_evidence(raw, (marker,))[3])
+            self.assertLess(time.monotonic() - started, 5)
+
+    def test_large_plain_text_tool_result_is_not_self_read(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": "abcd " * 500001})
+        self.assertFalse(live.stream_evidence(raw, (marker,))[3])
 
     def test_uninspectable_encoded_tool_result_fails_closed(self) -> None:
         marker = "abcdef0123456789abcdef0123456789"
