@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import base64
+import binascii
+import codecs
 import difflib
 import hashlib
 import json
@@ -15,6 +17,8 @@ import secrets
 import subprocess
 import sys
 import time
+import urllib.parse
+import zlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
@@ -38,6 +42,7 @@ SELF_READ = re.compile(
     r"(?<![/\\\w])\*\.md\b|git\s+(?:diff|show|log\s+-p)\b)"
 )
 READ_TOOLS = {"read_file", "search_files", "terminal", "execute_code", "delegate_task"}
+MAX_DECODED_TOOL_TEXT = 2_000_000
 SLASH_COMMANDS = {f"/context-{phase}" for phase in PHASES}
 
 
@@ -146,24 +151,53 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
             return [redact(child) for child in value]
         return value
 
-    def marker_hits(value: str) -> set[str]:
-        # A tool can transform instruction text before returning it. Check the
-        # original and simple encodings before redacting the result from evidence.
-        normalized = re.sub(r"[^0-9a-f]", "", value.lower())
-        found = {marker for marker in markers if marker in value or
-                 (re.fullmatch(r"[0-9a-f]{32}", marker) and marker.lower() in normalized)}
-        for token in re.findall(r"[A-Za-z0-9+/_-]{24,}={0,2}", value):
-            if len(token) > 2_000_000:
-                continue
+    def decoded_views(value: str) -> tuple[list[str], bool]:
+        # A tool can transform instruction text before returning it. Build the
+        # plausible decoded views, bounded; anything too large to inspect makes
+        # the result inconclusive, which counts as a self-read (fail closed).
+        views, inconclusive = [value, value[::-1]], False
+        if "%" in value:
+            views.append(urllib.parse.unquote(value))
+        if "\\u" in value or "\\x" in value:
             try:
-                decoded = base64.b64decode(token.replace("-", "+").replace("_", "/") + "=" * (-len(token) % 4), validate=True)
-            except (ValueError, base64.binascii.Error):
-                continue
-            decoded_text = decoded.decode("utf-8", errors="replace")
-            normalized_decoded = re.sub(r"[^0-9a-f]", "", decoded_text.lower())
-            found.update(marker for marker in markers if marker in decoded_text or
-                         (re.fullmatch(r"[0-9a-f]{32}", marker) and marker.lower() in normalized_decoded))
-        return found
+                views.append(codecs.decode(value, "unicode_escape"))
+            except (UnicodeDecodeError, ValueError):
+                pass
+        seen = set()
+        for source in (value, re.sub(r"\s+", "", value)):
+            for token in re.findall(r"[A-Za-z0-9+/_-]{24,}={0,2}", source):
+                if token in seen:
+                    continue
+                seen.add(token)
+                if len(token) > MAX_DECODED_TOOL_TEXT:
+                    inconclusive = True
+                    continue
+                try:
+                    decoded = base64.b64decode(
+                        token.replace("-", "+").replace("_", "/") + "=" * (-len(token) % 4), validate=True)
+                except (ValueError, binascii.Error):
+                    continue
+                if decoded[:2] == b"\x1f\x8b":
+                    inflater = zlib.decompressobj(16 + zlib.MAX_WBITS)
+                    try:
+                        decoded = inflater.decompress(decoded, MAX_DECODED_TOOL_TEXT)
+                    except zlib.error:
+                        continue
+                    if inflater.unconsumed_tail:
+                        inconclusive = True
+                text = decoded.decode("utf-8", errors="replace")
+                views.extend((text, text[::-1]))
+        return views, inconclusive
+
+    def marker_hits(value: str) -> tuple[set[str], bool]:
+        views, inconclusive = decoded_views(value)
+        found = set()
+        for view in views:
+            lowered = view.lower()
+            normalized = re.sub(r"[^0-9a-f]", "", lowered.replace("0x", ""))
+            found.update(marker for marker in markers if marker in view or marker.lower() in lowered or
+                         (re.fullmatch(r"[0-9a-f]{32}", marker) and marker.lower() in normalized))
+        return found, inconclusive
 
     events, assistant, final, skills = [], [], [], []
     self_read = False
@@ -191,7 +225,11 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
                          and re.search(r"(?i)Hermes fixture canary:", detail_text))):
                     self_read = True
         if kind == "tool_result":
-            found = {marker for value in strings(event) for marker in marker_hits(value)}
+            found = set()
+            for value in strings(event):
+                hits, inconclusive = marker_hits(value)
+                found |= hits
+                self_read = self_read or inconclusive
             allowed = set()
             if (event.get("name") == "skill_view" and requested_skill
                     and requested_skill[0] in (phase, f"context-{phase}")

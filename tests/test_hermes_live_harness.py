@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import base64
+import gzip
 import io
 import json
 import os
@@ -501,6 +502,13 @@ class HermesLiveHarnessTest(unittest.TestCase):
             "-".join(marker[i:i + 4] for i in range(0, len(marker), 4)),
             base64.b64encode(marker.encode()).decode(),
             base64.urlsafe_b64encode(("prefix " + marker + " suffix").encode()).decode(),
+            base64.urlsafe_b64encode(b"\xfb\xff" + marker.encode()).decode().rstrip("="),
+            base64.encodebytes(("x" * 48 + marker).encode()).decode(),
+            " ".join("0x" + marker[i:i + 2] for i in range(0, len(marker), 2)),
+            marker[::-1],
+            base64.b64encode(gzip.compress(("prefix " + marker).encode())).decode(),
+            "".join("%" + format(ord(char), "02x") for char in marker),
+            "".join("\\u%04x" % ord(char) for char in marker),
         )
         for value in variants:
             with self.subTest(value=value):
@@ -510,6 +518,12 @@ class HermesLiveHarnessTest(unittest.TestCase):
                 self.assertEqual("[REDACTED TOOL RESULT]", events[0]["output"])
                 self.assertEqual("", assistant)
                 self.assertEqual([], skills)
+
+    def test_uninspectable_encoded_tool_result_fails_closed(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        huge = base64.b64encode(b"x" * (live.MAX_DECODED_TOOL_TEXT)).decode()
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": huge})
+        self.assertTrue(live.stream_evidence(raw, (marker,))[3])
 
     def test_unrelated_encoded_tool_result_is_not_self_read(self) -> None:
         marker = "abcdef0123456789abcdef0123456789"
