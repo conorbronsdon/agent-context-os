@@ -677,6 +677,14 @@ class HermesLiveHarnessTest(unittest.TestCase):
         raw = json.dumps({"type": "tool_result", "name": "terminal", "output": "\n\n".join(tokens)})
         self.assertTrue(live.stream_evidence(raw, (marker,))[3])
 
+    def test_marker_matching_stays_fast_on_large_decoded_content(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        output = "\n\n".join(base64.b64encode(gzip.compress(bytes([1 + index]) * 900_000)).decode() for index in range(40))
+        started = time.monotonic()
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": output})
+        self.assertFalse(live.stream_evidence(raw, (marker,))[3])
+        self.assertLess(time.monotonic() - started, 5)
+
     def test_large_plain_text_tool_result_is_not_self_read(self) -> None:
         marker = "abcdef0123456789abcdef0123456789"
         raw = json.dumps({"type": "tool_result", "name": "terminal", "output": "abcd " * 500001})

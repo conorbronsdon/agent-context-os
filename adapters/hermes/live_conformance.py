@@ -47,6 +47,8 @@ OVERLAPPING_VIEWS = 4
 MAX_GZIP_MEMBERS = 64
 GZIP_MIN_MEMBER = 18  # 10-byte header, empty deflate block, 8-byte trailer
 MAX_TOOL_RESULT_TEXT = 20_000_000
+NON_HEX_BYTES = bytes(byte for byte in range(256) if chr(byte) not in "0123456789abcdef")
+HEX_CANARY = re.compile(r"[0-9a-f]{32}")
 BASE64_LINE = re.compile(r"[A-Za-z0-9+/_-]+={0,2}")
 SLASH_COMMANDS = {f"/context-{phase}" for phase in PHASES}
 
@@ -217,7 +219,7 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
         # the result inconclusive, which counts as a self-read (fail closed).
         if len(value) > MAX_TOOL_RESULT_TEXT:
             return [value], True
-        views, inconclusive = [value, value[::-1]], False
+        views, inconclusive = [value], False
         if "%" in value:
             views.append(urllib.parse.unquote(value))
         if "\\u" in value or "\\x" in value:
@@ -285,21 +287,29 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
                                 return views, True
                             if nested:
                                 text = nested.decode("utf-8", errors="replace")
-                                views.extend((text, text[::-1]))
+                                views.append(text)
                                 pending.append(nested)
                             start = blob.find(b"\x1f\x8b\x08", start + 1)
                 text = decoded.decode("utf-8", errors="replace")
-                views.extend((text, text[::-1]))
+                views.append(text)
         return views, inconclusive
 
     def marker_hits(value: str) -> tuple[set[str], bool]:
+        # Each view is checked forward and reversed (reversed markers against the
+        # view, rather than storing reversed copies), and hex canaries are also
+        # checked against the view with every non-hex character removed. The
+        # removal is a byte-level delete, which stays fast on multi-MB views.
         views, inconclusive = decoded_views(value)
         found = set()
         for view in views:
             lowered = view.lower()
-            normalized = re.sub(r"[^0-9a-f]", "", lowered.replace("0x", ""))
-            found.update(marker for marker in markers if marker in view or marker.lower() in lowered or
-                         (re.fullmatch(r"[0-9a-f]{32}", marker) and marker.lower() in normalized))
+            normalized = lowered.replace("0x", "").encode("ascii", "ignore").translate(None, NON_HEX_BYTES)
+            for marker in markers:
+                folded = marker.lower()
+                if (marker in view or folded in lowered or folded[::-1] in lowered
+                        or (HEX_CANARY.fullmatch(marker)
+                            and (folded.encode() in normalized or folded[::-1].encode() in normalized))):
+                    found.add(marker)
         return found, inconclusive
 
     events, assistant, final, skills = [], [], [], []
