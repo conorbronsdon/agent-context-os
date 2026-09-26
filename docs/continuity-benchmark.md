@@ -74,7 +74,7 @@ questions identify retained and replaced decisions, unresolved assumptions,
 interrupted status, and cross-project constraints. The original four-question
 scenario remains the default.
 
-The three profiles use the same questions and model. `handoff` includes every
+The four profiles use the same questions and model. `handoff` includes every
 answerable fact in one note. `contextos` includes canonical files and older
 sessions with superseded proposals. `instructions` contains no project facts.
 Each score reports `context_characters`, the sum of selected source lengths;
@@ -82,8 +82,16 @@ these are character counts, not measured input tokens. Use a fresh session per
 trial, disable tools, keep the model and available facts fixed, and repeat each
 profile. The instructions baseline tests safe uncertainty, not retention.
 
+The long-only `handoff-sentences` profile rewrites the compact `HANDOFF.md`
+with one self-contained sentence per fact, naming its subject without label
+prefixes. It preserves the handoff facts and `AGENTS.md` instructions for the
+#206 rerun. Its fixture overrides only the expected citation source and quote;
+answer values and the grounding rule stay the same. The original three
+profiles remain unchanged so the September 23 evidence can still be rescored.
+
 ```bash
 python scripts/continuity-benchmark.py prepare --scenario long --profile handoff > handoff-prompt.txt
+python scripts/continuity-benchmark.py prepare --scenario long --profile handoff-sentences > handoff-sentences-prompt.txt
 python scripts/continuity-benchmark.py prepare --scenario long --profile contextos > contextos-prompt.txt
 python scripts/continuity-benchmark.py score --scenario long --profile contextos --response response.json
 ```

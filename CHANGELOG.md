@@ -43,6 +43,9 @@
   command sources and lifecycle artifacts remain covered.
 
 ### Added
+- A long-scenario `handoff-sentences` continuity profile preserves the compact
+  handoff facts in separate sentences with named subjects, with per-profile
+  citation expectations for the #206 rerun and September 23 rescore controls.
 - An opt-in, operator-driven Hermes live conformance harness. It prepares a
   disposable fixture with committed canaries and an external manifest, sends
   bare `/context-*` commands, credits discovery only without self-reads across
