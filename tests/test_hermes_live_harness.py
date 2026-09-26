@@ -9,6 +9,7 @@ import os
 import shutil
 import time
 import uuid
+import zlib
 import subprocess
 import sys
 import unittest
@@ -615,6 +616,32 @@ class HermesLiveHarnessTest(unittest.TestCase):
             with self.subTest(length=len(payload)):
                 raw = json.dumps({"type": "tool_result", "name": "terminal", "output": base64.b64encode(payload).decode()})
                 self.assertTrue(live.stream_evidence(raw, (marker,))[3])
+
+    def test_gzip_members_that_cannot_be_read_fully_fail_closed(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        canary_member = gzip.compress(("prefix " + marker).encode())
+        compressor = zlib.compressobj(9, zlib.DEFLATED, -zlib.MAX_WBITS)
+        invalid_block = (b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\xff"
+                         + compressor.compress(("prefix " + marker).encode())
+                         + compressor.flush(zlib.Z_FULL_FLUSH) + b"\xff\xff")
+        cases = {
+            "missing trailer before a canary member": gzip.compress(b"harmless text only")[:-8] + canary_member,
+            "canary then an invalid deflate block": invalid_block,
+            "unreadable member before a canary member": b"\x1f\x8b\x08\x00unreadable-header" + canary_member,
+            "junk between members hides a canary member": gzip.compress(b"harmless text only") + b"junk" + canary_member,
+        }
+        for name, payload in cases.items():
+            with self.subTest(name=name):
+                raw = json.dumps({"type": "tool_result", "name": "terminal", "output": base64.b64encode(payload).decode()})
+                self.assertTrue(live.stream_evidence(raw, (marker,))[3])
+
+    def test_harmless_truncated_or_padded_gzip_is_not_self_read(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        member = gzip.compress(b"harmless text only")
+        for payload in (member[:len(member) // 2], member + b"\0\0", member + gzip.compress(b"more harmless text")):
+            with self.subTest(length=len(payload)):
+                raw = json.dumps({"type": "tool_result", "name": "terminal", "output": base64.b64encode(payload).decode()})
+                self.assertFalse(live.stream_evidence(raw, (marker,))[3])
 
     def test_member_allowance_counts_overlapping_views(self) -> None:
         marker = "abcdef0123456789abcdef0123456789"

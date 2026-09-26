@@ -45,6 +45,7 @@ READ_TOOLS = {"read_file", "search_files", "terminal", "execute_code", "delegate
 MAX_INFLATED_TOOL_TEXT = 10_000_000
 OVERLAPPING_VIEWS = 4
 MAX_GZIP_MEMBERS = 64
+GZIP_MIN_MEMBER = 18  # 10-byte header, empty deflate block, 8-byte trailer
 MAX_TOOL_RESULT_TEXT = 20_000_000
 BASE64_LINE = re.compile(r"[A-Za-z0-9+/_-]+={0,2}")
 SLASH_COMMANDS = {f"/context-{phase}" for phase in PHASES}
@@ -180,6 +181,9 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
         # (members[0]) runs out. Skipping the CRC check and feeding chunks keep
         # every decodable byte of a corrupt or truncated member for scanning.
         # Returns the text so far and False only when inspection stopped early.
+        # Running out of data mid-member is complete (nothing follows it), but a
+        # deflate error, an unreadable header with data remaining, or gzip data
+        # left after the members is not: those fail closed.
         output, position = bytearray(), 0
         while data[position:position + 2] == b"\x1f\x8b":
             if members[0] <= 0:
@@ -187,7 +191,7 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
             members[0] -= 1
             header = gzip_header_length(data, position)
             if header is None:
-                return bytes(output), True
+                return bytes(output), len(data) - position < GZIP_MIN_MEMBER
             position += header
             inflater = zlib.decompressobj(-zlib.MAX_WBITS)
             while position < len(data) and not inflater.eof:
@@ -195,14 +199,17 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
                 try:
                     output += inflater.decompress(chunk, max(limit - len(output), 1))
                 except zlib.error:
-                    return bytes(output), True
+                    return bytes(output), False
                 if inflater.unconsumed_tail or len(output) >= limit:
                     return bytes(output), False
                 position += len(chunk) - len(inflater.unused_data)
             if not inflater.eof:
                 return bytes(output), True
-            position += 8  # CRC-32 and ISIZE trailer
-        return bytes(output), True
+            # Skip the CRC-32 and ISIZE trailer unless it is missing and the next
+            # member starts immediately.
+            if data[position:position + 2] != b"\x1f\x8b" or data[position + 8:position + 10] == b"\x1f\x8b":
+                position += 8
+        return bytes(output), b"\x1f\x8b\x08" not in data[position:]
 
     def decoded_views(value: str) -> tuple[list[str], bool]:
         # A tool can transform instruction text before returning it. Build the
