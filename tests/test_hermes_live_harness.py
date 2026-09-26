@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import contextlib
+import base64
+import gzip
 import io
 import json
 import os
 import shutil
+import time
 import uuid
 import subprocess
 import sys
@@ -492,6 +495,148 @@ class HermesLiveHarnessTest(unittest.TestCase):
         self.assertEqual("", assistant)
         self.assertEqual([], skills)
         self.assertFalse(self_read)
+
+    def test_transformed_tool_result_canaries_are_self_reads(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        variants = (
+            marker.upper(),
+            "-".join(marker[i:i + 4] for i in range(0, len(marker), 4)),
+            base64.b64encode(marker.encode()).decode(),
+            base64.urlsafe_b64encode(("prefix " + marker + " suffix").encode()).decode(),
+            base64.urlsafe_b64encode(b"\xfb\xff" + marker.encode()).decode().rstrip("="),
+            base64.encodebytes(("x" * 48 + marker).encode()).decode(),
+            " ".join("0x" + marker[i:i + 2] for i in range(0, len(marker), 2)),
+            marker[::-1],
+            base64.b64encode(gzip.compress(("prefix " + marker).encode())).decode(),
+            "".join("%" + format(ord(char), "02x") for char in marker),
+            "".join("\\u%04x" % ord(char) for char in marker),
+        )
+        for value in variants:
+            with self.subTest(value=value):
+                raw = json.dumps({"type": "tool_result", "name": "terminal", "output": value})
+                events, assistant, skills, self_read = live.stream_evidence(raw, (marker,))
+                self.assertTrue(self_read)
+                self.assertEqual("[REDACTED TOOL RESULT]", events[0]["output"])
+                self.assertEqual("", assistant)
+                self.assertEqual([], skills)
+
+    def test_wrapped_base64_split_across_parts_and_armor_is_self_read(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        encoded = base64.b64encode(marker.encode()).decode()
+        split = {"type": "tool_result", "name": "terminal", "content": [encoded[:22], encoded[22:]]}
+        armored = {"type": "tool_result", "name": "terminal",
+                   "output": "-----BEGIN DATA-----\n" + encoded[:22] + "\n" + encoded[22:] + "\n-----END DATA-----"}
+        headed = {"type": "tool_result", "name": "terminal",
+                  "output": "RESULT\n" + encoded[:22] + "\n" + encoded[22:]}
+        for event in (split, armored, headed):
+            with self.subTest(event=event):
+                self.assertTrue(live.stream_evidence(json.dumps(event), (marker,))[3])
+
+    def test_tool_result_scanning_stays_linear_on_ordinary_output(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        outputs = ("a" * 40000, "\n".join(base64.encodebytes(bytes([i]) * 9000).decode() for i in range(20)))
+        for output in outputs:
+            started = time.monotonic()
+            raw = json.dumps({"type": "tool_result", "name": "terminal", "output": output})
+            self.assertFalse(live.stream_evidence(raw, (marker,))[3])
+            self.assertLess(time.monotonic() - started, 5)
+
+    def test_large_single_line_and_joined_lines_are_not_self_reads(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        for output in ("A" * 2_000_001, "\n".join(uuid.uuid4().hex for _ in range(68000))):
+            raw = json.dumps({"type": "tool_result", "name": "terminal", "output": output})
+            self.assertFalse(live.stream_evidence(raw, (marker,))[3])
+
+    def test_gzip_canary_in_later_member_is_self_read(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        payload = gzip.compress(b"harmless text") + gzip.compress(("prefix " + marker).encode())
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": base64.b64encode(payload).decode()})
+        self.assertTrue(live.stream_evidence(raw, (marker,))[3])
+
+    def test_large_wrapped_lines_are_not_double_charged(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": "A" * 7_000_000 + "\n" + "B" * 7_000_000})
+        self.assertFalse(live.stream_evidence(raw, (marker,))[3])
+
+    def test_wrapped_gzip_is_charged_once(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        encoded = base64.b64encode(gzip.compress(b"ghijklmnopqrstuv" * 687_500)).decode()
+        # Three lines: the first alone inflates nearly everything and is not one
+        # of the group's joined variants, so both passes see the same payload.
+        first, second = len(encoded) - 80, len(encoded) - 40
+        output = "\n".join((encoded[:first], encoded[first:second], encoded[second:]))
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": output})
+        self.assertFalse(live.stream_evidence(raw, (marker,))[3])
+
+    def test_many_gzip_tokens_in_one_wrapped_group_share_the_budget(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        lines = []
+        for index in range(25):
+            data = gzip.compress(bytes([65 + index]) * 1_000_000)
+            data += b"\0" * ((1 - len(data)) % 3)  # force "==" padding so the joined group splits per line
+            lines.append(base64.b64encode(data).decode())
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": "\n".join(lines)})
+        self.assertTrue(live.stream_evidence(raw, (marker,))[3])
+
+    def test_unpadded_gzip_lines_in_one_group_share_the_budget(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+
+        def encoded(index: int, padded: bool) -> str:
+            data = gzip.compress(bytes([65 + index]) * 1_000_000)
+            data += b"\0" * (((1 if padded else 0) - len(data)) % 3)
+            return base64.b64encode(data).decode()
+
+        # Fifteen unpadded lines form one group that only the line pass can
+        # inflate; ten standalone tokens then push the total past the budget.
+        group = "\n".join(encoded(index, padded=False) for index in range(15))
+        standalone = "\n\n".join(encoded(index, padded=True) for index in range(15, 25))
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": group + "\n\n" + standalone})
+        self.assertTrue(live.stream_evidence(raw, (marker,))[3])
+
+    def test_padded_tokens_inside_a_group_are_each_checked(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        lines = [base64.b64encode(("filler " * 5 + str(index)).encode()).decode() for index in range(3)]
+        lines[1] = base64.b64encode(("prefix " + marker).encode()).decode()
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": "\n".join(lines)})
+        self.assertTrue(live.stream_evidence(raw, (marker,))[3])
+
+    def test_misaligned_unpadded_group_line_is_checked(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        texts = ["x" * 32, "y" * 32, marker, "z" * 32]  # 43 unpadded chars each: the join is misaligned
+        lines = [base64.urlsafe_b64encode(text.encode()).decode().rstrip("=") for text in texts]
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": "\n".join(lines)})
+        self.assertTrue(live.stream_evidence(raw, (marker,))[3])
+
+    def test_many_empty_gzip_members_fail_closed_quickly(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        payload = gzip.compress(b"") * 5000
+        started = time.monotonic()
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": base64.b64encode(payload).decode()})
+        self.assertTrue(live.stream_evidence(raw, (marker,))[3])
+        self.assertLess(time.monotonic() - started, 5)
+
+    def test_gzip_expansion_beyond_budget_fails_closed(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        tokens = [base64.b64encode(gzip.compress(bytes([index + 1]) * 1_000_000 + str(index).encode())).decode()
+                  for index in range(30)]
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": "\n\n".join(tokens)})
+        self.assertTrue(live.stream_evidence(raw, (marker,))[3])
+
+    def test_large_plain_text_tool_result_is_not_self_read(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": "abcd " * 500001})
+        self.assertFalse(live.stream_evidence(raw, (marker,))[3])
+
+    def test_uninspectable_encoded_tool_result_fails_closed(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        huge = base64.b64encode(b"x" * live.MAX_TOOL_RESULT_TEXT).decode()
+        raw = json.dumps({"type": "tool_result", "name": "terminal", "output": huge})
+        self.assertTrue(live.stream_evidence(raw, (marker,))[3])
+
+    def test_unrelated_encoded_tool_result_is_not_self_read(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        raw = json.dumps({"type": "tool_result", "output": base64.b64encode(b"ordinary fixture data").decode()})
+        self.assertFalse(live.stream_evidence(raw, (marker,))[3])
 
     def test_delegate_task_input_counts_as_self_read(self) -> None:
         raw = json.dumps({"type": "tool_use", "name": "delegate_task", "input": {"task": "cat AGENT*"}})

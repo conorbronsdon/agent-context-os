@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
+import codecs
 import difflib
 import hashlib
 import json
@@ -14,6 +17,8 @@ import secrets
 import subprocess
 import sys
 import time
+import urllib.parse
+import zlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
@@ -37,6 +42,10 @@ SELF_READ = re.compile(
     r"(?<![/\\\w])\*\.md\b|git\s+(?:diff|show|log\s+-p)\b)"
 )
 READ_TOOLS = {"read_file", "search_files", "terminal", "execute_code", "delegate_task"}
+MAX_INFLATED_TOOL_TEXT = 20_000_000
+MAX_GZIP_MEMBERS = 64
+MAX_TOOL_RESULT_TEXT = 20_000_000
+BASE64_LINE = re.compile(r"[A-Za-z0-9+/_-]+={0,2}")
 SLASH_COMMANDS = {f"/context-{phase}" for phase in PHASES}
 
 
@@ -145,6 +154,116 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
             return [redact(child) for child in value]
         return value
 
+    def inflate_gzip_members(data: bytes, limit: int, members: list[int]) -> tuple[bytes, bool]:
+        # Inflate concatenated gzip members until the byte limit or the shared
+        # member allowance (members[0]) runs out. Returns the text so far and
+        # whether every member was fully inflated.
+        output = bytearray()
+        while data[:2] == b"\x1f\x8b":
+            if members[0] <= 0:
+                return bytes(output), False
+            members[0] -= 1
+            inflater = zlib.decompressobj(16 + zlib.MAX_WBITS)
+            try:
+                output += inflater.decompress(data, max(limit - len(output), 1))
+            except zlib.error:
+                return bytes(output), True
+            if inflater.unconsumed_tail or len(output) >= limit:
+                return bytes(output), False
+            data = inflater.unused_data
+        return bytes(output), True
+
+    def decoded_views(value: str) -> tuple[list[str], bool]:
+        # A tool can transform instruction text before returning it. Build the
+        # plausible decoded views, bounded; anything too large to inspect makes
+        # the result inconclusive, which counts as a self-read (fail closed).
+        if len(value) > MAX_TOOL_RESULT_TEXT:
+            return [value], True
+        views, inconclusive = [value, value[::-1]], False
+        if "%" in value:
+            views.append(urllib.parse.unquote(value))
+        if "\\u" in value or "\\x" in value:
+            try:
+                views.append(codecs.decode(value, "unicode_escape"))
+            except (UnicodeDecodeError, ValueError):
+                pass
+        seen = set()
+        # Wrapped base64 is rejoined only across line breaks between base64-looking
+        # lines, so ordinary space-separated text is never merged into one token.
+        # Rejoin wrapped base64 with one linear pass: group consecutive lines made
+        # only of base64 characters, then try the group with and without its
+        # first or last line, so a stray header or footer cannot spoil the decode.
+        groups, group_lines, group = [], set(), []
+        for line in [*value.splitlines(), ""]:
+            stripped = line.strip()
+            if stripped and BASE64_LINE.fullmatch(stripped):
+                group.append(stripped)
+                continue
+            if len(group) > 1:
+                groups.append((("".join(group), "".join(group[1:]), "".join(group[:-1])), list(group)))
+                group_lines.update(group)
+            group = []
+        # Plain base64 decoding is bounded by the input size. Only gzip expansion
+        # draws on the budget, and gzip members share one allowance; exhausting
+        # either fails closed instead of skipping content. Tokens within one
+        # source never overlap, so their expansion is summed. A wrapped group is
+        # decoded as its joined variants and also line by line (a misaligned
+        # join can hide a line); both views cover the same bytes, so the group
+        # is charged max(largest variant sum, line sum), never their total.
+        budget, members = MAX_INFLATED_TOOL_TEXT, [MAX_GZIP_MEMBERS]
+
+        def decode(source, skip_lines, limit):
+            # Decode every new token in one source; return its summed gzip
+            # expansion, or None when the source cannot be inspected in full.
+            total = 0
+            for token in re.findall(r"[A-Za-z0-9+/_-]{24,}={0,2}", source):
+                if token in seen or token in skip_lines:
+                    continue
+                seen.add(token)
+                try:
+                    decoded = base64.b64decode(
+                        token.replace("-", "+").replace("_", "/") + "=" * (-len(token) % 4), validate=True)
+                except (ValueError, binascii.Error):
+                    continue
+                if decoded[:2] == b"\x1f\x8b":
+                    decoded, complete = inflate_gzip_members(decoded, max(limit - total, 1), members)
+                    total += len(decoded)
+                    if not complete or total >= limit:
+                        return None
+                text = decoded.decode("utf-8", errors="replace")
+                views.extend((text, text[::-1]))
+            return total
+
+        for variants, lines in groups:
+            variant_cost = 0
+            for variant in variants:
+                total = decode(variant, (), budget)
+                if total is None:
+                    return views, True
+                variant_cost = max(variant_cost, total)
+            line_cost = 0
+            for line in lines:
+                total = decode(line, (), budget - line_cost)
+                if total is None:
+                    return views, True
+                line_cost += total
+            budget -= max(variant_cost, line_cost)
+            if budget <= 0:
+                return views, True
+        if decode(value, group_lines, budget) is None:
+            return views, True
+        return views, inconclusive
+
+    def marker_hits(value: str) -> tuple[set[str], bool]:
+        views, inconclusive = decoded_views(value)
+        found = set()
+        for view in views:
+            lowered = view.lower()
+            normalized = re.sub(r"[^0-9a-f]", "", lowered.replace("0x", ""))
+            found.update(marker for marker in markers if marker in view or marker.lower() in lowered or
+                         (re.fullmatch(r"[0-9a-f]{32}", marker) and marker.lower() in normalized))
+        return found, inconclusive
+
     events, assistant, final, skills = [], [], [], []
     self_read = False
     requested_skill = None
@@ -171,7 +290,12 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
                          and re.search(r"(?i)Hermes fixture canary:", detail_text))):
                     self_read = True
         if kind == "tool_result":
-            found = {marker for value in strings(event) for marker in markers if marker in value}
+            # Join every string field so content split across parts is scanned whole.
+            content = "\n".join(text for key, child in event.items()
+                                if key not in ("type", "name", "id", "tool_use_id", "timestamp")
+                                for text in strings(child))
+            found, inconclusive = marker_hits(content)
+            self_read = self_read or inconclusive
             allowed = set()
             if (event.get("name") == "skill_view" and requested_skill
                     and requested_skill[0] in (phase, f"context-{phase}")
