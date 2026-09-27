@@ -220,7 +220,7 @@ The IDE surface remains unverified.
 ### September 26, 2026 CLI conformance
 
 CLI `2026.09.26-dd393fe` passed all 14 live controls from source commit
-`4dec95e` ([evidence](../../docs/evidence/cursor-cli-2026-09-26/README.md)).
+`dc453d6` ([evidence](../../docs/evidence/cursor-cli-2026-09-26/README.md)).
 That commit fixed the deny-precedence parser. The client reports a denied file
 write as `editToolCall` with a `writePermissionDenied` result, and the harness
 had been looking for a different event shape. This is CLI evidence only. The
