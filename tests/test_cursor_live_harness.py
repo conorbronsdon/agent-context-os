@@ -456,6 +456,16 @@ class CursorLiveHarnessTest(unittest.TestCase):
         events.insert(events.index(shell_events(events, "started")[0]), duplicate)
         self.assert_deny_stream_rejected(events, "ambiguous shell event")
 
+    def test_deny_precedence_rejects_events_naming_several_tools(self) -> None:
+        events = observed_deny_stream(str(self.root / "denied.txt"))
+        completed = next(e for e in events if e.get("subtype") == "completed" and "editToolCall" in e["tool_call"])
+        completed["tool_call"]["shellToolCall"] = {"result": {"success": {"exitCode": 0}}}
+        self.assert_deny_stream_rejected(events, "ambiguous write event")
+        events = observed_deny_stream(str(self.root / "denied.txt"))
+        started = next(e for e in events if e.get("subtype") == "started" and "editToolCall" in e["tool_call"])
+        started["tool_call"]["shellToolCall"] = {"args": {"command": "echo"}}
+        self.assert_deny_stream_rejected(events, "ambiguous")
+
     def test_deny_precedence_rejects_other_completions_and_unmatched_calls(self) -> None:
         cases = {
             "success": {"success": {"path": "denied.txt"}},

@@ -25,6 +25,11 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 REQUIRED_FLAGS = ("--print", "--force", "--workspace", "--trust", "--mode", "--output-format")
 WRITE_TOOL_KINDS = ("editToolCall", "writeToolCall")
 SHELL_TOOL_KIND = "shellToolCall"
+
+
+def tool_kinds(tool_call: Mapping[str, object]) -> list[str]:
+    """Return every tool key in a stream event; valid events name exactly one."""
+    return [name for name in tool_call if name.endswith("ToolCall")]
 DISPOSABLE_MARKER = ".context-os-cursor-live-disposable"
 
 
@@ -196,7 +201,7 @@ def require_denied_write_attempt(
                 event.get("subtype") != "completed"
                 or call_id in completed
                 or not isinstance(tool_call, dict)
-                or [name for name in WRITE_TOOL_KINDS if name in tool_call] != [kind]
+                or tool_kinds(tool_call) != [kind]
                 or not isinstance(tool_call[kind], dict)
             ):
                 raise HarnessError(f"{subject} returned an ambiguous write event")
@@ -223,7 +228,7 @@ def require_denied_write_attempt(
             shell = tool_call[SHELL_TOOL_KIND]
             if (
                 not isinstance(shell, dict) or not isinstance(call_id, str)
-                or any(kind in tool_call for kind in WRITE_TOOL_KINDS)
+                or tool_kinds(tool_call) != [SHELL_TOOL_KIND]
             ):
                 raise HarnessError(f"{subject} returned an ambiguous shell event")
             if event.get("subtype") == "started":
@@ -241,7 +246,7 @@ def require_denied_write_attempt(
         kinds = [kind for kind in WRITE_TOOL_KINDS if kind in tool_call]
         if not kinds:
             continue
-        if len(kinds) != 1 or not isinstance(tool_call[kinds[0]], dict) or not isinstance(call_id, str):
+        if len(kinds) != 1 or tool_kinds(tool_call) != kinds or not isinstance(tool_call[kinds[0]], dict) or not isinstance(call_id, str):
             raise HarnessError(f"{subject} returned an ambiguous write event")
         write = tool_call[kinds[0]]
         if event.get("subtype") == "started":
