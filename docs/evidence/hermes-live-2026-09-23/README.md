@@ -47,28 +47,38 @@ redacts the joined text once and records it as a single event.
 \* Recorded as passed by a harness later found to allow false greens; see attempt 4 below.
 Attempt 5 used the final harness in this PR.
 
-## 2026-09-26 paid-model attempts
+## 2026-09-26 model attempts
 
-Attempts 6 and 7 ran against source `44d6a32`, before the discovery-rule
-change in #163. Both failed `setup_discovery` as self-reads under the old rules
-([attempt 6](attempt-6.json), [attempt 7](attempt-7.json)). Both used paid
-OpenRouter routes with Hermes Agent v0.21.4 and cost $0.37 together.
+Attempts [6](attempt-6.json) and [7](attempt-7.json) ran on source `44d6a32`
+through paid OpenRouter routes, costing $0.37 together. [Attempt 8](attempt-8.json)
+ran on source `03682ac` with GPT-6 Sol through Hermes's `openai-codex`
+provider, a subscription with no per-token cost. **All three are invalid as
+model evidence.** The `prepare` manifest then told the operator to run
+`hermes skills trust <fixture>` by hand before `record`. Attempts 1–5 did so,
+but the operator (Claude) skipped that step for attempts 6–8. The fixture was
+therefore untrusted, and Hermes exposed none of its repository skills. Each
+attempt then failed `setup_discovery` after a self-read. `record` now performs
+and records the trust step itself (`project_skill_trust`), so the step can no
+longer be skipped.
 
-- Attempt 6 used Claude Sonnet 5. It called `skill_view("hermes-agent")` instead
-  of `context-setup`, searched for `Hermes fixture canary` with `search_files`,
-  then read `.agents/skills/context-setup/SKILL.md` with `read_file`.
-- Attempt 7 used GPT-5.6 Sol. It loaded `context-setup` with `skill_view`,
-  which delivered the phase canary, then read the same `SKILL.md` with
-  `read_file` as a double-check later in that turn. After discovery failed,
-  the same turn also shows a Hermes tool-schema mismatch. GPT-5.6 Sol passed
-  `notify` and `heartbeat` (as false) on six foreground `terminal` calls, and
-  Hermes rejected each one with "notify/heartbeat only apply to background
-  commands", including a plain `git status`. The model then switched to
-  background mode. Its first background call ran outside the fixture
-  ("No such file or directory"); its second, with an explicit `cd`, created the
-  setup proposal. The operator read these results from Hermes's own session
-  state, because the harness redacts tool results. A model that fills optional
-  tool arguments can therefore look stalled under Hermes v0.21.4.
+- Attempt 6 used Claude Sonnet 5. It viewed the bundled `hermes-agent` skill,
+  then read the repository's `context-setup` skill file.
+- Attempt 7 used GPT-5.6 Sol. Its `skill_view("context-setup")` result had
+  `is_error: true` and reported that the skill was not found. It then read the
+  skill file. The empty `file_path` argument does not establish the cause of
+  that error; the untrusted fixture explains the missing repository skill.
+- Attempt 8 used GPT-6 Sol. It did not call `skill_view` and found the skill
+  files by search.
+
+Attempt 7 also shows a separate Hermes tool-argument finding. GPT-5.6 Sol
+passed `notify` and `heartbeat` on six foreground `terminal` calls. Hermes
+rejected each with "notify/heartbeat only apply to background commands",
+including a plain `git status`. The model switched to background mode. Its
+first background call ran outside the fixture ("No such file or directory");
+its second, with an explicit `cd`, created the setup proposal. The operator
+read these results from Hermes's session state because the harness redacts
+tool results. A model that fills optional tool arguments can look stalled
+under Hermes v0.21.4.
 
 What each failure means:
 
@@ -124,8 +134,9 @@ client before these attempts; they are not recorded in the attempt files.
   name taken by built-in; use /skill start"). The documented Hermes invocation
   is now `/context-setup`, `/context-start`, `/context-update`, and
   `/context-end`.
-- A bare `/context-start` query resolves the repository skill through
-  `skill_view` with no file named in the prompt.
+- An earlier diagnostic resolved a bare `/context-start` through `skill_view`
+  with no file named in the prompt. That diagnostic did not establish behavior
+  for `hermes chat -q`, which sends slash text to the model without expanding it.
 - `AGENTS.md` is in the system context. Asked with no tools, the model quoted a
   marker appended to it.
 - Hermes injects native memory into the model context. Keeping it out of

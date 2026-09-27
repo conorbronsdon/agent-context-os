@@ -3,9 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
-- Hermes live discovery prompts no longer name the fixture canary marker, and
-  post-`skill_view` reads of the same phase skill canary are recorded without
-  failing discovery; earlier reads and other canaries still fail (#163).
+- Hermes live conformance trusts its disposable fixture before model calls and
+  preloads each phase skill with `-s`. Single-query prompts no longer use slash
+  commands or name fixture canary markers and values (#163).
 - The Cursor CLI deny-precedence control recognizes the client's observed
   `editToolCall` / `writePermissionDenied` stream. Cursor CLI
   `2026.09.26-dd393fe` then passed all live CLI controls

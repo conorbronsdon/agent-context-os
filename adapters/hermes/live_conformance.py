@@ -100,6 +100,7 @@ def command(argv: Sequence[str], cwd: Path, env: dict[str, str] | None = None,
             "stdout": clean(stdout), "stderr": clean(stderr), "at": now()}
     if raw_output:
         result["_raw_stdout"] = stdout
+        result["_raw_stderr"] = stderr
     return result
 
 
@@ -128,18 +129,16 @@ def outside_checkouts(path: Path, source: Path) -> None:
 
 def prompt_for(phase: str) -> str:
     if phase == "setup":
-        prompt = "/context-setup Create a kernel proposal for a synthetic fixture identity. Stop after creating the proposal."
+        prompt = "Create a kernel proposal for a synthetic fixture identity. Stop after creating the proposal."
     if phase == "start":
-        prompt = "/context-start"
+        prompt = "Start the context lifecycle."
     if phase in ("update", "end"):
-        prompt = f"/context-{phase} Hermes fixture {phase} checkpoint. Stop after creating the kernel proposal."
+        prompt = f"Hermes fixture {phase} checkpoint. Stop after creating the kernel proposal."
     return prompt + " Also report the fixture canary values stated in the repository instructions and the skill instructions you loaded."
 
 
 def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
-                    phase: str | None = None, fixture: Path | None = None,
-                    manifest_path: Path | None = None,
-                    evidence_path: Path | None = None) -> tuple[list[dict], str, list[str], bool]:
+                    phase: str | None = None) -> tuple[list[dict], str, list[str], bool]:
     markers = tuple(known.values()) if isinstance(known, dict) else tuple(known)
     def strings(value):
         if isinstance(value, str):
@@ -322,10 +321,6 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
     events, assistant, final, skills = [], [], [], []
     self_read = False
     requested_skills: list[tuple[str, object]] = []
-    requested_reads: list[dict] = []
-    own_marker = known.get(f"context-{phase}") if isinstance(known, dict) else None
-    disclosed = False
-    own_paths = {f".agents/skills/{name}/skill.md" for name in (phase, f"context-{phase}")}
     for line in output.splitlines():
         try:
             event = json.loads(line)
@@ -343,23 +338,10 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
             if name != "write_file" and (name in READ_TOOLS or (isinstance(detail, dict) and
                                       any(key in detail for key in ("path", "command", "pattern", "code")))):
                 detail_text = " ".join(strings(detail))
-                matches = [match.group().replace("\\", "/").lower() for match in SELF_READ.finditer(detail_text)]
-                marker_search = (re.search(r"(?i)\b(?:grep|rg|findstr|Select-String)\b", detail_text)
-                                 and re.search(r"(?i)Hermes fixture canary:", detail_text))
-                other_marker = any(marker in detail_text for marker in markers if marker != own_marker)
-                paths = [value for key, value in detail.items() if key in ("path", "file", "filename")
-                         and isinstance(value, str)] if isinstance(detail, dict) else []
-                outside = any(".." in Path(path).parts or (Path(path).is_absolute() and
-                              (fixture is None or Path(path).resolve() != fixture.resolve() and
-                               fixture.resolve() not in Path(path).resolve().parents)) for path in paths)
-                protected = (any(match not in own_paths for match in matches) or other_marker or outside or
-                             any(value and str(value) in detail_text for value in (manifest_path, evidence_path)))
-                input_self_read = bool(matches or marker_search or own_marker and own_marker in detail_text)
-                if protected or (name not in ("read_file", "search_files") and input_self_read) or (input_self_read and not disclosed):
+                if (SELF_READ.search(detail_text) or
+                        (re.search(r"(?i)\b(?:grep|rg|findstr|Select-String)\b", detail_text)
+                         and re.search(r"(?i)Hermes fixture canary:", detail_text))):
                     self_read = True
-                elif name in ("read_file", "search_files") and disclosed:
-                    requested_reads.append({"id": event.get("id"), "name": name,
-                                            "input_self_read": input_self_read, "input_event": len(events)})
         if kind == "tool_result":
             # Join every string field so content split across parts is scanned whole.
             content = "\n".join(text for key, child in event.items()
@@ -375,23 +357,11 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
                 own = [request for request in matching if request[0] in (phase, f"context-{phase}")]
                 if own and isinstance(known, dict):
                     allowed = {known[request[0]] for request in own if request[0] in known}
-                    if own_marker in content and own_marker in allowed:
-                        disclosed = True
                 requested_skills.remove((own or matching)[0])
             elif event_id is not None:
                 # Any other result for a pending ID consumes it, so it cannot be replayed.
                 for request in matching:
                     requested_skills.remove(request)
-            read = next((item for item in requested_reads if item["id"] == event_id and
-                         item["name"] == event.get("name")), None)
-            if read is not None:
-                requested_reads.remove(read)
-                if found == {own_marker} and own_marker in content and not inconclusive:
-                    allowed.add(own_marker)
-                    event["post_discovery_skill_read"] = {"rule": "phase_skill_after_view",
-                                                           "tool_use_event": read["input_event"]}
-                elif read["input_self_read"]:
-                    self_read = True
             if found - allowed:
                 self_read = True
         if kind in ("assistant", "assistant_message") or (kind == "message" and event.get("role") == "assistant"):
@@ -417,8 +387,6 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
         events.append({"type": "text", "text": clean(deltas, markers), "joined_deltas": True})
     if not events:
         raise HarnessError("Hermes stream contains no events")
-    if any(read["input_self_read"] for read in requested_reads):
-        self_read = True
     return events, ("".join(assistant) + "\n" + "\n".join(final)).strip(), skills, self_read
 
 
@@ -499,11 +467,10 @@ def prepare(source: Path, fixture: Path, home: Path, expected_commit: str,
                 "native_memory_canaries": memory_canaries,
                 "sentinel_sha256": sha(fixture / "unrelated-sentinel.txt"),
                 "prompts": {phase: prompt_for(phase) for phase in PHASES},
-                "commands": ["hermes skills trust <fixture>", "hermes skills list --source local",
-                             "python adapters/hermes/live_conformance.py record --fixture <fixture> --home <home> --manifest <manifest> --evidence <new-json> --binary <hermes> --model <model> --provider <provider> --expected-version 'Hermes Agent v0.21.4' --run-budget 120 --max-turns 20"],
+                "commands": ["python adapters/hermes/live_conformance.py record --fixture <fixture> --home <home> --manifest <manifest> --evidence <new-json> --binary <hermes> --model <model> --provider <provider> --expected-version 'Hermes Agent v0.21.4' --run-budget 120 --max-turns 20"],
                 "steps": ["Set HERMES_HOME to the fresh home path printed by prepare.",
                           "Supply provider credentials through environment variables; do not copy credentials into the fixture.",
-                          "Run hermes skills trust <fixture> yourself, then verify hermes skills list --source local.",
+                          "Record trusts the fixture in the disposable HERMES_HOME before the first phase.",
                           "Run record with --binary, --model, --provider, --run-budget, --max-turns and --evidence.",
                           "For each proposal, inspect the printed diff and type its exact digest."]}
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -671,7 +638,7 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
               "operator_mode": "approval-dir" if approval_dir is not None else "interactive",
               "model": route_id(model, "model"), "provider": route_id(provider, "provider"),
               "controls": {name: "unsupported" for name in (
-                  "provider_key_preflight", "version", "agents_discovery", "setup_discovery", "setup_proposal_apply",
+                  "provider_key_preflight", "version", "project_skill_trust", "agents_discovery", "setup_discovery", "setup_proposal_apply",
                   "start_discovery", "start_read_only", "update_discovery", "update_proposal_apply",
                   "end_discovery", "end_proposal_apply", "wrong_digest_rejected", "stale_target_rejected",
                   "memory_separation", "unrelated_sentinel", "hook_example")},
@@ -701,6 +668,15 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
                 or (expected_version and not result["version"].startswith(expected_version))):
             raise HarnessError("Hermes version was not verified")
         result["controls"]["version"] = "passed"
+        current_control = "project_skill_trust"
+        before_trust = tracked_state(fixture)
+        trust = command([*binary, "skills", "trust", str(fixture)], fixture, env, raw_output=True)
+        trust_output = trust.pop("_raw_stdout") + "\n" + trust.pop("_raw_stderr")
+        result["commands"].append(trust)
+        if (trust["exit_code"] or "Trusted:" not in trust_output or str(fixture) not in trust_output
+                or tracked_state(fixture) != before_trust):
+            raise HarnessError("project skill trust failed or changed the fixture")
+        result["controls"][current_control] = "passed"
         canaries = manifest["canaries"]
         stream_canaries = {**canaries, **{f"native-{name}": marker
                                          for name, marker in manifest["native_memory_canaries"].items()}}
@@ -710,9 +686,10 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
             proposals = set((fixture / ".context-os" / "proposals").glob("*.json"))
             prompt = prompt_for(phase)
             argv = [*binary, "chat", "--format", "stream-json", "--source", "tool", "-m", model, "--provider", provider,
-                    "--run-budget", str(run_budget), "--max-turns", str(max_turns), "-q", prompt]
+                    "--run-budget", str(run_budget), "--max-turns", str(max_turns), "-s", f"context-{phase}", "-q", prompt]
             call = command(argv, fixture, env, timeout=run_budget + 30, raw_output=True)
             raw = call.pop("_raw_stdout")
+            call.pop("_raw_stderr")
             call["stdout"] = "[stream-json events recorded separately]"
             result["commands"].append(call)
             current_control = "memory_separation"
@@ -721,12 +698,9 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
             current_control = f"{phase}_discovery"
             if call["exit_code"]:
                 raise HarnessError(f"{phase} chat failed or timed out")
-            events, assistant, skills, self_read = stream_evidence(raw, stream_canaries, phase,
-                                                                   fixture, manifest_path, evidence)
+            events, assistant, skills, self_read = stream_evidence(raw, stream_canaries, phase)
             call["events"] = events
             call["skill_view_names"] = skills
-            call["post_discovery_skill_reads"] = [event["post_discovery_skill_read"] for event in events
-                                                  if "post_discovery_skill_read" in event]
             required = [canaries["agents"], canaries[f"context-{phase}"]]
             if self_read:
                 raise HarnessError("self-read: discovery not shown")

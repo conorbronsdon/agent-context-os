@@ -35,9 +35,8 @@ python adapters/hermes/live_conformance.py prepare --source . --expected-commit 
 ```
 
 Follow the printed manifest. Set `HERMES_HOME` to the new home, supply provider
-credentials through environment variables, and run `hermes skills trust
-<fixture>` yourself. Do not copy a profile, credentials, or native memory into
-the fixture. Check the eight local skills. Then run from the source checkout:
+credentials through environment variables, and run from the source checkout.
+Do not copy a profile, credentials, or native memory into the fixture:
 
 ```sh
 python adapters/hermes/live_conformance.py record --fixture <fixture> --home <new-hermes-home> --manifest <manifest-path> --evidence <new-evidence.json> --binary <hermes-executable> --model <model-id> --provider <provider> --expected-version 'Hermes Agent v0.21.4' --run-budget 120 --max-turns 20
@@ -45,8 +44,18 @@ python adapters/hermes/live_conformance.py record --fixture <fixture> --home <ne
 
 `prepare` places two synthetic native-memory canaries under the fresh
 `HERMES_HOME/memories/` path described by [Hermes memory documentation](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/memory.md).
-`record` makes bounded `hermes chat --format stream-json --source tool` calls in
-the fixture. It records version, commands, redacted events, discovery canaries,
+`record` runs `hermes skills trust <fixture>` before the first phase, with the
+same filtered environment and the fixture as its working directory. Hermes
+only loads repository `.agents/skills/` when the repository root is trusted in
+the active `HERMES_HOME` config. The trust command writes to the disposable
+home's `config.yaml`; the harness checks that fixture files and Git status did
+not change. A failed trust control stops the run before any model call.
+
+Each phase uses `hermes chat -s context-<phase> -q <prompt>` to preload its
+skill. Hermes Agent v0.21.4 single-query mode does not expand slash commands;
+placing `/context-<phase>` in the prompt sends that text to the model. This
+harness does not exercise interactive slash-command discovery. It records
+version, commands, redacted events, discovery canaries,
 skill views, read-only start, kernel proposals, no file changes before operator
 apply, exact-digest apply receipts, wrong-digest and stale-target rejection,
 memory separation,
@@ -55,16 +64,10 @@ the canary edits are committed in the disposable fixture. Evidence names both
 the source and fixture commits.
 
 Phase prompts ask for the canary values in the repository and loaded skill
-instructions without naming the marker prefix. Naming it invited a search for
-that text in the fixture. A direct read or search that returns the current
-phase skill canary is allowed only after a matching `skill_view` result has
-already delivered that canary in the same stream. Strong models sometimes
-double-check a loaded skill by reading its file. A read before that result,
-another phase's canary, the `AGENTS.md` canary through a skill path, and a
-native-memory canary still fail discovery. So do reads aimed at the manifest,
-evidence, or files outside the fixture. The `AGENTS.md` canary rule is unchanged.
-Evidence records each allowed read and the rule that allowed it in
-`post_discovery_skill_reads`.
+instructions without naming the marker prefix or canary values. Discovery
+requires both reported canaries and no self-read. The preloaded skill reaches
+the model through its prompt; the model need not call `skill_view`. Evidence
+still records any `skill_view` names.
 
 Hermes Agent v0.21.4 emitted only valid JSON lines in a three-line live
 `hermes chat -Q --format stream-json` probe, both with and without `-Q`.
