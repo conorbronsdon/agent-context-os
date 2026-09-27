@@ -1,0 +1,13 @@
+{
+    "root_response":  "CONTEXTOS_CURSOR_IDE_ROOT_5e472a48cba92b34",
+    "nested_response":  "CONTEXTOS_CURSOR_IDE_NESTED_8d18ddef3cb17b07",
+    "rule_response":  "CONTEXTOS_CURSOR_IDE_RULE_2a7a574d3b9a597f",
+    "conflict_response":  "CONTEXTOS_CURSOR_IDE_CONFLICT_ROOT_0b89a5ca120d4e42",
+    "implicit_response":  "CONTEXTOS_CURSOR_IDE_ROOT_5e472a48cba92b34",
+    "explicit_response":  "CONTEXTOS_CURSOR_IDE_SKILL_d6698d043b2256d7",
+    "short_update_resolution":  "skill",
+    "ask_write_denied":  true,
+    "agent_write_denied":  false,
+    "agent_write_approved":  true,
+    "short_update_not_executed":  true
+}

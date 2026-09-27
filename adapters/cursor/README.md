@@ -206,6 +206,17 @@ headless ask, no-`--force`, and `--force` behavior, deny precedence, MCP scope,
 native-state isolation, and either a tested Cursor-specific hook adapter or a
 continuing explicit no-hook claim.
 
+### September 26, 2026 IDE operator run (diagnostic)
+
+An agent operator ran the prepared IDE fixture on IDE `3.21.18`
+([record](../../docs/evidence/cursor-ide-2026-09-26/README.md)), with the
+answer key made unreadable to the operator account. The root, nested, rule,
+and explicit canaries matched, and the implicit control did not return the
+skill canary. The Agent-mode denial control failed: the IDE wrote the file
+before any approval prompt, and Review, Keep, and Undo came only afterwards.
+Cursor then updated itself to `3.22.7` on exit, so `record` refused the run.
+The IDE surface remains unverified.
+
 ### September 26, 2026 CLI conformance
 
 CLI `2026.09.26-dd393fe` passed all 14 live controls from source commit

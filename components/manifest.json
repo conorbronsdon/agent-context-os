@@ -757,6 +757,14 @@
                     "policy": "development"
                 },
                 {
+                    "path": "docs/evidence/cursor-ide-2026-09-26/README.md",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/cursor-ide-2026-09-26/observations.json",
+                    "policy": "development"
+                },
+                {
                     "path": "docs/evidence/continuity-rerun-218-2026-09-26/fence-normalization.jsonl",
                     "policy": "development"
                 },
