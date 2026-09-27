@@ -48,6 +48,9 @@
   command sources and lifecycle artifacts remain covered.
 
 ### Added
+- Per-host integration evidence in the catalog and generated reference, with
+  OpenClaw support requiring a test record. MarkItDown MCP is the first entry,
+  based on its OpenClaw CLI and headless agent test (#147).
 - Lifecycle templates, the starter handoff, and the end and update skills ask
   for one self-contained sentence per fact that names its subject (#206).
 - A same-day continuity rerun (`docs/evidence/continuity-rerun-2026-09-26/`)
