@@ -1,0 +1,36 @@
+State directory inspection after uninstall
+
+file: agents/main/agent/openclaw-agent.sqlite
+file: agents/main/agent/openclaw-agent.sqlite-shm
+file: agents/main/agent/openclaw-agent.sqlite-wal
+file: config-journal-fingerprint.key
+file: exec-config.json  (operator-written copy used for agent exec; not written by OpenClaw)
+file: openclaw.json
+file: openclaw.json.bak
+file: plugin-skills/browser-automation/SKILL.md
+file: plugin-skills/canvas/SKILL.md
+file: state/openclaw-quarantine.sqlite
+file: state/openclaw.sqlite
+file: state/openclaw.sqlite-shm
+file: state/openclaw.sqlite-wal
+file: tmp/openclaw/device-identity.c7fb726b.lock.sqlite
+file: tmp/openclaw/gateway.a5cef696.lock.sqlite
+file: tmp/openclaw/gateway.state.lock.sqlite
+
+openclaw.json: mentions markitdown = False
+openclaw.json.bak: mentions markitdown = True
+
+agents/main/agent/openclaw-agent.sqlite: credential-like tables {'auth_profile_store': 0, 'auth_profile_state': 0}; rows mentioning markitdown: 6
+state/openclaw-quarantine.sqlite: credential-like tables {}; rows mentioning markitdown: 0
+state/openclaw.sqlite: credential-like tables {'worker_turn_tool_authorities': 0, 'mcp_oauth_stores': 0, 'device_bootstrap_tokens': 0, 'device_auth_tokens': 0, 'gateway_origin_device_tokens': 0, 'worker_environment_credentials': 0, 'secret_store_entries': 0}; rows mentioning markitdown: 2
+tmp/openclaw/device-identity.c7fb726b.lock.sqlite: credential-like tables {}; rows mentioning markitdown: 0
+tmp/openclaw/gateway.a5cef696.lock.sqlite: credential-like tables {}; rows mentioning markitdown: 0
+tmp/openclaw/gateway.state.lock.sqlite: credential-like tables {}; rows mentioning markitdown: 0
+
+byte search for 'sk-ant-': 0 occurrences
+byte search for 'refresh_token': 0 occurrences
+byte search for 'refreshToken': 0 occurrences
+byte search for 'accessToken': 0 occurrences
+byte search for 'access_token"': 0 occurrences
+
+running processes named markitdown*: 0

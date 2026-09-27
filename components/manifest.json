@@ -821,6 +821,14 @@
                     "policy": "development"
                 },
                 {
+                    "path": "docs/evidence/openclaw-markitdown-2026-09-26/captures/10-provenance.txt",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/openclaw-markitdown-2026-09-26/captures/11-state-after-uninstall.txt",
+                    "policy": "development"
+                },
+                {
                     "path": "docs/continuity.md",
                     "policy": "managed"
                 },

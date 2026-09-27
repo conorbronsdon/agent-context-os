@@ -345,10 +345,11 @@ def validate_catalog(catalog: Any) -> None:
                 PurePosixPath(evidence_path).is_absolute()
                 or PureWindowsPath(evidence_path).is_absolute()
                 or ".." in PurePosixPath(evidence_path).parts
-                or "\\" in evidence_path
-                or ":" in evidence_path
+                or not re.fullmatch(r"[A-Za-z0-9._/-]+", evidence_path)
             ):
-                raise CatalogError(f"{record_location}.evidence: expected a repo-relative path without '..'")
+                raise CatalogError(
+                    f"{record_location}.evidence: expected a repo-relative path of letters, digits, '.', '_', '-', and '/' without '..'"
+                )
             candidate = ROOT / evidence_path
             if not candidate.exists() or not candidate.resolve().is_relative_to(ROOT):
                 raise CatalogError(f"{record_location}.evidence: path does not exist in the repository")

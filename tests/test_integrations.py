@@ -151,6 +151,9 @@ class IntegrationCatalogTests(unittest.TestCase):
             "/docs/evidence/openclaw-markitdown-2026-09-26/README.md",
             "C:/evidence/README.md",
             existing_absolute,
+            "docs\\evidence\\openclaw-markitdown-2026-09-26\\README.md",
+            "docs/evidence/evil) [forged](x/README.md",
+            "docs/evidence/a b.md",
         ):
             with self.subTest(path=path):
                 self.assert_invalid_host_record(
@@ -164,6 +167,14 @@ class IntegrationCatalogTests(unittest.TestCase):
         self.assert_invalid_host_record(
             lambda item, record: record.update({"evidence": "docs/evidence/missing/README.md"})
         )
+
+    def test_host_evidence_path_rejects_markdown_link_characters_even_when_present(self) -> None:
+        with mock.patch.object(Path, "exists", return_value=True):
+            for path in ("docs/evidence/evil) [forged](x/README.md", "docs/evidence/a<b>.md"):
+                with self.subTest(path=path):
+                    self.assert_invalid_host_record(
+                        lambda item, record, value=path: record.update({"evidence": value})
+                    )
 
     def test_host_evidence_path_cannot_resolve_outside_repository(self) -> None:
         candidate = ROOT / self.entry("markitdown-mcp")["host_evidence"][0]["evidence"]

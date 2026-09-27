@@ -3,33 +3,41 @@
 This is the first integration-by-host evidence record for #147. It follows the
 [host compatibility evidence](../../integrations-guide.md#host-compatibility-evidence)
 requirements. The integration is the catalog's
-[`markitdown-mcp`](../../../integrations/entries/markitdown-mcp.json) entry. The
-host is OpenClaw, running one real agent turn. The operator ran it on Windows 11
-in a disposable state directory. Local paths are replaced with `<HOST_ROOT>` in
-the captures.
+[`markitdown-mcp`](../../../integrations/entries/markitdown-mcp.json) entry.
+The host is OpenClaw, exercised through its CLI and one headless agent turn
+that converted one local file. Local paths are replaced with `<HOST_ROOT>`,
+`<UV_DIR>`, or `<HOME>` in the captures, and the agent session ID is redacted.
+
+Items marked *operator-observed* were seen during the run, but no capture of
+them was kept.
 
 ## Tested versions and provenance
 
+The versions and hashes below are in [the provenance capture](captures/10-provenance.txt),
+which was taken after the run from the same install.
+
 | Component | Version | Provenance |
 |---|---|---|
-| OpenClaw | `2026.9.6 (eb377ac)` | npm `openclaw@2026.9.6`, installed into a private prefix. Registry integrity `sha512-Ie0kyQSCVfFqixsgVg39vevUDq01Ch5u3+7Yu5Y3qARczmdAe+lzp8bVnO9925rHiW/+CFp70zfORCyPmCH31g==` matched the installed package. Repository `openclaw/openclaw`, MIT. npm skipped install scripts. |
-| Node.js | `v24.21.0` win-x64 | Official zip; SHA-256 `158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541` matched `SHASUMS256.txt`. OpenClaw requires Node 24.16 or newer. |
-| markitdown-mcp | `0.0.1a7` | PyPI, wheel SHA-256 `e38dce929a28b210a936396c4e1546b30b02601667c79dfa104afd6a7e3b818b`. Source `microsoft/markitdown`. Installed with uv into an isolated Python 3.12 virtual environment. |
-| markitdown | `0.1.7` | Pinned to the release that the catalog entry's evidence cites. The resolver first chose `0.1.8`; the operator downgraded it and `uv pip check` reported no conflicts. |
-| Agent model | `anthropic/claude-sonnet-5` | OpenClaw's bundled `claude-cli` runtime, which runs the operator's logged-in Claude Code CLI. |
+| Platform | Windows 11 (`Windows-11-10.0.26200`) | Provenance capture. |
+| OpenClaw | `2026.9.6 (eb377ac)` | npm `openclaw@2026.9.6`, installed into a private prefix. The lockfile integrity equals the registry's `dist.integrity`. The package names `openclaw/openclaw` as its repository and MIT as its license. It requires Node `>=24.16.0 <25 \|\| >=26.1.0`. *Operator-observed:* npm skipped the package's install scripts. |
+| Node.js | `v24.21.0` win-x64 | Official zip. Its SHA-256 equals the `SHASUMS256.txt` line shown in the capture. |
+| markitdown-mcp | `0.0.1a7` | PyPI, source `microsoft/markitdown`. The capture lists PyPI's published file hashes. The installed version appears in [the uninstall capture](captures/09-pip-uninstall.txt). The installed wheel was not hash-pinned. It was installed with uv into an isolated Python 3.12 virtual environment. |
+| markitdown | `0.1.7` | The release the catalog entry's evidence cites; the installed version is in the uninstall capture. *Operator-observed:* the resolver first chose `0.1.8`, the operator pinned `0.1.7`, and `uv pip check` then reported no conflicts. |
+| Agent model | `anthropic/claude-sonnet-5` | Runs through OpenClaw's bundled `claude-cli` runtime, which launches the operator's logged-in Claude Code CLI ([config](inputs/exec-config.json), [result](captures/06-agent-exec.json)). |
 
-`MARKITDOWN_ENABLE_PLUGINS` was unset. The server was configured with an
-explicit tool filter that includes only `convert_to_markdown`.
+`MARKITDOWN_ENABLE_PLUGINS` was unset in the capture environment. The server
+was configured with a tool filter that includes only `convert_to_markdown`
+([show](captures/04-mcp-show.txt)).
 
 ## Procedure
 
-Every command ran with `OPENCLAW_STATE_DIR` set to a new, empty directory.
+All commands used one dedicated `OPENCLAW_STATE_DIR`. *Operator-observed:* the
+directory was newly created for this test.
 
 1. `openclaw mcp add markitdown --command <HOST_ROOT>\md-venv\Scripts\markitdown-mcp.exe --cwd <HOST_ROOT>\fixtures --include convert_to_markdown --timeout 60 --connect-timeout 60`
-   ([capture](captures/01-mcp-add.txt)). OpenClaw probes the server before it
-   saves it. A first attempt with the default 5-second connection timeout
-   failed: the server's cold start takes longer than 5 seconds, and OpenClaw
-   saved nothing. A 60-second connection timeout succeeded.
+   ([capture](captures/01-mcp-add.txt)). OpenClaw probes a server before saving
+   it. *Operator-observed:* an earlier attempt without `--connect-timeout`
+   failed with "did not complete initialize within 5s". The later add succeeded.
 2. Health check: `openclaw mcp probe markitdown --json`
    ([capture](captures/02-mcp-probe.json)). Then `mcp doctor`, `mcp show`, and
    `mcp list` ([doctor](captures/03-mcp-doctor.txt),
@@ -42,35 +50,44 @@ Every command ran with `OPENCLAW_STATE_DIR` set to a new, empty directory.
    ([unset](captures/07-mcp-unset.txt),
    [list after](captures/08-mcp-list-after-unset.txt),
    [pip](captures/09-pip-uninstall.txt)).
+5. State inspection after uninstall
+   ([capture](captures/11-state-after-uninstall.txt)). It covers:
+   - the file list of the state directory
+   - whether each config file still mentions the server
+   - row counts in credential-like SQLite tables
+   - SQLite rows that mention the server
+   - a byte search of the state files for common token markers
+   - the count of running `markitdown` processes
 
 ## Record
 
 | Field | Observed |
 |---|---|
-| Tested host surface | OpenClaw CLI `2026.9.6 (eb377ac)`: `openclaw mcp add/probe/doctor/show/list/unset` and one headless `openclaw agent exec` turn using the `claude-cli` runtime. The Gateway, channels, and interactive sessions were not tested. |
+| Tested host surface | OpenClaw CLI `2026.9.6 (eb377ac)`: `openclaw mcp add/probe/doctor/show/list/unset` and one headless `openclaw agent exec` turn using the `claude-cli` runtime, converting one local file. The Gateway, channels, interactive sessions, and HTTP or HTTPS conversions were not tested. |
 | Test date | 2026-09-26 (US Pacific). The probe capture's UTC timestamp is 2026-09-27. |
-| Credential model | MarkItDown needs no credentials, and OpenClaw's config stored none. The model turn used the operator's existing Claude Code login, which Claude Code stores in the user profile, because `--no-auth-env-only` allows external CLI credential discovery. After the run, every credential table in the state directory's SQLite databases had zero rows (`auth_profile_store`, `auth_profile_state`, `mcp_oauth_stores`, `secret_store_entries`, `worker_environment_credentials`, and the device and gateway token tables), and no token strings were found in the state files. |
-| Egress | The server was only used with a `file:` URI, so the conversion itself needed no network. The Claude Code child process reached Anthropic's API for the model turn. Network traffic was not monitored, so this record does not rule out other OpenClaw or Claude Code background traffic. |
-| Side effects | The integration read one synthetic fixture and made no writes. OpenClaw wrote `openclaw.json`, an `openclaw.json.bak` backup, and SQLite session state inside the disposable state directory. There were no destructive actions. |
-| Confirmation gates observed | **None fired.** The probe reports `codexApprovalMode: auto` and "tools have no safety annotations; calls require approval in prompting session postures". The headless `agent exec` turn called the tool without any prompt. The catalog requires confirming the exact URI before each conversion (`read_sensitive`). On this surface, that confirmation must come from the operator: here, the operator named the one fixture file in the prompt. |
+| Credential model | MarkItDown uses no credentials, and the saved OpenClaw config contains none. The model turn used the operator's existing Claude Code login, which `--no-auth-env-only` lets OpenClaw discover. The state inspection found zero rows in every credential-like table of the state SQLite databases, and no common token markers in the state files. Claude Code's own credential storage was outside this test and was not inspected. |
+| Egress | The only conversion used a `file:` URI. The result reports `anthropic` as the provider for the model turn. Network traffic was not monitored, so no destination, including any background traffic from OpenClaw or Claude Code, is measured here. |
+| Side effects | The tool is read-only in the catalog. It was called once, on the synthetic fixture. The state inspection lists the files OpenClaw left in its state directory: `openclaw.json`, `openclaw.json.bak`, SQLite databases, plugin skill files, and lock files. `exec-config.json` is the operator's own copy. No destructive command was run. Writes outside the state directory were not monitored. |
+| Confirmation gates observed | The probe reports `codexApprovalMode: auto` and "tools have no safety annotations; calls require approval in prompting session postures". The headless `agent exec` result shows a successful tool call and no confirmation event, and the command returned without operator input. The catalog requires confirming the exact URI before each conversion (`read_sensitive`), so on this surface that confirmation has to come from the operator. Here, the operator named the one fixture file in [the prompt](inputs/task.md). |
 | Health check | `openclaw mcp probe markitdown --json` returned `"tools": ["markitdown__convert_to_markdown"]`, a per-server `"tools": 1`, and empty `diagnostics`. `openclaw mcp doctor` printed `markitdown: ok`. |
-| Tool call | `toolSummary.tools` lists `ToolSearch` (Claude Code's deferred-tool loader) and `mcp__markitdown__convert_to_markdown`, with 0 failures. The reply reproduced the fixture's Markdown exactly. |
-| Uninstall | `openclaw mcp unset markitdown` removed the entry, and `mcp list` then reported no managed servers. `uv pip uninstall` removed both packages. No `markitdown-mcp` process remained. **Residue:** `openclaw.json.bak` still contains the removed server entry, and the session SQLite keeps the call history. Delete both or the whole state directory if the entry must not persist. There was no credential to revoke. |
+| Tool call | `toolSummary.tools` lists `ToolSearch` (Claude Code's deferred-tool loader) and `mcp__markitdown__convert_to_markdown`, with 0 failures. The reply begins with the fixture's text unchanged, followed by the requested `TOOL_USED` line and an unrelated note (see below). |
+| Uninstall | `openclaw mcp unset markitdown` removed the entry, and `mcp list` then reported no managed servers. `uv pip uninstall` removed both packages. The state inspection found no running `markitdown` process. **Residue:** `openclaw.json.bak` still names the removed server, and SQLite rows in the agent and state databases mention it. Delete the state directory if these must not persist. No credential was issued, so nothing needed revoking. |
 | Evidence location | This directory. |
 
 ## Host isolation finding
 
-The `claude-cli` runtime launches the user's normal Claude Code CLI, which
-loaded the operator's global Claude Code settings, including hooks. A personal
-session-start hook ran inside the OpenClaw turn and added an unrelated
-memory-sync note to the reply (visible in [the result](captures/06-agent-exec.json)).
-The result is kept verbatim. Anyone repeating this test should expect the
-agent's context to include their own Claude Code configuration, unless they
-run it under a separate Claude Code profile.
+The `claude-cli` runtime launches the user's own Claude Code CLI. The captured
+reply ends with a note about a memory-sync pull. That note came from the
+operator's personal Claude Code configuration, not from OpenClaw or MarkItDown.
+*Operator-observed:* the operator's settings, which are not published, define
+the session-start hook that does this sync. The reply is kept verbatim apart
+from the session ID. Anyone repeating this test should expect their own Claude
+Code configuration, including hooks, to apply inside the OpenClaw turn unless
+they use a separate Claude Code profile.
 
 ## Limits
 
-This record covers one integration, one host version, one platform (Windows 11),
-one headless turn, one local fixture, and the `claude-cli` runtime only. HTTP
-and HTTPS conversions, the Gateway, OpenClaw's embedded runtime with API-key
+This record covers one integration, one host version, one platform, one
+headless turn, one local fixture, and only the `claude-cli` runtime. HTTP and
+HTTPS conversions, the Gateway, OpenClaw's embedded runtime with API-key
 providers, and other operating systems were not tested.
