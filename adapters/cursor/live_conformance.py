@@ -23,6 +23,7 @@ from typing import Callable, Mapping, Sequence
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 REQUIRED_FLAGS = ("--print", "--force", "--workspace", "--trust", "--mode", "--output-format")
+WRITE_TOOL_KINDS = ("editToolCall", "writeToolCall")
 DISPOSABLE_MARKER = ".context-os-cursor-live-disposable"
 
 
@@ -169,32 +170,34 @@ def require_denied_write_attempt(
     ]
     if len(terminal) != 1 or not isinstance(terminal[0].get("result"), str):
         raise HarnessError(f"{subject} did not complete with one successful stream result")
-    attempts: dict[str, Mapping[str, object]] = {}
+    # Cursor CLI 2026.09.23-86fc751 reports file writes as editToolCall. Its
+    # completed event omits args, so completions match their started call_id.
+    attempts: dict[str, str] = {}
     for event in events:
         tool_call = event.get("tool_call")
-        if not isinstance(tool_call, dict):
-            continue
-        write = tool_call.get("writeToolCall")
-        args = write.get("args") if isinstance(write, dict) else None
-        path = args.get("path") if isinstance(args, dict) else None
         call_id = event.get("call_id")
-        if not isinstance(path, str) or not isinstance(call_id, str) or Path(path).name != filename:
+        if not isinstance(tool_call, dict) or not isinstance(call_id, str):
             continue
-        target = (workspace / path).resolve(strict=False) if not Path(path).is_absolute() else Path(path).resolve(strict=False)
-        try:
-            target.relative_to(workspace.resolve())
-        except ValueError as exc:
-            raise HarnessError(f"{subject} attempted a write outside the disposable workspace") from exc
+        kinds = [kind for kind in WRITE_TOOL_KINDS if isinstance(tool_call.get(kind), dict)]
+        if len(kinds) != 1:
+            continue
+        write = tool_call[kinds[0]]
         if event.get("subtype") == "started":
-            attempts[call_id] = write
-        elif event.get("subtype") == "completed" and call_id in attempts:
-            outcome = write.get("result") if isinstance(write, dict) else None
-            if isinstance(outcome, dict) and "error" in outcome:
-                raise HarnessError(f"{subject} write failed for a reason other than policy denial")
-            if isinstance(outcome, dict) and "success" not in outcome and any(
-                key in outcome for key in ("denied", "rejected")
-            ):
+            args = write.get("args")
+            path = args.get("path") if isinstance(args, dict) else None
+            if not isinstance(path, str) or Path(path).name != filename:
+                continue
+            target = (workspace / path).resolve(strict=False) if not Path(path).is_absolute() else Path(path).resolve(strict=False)
+            try:
+                target.relative_to(workspace.resolve())
+            except ValueError as exc:
+                raise HarnessError(f"{subject} attempted a write outside the disposable workspace") from exc
+            attempts[call_id] = kinds[0]
+        elif event.get("subtype") == "completed" and attempts.get(call_id) == kinds[0]:
+            outcome = write.get("result")
+            if isinstance(outcome, dict) and set(outcome) == {"writePermissionDenied"}:
                 return
+            raise HarnessError(f"{subject} write failed for a reason other than policy denial")
     raise HarnessError(f"{subject} did not record a rejected denied write through Cursor")
 
 

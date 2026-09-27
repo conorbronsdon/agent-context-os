@@ -21,6 +21,19 @@ sys.modules[SPEC.name] = live
 SPEC.loader.exec_module(live)
 
 
+DENY_STREAM = ROOT / "tests/fixtures/cursor/deny-stream-2026.09.23-86fc751.jsonl"
+
+
+def observed_deny_stream(path: str) -> list[dict]:
+    """Return the recorded Cursor CLI deny stream with its write aimed at path."""
+    events = [json.loads(line) for line in DENY_STREAM.read_text(encoding="utf-8").splitlines()]
+    for event in events:
+        edit = event.get("tool_call", {}).get("editToolCall", {})
+        if event.get("subtype") == "started" and "args" in edit:
+            edit["args"]["path"] = path
+    return events
+
+
 class CursorLiveHarnessTest(unittest.TestCase):
     def setUp(self) -> None:
         environment = mock.patch.dict(os.environ, {"CURSOR_CONFIG_DIR": "", "XDG_CONFIG_HOME": ""})
@@ -275,11 +288,47 @@ class CursorLiveHarnessTest(unittest.TestCase):
                 live.CommandResult([], 0, terminal, ""), self.root, "denied.txt", "deny"
             )
 
+    def test_deny_precedence_accepts_the_observed_cursor_denial_stream(self) -> None:
+        stream = "\n".join(json.dumps(item) for item in observed_deny_stream(str(self.root / "denied.txt")))
+        live.require_denied_write_attempt(
+            live.CommandResult([], 0, stream, ""), self.root, "denied.txt", "deny"
+        )
+
+    def test_deny_precedence_rejects_other_completions_and_unmatched_calls(self) -> None:
+        cases = {
+            "success": {"success": {"path": "denied.txt"}},
+            "denial plus success": {"writePermissionDenied": {}, "success": {}},
+            "legacy invented key": {"denied": {"reason": "policy"}},
+        }
+        for name, outcome in cases.items():
+            with self.subTest(name=name):
+                events = observed_deny_stream(str(self.root / "denied.txt"))
+                completed = next(e for e in events if e.get("subtype") == "completed" and "editToolCall" in e.get("tool_call", {}))
+                completed["tool_call"]["editToolCall"]["result"] = outcome
+                stream = "\n".join(json.dumps(item) for item in events)
+                with self.assertRaisesRegex(live.HarnessError, "other than policy"):
+                    live.require_denied_write_attempt(
+                        live.CommandResult([], 0, stream, ""), self.root, "denied.txt", "deny"
+                    )
+        events = observed_deny_stream(str(self.root / "denied.txt"))
+        for event in events:
+            if event.get("subtype") == "completed" and "editToolCall" in event.get("tool_call", {}):
+                event["call_id"] = "unmatched"
+        stream = "\n".join(json.dumps(item) for item in events)
+        with self.assertRaisesRegex(live.HarnessError, "rejected denied write"):
+            live.require_denied_write_attempt(
+                live.CommandResult([], 0, stream, ""), self.root, "denied.txt", "deny"
+            )
+        events = observed_deny_stream(str(self.root / "other.txt"))
+        stream = "\n".join(json.dumps(item) for item in events)
+        with self.assertRaisesRegex(live.HarnessError, "rejected denied write"):
+            live.require_denied_write_attempt(
+                live.CommandResult([], 0, stream, ""), self.root, "denied.txt", "deny"
+            )
+
     def test_deny_precedence_rejects_an_outside_workspace_attempt(self) -> None:
         stream = "\n".join(json.dumps(item) for item in [
-            {"type": "tool_call", "subtype": "started", "call_id": "call-1", "tool_call": {"writeToolCall": {"args": {"path": str(self.root.parent / "denied.txt")}}}},
-            {"type": "tool_call", "subtype": "completed", "call_id": "call-1", "tool_call": {"writeToolCall": {"args": {"path": str(self.root.parent / "denied.txt")}, "result": {"denied": {"reason": "policy"}}}}},
-            {"type": "result", "subtype": "success", "is_error": False, "result": "Denied"},
+            *observed_deny_stream(str(self.root.parent / "denied.txt")),
         ])
         with self.assertRaisesRegex(live.HarnessError, "outside"):
             live.require_denied_write_attempt(
@@ -288,8 +337,8 @@ class CursorLiveHarnessTest(unittest.TestCase):
 
     def test_deny_precedence_rejects_non_policy_tool_errors(self) -> None:
         stream = "\n".join(json.dumps(item) for item in [
-            {"type": "tool_call", "subtype": "started", "call_id": "call-1", "tool_call": {"writeToolCall": {"args": {"path": "denied.txt"}}}},
-            {"type": "tool_call", "subtype": "completed", "call_id": "call-1", "tool_call": {"writeToolCall": {"args": {"path": "denied.txt"}, "result": {"error": {"reason": "disk full"}}}}},
+            {"type": "tool_call", "subtype": "started", "call_id": "call-1", "tool_call": {"editToolCall": {"args": {"path": "denied.txt"}}}},
+            {"type": "tool_call", "subtype": "completed", "call_id": "call-1", "tool_call": {"editToolCall": {"result": {"error": {"error": "disk full"}}}}},
             {"type": "result", "subtype": "success", "is_error": False, "result": "Write failed"},
         ])
         with self.assertRaisesRegex(live.HarnessError, "other than policy"):
@@ -335,11 +384,7 @@ class CursorLiveHarnessTest(unittest.TestCase):
             if "proposed.txt" in prompt:
                 return live.CommandResult([], 0, json_result("PROPOSED_ONLY"), "")
             if "denied.txt" in prompt:
-                stream = [
-                    {"type": "tool_call", "subtype": "started", "call_id": "call-denied", "tool_call": {"writeToolCall": {"args": {"path": "denied.txt"}}}},
-                    {"type": "tool_call", "subtype": "completed", "call_id": "call-denied", "tool_call": {"writeToolCall": {"args": {"path": "denied.txt"}, "result": {"denied": {"reason": "policy"}}}}},
-                    {"type": "result", "subtype": "success", "is_error": False, "result": "Write denied"},
-                ]
+                stream = observed_deny_stream(str(workspace / "denied.txt"))
                 return live.CommandResult([], 0, "\n".join(json.dumps(item) for item in stream), "")
             if "allowed.txt" in prompt:
                 (workspace / "allowed.txt").write_text("ALLOWED_CONTROL\n", encoding="utf-8")
