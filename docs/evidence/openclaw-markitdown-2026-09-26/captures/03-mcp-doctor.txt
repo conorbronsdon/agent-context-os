@@ -1,0 +1,2 @@
+MCP doctor (<HOST_ROOT>\state-md\openclaw.json):
+- markitdown: ok

@@ -1,0 +1,1 @@
+Removed MCP server "markitdown" from <HOST_ROOT>\state-md\openclaw.json.

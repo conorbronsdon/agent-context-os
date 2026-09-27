@@ -1,0 +1,12 @@
+OpenClaw-managed MCP server "markitdown" (<HOST_ROOT>\state-md\openclaw.json):
+{
+  "command": "<HOST_ROOT>\\md-venv\\Scripts\\markitdown-mcp.exe",
+  "cwd": "<HOST_ROOT>\\fixtures",
+  "requestTimeoutMs": 60000,
+  "connectionTimeoutMs": 60000,
+  "toolFilter": {
+    "include": [
+      "convert_to_markdown"
+    ]
+  }
+}

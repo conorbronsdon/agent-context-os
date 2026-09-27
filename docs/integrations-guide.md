@@ -23,13 +23,15 @@ health-check command and observed output shape, verified uninstall and credentia
 revocation steps, and the location of the test evidence. Keep credentials and
 private data out of that record.
 
-The current catalog schema cannot express `openclaw` or per-host evidence. Until
-at least one real integration is tested through OpenClaw, the schema, generator,
-catalog, and chooser must not declare OpenClaw integration support. Contributors
-who have run that test can submit the optional host-evidence section of the
-[integration proposal](../.github/ISSUE_TEMPLATE/integration-proposal.md),
-including an evidence location for review. The first proven entry can then
-motivate a schema and rendering change; the core adapter remains separate.
+The catalog schema now expresses per-host evidence in `host_evidence`. An entry
+that lists `openclaw` in `supported_agents` must include a matching record with
+the fields above and a repository evidence path. MarkItDown MCP
+is the first entry with a documented OpenClaw test (CLI commands and one headless local-file turn), with the [OpenClaw test record](evidence/openclaw-markitdown-2026-09-26/README.md).
+No confirmation event appears in its retained headless agent result, so the operator must
+confirm the exact URI before each conversion. The [integration proposal](../.github/ISSUE_TEMPLATE/integration-proposal.md)
+lists the host-evidence fields for future entries. The core adapter's runtime
+tier remains separate from integration support, and generic MCP support never
+implies support on a named host.
 
 ## Outcome chooser
 

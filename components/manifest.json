@@ -801,6 +801,66 @@
                     "policy": "development"
                 },
                 {
+                    "path": "docs/evidence/openclaw-markitdown-2026-09-26/README.md",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/openclaw-markitdown-2026-09-26/inputs/exec-config.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/openclaw-markitdown-2026-09-26/inputs/proof.txt",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/openclaw-markitdown-2026-09-26/inputs/task.md",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/openclaw-markitdown-2026-09-26/captures/01-mcp-add.txt",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/openclaw-markitdown-2026-09-26/captures/02-mcp-probe.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/openclaw-markitdown-2026-09-26/captures/03-mcp-doctor.txt",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/openclaw-markitdown-2026-09-26/captures/04-mcp-show.txt",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/openclaw-markitdown-2026-09-26/captures/05-mcp-list.txt",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/openclaw-markitdown-2026-09-26/captures/06-agent-exec.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/openclaw-markitdown-2026-09-26/captures/07-mcp-unset.txt",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/openclaw-markitdown-2026-09-26/captures/08-mcp-list-after-unset.txt",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/openclaw-markitdown-2026-09-26/captures/09-pip-uninstall.txt",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/openclaw-markitdown-2026-09-26/captures/10-provenance.txt",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/openclaw-markitdown-2026-09-26/captures/11-state-after-uninstall.txt",
+                    "policy": "development"
+                },
+                {
                     "path": "docs/continuity.md",
                     "policy": "managed"
                 },

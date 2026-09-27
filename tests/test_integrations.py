@@ -6,6 +6,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +28,12 @@ class IntegrationCatalogTests(unittest.TestCase):
         mutate(catalog)
         with self.assertRaises(MODULE.CatalogError):
             MODULE.validate_catalog(catalog)
+
+    def assert_invalid_host_record(self, change) -> None:
+        def mutate(catalog) -> None:
+            item = next(item for item in catalog["integrations"] if item["id"] == "markitdown-mcp")
+            change(item, item["host_evidence"][0])
+        self.assert_invalid(mutate)
 
     def test_catalog_has_expected_entries_and_visible_safety_columns(self) -> None:
         rendered = MODULE.render_reference(self.catalog)
@@ -66,31 +73,153 @@ class IntegrationCatalogTests(unittest.TestCase):
         self.assertTrue(rendered.endswith("\n"))
         self.assertFalse(rendered.endswith("\n\n"))
 
-    def test_openclaw_host_claims_wait_for_host_evidence_schema(self) -> None:
+    def test_openclaw_requires_host_evidence_and_core_runtime_is_separate(self) -> None:
         guide = (ROOT / "docs" / "integrations-guide.md").read_text(encoding="utf-8")
-        self.assertIn(
-            "The current catalog schema cannot express `openclaw` or per-host evidence.",
-            guide,
-        )
-        self.assertNotIn("openclaw", MODULE.AGENTS)
-        self.assertNotIn("openclaw", {item["id"] for item in self.catalog["integrations"]})
-        self.assertTrue(
-            all("openclaw" not in item["supported_agents"] for item in self.catalog["integrations"])
-        )
+        self.assertIn("openclaw", MODULE.AGENTS)
+        self.assertEqual(MODULE.HOSTS_REQUIRING_EVIDENCE, {"openclaw"})
+        self.assertIn("core adapter's runtime", guide)
         self.assert_invalid(
-            lambda catalog: catalog["integrations"][0]["supported_agents"].append("openclaw")
-        )
-        self.assert_invalid(
-            lambda catalog: catalog["integrations"][0].update({"host_evidence": {}})
+            lambda catalog: next(
+                item for item in catalog["integrations"] if item["id"] == "markitdown-mcp"
+            ).pop("host_evidence")
         )
         runtime = json.loads((ROOT / "runtimes" / "openclaw.json").read_text(encoding="utf-8"))
         self.assertEqual(runtime["support_tier"], "first-class")
+        self.assertEqual(runtime["runtime"], "openclaw")
+        self.assertNotIn("host_evidence", runtime)
 
-    def test_mcp_entries_do_not_render_openclaw_support(self) -> None:
-        self.assertTrue(any(item["kind"] == "mcp_server" for item in self.catalog["integrations"]))
-        self.assertNotIn('"openclaw"', MODULE.render_catalog(self.catalog))
+    def test_markitdown_is_the_only_openclaw_claim_and_renders_its_evidence(self) -> None:
+        claimants = [
+            item for item in self.catalog["integrations"]
+            if "openclaw" in item["supported_agents"]
+        ]
+        self.assertEqual([item["id"] for item in claimants], ["markitdown-mcp"])
+        record = claimants[0]["host_evidence"][0]
+        self.assertEqual(record["host"], "openclaw")
+        self.assertEqual(record["host_version"], "2026.9.6 (eb377ac)")
+        self.assertEqual(record["tested_on"], "2026-09-26")
+        self.assertTrue((ROOT / record["evidence"]).is_file())
+        self.assertIn("claude-cli", record["surface"])
+        self.assertIn("operator must confirm the exact URI", record["confirmation_gates"])
         rendered = MODULE.render_reference(self.catalog)
-        self.assertNotIn("`openclaw`", rendered)
+        markitdown_section = rendered.split("## MarkItDown MCP\n\n", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("**Host evidence:** `openclaw` 2026.9.6 (eb377ac), 2026-09-26", markitdown_section)
+        self.assertIn(f"[record](../{record['evidence']})", markitdown_section)
+        self.assertIn(record["confirmation_gates"], markitdown_section)
+        self.assertIn('"host_evidence"', MODULE.render_catalog(self.catalog))
+
+    def test_host_evidence_requires_supported_host(self) -> None:
+        self.assert_invalid_host_record(
+            lambda item, record: item["supported_agents"].remove("openclaw")
+        )
+
+    def test_host_evidence_requires_exact_fields(self) -> None:
+        changes = (
+            lambda item, record: record.update({"unexpected": "value"}),
+            lambda item, record: record.pop("surface"),
+            lambda item, record: record["health_check"].pop("command"),
+            lambda item, record: record["health_check"].update({"extra": "value"}),
+        )
+        for index, change in enumerate(changes):
+            with self.subTest(case=index):
+                self.assert_invalid_host_record(change)
+
+    def test_host_evidence_requires_structured_values(self) -> None:
+        catalog = copy.deepcopy(self.catalog)
+        item = next(item for item in catalog["integrations"] if item["id"] == "markitdown-mcp")
+        item["host_evidence"] = "openclaw"
+        with self.assertRaisesRegex(MODULE.CatalogError, "host_evidence: expected an array"):
+            MODULE.validate_catalog(catalog)
+        item["host_evidence"] = ["openclaw"]
+        with self.assertRaisesRegex(MODULE.CatalogError, "expected an object"):
+            MODULE.validate_catalog(catalog)
+        item["host_evidence"] = copy.deepcopy(self.entry("markitdown-mcp")["host_evidence"])
+        item["host_evidence"][0]["health_check"] = "not an object"
+        with self.assertRaisesRegex(MODULE.CatalogError, "health_check: expected an object"):
+            MODULE.validate_catalog(catalog)
+
+    def test_host_evidence_rejects_invalid_dates(self) -> None:
+        for date in ("2026-02-30", "2026-9-26", "20260926", "9999-01-01"):
+            with self.subTest(date=date):
+                self.assert_invalid_host_record(
+                    lambda item, record, value=date: record.update({"tested_on": value})
+                )
+
+    def test_host_evidence_requires_repo_relative_existing_path(self) -> None:
+        existing_absolute = str(ROOT / self.entry("markitdown-mcp")["host_evidence"][0]["evidence"])
+        for path in (
+            "/docs/evidence/openclaw-markitdown-2026-09-26/README.md",
+            "C:/evidence/README.md",
+            existing_absolute,
+            "docs\\evidence\\openclaw-markitdown-2026-09-26\\README.md",
+            "docs/evidence/evil) [forged](x/README.md",
+            "docs/evidence/a b.md",
+        ):
+            with self.subTest(path=path):
+                self.assert_invalid_host_record(
+                    lambda item, record, value=path: record.update({"evidence": value})
+                )
+        self.assert_invalid_host_record(
+            lambda item, record: record.update(
+                {"evidence": "docs/../docs/evidence/openclaw-markitdown-2026-09-26/README.md"}
+            )
+        )
+        self.assert_invalid_host_record(
+            lambda item, record: record.update({"evidence": "docs/evidence/missing/README.md"})
+        )
+
+    def test_host_evidence_path_rejects_markdown_link_characters_even_when_present(self) -> None:
+        with mock.patch.object(Path, "exists", return_value=True):
+            for path in ("docs/evidence/evil) [forged](x/README.md", "docs/evidence/a<b>.md"):
+                with self.subTest(path=path):
+                    self.assert_invalid_host_record(
+                        lambda item, record, value=path: record.update({"evidence": value})
+                    )
+
+    def test_host_evidence_path_cannot_resolve_outside_repository(self) -> None:
+        candidate = ROOT / self.entry("markitdown-mcp")["host_evidence"][0]["evidence"]
+        original_resolve = Path.resolve
+
+        def resolve(path, *args, **kwargs):
+            if path == candidate:
+                return ROOT.parent
+            return original_resolve(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "resolve", resolve):
+            self.assert_invalid_host_record(lambda item, record: None)
+
+    def test_host_evidence_requires_nonempty_text_and_string_list(self) -> None:
+        for field in (
+            "host_version", "surface", "credentials", "side_effects",
+            "confirmation_gates", "uninstall", "evidence",
+        ):
+            with self.subTest(field=field):
+                self.assert_invalid_host_record(
+                    lambda item, record, key=field: record.update({key: " "})
+                )
+        for value in ([""], "none"):
+            with self.subTest(egress=value):
+                self.assert_invalid_host_record(
+                    lambda item, record, replacement=value: record.update({"egress": replacement})
+                )
+        self.assert_invalid_host_record(
+            lambda item, record: record["health_check"].update({"output_shape": " "})
+        )
+
+    def test_host_evidence_rejects_unknown_or_malformed_host(self) -> None:
+        for value in ("unknown", []):
+            with self.subTest(host=value):
+                self.assert_invalid_host_record(
+                    lambda item, record, replacement=value: record.update({"host": replacement})
+                )
+        self.assert_invalid_host_record(
+            lambda item, record: item.update({"host_evidence": {"host": "openclaw"}})
+        )
+
+    def test_host_evidence_rejects_duplicate_hosts(self) -> None:
+        self.assert_invalid_host_record(
+            lambda item, record: item["host_evidence"].append(copy.deepcopy(record))
+        )
 
     def test_mcp_chooser_does_not_imply_openclaw_support(self) -> None:
         guide = (ROOT / "docs" / "integrations-guide.md").read_text(encoding="utf-8")

@@ -6,8 +6,14 @@
 - The Cursor CLI deny-precedence control recognizes the client's observed
   `editToolCall` / `writePermissionDenied` stream. Cursor CLI
   `2026.09.26-dd393fe` then passed all live CLI controls
-  (`docs/evidence/cursor-cli-2026-09-26/`); the IDE surface is still
+  (`docs/evidence/cursor-cli-2026-09-26/`). An IDE `3.21.18` operator run is
+  recorded as a diagnostic (`docs/evidence/cursor-ide-2026-09-26/`): Agent mode
+  wrote files before any approval, so the IDE surface is still
   unverified (#73).
+- Hermes live conformance checks provider keys before model calls and records a
+  separate setup control. Parallel `skill_view` requests now retain their
+  matching result across other tool events; the adapter documents the
+  v0.21.4 stream flags and terminal credential scrubbing (#214).
 - The long continuity `handoff-sentences` fixture keeps interrupted status and
   its qualifiers in one sentence, with full-answer citation quotes (#218).
 - A 15-trial same-day rerun (`docs/evidence/continuity-rerun-218-2026-09-26/`)
@@ -58,6 +64,9 @@
   command sources and lifecycle artifacts remain covered.
 
 ### Added
+- Per-host integration evidence in the catalog and generated reference, with
+  OpenClaw support requiring a test record. MarkItDown MCP is the first entry,
+  based on its OpenClaw CLI and headless agent test (#147).
 - Lifecycle templates, the starter handoff, and the end and update skills ask
   for one self-contained sentence per fact that names its subject (#206).
 - A same-day continuity rerun (`docs/evidence/continuity-rerun-2026-09-26/`)

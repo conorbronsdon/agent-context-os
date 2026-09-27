@@ -1,0 +1,2 @@
+No OpenClaw-managed MCP servers configured in <HOST_ROOT>\state-md\openclaw.json. Add one with openclaw mcp set <name> '{"command":"uvx","args":["context7-mcp"]}'.
+Note: this command only shows OpenClaw-managed mcp.servers entries and does not include mcporter servers from config/mcporter.json.

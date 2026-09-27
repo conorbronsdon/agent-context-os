@@ -319,7 +319,7 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
 
     events, assistant, final, skills = [], [], [], []
     self_read = False
-    requested_skill = None
+    requested_skills: list[tuple[str, object]] = []
     for line in output.splitlines():
         try:
             event = json.loads(line)
@@ -331,10 +331,9 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
         if kind == "tool_use":
             name = event.get("name")
             detail = event.get("input", {})
-            requested_skill = None
             if name == "skill_view" and isinstance(detail, dict) and isinstance(detail.get("name"), str):
-                requested_skill = (detail["name"], event.get("id"))
-                skills.append(clean(requested_skill[0], markers))
+                requested_skills.append((detail["name"], event.get("id")))
+                skills.append(clean(detail["name"], markers))
             if name != "write_file" and (name in READ_TOOLS or (isinstance(detail, dict) and
                                       any(key in detail for key in ("path", "command", "pattern", "code")))):
                 detail_text = " ".join(strings(detail))
@@ -350,13 +349,20 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
             found, inconclusive = marker_hits(content)
             self_read = self_read or inconclusive
             allowed = set()
-            if (event.get("name") == "skill_view" and requested_skill
-                    and requested_skill[0] in (phase, f"context-{phase}")
-                    and event.get("id") == requested_skill[1] and isinstance(known, dict)):
-                allowed = {known[requested_skill[0]]}
+            event_id = event.get("id")
+            matching = [request for request in requested_skills if request[1] == event_id]
+            if event.get("name") == "skill_view" and matching:
+                # ID-less requests can share a result slot; allow only this phase's skill.
+                own = [request for request in matching if request[0] in (phase, f"context-{phase}")]
+                if own and isinstance(known, dict):
+                    allowed = {known[request[0]] for request in own if request[0] in known}
+                requested_skills.remove((own or matching)[0])
+            elif event_id is not None:
+                # Any other result for a pending ID consumes it, so it cannot be replayed.
+                for request in matching:
+                    requested_skills.remove(request)
             if found - allowed:
                 self_read = True
-            requested_skill = None
         if kind in ("assistant", "assistant_message") or (kind == "message" and event.get("role") == "assistant"):
             content = event.get("content", event.get("text", ""))
             if isinstance(content, str):
@@ -549,6 +555,19 @@ def hermes_environment(home: Path, provider: str, allow: Sequence[str] = ()) -> 
     return env
 
 
+def check_provider_key(provider: str, env: dict[str, str], allow: Sequence[str]) -> None:
+    expected = {"openrouter": "OPENROUTER_API_KEY", "openai": "OPENAI_API_KEY",
+                "anthropic": "ANTHROPIC_API_KEY"}.get(provider.lower())
+    available = {name.upper() for name, value in env.items() if value.strip()}
+    if expected:
+        if expected not in available:
+            raise HarnessError(f"provider {provider!r} requires {expected} in the filtered environment")
+    elif not any(name.upper() in available and name.upper().endswith(("_API_KEY", "_TOKEN"))
+                 for name in allow):
+        raise HarnessError(f"provider {provider!r} requires --env-allow NAME for a populated "
+                           "_API_KEY or _TOKEN variable, or --no-key-check")
+
+
 def new_proposal(fixture: Path, before: set[Path], phase: str) -> tuple[Path, dict]:
     folder = fixture / ".context-os" / "proposals"
     if is_link_like(folder) or is_link_like(folder.parent):
@@ -578,7 +597,7 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
            provider: str, run_budget: int, max_turns: int, input_fn=input,
            expected_version: str = "", approval_dir: Path | None = None,
            approval_timeout: float = 900, manifest_path: Path | None = None,
-           env_allow: Sequence[str] = ()) -> dict:
+           env_allow: Sequence[str] = (), no_key_check: bool = False) -> dict:
     fixture, home, evidence = fixture.resolve(), home.resolve(), evidence.resolve(strict=False)
     if not home.is_dir() or fixture in home.parents or home in fixture.parents:
         raise HarnessError("HERMES_HOME must be a separate existing directory")
@@ -619,7 +638,7 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
               "operator_mode": "approval-dir" if approval_dir is not None else "interactive",
               "model": route_id(model, "model"), "provider": route_id(provider, "provider"),
               "controls": {name: "unsupported" for name in (
-                  "version", "agents_discovery", "setup_discovery", "setup_proposal_apply",
+                  "provider_key_preflight", "version", "agents_discovery", "setup_discovery", "setup_proposal_apply",
                   "start_discovery", "start_read_only", "update_discovery", "update_proposal_apply",
                   "end_discovery", "end_proposal_apply", "wrong_digest_rejected", "stale_target_rejected",
                   "memory_separation", "unrelated_sentinel", "hook_example")},
@@ -630,8 +649,14 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
     memory_before = native_memory_state(home)
     memory_contents = native_memory_contents(home)
     sentinel = sha(fixture / "unrelated-sentinel.txt")
-    current_control = "version"
+    current_control = "provider_key_preflight"
     try:
+        if no_key_check:
+            result["controls"][current_control] = "bypassed"
+        else:
+            check_provider_key(provider, env, env_allow)
+            result["controls"][current_control] = "passed"
+        current_control = "version"
         version = command([*binary, "--version"], fixture, env)
         result["commands"].append(version)
         current_control = "memory_separation"
@@ -764,6 +789,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     for flag in ("fixture", "home", "manifest", "evidence", "binary", "model", "provider", "expected-version"):
         run.add_argument("--" + flag, required=True)
     run.add_argument("--env-allow", action="append", default=[], metavar="NAME")
+    run.add_argument("--no-key-check", action="store_true")
     run.add_argument("--run-budget", type=int, default=120)
     run.add_argument("--max-turns", type=int, default=20)
     run.add_argument("--approval-dir")
@@ -778,7 +804,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = record(Path(args.fixture), Path(args.home), Path(args.evidence), [args.binary], args.model, args.provider, args.run_budget, args.max_turns,
                             expected_version=args.expected_version,
                             approval_dir=Path(args.approval_dir) if args.approval_dir else None,
-                            manifest_path=Path(args.manifest), env_allow=args.env_allow)
+                            manifest_path=Path(args.manifest), env_allow=args.env_allow,
+                            no_key_check=args.no_key_check)
             print(json.dumps({"controls": result["controls"], "evidence": args.evidence}, indent=2))
             return 0 if result["controls"]["run"] == "passed" else 1
     except HarnessError as exc:

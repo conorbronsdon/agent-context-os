@@ -38,13 +38,28 @@ if sys.argv[sys.argv.index('--format') + 1] != 'stream-json':
     sys.exit(3)
 def emit(event):
     print(json.dumps(event))
-emit({'type': 'tool_use', 'id': 'skill-1', 'name': 'skill_view', 'input': {'name': 'context-' + phase}})
+if mode == 'skill-view-idless-pair':
+    emit({'type': 'tool_use', 'name': 'skill_view', 'input': {'name': phase}})
+    emit({'type': 'tool_use', 'name': 'skill_view', 'input': {'name': 'context-' + phase}})
+else:
+    emit({'type': 'tool_use', 'id': 'skill-1', 'name': 'skill_view', 'input': {'name': 'context-' + phase}})
+if mode == 'skill-view-id-consumed':
+    emit({'type': 'tool_result', 'id': 'skill-1', 'name': 'read_file', 'output': 'ordinary fixture data'})
+if mode.startswith('parallel-skill-view'):
+    emit({'type': 'tool_use', 'id': 'ordinary-1', 'name': 'read_file', 'input': {'path': 'TODO.md'}})
+    emit({'type': 'tool_result', 'id': 'ordinary-1', 'name': 'read_file', 'output': 'ordinary fixture data'})
 skill = (root / '.agents' / 'skills' / ('context-' + phase) / 'SKILL.md').read_text()
-if mode == 'skill-view-other-phase':
+if mode in ('skill-view-other-phase', 'parallel-skill-view-other-phase'):
     skill += (root / '.agents' / 'skills' / 'context-start' / 'SKILL.md').read_text()
-if mode == 'skill-view-native-memory':
+if mode in ('skill-view-native-memory', 'parallel-skill-view-native-memory'):
     skill += (pathlib.Path(os.environ['HERMES_HOME']) / 'memories' / 'USER.md').read_text()
-emit({'type': 'tool_result', 'id': 'skill-1', 'name': 'skill_view', 'output': skill})
+if mode == 'skill-view-idless-pair':
+    emit({'type': 'tool_result', 'name': 'skill_view', 'output': skill})
+    emit({'type': 'tool_result', 'name': 'skill_view', 'output': skill})
+else:
+    emit({'type': 'tool_result', 'id': 'skill-1', 'name': 'skill_view', 'output': skill})
+if mode == 'skill-view-replayed-result':
+    emit({'type': 'tool_result', 'id': 'skill-1', 'name': 'skill_view', 'output': skill})
 if mode == 'write-agents-word':
     emit({'type': 'tool_use', 'name': 'write_file', 'input': {'path': 'identity/hermes-fixture.md',
           'content': 'The agents loaded .agents/skills/context-setup/SKILL.md'}})
@@ -218,10 +233,12 @@ class HermesLiveHarnessTest(unittest.TestCase):
                                   "--evidence", "evidence", "--binary", "hermes",
                                   "--model", "model", "--provider", "provider",
                                   "--expected-version", "Hermes Agent v0.21.4",
-                                  "--approval-dir", str(approval_dir), "--env-allow", "PRIVATE_TEST"])
+                                  "--approval-dir", str(approval_dir), "--env-allow", "PRIVATE_TEST",
+                                  "--no-key-check"])
         self.assertEqual(0, code)
         self.assertEqual(approval_dir, record.call_args.kwargs["approval_dir"])
         self.assertEqual(["PRIVATE_TEST"], record.call_args.kwargs["env_allow"])
+        self.assertTrue(record.call_args.kwargs["no_key_check"])
 
     def test_prepare_rejects_checkout_path(self) -> None:
         with self.assertRaisesRegex(live.HarnessError, "separate, non-nested"):
@@ -266,7 +283,7 @@ class HermesLiveHarnessTest(unittest.TestCase):
             live.new_proposal(self.fixture, set(), "update")
 
     def run_record(self, mode: str = "", input_fn=None, approval_dir=None,
-                   approval_timeout=900, provider="fake") -> dict:
+                   approval_timeout=900, provider="fake", env_allow=(), no_key_check=None) -> dict:
         original_command = live.command
         def kernel_command(argv, cwd, env=None, timeout=120, raw_output=False):
             if mode == "accept-wrong" and argv[:2] == ["bash", "scripts/contextos.sh"] and "0" * 64 in argv:
@@ -298,7 +315,8 @@ class HermesLiveHarnessTest(unittest.TestCase):
                                    input_fn=input_fn or (lambda prompt: prompt.split("digest ")[1].split()[0]),
                                    expected_version="Hermes Agent v0.21.4",
                                    approval_dir=approval_dir, approval_timeout=approval_timeout,
-                                   manifest_path=self.manifest_path, env_allow=("FAKE_HERMES_MODE",))
+                                   manifest_path=self.manifest_path, env_allow=("FAKE_HERMES_MODE", *env_allow),
+                                   no_key_check=(provider == "fake" if no_key_check is None else no_key_check))
 
     def test_generic_text_fails_canary(self) -> None:
         report = self.run_record("generic")
@@ -318,7 +336,8 @@ class HermesLiveHarnessTest(unittest.TestCase):
                      "evasion-grep", "evasion-manifest", "evasion-diff", "evasion-skill-glob",
                      "evasion-agents-glob", "evasion-show", "evasion-log", "evasion-rg",
                      "evasion-findstr", "evasion-select-string", "evasion-execute-code", "result-leak",
-                     "skill-view-other-phase", "skill-view-native-memory", "cat-agents"):
+                     "skill-view-other-phase", "skill-view-native-memory",
+                     "parallel-skill-view-other-phase", "parallel-skill-view-native-memory", "cat-agents"):
             with self.subTest(mode=mode):
                 self.evidence.unlink(missing_ok=True)
                 report = self.run_record(mode)
@@ -330,6 +349,24 @@ class HermesLiveHarnessTest(unittest.TestCase):
 
     def test_skill_view_result_is_not_self_read(self) -> None:
         report = self.run_record("skill-view-valid")
+        self.assertEqual("passed", report["controls"]["run"], report.get("failure"))
+
+    def test_parallel_skill_view_result_passes_discovery(self) -> None:
+        report = self.run_record("parallel-skill-view-valid")
+        self.assertEqual("passed", report["controls"]["setup_discovery"], report.get("failure"))
+        self.assertEqual("passed", report["controls"]["run"], report.get("failure"))
+
+    def test_replayed_skill_view_result_is_self_read(self) -> None:
+        for mode in ("skill-view-replayed-result", "skill-view-id-consumed"):
+            with self.subTest(mode=mode):
+                self.evidence.unlink(missing_ok=True)
+                report = self.run_record(mode)
+                self.assertEqual("failed", report["controls"]["setup_discovery"])
+                self.assertEqual("HarnessError: self-read: discovery not shown", report["failure"])
+
+    def test_idless_skill_view_pair_passes_discovery(self) -> None:
+        report = self.run_record("skill-view-idless-pair")
+        self.assertEqual("passed", report["controls"]["setup_discovery"], report.get("failure"))
         self.assertEqual("passed", report["controls"]["run"], report.get("failure"))
 
     def test_skill_view_native_memory_is_self_read(self) -> None:
@@ -470,6 +507,47 @@ class HermesLiveHarnessTest(unittest.TestCase):
         self.assertIn("OPENROUTER_API_KEY", report["environment_names"])
         self.assertEqual(["OPENROUTER_API_KEY"], report["api_key_names"])
         self.assertNotIn(provider_value, self.evidence.read_text(encoding="utf-8"))
+
+    def test_missing_provider_key_fails_setup_before_commands(self) -> None:
+        cases = (("openrouter", "OPENROUTER_API_KEY", ()),
+                 ("openai", "OPENAI_API_KEY", ("OPENAI_API_KEY",)),
+                 ("anthropic", "ANTHROPIC_API_KEY", ("ANTHROPIC_API_KEY",)))
+        for provider, key, allow in cases:
+            with self.subTest(provider=provider):
+                self.evidence.unlink(missing_ok=True)
+                with mock.patch.dict(os.environ, {key: ""}), mock.patch.object(
+                        live, "command", side_effect=AssertionError("command called")):
+                    report = self.run_record(provider=provider, env_allow=allow)
+                self.assertEqual("failed", report["controls"]["provider_key_preflight"])
+                self.assertEqual("unsupported", report["controls"]["setup_discovery"])
+                self.assertEqual([], report["commands"])
+                self.assertIn(provider, report["failure"])
+                self.assertIn(key, report["failure"])
+                self.assertIn("provider_key_preflight", self.evidence.read_text(encoding="utf-8"))
+
+    def test_known_provider_key_must_be_allowed_into_filtered_environment(self) -> None:
+        with mock.patch.dict(os.environ, {"OPENAI_API_KEY": "fixture-private"}), mock.patch.object(
+                live, "command", side_effect=AssertionError("command called")):
+            report = self.run_record(provider="openai")
+        self.assertEqual("failed", report["controls"]["provider_key_preflight"])
+        self.assertNotIn("OPENAI_API_KEY", report["environment_names"])
+        self.assertNotIn("fixture-private", self.evidence.read_text(encoding="utf-8"))
+
+    def test_unknown_provider_requires_allowed_key_or_explicit_bypass(self) -> None:
+        with mock.patch.dict(os.environ, {"CUSTOM_TOKEN": "fixture-private"}), mock.patch.object(
+                live, "command", side_effect=AssertionError("command called")):
+            report = self.run_record(provider="custom")
+        self.assertEqual("failed", report["controls"]["provider_key_preflight"])
+        self.assertIn("--env-allow", report["failure"])
+        self.assertEqual([], report["commands"])
+        self.assertNotIn("fixture-private", self.evidence.read_text(encoding="utf-8"))
+        self.evidence.unlink()
+        with mock.patch.dict(os.environ, {"CUSTOM_TOKEN": "fixture-private"}):
+            report = self.run_record(provider="custom", env_allow=("CUSTOM_TOKEN",))
+        self.assertEqual("passed", report["controls"]["provider_key_preflight"])
+        self.assertEqual("passed", report["controls"]["run"], report.get("failure"))
+        self.assertIn("CUSTOM_TOKEN", report["environment_names"])
+        self.assertNotIn("fixture-private", self.evidence.read_text(encoding="utf-8"))
 
     def test_environment_only_passes_selected_provider_key_and_network_settings(self) -> None:
         values = {"OPENROUTER_API_KEY": "fixture-openrouter", "OTHER_API_KEY": "fixture-other",
@@ -918,6 +996,7 @@ class HermesLiveHarnessTest(unittest.TestCase):
         self.assertEqual(manifest["source_sha"], report["source_sha"])
         self.assertEqual(manifest["fixture_commit"], report["fixture_commit"])
         self.assertEqual("interactive", report["operator_mode"])
+        self.assertEqual("bypassed", report["controls"]["provider_key_preflight"])
         self.assertIn("skill_view", [event.get("name") for event in report["commands"][1]["events"]])
         self.assertEqual(["context-setup"], report["commands"][1]["skill_view_names"])
         self.assertTrue(report["commands"][1]["argv"][-1].startswith("/context-setup"))

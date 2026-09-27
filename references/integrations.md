@@ -311,7 +311,7 @@ Capabilities and limits:
 
 Microsoft's local MCP server converts explicitly supplied file, HTTP, HTTPS, and data URIs to Markdown through one read-only tool.
 
-- **Supported agents:** `claude_code`, `codex`, `gemini_cli`, `cursor`, `opencode`, `generic`
+- **Supported agents:** `claude_code`, `codex`, `gemini_cli`, `cursor`, `opencode`, `openclaw`, `generic`
 - **Install scope:** `project_or_user`; never automatic
 - **Prerequisites:** Python with pip or Docker; An MCP-compatible client; Explicitly bounded file and network access for the server process; Third-party plugins disabled by leaving MARKITDOWN\_ENABLE\_PLUGINS unset or false
 - **Credentials:** None
@@ -322,6 +322,7 @@ Microsoft's local MCP server converts explicitly supplied file, HTTP, HTTPS, and
 - **Confirmation:** Confirm installation and the exact URI before each conversion; reject broad local paths, private-network targets, or untrusted remote content unless their read boundary is explicitly approved.
 - **Risk tags:** `local-data`, `sensitive-read`, `network-capable`, `open-world`, `no-authentication`, `prompt-injection`
 - **Evidence:** [1](https://github.com/microsoft/markitdown/blob/fd239d5d2be43d9b68329730206b9312c7d5a388/packages/markitdown-mcp/README.md); [2](https://github.com/microsoft/markitdown/blob/fd239d5d2be43d9b68329730206b9312c7d5a388/packages/markitdown-mcp/src/markitdown_mcp/__main__.py); [3](https://github.com/microsoft/markitdown/releases/tag/v0.1.7)
+- **Host evidence:** `openclaw` 2026.9.6 (eb377ac), 2026-09-26 ([record](../docs/evidence/openclaw-markitdown-2026-09-26/README.md)); confirmation gates: No confirmation event in the headless agent exec result; the operator must confirm the exact URI before each conversion.
 - **Health check:** Run the stdio server in a sandbox, list its single convert\_to\_markdown tool, then convert one non-sensitive local fixture from an explicitly allowed directory.
 - **Uninstall:** Remove the MarkItDown MCP entry from the client and uninstall markitdown-mcp or remove its container image; preserve every source file and converted output unless separately requested. (removes user data: No)
 

@@ -1,0 +1,1 @@
+Use the markitdown convert_to_markdown MCP tool exactly once to convert the local file proof.txt in your working directory (pass it as a file: URI with its absolute path). Do not read the file any other way and do not call any other tool. Reply with the tool's Markdown output verbatim, then one line: TOOL_USED=<exact tool name>.
