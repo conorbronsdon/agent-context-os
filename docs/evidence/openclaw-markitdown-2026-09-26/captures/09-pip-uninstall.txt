@@ -1,0 +1,4 @@
+Using Python 3.12.6 environment at: md-venv
+Uninstalled 2 packages in 19ms
+ - markitdown==0.1.7
+ - markitdown-mcp==0.0.1a7

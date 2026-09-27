@@ -1,0 +1,1 @@
+Saved MCP server "markitdown" to <HOST_ROOT>\state-md\openclaw.json.

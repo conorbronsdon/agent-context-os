@@ -1,0 +1,64 @@
+{
+  "mcp": {
+    "servers": {
+      "markitdown": {
+        "command": "<HOST_ROOT>\\md-venv\\Scripts\\markitdown-mcp.exe",
+        "cwd": "<HOST_ROOT>\\fixtures",
+        "requestTimeoutMs": 60000,
+        "connectionTimeoutMs": 60000,
+        "toolFilter": {
+          "include": [
+            "convert_to_markdown"
+          ]
+        }
+      }
+    }
+  },
+  "plugins": {
+    "entries": {
+      "anthropic": {
+        "config": {
+          "sessionCatalog": {
+            "enabled": false
+          }
+        },
+        "enabled": true
+      },
+      "codex": {
+        "config": {
+          "sessionCatalog": {
+            "enabled": false
+          }
+        }
+      }
+    }
+  },
+  "meta": {
+    "migrations": {
+      "modelPolicyAllowlist": true,
+      "utilityModelSeparation": true
+    },
+    "lastTouchedVersion": "2026.9.6"
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "<HOST_ROOT>\\fixtures",
+      "skipBootstrap": true,
+      "model": {
+        "primary": "anthropic/claude-sonnet-5"
+      },
+      "models": {
+        "anthropic/claude-sonnet-5": {
+          "agentRuntime": {
+            "id": "claude-cli"
+          }
+        }
+      }
+    }
+  },
+  "hooks": {
+    "internal": {
+      "enabled": false
+    }
+  }
+}

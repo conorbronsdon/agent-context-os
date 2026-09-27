@@ -1,0 +1,18 @@
+{
+  "generatedAt": "2026-09-27T00:43:08.460Z",
+  "servers": {
+    "markitdown": {
+      "launch": "<HOST_ROOT>\\md-venv\\Scripts\\markitdown-mcp.exe (cwd=<HOST_ROOT>\\fixtures)",
+      "tools": 1,
+      "codexApprovalMode": "auto",
+      "approvalHint": "tools have no safety annotations; calls require approval in prompting session postures",
+      "requestTimeoutMs": 60000,
+      "resources": true,
+      "prompts": true
+    }
+  },
+  "tools": [
+    "markitdown__convert_to_markdown"
+  ],
+  "diagnostics": []
+}
