@@ -25,9 +25,9 @@ private data out of that record.
 
 The catalog schema now expresses per-host evidence in `host_evidence`. An entry
 that lists `openclaw` in `supported_agents` must include a matching record with
-the fields above and a repository evidence path. [MarkItDown MCP](../references/integrations.md#markitdown-mcp)
+the fields above and a repository evidence path. MarkItDown MCP
 is the first entry with a documented OpenClaw test (CLI commands and one headless local-file turn), with the [OpenClaw test record](evidence/openclaw-markitdown-2026-09-26/README.md).
-No confirmation event appeared in its headless agent turn, so the operator must
+No confirmation event appears in its retained headless agent result, so the operator must
 confirm the exact URI before each conversion. The [integration proposal](../.github/ISSUE_TEMPLATE/integration-proposal.md)
 lists the host-evidence fields for future entries. The core adapter's runtime
 tier remains separate from integration support, and generic MCP support never
