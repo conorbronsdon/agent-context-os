@@ -172,9 +172,16 @@ def require_denied_write_attempt(
         raise HarnessError(f"{subject} did not complete with one successful stream result")
     # Cursor CLI 2026.09.23-86fc751 reports file writes as editToolCall. Its
     # completed event omits args, so completions match their started call_id.
-    # The whole stream is checked: every write must stay in the workspace, and
-    # every completion of a tracked write must be a policy denial for that file.
-    attempts: dict[str, str] = {}
+    # The whole stream is checked. The project denies every write, so every
+    # write must stay in the workspace and every completion must be a policy
+    # denial for its own started target; one must be the requested file.
+    root = workspace.resolve()
+    expected = (root / filename).resolve(strict=False)
+
+    def resolve(path: str) -> Path:
+        return Path(path).resolve(strict=False) if Path(path).is_absolute() else (root / path).resolve(strict=False)
+
+    attempts: dict[str, tuple[str, Path]] = {}
     denied = False
     for event in events:
         tool_call = event.get("tool_call")
@@ -192,14 +199,16 @@ def require_denied_write_attempt(
             path = args.get("path") if isinstance(args, dict) else None
             if not isinstance(path, str) or not path:
                 raise HarnessError(f"{subject} returned a write without a target path")
-            target = (workspace / path).resolve(strict=False) if not Path(path).is_absolute() else Path(path).resolve(strict=False)
+            target = resolve(path)
             try:
-                target.relative_to(workspace.resolve())
+                target.relative_to(root)
             except ValueError as exc:
                 raise HarnessError(f"{subject} attempted a write outside the disposable workspace") from exc
-            if Path(path).name == filename:
-                attempts[call_id] = kinds[0]
-        elif event.get("subtype") == "completed" and attempts.get(call_id) == kinds[0]:
+            attempts[call_id] = (kinds[0], target)
+        elif event.get("subtype") == "completed":
+            if attempts.get(call_id, ("", None))[0] != kinds[0]:
+                raise HarnessError(f"{subject} returned an ambiguous write event")
+            target = attempts[call_id][1]
             outcome = write.get("result")
             payload = outcome.get("writePermissionDenied") if isinstance(outcome, dict) else None
             reported = payload.get("path") if isinstance(payload, dict) else None
@@ -208,11 +217,11 @@ def require_denied_write_attempt(
                 or set(outcome) != {"writePermissionDenied"}
                 or not isinstance(payload, dict)
                 or not isinstance(reported, str)
-                or (reported and Path(reported).name != filename)
-                or filename not in str(payload.get("error", ""))
+                or (reported and resolve(reported) != target)
+                or target.name not in str(payload.get("error", ""))
             ):
                 raise HarnessError(f"{subject} write failed for a reason other than policy denial")
-            denied = True
+            denied = denied or target == expected
     if not denied:
         raise HarnessError(f"{subject} did not record a rejected denied write through Cursor")
 
