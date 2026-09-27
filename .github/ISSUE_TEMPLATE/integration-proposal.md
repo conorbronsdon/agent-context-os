@@ -39,7 +39,7 @@ maintaining durable context in a git repo.
 - `summary`:
 - `source_url`:
 - `kind`: <!-- mcp_server | skill_catalog | workspace_template | resource_catalog | agent_extension | connector | editor_guide | local_workspace -->
-- `supported_agents`: <!-- claude_code | codex | cursor | gemini_cli | opencode | generic - list only what you verified -->
+- `supported_agents`: <!-- claude_code | codex | cursor | gemini_cli | opencode | openclaw | generic - list only what you verified; openclaw requires host_evidence -->
 - `maturity`: <!-- verified | listed | experimental -->
 - `last_verified`: <!-- YYYY-MM-DD -->
 
@@ -100,26 +100,29 @@ The catalog must describe the full surface; it does not disable tools or enforce
 - `instructions`:
 - `removes_user_data`: <!-- true | false -->
 
-## Optional host evidence
+## Host evidence (required for OpenClaw support)
 
 <!--
-Fill this in only if you have tested this integration on a named host. An
-OpenClaw claim needs a real OpenClaw integration test; generic MCP support is
-not host evidence. This is proposal evidence, not a catalog field yet. Do not
-include credentials, private data, or account identifiers. See
+Fill this in if you have tested this integration on a named host. Add one
+host_evidence record for each tested host; openclaw support requires one.
+Generic MCP support is not host evidence. The evidence path must be a file or
+directory in this repository. Do not include credentials, private data, or
+account identifiers. See
 docs/integrations-guide.md#host-compatibility-evidence.
 -->
 
-- Integration and host:
-- Tested host surface and exact version:
-- Test date (YYYY-MM-DD):
-- Credential model and storage location (no secret values):
-- Network egress destinations:
-- Reachable side effects, identifying writes and destructive actions:
-- Confirmation gates observed on this host:
-- Health-check command and observed output shape (redacted):
-- Verified uninstall and credential revocation steps:
-- Evidence location (test log, reproducible steps, or reviewable artifact):
+- `host`:
+- `host_version`:
+- `tested_on`: <!-- YYYY-MM-DD -->
+- `surface`:
+- `credentials`: <!-- Model and integration credentials; no secret values -->
+- `egress`: <!-- List of destinations or observed absence; state monitoring limits -->
+- `side_effects`: <!-- Include writes and destructive actions -->
+- `confirmation_gates`: <!-- What fired or did not -->
+- `health_check.command`:
+- `health_check.output_shape`:
+- `uninstall`: <!-- Include credential revocation and residue -->
+- `evidence`: <!-- Repo-relative path to a file or directory -->
 
 ## What you could not verify
 

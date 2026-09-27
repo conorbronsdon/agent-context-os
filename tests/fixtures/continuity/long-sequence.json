@@ -16,7 +16,7 @@
   },
   "sources_by_profile": {
     "handoff-sentences": {
-      "HANDOFF.md": "Atlas uses webhooks for event delivery. Atlas replaced its cron polling plan with webhooks. Atlas had earlier replaced queue delivery with cron polling. Atlas must omit customer IDs from exports. Atlas's staging migration was interrupted before execution. Atlas's staging migration has not run. Atlas's release date remains unresolved. Beacon uses SQLite for the local cache. Beacon exports must include customer IDs. Beacon's import review was interrupted after the draft. Beacon's import review has not been approved. Beacon's vendor quota remains unresolved."
+      "HANDOFF.md": "Atlas uses webhooks for event delivery. Atlas replaced its cron polling plan with webhooks. Atlas had earlier replaced queue delivery with cron polling. Atlas must omit customer IDs from exports. Atlas's staging migration was interrupted before execution and has not run. Atlas's release date remains unresolved. Beacon uses SQLite for the local cache. Beacon exports must include customer IDs. Beacon's import review was interrupted after the draft, before approval. Beacon's vendor quota remains unresolved."
     }
   },
   "expected_by_profile": {
@@ -27,8 +27,8 @@
       "atlas_queue_current": {"source": "HANDOFF.md", "quote": "Atlas had earlier replaced queue delivery with cron polling."},
       "atlas_release": {"source": "HANDOFF.md", "quote": "Atlas's release date remains unresolved."},
       "beacon_quota": {"source": "HANDOFF.md", "quote": "Beacon's vendor quota remains unresolved."},
-      "atlas_migration": {"source": "HANDOFF.md", "quote": "Atlas's staging migration has not run."},
-      "beacon_review": {"source": "HANDOFF.md", "quote": "Beacon's import review has not been approved."},
+      "atlas_migration": {"source": "HANDOFF.md", "quote": "Atlas's staging migration was interrupted before execution and has not run."},
+      "beacon_review": {"source": "HANDOFF.md", "quote": "Beacon's import review was interrupted after the draft, before approval."},
       "atlas_ids": {"source": "HANDOFF.md", "quote": "Atlas must omit customer IDs from exports."},
       "beacon_ids": {"source": "HANDOFF.md", "quote": "Beacon exports must include customer IDs."}
     }

@@ -9,7 +9,7 @@ import json
 import re
 import sys
 import unicodedata
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
@@ -33,7 +33,12 @@ KINDS = {
     "agent_extension",
     "connector",
 }
-AGENTS = {"claude_code", "codex", "gemini_cli", "cursor", "opencode", "generic"}
+AGENTS = {"claude_code", "codex", "gemini_cli", "cursor", "opencode", "openclaw", "generic"}
+HOSTS_REQUIRING_EVIDENCE = {"openclaw"}
+HOST_EVIDENCE_FIELDS = {
+    "host", "host_version", "tested_on", "surface", "credentials", "egress",
+    "side_effects", "confirmation_gates", "health_check", "uninstall", "evidence",
+}
 SCOPES = {"none", "project", "user", "project_or_user"}
 MATURITY = {"verified", "listed", "experimental"}
 CONFIRMATIONS = {
@@ -268,7 +273,7 @@ def validate_catalog(catalog: Any) -> None:
         location = f"catalog.integrations[{index}]"
         if not isinstance(item, dict):
             raise CatalogError(f"{location}: expected an object")
-        require_exact_keys(item, expected, location)
+        require_exact_keys(item, expected | ({"host_evidence"} if "host_evidence" in item else set()), location)
         for field in ("name", "summary", "health_check"):
             require_safe_text(item[field], f"{location}.{field}")
         if any(character in item["name"] for character in "|[]"):
@@ -297,6 +302,59 @@ def validate_catalog(catalog: Any) -> None:
         require_string_list(item["supported_agents"], f"{location}.supported_agents", nonempty=True)
         if not set(item["supported_agents"]) <= AGENTS:
             raise CatalogError(f"{location}.supported_agents: unsupported agent")
+        host_evidence = item.get("host_evidence", [])
+        if not isinstance(host_evidence, list):
+            raise CatalogError(f"{location}.host_evidence: expected an array")
+        evidenced_hosts: set[str] = set()
+        for evidence_index, record in enumerate(host_evidence):
+            record_location = f"{location}.host_evidence[{evidence_index}]"
+            if not isinstance(record, dict):
+                raise CatalogError(f"{record_location}: expected an object")
+            require_exact_keys(record, HOST_EVIDENCE_FIELDS, record_location)
+            if record["host"] not in item["supported_agents"]:
+                raise CatalogError(f"{record_location}.host: host must appear in supported_agents")
+            if record["host"] in evidenced_hosts:
+                raise CatalogError(f"{record_location}.host: duplicate host evidence")
+            evidenced_hosts.add(record["host"])
+            for field in (
+                "host_version", "surface", "credentials", "side_effects",
+                "confirmation_gates", "uninstall", "evidence",
+            ):
+                require_safe_text(record[field], f"{record_location}.{field}")
+            require_string_list(record["egress"], f"{record_location}.egress")
+            if not isinstance(record["tested_on"], str) or not re.fullmatch(
+                r"\d{4}-\d{2}-\d{2}", record["tested_on"]
+            ):
+                raise CatalogError(f"{record_location}.tested_on: expected YYYY-MM-DD")
+            try:
+                tested_on = dt.date.fromisoformat(record["tested_on"])
+            except ValueError:
+                raise CatalogError(f"{record_location}.tested_on: expected YYYY-MM-DD") from None
+            if tested_on > dt.date.today():
+                raise CatalogError(f"{record_location}.tested_on: future dates are not allowed")
+            health_check = record["health_check"]
+            if not isinstance(health_check, dict):
+                raise CatalogError(f"{record_location}.health_check: expected an object")
+            require_exact_keys(
+                health_check, {"command", "output_shape"}, f"{record_location}.health_check"
+            )
+            for field in ("command", "output_shape"):
+                require_safe_text(health_check[field], f"{record_location}.health_check.{field}")
+            evidence_path = record["evidence"]
+            if (
+                PurePosixPath(evidence_path).is_absolute()
+                or PureWindowsPath(evidence_path).is_absolute()
+                or ".." in PurePosixPath(evidence_path).parts
+                or not re.fullmatch(r"[A-Za-z0-9._/-]+", evidence_path)
+            ):
+                raise CatalogError(
+                    f"{record_location}.evidence: expected a repo-relative path of letters, digits, '.', '_', '-', and '/' without '..'"
+                )
+            candidate = ROOT / evidence_path
+            if not candidate.exists() or not candidate.resolve().is_relative_to(ROOT):
+                raise CatalogError(f"{record_location}.evidence: path does not exist in the repository")
+        if not HOSTS_REQUIRING_EVIDENCE.intersection(item["supported_agents"]) <= evidenced_hosts:
+            raise CatalogError(f"{location}.host_evidence: required for supported host")
 
         installation = item["installation"]
         if not isinstance(installation, dict):
@@ -563,6 +621,12 @@ def render_reference(catalog: dict[str, Any]) -> str:
         ) or "None"
         evidence = "; ".join(f"[{index + 1}]({url})" for index, url in enumerate(item["evidence"]))
         required_for = ", ".join(f"`{gate}`" for gate in item["confirmation"]["required_for"]) or "None"
+        host_evidence = "".join(
+            f"- **Host evidence:** `{record['host']}` {markdown_text(record['host_version'])}, "
+            f"{record['tested_on']} ([record](../{record['evidence']})); "
+            f"confirmation gates: {markdown_text(record['confirmation_gates'])}\n"
+            for record in item.get("host_evidence", [])
+        )
         sections.append(
             f"## {name}\n\n"
             f"{markdown_paragraph(item['summary'])}\n\n"
@@ -577,6 +641,7 @@ def render_reference(catalog: dict[str, Any]) -> str:
             f"- **Confirmation:** {markdown_text(item['confirmation']['notes'])}\n"
             f"- **Risk tags:** {', '.join(f'`{tag}`' for tag in item['risk_tags'])}\n"
             f"- **Evidence:** {evidence}\n"
+            f"{host_evidence}"
             f"- **Health check:** {markdown_text(item['health_check'])}\n"
             f"- **Uninstall:** {markdown_text(item['uninstall']['instructions'])} "
             f"(removes user data: {yes_no(item['uninstall']['removes_user_data'])})\n\n"

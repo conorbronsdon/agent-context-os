@@ -84,7 +84,8 @@ profile. The instructions baseline tests safe uncertainty, not retention.
 
 The long-only `handoff-sentences` profile rewrites the compact `HANDOFF.md`
 with one self-contained sentence per fact, naming its subject without label
-prefixes. It preserves the handoff facts and `AGENTS.md` instructions for the
+prefixes. Statuses now keep their qualifiers in one sentence (#218).
+It preserves the handoff facts and `AGENTS.md` instructions for the
 #206 rerun. Its fixture overrides only the expected citation source and quote;
 answer values and the grounding rule stay the same. The original three
 profiles remain unchanged so the September 23 evidence can still be rescored.
@@ -99,6 +100,8 @@ python scripts/continuity-benchmark.py score --scenario long --profile contextos
 The [September 26 rerun](evidence/continuity-rerun-2026-09-26/README.md) compares the three
 informed profiles on the same day. It observed no reduction in citation
 rejections from the self-contained-sentence rule.
+After statuses were kept whole (#218), a [15-trial rerun](evidence/continuity-rerun-218-2026-09-26/README.md)
+observed 0/150 citation rejections for the rule-following note, against 12/150 for the original.
 
 `score` reports grounded correctness, retention among the eight resolved
 questions, correct handling of replaced decisions (`corrections`), safe

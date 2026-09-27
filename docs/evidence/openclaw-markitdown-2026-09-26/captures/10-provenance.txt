@@ -1,0 +1,116 @@
+captured_at_utc: 2026-09-27T01:05:29+00:00
+platform: Windows-11-10.0.26200-SP0
+
+openclaw package.json version: 2026.9.6
+openclaw package.json repository: {'type': 'git', 'url': 'git+https://github.com/openclaw/openclaw.git'}
+openclaw package.json license: MIT
+openclaw package.json engines: {'node': '>=24.16.0 <25 || >=26.1.0'}
+package-lock resolved: https://registry.npmjs.org/openclaw/-/openclaw-2026.9.6.tgz
+package-lock integrity: sha512-Ie0kyQSCVfFqixsgVg39vevUDq01Ch5u3+7Yu5Y3qARczmdAe+lzp8bVnO9925rHiW/+CFp70zfORCyPmCH31g==
+
+$ <HOST_ROOT>\node-v24.21.0-win-x64\npm.cmd view openclaw@2026.9.6 dist.integrity dist.shasum
+[rc=0]
+dist.integrity = 'sha512-Ie0kyQSCVfFqixsgVg39vevUDq01Ch5u3+7Yu5Y3qARczmdAe+lzp8bVnO9925rHiW/+CFp70zfORCyPmCH31g=='
+dist.shasum = 'fc64ad772b885b2c923e373acf27fcd4347e84f4'
+
+$ <HOST_ROOT>\oc\node_modules\.bin\openclaw.cmd --version
+[rc=0]
+OpenClaw 2026.9.6 (eb377ac)
+
+$ <HOST_ROOT>\node-v24.21.0-win-x64\node.exe --version
+[rc=0]
+v24.21.0
+
+node zip sha256: 158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541
+158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541  node-v24.21.0-win-x64.zip
+
+$ <UV_DIR>\uv.exe pip list --python <HOST_ROOT>\md-venv\Scripts\python.exe
+[rc=0]
+Package                       Version
+----------------------------- -----------
+annotated-types               0.8.0
+anyio                         4.15.1
+attrs                         26.1.0
+azure-ai-contentunderstanding 1.2.0b3
+azure-ai-documentintelligence 1.0.2
+azure-core                    1.41.0
+azure-identity                1.25.3
+beautifulsoup4                4.15.0
+certifi                       2026.7.22
+cffi                          2.1.1
+charset-normalizer            3.5.1
+click                         8.5.0
+cobble                        0.1.4
+coloredlogs                   15.0.1
+cryptography                  50.0.1
+defusedxml                    0.7.1
+et-xmlfile                    2.0.0
+flatbuffers                   25.12.19
+h11                           0.16.0
+httpcore2                     2.13.1
+httpx2                        2.13.1
+humanfriendly                 10.0
+idna                          3.20
+isodate                       0.7.2
+jsonschema                    4.26.0
+jsonschema-specifications     2025.9.1
+lxml                          6.1.3
+magika                        0.6.3
+mammoth                       1.11.0
+markdownify                   1.2.3
+mcp                           2.2.0
+mcp-types                     2.2.0
+mpmath                        1.3.0
+msal                          1.39.0
+msal-extensions               1.3.1
+numpy                         2.5.3
+olefile                       0.47
+onnxruntime                   1.20.1
+openpyxl                      3.1.5
+opentelemetry-api             1.45.0
+packaging                     26.3
+pandas                        3.0.6
+pdfminer-six                  20260107
+pdfplumber                    0.11.10
+pillow                        12.3.0
+protobuf                      7.36.2
+pycparser                     3.0
+pydantic                      2.13.5
+pydantic-core                 2.46.5
+pydub                         0.25.1
+pyjwt                         2.15.0
+pypdfium2                     5.13.0
+pyreadline3                   3.5.6
+python-dateutil               2.9.0.post0
+python-dotenv                 1.2.3
+python-multipart              0.0.32
+python-pptx                   1.0.2
+pywin32                       312
+referencing                   0.37.0
+requests                      2.34.2
+rpds-py                       2026.6.3
+six                           1.17.0
+soupsieve                     2.10
+speechrecognition             3.17.0
+sse-starlette                 3.4.11
+starlette                     1.7.0
+sympy                         1.14.0
+truststore                    0.10.4
+typing-extensions             4.16.0
+typing-inspection             0.4.4
+tzdata                        2026.4
+urllib3                       2.8.0
+uvicorn                       0.54.0
+xlrd                          2.0.2
+xlsxwriter                    3.2.9
+youtube-transcript-api        1.2.4
+Using Python 3.12.6 environment at: md-venv
+
+MARKITDOWN_ENABLE_PLUGINS in this environment: unset
+PyPI release files (https://pypi.org/pypi/<name>/<version>/json):
+markitdown-mcp 0.0.1a7 source: https://github.com/microsoft/markitdown
+   markitdown_mcp-0.0.1a7-py3-none-any.whl e38dce929a28b210a936396c4e1546b30b02601667c79dfa104afd6a7e3b818b
+   markitdown_mcp-0.0.1a7.tar.gz bb4cef66502b445304c73f232d5ef6e54b38c13ffcbff337b17d1623526c67b0
+markitdown 0.1.7 source: https://github.com/microsoft/markitdown
+   markitdown-0.1.7-py3-none-any.whl 4eca912c87c6aa6897284a7f4bf6769a23bccf8544530f5d8b175fbe3797c916
+   markitdown-0.1.7.tar.gz 4d1f3c69cd43b82288fdc3653686d759dcf355ee7c681aa6a855aed98a1e4f44

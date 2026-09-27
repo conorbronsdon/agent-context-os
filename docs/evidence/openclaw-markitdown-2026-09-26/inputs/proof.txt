@@ -1,0 +1,3 @@
+Fixture for OpenClaw MarkItDown proof.
+
+This synthetic file contains no private data.

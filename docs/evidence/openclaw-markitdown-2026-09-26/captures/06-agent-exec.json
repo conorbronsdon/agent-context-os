@@ -1,0 +1,28 @@
+{
+  "ok": true,
+  "status": "ok",
+  "final": "Fixture for OpenClaw MarkItDown proof.\n\nThis synthetic file contains no private data.\n\nTOOL_USED=mcp__markitdown__convert_to_markdown\n\nSeparately, the session-start memory sync pull failed because it was locked by pid 10154. Memory notes may be stale.",
+  "payloads": [
+    {
+      "text": "Fixture for OpenClaw MarkItDown proof.\n\nThis synthetic file contains no private data.\n\nTOOL_USED=mcp__markitdown__convert_to_markdown\n\nSeparately, the session-start memory sync pull failed because it was locked by pid 10154. Memory notes may be stale.",
+      "mediaUrl": null
+    }
+  ],
+  "usage": {
+    "input": 2,
+    "output": 100,
+    "cacheRead": 68540,
+    "cacheWrite": 186
+  },
+  "toolSummary": {
+    "calls": 2,
+    "tools": [
+      "ToolSearch",
+      "mcp__markitdown__convert_to_markdown"
+    ],
+    "failures": 0
+  },
+  "model": "claude-sonnet-5",
+  "provider": "anthropic",
+  "sessionId": "<REDACTED>"
+}

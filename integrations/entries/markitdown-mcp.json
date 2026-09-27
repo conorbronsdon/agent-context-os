@@ -10,6 +10,7 @@
                              "gemini_cli",
                              "cursor",
                              "opencode",
+                             "openclaw",
                              "generic"
                          ],
     "installation":  {
@@ -74,6 +75,27 @@
                      "https://github.com/microsoft/markitdown/blob/fd239d5d2be43d9b68329730206b9312c7d5a388/packages/markitdown-mcp/src/markitdown_mcp/__main__.py",
                      "https://github.com/microsoft/markitdown/releases/tag/v0.1.7"
                  ],
+    "host_evidence":  [
+                          {
+                              "host": "openclaw",
+                              "host_version": "2026.9.6 (eb377ac)",
+                              "tested_on": "2026-09-26",
+                              "surface": "OpenClaw CLI mcp add/probe/doctor/show/list/unset commands and one headless agent exec turn using the claude-cli runtime, prompted to convert one local file (call arguments not retained); Gateway, channels, interactive sessions, and HTTP or HTTPS conversions were not tested.",
+                              "credentials": "None for MarkItDown; operator-observed, not captured: the model turn used the operator's existing Claude Code login. The credential-like tables listed in the state inspection had zero rows; Claude Code's own credential storage was not inspected.",
+                              "egress": [
+                                  "The prompt requested a file: URI conversion; call arguments were not retained.",
+                                  "The model turn reports anthropic as its provider; network traffic was not monitored, so no destination was measured."
+                              ],
+                              "side_effects": "One reported read-only tool call; the reply matched the synthetic fixture. After uninstall the state directory held openclaw.json, openclaw.json.bak, SQLite databases, plugin skill files, and lock files; no destructive command appears in the retained procedure, and writes outside that directory were not monitored.",
+                              "confirmation_gates": "No confirmation event in the headless agent exec result; the operator must confirm the exact URI before each conversion.",
+                              "health_check": {
+                                  "command": "openclaw mcp probe markitdown --json",
+                                  "output_shape": "One tool, markitdown__convert_to_markdown; one per-server tool; empty diagnostics."
+                              },
+                              "uninstall": "openclaw mcp unset markitdown plus uv pip uninstall markitdown-mcp markitdown removed the managed entry and packages. Residue remained in openclaw.json.bak and state SQLite rows; no integration credential appears in the retained config, and revocation was not tested.",
+                              "evidence": "docs/evidence/openclaw-markitdown-2026-09-26/README.md"
+                          }
+                      ],
     "health_check":  "Run the stdio server in a sandbox, list its single convert_to_markdown tool, then convert one non-sensitive local fixture from an explicitly allowed directory.",
     "uninstall":  {
                       "instructions":  "Remove the MarkItDown MCP entry from the client and uninstall markitdown-mcp or remove its container image; preserve every source file and converted output unless separately requested.",
