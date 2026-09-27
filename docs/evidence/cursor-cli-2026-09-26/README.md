@@ -4,18 +4,27 @@
 `adapters/cursor/live_conformance.py`, unmodified. It records hashes of each
 command's arguments and output, not the prompts or responses.
 
-- Source commit: `fb761f824a1b3c16bc6769d0dca2f9a25f94bd4b`. This commit
-  contains the deny-stream parser fix that the harness needed for this client.
+Items marked *operator-observed* are not recorded in `evidence.json`.
+
+## Recorded in `evidence.json`
+
+- Source commit: `f2e76bd348c9428988e4ce2778a79b020f754afd`, which contains
+  the final deny-stream parser.
 - Cursor CLI: `2026.09.26-dd393fe`. The launcher `agent.cmd` has SHA-256
-  `299eaddf3327768e7fcd64f29ad01747c740f7e316931575fb3cee617c92ccfc`, and the
-  run was on Windows 11.
-- Account: a paid Cursor plan, with privacy mode on in the CLI configuration.
-  The prompts contained only synthetic fixture canaries.
-- Configuration: a dedicated `CURSOR_CONFIG_DIR` whose `cli-config.json` was a
-  copy of the operator's configuration with empty permission allow and deny
-  lists. The operator's normal configuration allows `Shell(ls)`, which the
-  harness rejects as a confound. The evidence records the dedicated file's hash.
-- Result: all 14 controls passed, and the workspace cleanup completed.
+  `299eaddf3327768e7fcd64f29ad01747c740f7e316931575fb3cee617c92ccfc`.
+- The CLI configuration file's SHA-256 at preflight:
+  `fdda9f578476bf2484731873f92a0b840d8d7473976f792e1d009a316396e4dd`.
+- All 14 controls passed, and the workspace cleanup completed.
+
+## Operator-observed
+
+- **Platform:** Windows 11.
+- **Account:** a paid Cursor plan, with privacy mode on in the CLI
+  configuration. The prompts contained only synthetic fixture canaries.
+- **Configuration:** the file above was a dedicated `CURSOR_CONFIG_DIR` copy of
+  the operator's configuration with empty permission allow and deny lists. The
+  operator's normal configuration allows `Shell(ls)`, which the harness
+  rejects as a confound.
 
 ## What the run established
 
@@ -33,15 +42,18 @@ The harness never invoked Cursor's built-in `/update`.
 ## Earlier attempts the same day
 
 - **Harness bug:** a run from `3597a85` on CLI `2026.09.23-86fc751` failed the
-  deny-precedence control. A manual reproduction showed that Cursor had denied
-  the write. The stream reported it as `editToolCall` with a
-  `writePermissionDenied` result. The model then tried a shell redirect, which
-  was also blocked, with a `permissionDenied` result. The harness looked only
-  for `writeToolCall` with `denied` or `rejected` keys, so it could not
-  recognize the denial. The recorded stream is now the test fixture
-  `tests/fixtures/cursor/deny-stream-2026.09.23-86fc751.jsonl`.
+  deny-precedence control. A manual reproduction (operator-observed) showed
+  that Cursor had denied the write. The stream reported it as `editToolCall`
+  with a `writePermissionDenied` result, and a follow-up shell redirect was
+  also blocked, with a `permissionDenied` result. The harness looked only for
+  `writeToolCall` with `denied` or `rejected` keys, so it could not recognize
+  the denial. The recorded stream, with correlation IDs redacted, is now the
+  test fixture `tests/fixtures/cursor/deny-stream-2026.09.23-86fc751.jsonl`.
 - **Version drift:** the CLI then updated itself to `2026.09.26-dd393fe`. A run
   pinned to the earlier version correctly stopped at the exact-version check.
+- **Superseded pass:** a run from `fb761f8`, with a less strict parser, also
+  passed all 14 controls. Review then tightened the parser, and this artifact
+  replaces that run's.
 
 ## Limits
 
