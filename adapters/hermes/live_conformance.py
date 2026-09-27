@@ -354,8 +354,8 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
             if event.get("name") == "skill_view" and matching:
                 # ID-less requests can share a result slot; allow only this phase's skill.
                 own = [request for request in matching if request[0] in (phase, f"context-{phase}")]
-                if own and isinstance(known, dict) and f"context-{phase}" in known:
-                    allowed = {known[f"context-{phase}"]}
+                if own and isinstance(known, dict):
+                    allowed = {known[request[0]] for request in own if request[0] in known}
                 requested_skills.remove((own or matching)[0])
             elif event_id is not None:
                 # Any other result for a pending ID consumes it, so it cannot be replayed.
