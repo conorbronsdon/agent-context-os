@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Hermes live discovery prompts no longer name the fixture canary marker, and
+  post-`skill_view` reads of the same phase skill canary are recorded without
+  failing discovery; earlier reads and other canaries still fail (#163).
 - The Cursor CLI deny-precedence control recognizes the client's observed
   `editToolCall` / `writePermissionDenied` stream. Cursor CLI
   `2026.09.26-dd393fe` then passed all live CLI controls

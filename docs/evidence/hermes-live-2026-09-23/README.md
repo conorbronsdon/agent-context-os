@@ -47,6 +47,29 @@ redacts the joined text once and records it as a single event.
 \* Recorded as passed by a harness later found to allow false greens; see attempt 4 below.
 Attempt 5 used the final harness in this PR.
 
+## 2026-09-26 paid-model attempts
+
+Attempts 6 and 7 ran against source `44d6a32`, before the discovery-rule
+change in #163. Both failed `setup_discovery` as self-reads under the old rules
+([attempt 6](attempt-6.json), [attempt 7](attempt-7.json)). Both used paid
+OpenRouter routes with Hermes Agent v0.21.4 and cost $0.37 together.
+
+- Attempt 6 used Claude Sonnet 5. It called `skill_view("hermes-agent")` instead
+  of `context-setup`, searched for `Hermes fixture canary` with `search_files`,
+  then read `.agents/skills/context-setup/SKILL.md` with `read_file`.
+- Attempt 7 used GPT-5.6 Sol. It loaded `context-setup` with `skill_view`,
+  which delivered the phase canary, then read the same `SKILL.md` with
+  `read_file` as a double-check later in that turn. After discovery failed,
+  the same turn also shows a Hermes tool-schema mismatch. GPT-5.6 Sol passed
+  `notify` and `heartbeat` (as false) on six foreground `terminal` calls, and
+  Hermes rejected each one with "notify/heartbeat only apply to background
+  commands", including a plain `git status`. The model then switched to
+  background mode. Its first background call ran outside the fixture
+  ("No such file or directory"); its second, with an explicit `cd`, created the
+  setup proposal. The operator read these results from Hermes's own session
+  state, because the harness redacts tool results. A model that fills optional
+  tool arguments can therefore look stalled under Hermes v0.21.4.
+
 What each failure means:
 
 1. **Attempt 1.** In the setup turn, Hermes loaded `context-setup` through its

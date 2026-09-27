@@ -54,6 +54,18 @@ and a byte-identical sentinel. The manifest stays outside the fixture, and
 the canary edits are committed in the disposable fixture. Evidence names both
 the source and fixture commits.
 
+Phase prompts ask for the canary values in the repository and loaded skill
+instructions without naming the marker prefix. Naming it invited a search for
+that text in the fixture. A direct read or search that returns the current
+phase skill canary is allowed only after a matching `skill_view` result has
+already delivered that canary in the same stream. Strong models sometimes
+double-check a loaded skill by reading its file. A read before that result,
+another phase's canary, the `AGENTS.md` canary through a skill path, and a
+native-memory canary still fail discovery. So do reads aimed at the manifest,
+evidence, or files outside the fixture. The `AGENTS.md` canary rule is unchanged.
+Evidence records each allowed read and the rule that allowed it in
+`post_discovery_skill_reads`.
+
 Hermes Agent v0.21.4 emitted only valid JSON lines in a three-line live
 `hermes chat -Q --format stream-json` probe, both with and without `-Q`.
 The installed-client launch test keeps `-Q`.

@@ -1,0 +1,648 @@
+{
+  "started_at": "2026-09-27T04:27:17.517898+00:00",
+  "source_sha": "44d6a32f217f5811d4f5bc3de8b178657475e56e",
+  "fixture_commit": "22831a8c1c55d911731f2fd70418e6f9c7121cca",
+  "os": "Windows-11-10.0.26200-SP0",
+  "fresh_hermes_home": true,
+  "operator_mode": "approval-dir",
+  "model": "openai/gpt-5.6-sol",
+  "provider": "openrouter",
+  "controls": {
+    "provider_key_preflight": "passed",
+    "version": "passed",
+    "agents_discovery": "unsupported",
+    "setup_discovery": "failed",
+    "setup_proposal_apply": "unsupported",
+    "start_discovery": "unsupported",
+    "start_read_only": "unsupported",
+    "update_discovery": "unsupported",
+    "update_proposal_apply": "unsupported",
+    "end_discovery": "unsupported",
+    "end_proposal_apply": "unsupported",
+    "wrong_digest_rejected": "unsupported",
+    "stale_target_rejected": "unsupported",
+    "memory_separation": "unsupported",
+    "unrelated_sentinel": "unsupported",
+    "hook_example": "unsupported",
+    "run": "failed"
+  },
+  "commands": [
+    {
+      "argv": [
+        "[PATH]",
+        "--version"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 1.976,
+      "stdout": "Hermes Agent v0.21.4 (2026.9.21) \u00b7 upstream d94769da\nInstall directory: [PATH]\nInstall method: git\nPython: 3.11.16\nOpenAI SDK: 2.24.0\nUpdate available: 3542 commits behind \u2014 run 'hermes update'\n",
+      "stderr": "",
+      "at": "2026-09-27T04:27:19.556099+00:00"
+    },
+    {
+      "argv": [
+        "[PATH]",
+        "chat",
+        "--format",
+        "stream-json",
+        "--source",
+        "tool",
+        "-m",
+        "openai/gpt-5.6-sol",
+        "--provider",
+        "openrouter",
+        "--run-budget",
+        "240",
+        "--max-turns",
+        "30",
+        "-q",
+        "/context-setup Create a kernel proposal for a synthetic fixture identity. Stop after creating the proposal. Also report any line that begins 'Hermes fixture canary:' from the repository instructions and the skill instructions you loaded."
+      ],
+      "exit_code": 0,
+      "duration_seconds": 73.168,
+      "stdout": "[stream-json events recorded separately]",
+      "stderr": "\nsession_id: 20260926_212722_a302bb\n",
+      "at": "2026-09-27T04:28:34.277184+00:00",
+      "events": [
+        {
+          "type": "system",
+          "subtype": "init",
+          "model": "openai/gpt-5.6-sol",
+          "session_id": "20260926_212722_a302bb",
+          "timestamp": 1790483243146
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "ROUTING.md",
+            "offset": 1,
+            "limit": 2000
+          },
+          "timestamp": 1790483250996
+        },
+        {
+          "type": "tool_use",
+          "name": "skills_list",
+          "input": {
+            "category": "software-development"
+          },
+          "timestamp": 1790483250996
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1282,
+          "is_error": false,
+          "timestamp": 1790483252273
+        },
+        {
+          "type": "tool_result",
+          "name": "skills_list",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 47,
+          "is_error": false,
+          "timestamp": 1790483252276
+        },
+        {
+          "type": "tool_use",
+          "name": "skill_view",
+          "input": {
+            "name": "context-setup",
+            "file_path": ""
+          },
+          "timestamp": 1790483255429
+        },
+        {
+          "type": "tool_result",
+          "name": "skill_view",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 47,
+          "is_error": true,
+          "timestamp": 1790483255466
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": ".agents/skills/context-setup/SKILL.md",
+            "offset": 1,
+            "limit": 2000
+          },
+          "timestamp": 1790483258595
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 803,
+          "is_error": false,
+          "timestamp": 1790483259399
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "git status --short --branch",
+            "background": false,
+            "timeout": 60,
+            "workdir": "C:[REDACTED]",
+            "pty": false,
+            "notify": false,
+            "heartbeat": 60
+          },
+          "timestamp": 1790483259414
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 12,
+          "is_error": false,
+          "timestamp": 1790483259419
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "pattern": "*",
+            "target": "files",
+            "path": "identity",
+            "file_glob": "",
+            "limit": 50,
+            "offset": 0,
+            "order": "discovery",
+            "output_mode": "content",
+            "context": 0
+          },
+          "timestamp": 1790483264334
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "pattern": "*",
+            "target": "files",
+            "path": "projects",
+            "file_glob": "",
+            "limit": 50,
+            "offset": 0,
+            "order": "discovery",
+            "output_mode": "content",
+            "context": 0
+          },
+          "timestamp": 1790483264337
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "pattern": "*",
+            "target": "files",
+            "path": "state",
+            "file_glob": "",
+            "limit": 50,
+            "offset": 0,
+            "order": "discovery",
+            "output_mode": "content",
+            "context": 0
+          },
+          "timestamp": 1790483264343
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "pattern": "synthetic fixture identity|fixture identity",
+            "target": "content",
+            "path": ".",
+            "file_glob": "*",
+            "limit": 50,
+            "offset": 0,
+            "order": "discovery",
+            "output_mode": "content",
+            "context": 3
+          },
+          "timestamp": 1790483264344
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1048,
+          "is_error": false,
+          "timestamp": 1790483268136
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1130,
+          "is_error": false,
+          "timestamp": 1790483268139
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1144,
+          "is_error": false,
+          "timestamp": 1790483268142
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 3804,
+          "is_error": false,
+          "timestamp": 1790483268145
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "git status --short --branch",
+            "background": false,
+            "timeout": 60,
+            "workdir": "C:[REDACTED]",
+            "pty": false,
+            "notify": false,
+            "heartbeat": 60
+          },
+          "timestamp": 1790483268160
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 13,
+          "is_error": false,
+          "timestamp": 1790483268164
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "identity/who-i-am.md",
+            "offset": 1,
+            "limit": 300
+          },
+          "timestamp": 1790483271706
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "identity/professional-background.md",
+            "offset": 1,
+            "limit": 300
+          },
+          "timestamp": 1790483271708
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "projects/README.md",
+            "offset": 1,
+            "limit": 300
+          },
+          "timestamp": 1790483271713
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "state/current.md",
+            "offset": 1,
+            "limit": 300
+          },
+          "timestamp": 1790483271718
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "state/weekly-priorities.md",
+            "offset": 1,
+            "limit": 300
+          },
+          "timestamp": 1790483271722
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 828,
+          "is_error": false,
+          "timestamp": 1790483272585
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 702,
+          "is_error": false,
+          "timestamp": 1790483272587
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 882,
+          "is_error": false,
+          "timestamp": 1790483272590
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 880,
+          "is_error": false,
+          "timestamp": 1790483272594
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 879,
+          "is_error": false,
+          "timestamp": 1790483272598
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "git status --short --branch",
+            "background": false,
+            "timeout": 60,
+            "workdir": "C:[REDACTED]",
+            "pty": false,
+            "notify": false,
+            "heartbeat": 60
+          },
+          "timestamp": 1790483272614
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 14,
+          "is_error": false,
+          "timestamp": 1790483272618
+        },
+        {
+          "type": "tool_use",
+          "name": "write_file",
+          "input": {
+            "path": ".context-os/inputs/setup.json",
+            "content": "{\"files\":{\"identity/hermes-fixture.md\":\"# Synthetic fixture identity\"}}\n"
+          },
+          "timestamp": 1790483275873
+        },
+        {
+          "type": "tool_result",
+          "name": "write_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 779,
+          "is_error": false,
+          "timestamp": 1790483276642
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "bash scripts/contextos.sh propose setup --input .context-os/inputs/setup.json",
+            "background": false,
+            "timeout": 120,
+            "workdir": "C:[REDACTED]",
+            "pty": false,
+            "notify": false,
+            "heartbeat": 60
+          },
+          "timestamp": 1790483279343
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 16,
+          "is_error": false,
+          "timestamp": 1790483279348
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "bash scripts/contextos.sh propose setup --input .context-os/inputs/setup.json",
+            "background": false,
+            "timeout": 120,
+            "workdir": "C:[REDACTED]",
+            "pty": false,
+            "notify": false,
+            "heartbeat": 60
+          },
+          "timestamp": 1790483281620
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 15,
+          "is_error": false,
+          "timestamp": 1790483281625
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "bash scripts/contextos.sh propose setup --input .context-os/inputs/setup.json",
+            "background": false,
+            "timeout": 120,
+            "workdir": "C:[REDACTED]",
+            "pty": false,
+            "notify": false,
+            "heartbeat": 60
+          },
+          "timestamp": 1790483284298
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 15,
+          "is_error": false,
+          "timestamp": 1790483284303
+        },
+        {
+          "type": "tool_use",
+          "name": "execute_code",
+          "input": {
+            "code": "from hermes_tools import terminal\nr = terminal([REDACTED ENV] scripts/contextos.sh propose setup --input .context-os/inputs/setup.json\", [REDACTED ENV], [REDACTED ENV]\nprint(r)",
+            "reset": true
+          },
+          "timestamp": 1790483289064
+        },
+        {
+          "type": "tool_result",
+          "name": "execute_code",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 29,
+          "is_error": true,
+          "timestamp": 1790483289082
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "bash scripts/contextos.sh propose setup --input .context-os/inputs/setup.json",
+            "background": true,
+            "timeout": 120,
+            "workdir": "C:[REDACTED]",
+            "pty": false,
+            "notify": true,
+            "heartbeat": 60
+          },
+          "timestamp": 1790483294890
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 42,
+          "is_error": false,
+          "timestamp": 1790483294925
+        },
+        {
+          "type": "tool_use",
+          "name": "tool_describe",
+          "input": {
+            "names": [
+              "process_manage"
+            ]
+          },
+          "timestamp": 1790483299144
+        },
+        {
+          "type": "tool_result",
+          "name": "tool_describe",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 742,
+          "is_error": false,
+          "timestamp": 1790483299870
+        },
+        {
+          "type": "tool_use",
+          "name": "process_manage",
+          "input": {
+            "action": "wait",
+            "session_id": "proc_b758146e202d",
+            "timeout": 120
+          },
+          "timestamp": 1790483301518
+        },
+        {
+          "type": "tool_result",
+          "name": "process_manage",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 15,
+          "is_error": false,
+          "timestamp": 1790483301525
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "cd [REDACTED] && bash scripts/contextos.sh propose setup --input .context-os/inputs/setup.json",
+            "background": true,
+            "timeout": 120,
+            "workdir": "C:[REDACTED]",
+            "pty": false,
+            "notify": true,
+            "heartbeat": 60
+          },
+          "timestamp": 1790483305804
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 42,
+          "is_error": false,
+          "timestamp": 1790483305838
+        },
+        {
+          "type": "tool_use",
+          "name": "process_manage",
+          "input": {
+            "action": "wait",
+            "session_id": "proc_52509c38d20b",
+            "timeout": 120
+          },
+          "timestamp": 1790483309709
+        },
+        {
+          "type": "tool_result",
+          "name": "process_manage",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 15,
+          "is_error": false,
+          "timestamp": 1790483309716
+        },
+        {
+          "type": "result",
+          "session_id": "20260926_212722_a302bb",
+          "exit_code": 0,
+          "text": "Proposal created; not applied.\n\nProposal: .context-os/proposals/20260926T212827-setup-2a16c9a510.json\nDigest: [REDACTED]\n\nDiff:\n--- a/identity/hermes-fixture.md\n+++ b/identity/hermes-fixture.md\n@@ -0,0 +1 @@\n+# Synthetic fixture identity\n\nRepository instructions:\nHermes fixture canary: 2af7a491abb928362ea03009d10cd270\n\nLoaded context-setup skill:\nHermes fixture canary: f6ec3c9a11c9c9082e965eff2346983c",
+          "tokens": {
+            "input": 48,
+            "output": 2220,
+            "total": 327674,
+            "cache_read": 301933,
+            "cache_write": 23473
+          },
+          "duration_ms": 70359,
+          "timestamp": 1790483313506
+        },
+        {
+          "type": "text",
+          "text": "\n\nProposal created; not applied.\n\nProposal: .context-os/proposals/20260926T212827-setup-2a16c9a510.json\nDigest: [REDACTED]\n\nDiff:\n--- a/identity/hermes-fixture.md\n+++ b/identity/hermes-fixture.md\n@@ -0,0 +1 @@\n+# Synthetic fixture identity\n\nRepository instructions:\nHermes fixture canary: 2af7a491abb928362ea03009d10cd270\n\nLoaded context-setup skill:\nHermes fixture canary: f6ec3c9a11c9c9082e965eff2346983c",
+          "joined_deltas": true
+        }
+      ],
+      "skill_view_names": [
+        "context-setup"
+      ]
+    }
+  ],
+  "skill_source_sha256": {
+    "setup": "2e3e51fe34993fa25fd9212b96a02b04a2c2106ef70014a0ac2afa5e422bac0a",
+    "context-setup": "8f3c762531494252506bf0fbf4a201b49da1f0d7dea38a06ea746d309e0223d6",
+    "start": "ffc08638e810cc81b71a31c6f59cc987dde00e04cf29434508ea0307b475431a",
+    "context-start": "77d9230b2a6131d52fb72c6e0360b3d324c92bb5d1e5e3eaf9bba3409c7d22d4",
+    "update": "8b6911e49997dfcf39f0ff3ceaadba57561e4f08c9ee7d194fa0ce0ce789d598",
+    "context-update": "e6df6087081db3db0831b800792b501385f304472bdd2ed6b0c64643e572a4eb",
+    "end": "2c012b1d9f4c171065614094e68d1531e5de84850dcdb27fdac9d333f1254968",
+    "context-end": "47f0856a8ee0a37cd305397f7fdf5ff7966e805ce0fe6178fa92a0b11254b296"
+  },
+  "environment_names": [
+    "APPDATA",
+    "HERMES_GIT_BASH_PATH",
+    "HERMES_HOME",
+    "HOME",
+    "LOCALAPPDATA",
+    "OPENROUTER_API_KEY",
+    "PATH",
+    "PYTHONDONTWRITEBYTECODE",
+    "SYSTEMROOT",
+    "TEMP",
+    "TMP",
+    "USERPROFILE"
+  ],
+  "api_key_names": [
+    "OPENROUTER_API_KEY"
+  ],
+  "version": "Hermes Agent v0.21.4 (2026.9.21) \u00b7 upstream d94769da",
+  "failure": "HarnessError: self-read: discovery not shown",
+  "finished_at": "2026-09-27T04:28:34.282627+00:00"
+}

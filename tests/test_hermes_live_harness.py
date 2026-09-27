@@ -53,11 +53,29 @@ if mode in ('skill-view-other-phase', 'parallel-skill-view-other-phase'):
     skill += (root / '.agents' / 'skills' / 'context-start' / 'SKILL.md').read_text()
 if mode in ('skill-view-native-memory', 'parallel-skill-view-native-memory'):
     skill += (pathlib.Path(os.environ['HERMES_HOME']) / 'memories' / 'USER.md').read_text()
+if mode in ('read-before-skill-view', 'search-canary-before-skill-view'):
+    tool = 'read_file' if mode == 'read-before-skill-view' else 'search_files'
+    detail = ({'path': '.agents/skills/context-' + phase + '/SKILL.md'} if tool == 'read_file'
+              else {'pattern': canaries['context-' + phase]})
+    emit({'type': 'tool_use', 'id': 'read-1', 'name': tool, 'input': detail})
+    emit({'type': 'tool_result', 'id': 'read-1', 'name': tool, 'output': skill})
 if mode == 'skill-view-idless-pair':
     emit({'type': 'tool_result', 'name': 'skill_view', 'output': skill})
     emit({'type': 'tool_result', 'name': 'skill_view', 'output': skill})
 else:
     emit({'type': 'tool_result', 'id': 'skill-1', 'name': 'skill_view', 'output': skill})
+if mode in ('read-after-skill-view', 'search-after-skill-view', 'read-other-phase-after-skill-view',
+            'read-native-memory-after-skill-view'):
+    target = ('.agents/skills/context-start/SKILL.md' if mode == 'read-other-phase-after-skill-view'
+              else str(pathlib.Path(os.environ['HERMES_HOME']) / 'memories' / 'USER.md')
+              if mode == 'read-native-memory-after-skill-view'
+              else '.agents/skills/context-' + phase + '/SKILL.md')
+    tool = 'search_files' if mode == 'search-after-skill-view' else 'read_file'
+    detail = {'pattern': canaries['context-' + phase]} if tool == 'search_files' else {'path': target}
+    emit({'type': 'tool_use', 'id': 'read-2', 'name': tool, 'input': detail})
+    emit({'type': 'tool_result', 'id': 'read-2', 'name': tool,
+          'output': pathlib.Path(target).read_text() if pathlib.Path(target).is_absolute()
+          else (root / target).read_text()})
 if mode == 'skill-view-replayed-result':
     emit({'type': 'tool_result', 'id': 'skill-1', 'name': 'skill_view', 'output': skill})
 if mode == 'write-agents-word':
@@ -331,6 +349,14 @@ class HermesLiveHarnessTest(unittest.TestCase):
             self.assertNotIn("SKILL.md", prompt)
             self.assertNotIn(".agents/skills", prompt)
 
+    def test_phase_prompts_do_not_disclose_canary_marker_or_values(self) -> None:
+        canaries = json.loads(self.manifest_path.read_text(encoding="utf-8"))["canaries"]
+        for phase in live.PHASES:
+            prompt = live.prompt_for(phase)
+            self.assertNotIn("Hermes fixture canary:", prompt)
+            for value in canaries.values():
+                self.assertNotIn(value, prompt)
+
     def test_self_read_blocks_discovery(self) -> None:
         for mode in ("self-read-agents", "self-read-skill", "self-read-terminal", "self-read-search",
                      "evasion-grep", "evasion-manifest", "evasion-diff", "evasion-skill-glob",
@@ -350,6 +376,39 @@ class HermesLiveHarnessTest(unittest.TestCase):
     def test_skill_view_result_is_not_self_read(self) -> None:
         report = self.run_record("skill-view-valid")
         self.assertEqual("passed", report["controls"]["run"], report.get("failure"))
+
+    def test_read_after_skill_view_passes_discovery_and_records_rule(self) -> None:
+        report = self.run_record("read-after-skill-view")
+        self.assertEqual("passed", report["controls"]["setup_discovery"], report.get("failure"))
+        self.assertEqual("passed", report["controls"]["run"], report.get("failure"))
+        self.assertEqual([{"rule": "phase_skill_after_view", "tool_use_event": 2}],
+                         report["commands"][1]["post_discovery_skill_reads"])
+
+    def test_read_before_skill_view_fails_discovery(self) -> None:
+        report = self.run_record("read-before-skill-view")
+        self.assertEqual("failed", report["controls"]["setup_discovery"])
+        self.assertIn("self-read", report["failure"])
+
+    def test_search_after_skill_view_passes_discovery_and_records_rule(self) -> None:
+        report = self.run_record("search-after-skill-view")
+        self.assertEqual("passed", report["controls"]["setup_discovery"], report.get("failure"))
+        self.assertEqual([{"rule": "phase_skill_after_view", "tool_use_event": 2}],
+                         report["commands"][1]["post_discovery_skill_reads"])
+
+    def test_other_phase_read_after_skill_view_fails_discovery(self) -> None:
+        report = self.run_record("read-other-phase-after-skill-view")
+        self.assertEqual("failed", report["controls"]["setup_discovery"])
+        self.assertIn("self-read", report["failure"])
+
+    def test_native_memory_read_after_skill_view_fails_discovery(self) -> None:
+        report = self.run_record("read-native-memory-after-skill-view")
+        self.assertEqual("failed", report["controls"]["setup_discovery"])
+        self.assertIn("self-read", report["failure"])
+
+    def test_search_canary_before_skill_view_fails_discovery(self) -> None:
+        report = self.run_record("search-canary-before-skill-view")
+        self.assertEqual("failed", report["controls"]["setup_discovery"])
+        self.assertIn("self-read", report["failure"])
 
     def test_parallel_skill_view_result_passes_discovery(self) -> None:
         report = self.run_record("parallel-skill-view-valid")
@@ -393,6 +452,35 @@ class HermesLiveHarnessTest(unittest.TestCase):
         result["output"] = "alias-marker"
         result["id"] = "skill-2"
         self.assertTrue(live.stream_evidence("\n".join(json.dumps(event) for event in (use, result)), canaries, "setup")[3])
+
+    def test_transformed_phase_canary_after_skill_view_is_self_read(self) -> None:
+        marker = "abcdef0123456789abcdef0123456789"
+        events = [
+            {"type": "tool_use", "id": "skill-1", "name": "skill_view", "input": {"name": "context-setup"}},
+            {"type": "tool_result", "id": "skill-1", "name": "skill_view", "output": marker},
+            {"type": "tool_use", "id": "read-1", "name": "read_file",
+             "input": {"path": ".agents/skills/context-setup/SKILL.md"}},
+            {"type": "tool_result", "id": "read-1", "name": "read_file", "output": marker.upper()},
+        ]
+        raw = "\n".join(json.dumps(event) for event in events)
+        self.assertTrue(live.stream_evidence(raw, {"context-setup": marker}, "setup")[3])
+
+    def test_post_discovery_read_cannot_surface_agents_or_target_external_files(self) -> None:
+        own, agents = "phase-canary", "agents-canary"
+        skill = [
+            {"type": "tool_use", "id": "skill-1", "name": "skill_view", "input": {"name": "context-setup"}},
+            {"type": "tool_result", "id": "skill-1", "name": "skill_view", "output": own},
+        ]
+        for target, output in ((".agents/skills/context-setup/SKILL.md", agents),
+                               ("../fixture-manifest.json", own),
+                               ("../evidence.json", own)):
+            with self.subTest(target=target, output=output):
+                events = skill + [
+                    {"type": "tool_use", "id": "read-1", "name": "read_file", "input": {"path": target}},
+                    {"type": "tool_result", "id": "read-1", "name": "read_file", "output": output},
+                ]
+                raw = "\n".join(json.dumps(event) for event in events)
+                self.assertTrue(live.stream_evidence(raw, {"agents": agents, "context-setup": own}, "setup")[3])
 
     def test_fake_skill_view_returns_fixture_skill_text(self) -> None:
         env = os.environ.copy()

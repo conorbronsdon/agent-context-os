@@ -1,0 +1,514 @@
+{
+  "started_at": "2026-09-27T04:24:33.990738+00:00",
+  "source_sha": "44d6a32f217f5811d4f5bc3de8b178657475e56e",
+  "fixture_commit": "abd0ec947837cb8a9c8b9db2d15d59a5fed4c78b",
+  "os": "Windows-11-10.0.26200-SP0",
+  "fresh_hermes_home": true,
+  "operator_mode": "approval-dir",
+  "model": "anthropic/claude-sonnet-5",
+  "provider": "openrouter",
+  "controls": {
+    "provider_key_preflight": "passed",
+    "version": "passed",
+    "agents_discovery": "unsupported",
+    "setup_discovery": "failed",
+    "setup_proposal_apply": "unsupported",
+    "start_discovery": "unsupported",
+    "start_read_only": "unsupported",
+    "update_discovery": "unsupported",
+    "update_proposal_apply": "unsupported",
+    "end_discovery": "unsupported",
+    "end_proposal_apply": "unsupported",
+    "wrong_digest_rejected": "unsupported",
+    "stale_target_rejected": "unsupported",
+    "memory_separation": "unsupported",
+    "unrelated_sentinel": "unsupported",
+    "hook_example": "unsupported",
+    "run": "failed"
+  },
+  "commands": [
+    {
+      "argv": [
+        "[PATH]",
+        "--version"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 1.748,
+      "stdout": "Hermes Agent v0.21.4 (2026.9.21) \u00b7 upstream d94769da\nInstall directory: [PATH]\nInstall method: git\nPython: 3.11.16\nOpenAI SDK: 2.24.0\nUpdate available: 3542 commits behind \u2014 run 'hermes update'\n",
+      "stderr": "",
+      "at": "2026-09-27T04:24:35.802511+00:00"
+    },
+    {
+      "argv": [
+        "[PATH]",
+        "chat",
+        "--format",
+        "stream-json",
+        "--source",
+        "tool",
+        "-m",
+        "anthropic/claude-sonnet-5",
+        "--provider",
+        "openrouter",
+        "--run-budget",
+        "240",
+        "--max-turns",
+        "30",
+        "-q",
+        "/context-setup Create a kernel proposal for a synthetic fixture identity. Stop after creating the proposal. Also report any line that begins 'Hermes fixture canary:' from the repository instructions and the skill instructions you loaded."
+      ],
+      "exit_code": 0,
+      "duration_seconds": 105.601,
+      "stdout": "[stream-json events recorded separately]",
+      "stderr": "\nsession_id: 20260926_212440_b5981f\n",
+      "at": "2026-09-27T04:26:23.907384+00:00",
+      "events": [
+        {
+          "type": "system",
+          "subtype": "init",
+          "model": "anthropic/claude-sonnet-5",
+          "session_id": "20260926_212440_b5981f",
+          "timestamp": 1790483080372
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "pattern": "*",
+            "target": "files",
+            "path": "."
+          },
+          "timestamp": 1790483092708
+        },
+        {
+          "type": "tool_use",
+          "name": "skill_view",
+          "input": {
+            "name": "hermes-agent"
+          },
+          "timestamp": 1790483092708
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1690,
+          "is_error": false,
+          "timestamp": 1790483094402
+        },
+        {
+          "type": "tool_result",
+          "name": "skill_view",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 78,
+          "is_error": false,
+          "timestamp": 1790483094404
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "pattern": "*",
+            "path": ".agents/skills",
+            "target": "files"
+          },
+          "timestamp": 1790483102605
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "pattern": "Hermes fixture canary",
+            "path": "."
+          },
+          "timestamp": 1790483102608
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "scripts/contextos.sh"
+          },
+          "timestamp": 1790483102612
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 706,
+          "is_error": false,
+          "timestamp": 1790483103366
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 762,
+          "is_error": false,
+          "timestamp": 1790483103369
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 616,
+          "is_error": false,
+          "timestamp": 1790483103372
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": ".agents/skills/context-setup/SKILL.md"
+          },
+          "timestamp": 1790483111118
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "TODO.md"
+          },
+          "timestamp": 1790483111121
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "pattern": "ROUTING.md",
+            "target": "files"
+          },
+          "timestamp": 1790483111125
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 623,
+          "is_error": false,
+          "timestamp": 1790483111739
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 439,
+          "is_error": false,
+          "timestamp": 1790483111742
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 548,
+          "is_error": false,
+          "timestamp": 1790483111745
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "ROUTING.md"
+          },
+          "timestamp": 1790483119662
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "pattern": "*",
+            "path": ".context-os",
+            "target": "files"
+          },
+          "timestamp": 1790483119666
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "pattern": "*",
+            "target": "files",
+            "path": "identity"
+          },
+          "timestamp": 1790483119669
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "pattern": "*",
+            "target": "files",
+            "path": "state"
+          },
+          "timestamp": 1790483119674
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 498,
+          "is_error": false,
+          "timestamp": 1790483120425
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 768,
+          "is_error": true,
+          "timestamp": 1790483120429
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 622,
+          "is_error": false,
+          "timestamp": 1790483120432
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 641,
+          "is_error": false,
+          "timestamp": 1790483120435
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "identity/who-i-am.md"
+          },
+          "timestamp": 1790483125942
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "identity/professional-background.md"
+          },
+          "timestamp": 1790483125946
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "state/current.md"
+          },
+          "timestamp": 1790483125950
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 652,
+          "is_error": false,
+          "timestamp": 1790483126593
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 653,
+          "is_error": false,
+          "timestamp": 1790483126599
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 652,
+          "is_error": false,
+          "timestamp": 1790483126604
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "bash scripts/contextos.sh --help 2>&1 | head -80"
+          },
+          "timestamp": 1790483141135
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1031,
+          "is_error": false,
+          "timestamp": 1790483142157
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "path": ".",
+            "pattern": "contextos",
+            "target": "files",
+            "file_glob": "*.py"
+          },
+          "timestamp": 1790483142171
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 450,
+          "is_error": false,
+          "timestamp": 1790483142613
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "bash scripts/contextos.sh propose --help 2>&1 | head -60"
+          },
+          "timestamp": 1790483146495
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1039,
+          "is_error": false,
+          "timestamp": 1790483147523
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "bash scripts/contextos.sh start 2>&1 | head -100"
+          },
+          "timestamp": 1790483147537
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1053,
+          "is_error": false,
+          "timestamp": 1790483148584
+        },
+        {
+          "type": "tool_use",
+          "name": "write_file",
+          "input": {
+            "path": ".context-os/inputs/setup-fixture-identity.json",
+            "content": "{\n  \"files\": {\n    \"identity/who-i-am.md\": \"# Who I Am\\n\\n**Last Updated:** {{TODAY}}\\n\\n## Current role\\nSynthetic fixture identity for exercising the Context OS lifecycle kernel in this repository's test environment. Not a real person.\\n\\n## Background\\nCreated on request via the $context-setup workflow to produce a reviewable kernel proposal without pre-existing personal context.\\n\\n## Projects I'm actively working on\\n- Context OS kernel: exercising propose/apply flows against fixture identity content.\\n\\n## How I work\\nN/A \u2014 synthetic placeholder, no working-style preferences to record.\\n\\n## Goals (this quarter)\\n- Demonstrate a correct propose step for $context-setup, stopping before apply.\\n\\n## Personal\\nNone. This file intentionally contains no real personal information.\\n\",\n    \"state/current.md\": \"# Current State\\n\\n**Last Updated:** {{TODAY}}\\n\\n## Active priorities\\n\\n1. Validate the $context-setup proposal flow with synthetic fixture content.\\n\\n## Open threads\\n\\n- Awaiting explicit approval before any apply step.\\n\\n## Recent context\\n\\nThis session ran $context-setup to create a kernel proposal for a synthetic fixture identity, then stopped as instructed.\\n\\n## Notes\\n\\nContent here is synthetic and intended only to exercise the lifecycle kernel.\\n\"\n  }\n}\n"
+          },
+          "timestamp": 1790483156653
+        },
+        {
+          "type": "tool_result",
+          "name": "write_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 855,
+          "is_error": false,
+          "timestamp": 1790483157499
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "bash scripts/contextos.sh propose setup --input .context-os/inputs/setup-fixture-identity.json 2>&1"
+          },
+          "timestamp": 1790483159818
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1018,
+          "is_error": true,
+          "timestamp": 1790483160826
+        },
+        {
+          "type": "tool_use",
+          "name": "write_file",
+          "input": {
+            "content": "{\n  \"files\": {\n    \"identity/who-i-am.md\": \"# Who I Am\\n\\n**Last Updated:** {{TODAY}}\\n\\n## Current role\\nSynthetic fixture identity for exercising the Context OS lifecycle kernel in this repository's test environment. Not a real person.\\n\\n## Background\\nCreated on request via the $context-setup workflow to produce a reviewable kernel proposal without pre-existing personal context.\\n\\n## Projects I'm actively working on\\n- Context OS kernel: exercising propose/apply flows against fixture identity content.\\n\\n## How I work\\nN/A \u2014 synthetic placeholder, no working-style preferences to record.\\n\\n## Goals (this quarter)\\n- Demonstrate a correct propose step for $context-setup, stopping before apply.\\n\\n## Personal\\nNone. This file intentionally contains no real personal information.\\n\"\n  }\n}\n",
+            "path": ".context-os/inputs/setup-fixture-identity.json"
+          },
+          "timestamp": 1790483170061
+        },
+        {
+          "type": "tool_result",
+          "name": "write_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1306,
+          "is_error": false,
+          "timestamp": 1790483171358
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "bash scripts/contextos.sh propose setup --input .context-os/inputs/setup-fixture-identity.json 2>&1"
+          },
+          "timestamp": 1790483173569
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1011,
+          "is_error": false,
+          "timestamp": 1790483174570
+        },
+        {
+          "type": "result",
+          "session_id": "20260926_212440_b5981f",
+          "exit_code": 0,
+          "text": "The proposal was created successfully. Per instructions, stopping here without applying.\n\nProposal created:\n- Path: `.context-os/proposals/20260926T212614-setup-0ce7b76b4b.json`\n- Proposal ID: `[REDACTED]`\n- Digest: `[REDACTED]`\n- Change: rewrites `identity/who-i-am.md` with a synthetic fixture identity (explicitly labeled \"Not a real person,\" no genuine biographical content). `state/current.md` was left out of this proposal because the kernel flagged it as an already-populated file requiring separate `replace_populated` approval \u2014 not something to grant implicitly for a synthetic-identity request.\n\nNot applied \u2014 stopping here as instructed.\n\nCanary lines beginning \"Hermes fixture canary:\":\n- `AGENTS.md`: `Hermes fixture canary: 55a04d0b3e7a028475e1000af0bfff85` (repository instructions)\n- `.agents/skills/context-setup/SKILL.md`: `Hermes fixture canary: f64a7bafef8b611e5fa8d9f82f93b132` (skill instructions loaded for this workflow)\n\nThe general `hermes-agent` skill I also loaded (for orchestration reference) contains no such canary line.",
+          "tokens": {
+            "input": 24,
+            "output": 5268,
+            "total": 491924,
+            "cache_read": 438750,
+            "cache_write": 47882
+          },
+          "duration_ms": 102835,
+          "timestamp": 1790483183207
+        },
+        {
+          "type": "text",
+          "text": "\n\nGood, confirms `initialized: false` \u2014 this workspace hasn't been set up yet, consistent with running `$context-setup`. Now let me build the payload and create the proposal.\n\nThe proposal was created successfully. Per instructions, stopping here without applying.\n\nProposal created:\n- Path: `.context-os/proposals/20260926T212614-setup-0ce7b76b4b.json`\n- Proposal ID: `[REDACTED]`\n- Digest: `[REDACTED]`\n- Change: rewrites `identity/who-i-am.md` with a synthetic fixture identity (explicitly labeled \"Not a real person,\" no genuine biographical content). `state/current.md` was left out of this proposal because the kernel flagged it as an already-populated file requiring separate `replace_populated` approval \u2014 not something to grant implicitly for a synthetic-identity request.\n\nNot applied \u2014 stopping here as instructed.\n\nCanary lines beginning \"Hermes fixture canary:\":\n- `AGENTS.md`: `Hermes fixture canary: 55a04d0b3e7a028475e1000af0bfff85` (repository instructions)\n- `.agents/skills/context-setup/SKILL.md`: `Hermes fixture canary: f64a7bafef8b611e5fa8d9f82f93b132` (skill instructions loaded for this workflow)\n\nThe general `hermes-agent` skill I also loaded (for orchestration reference) contains no such canary line.",
+          "joined_deltas": true
+        }
+      ],
+      "skill_view_names": [
+        "hermes-agent"
+      ]
+    }
+  ],
+  "skill_source_sha256": {
+    "setup": "2e3e51fe34993fa25fd9212b96a02b04a2c2106ef70014a0ac2afa5e422bac0a",
+    "context-setup": "8f3c762531494252506bf0fbf4a201b49da1f0d7dea38a06ea746d309e0223d6",
+    "start": "ffc08638e810cc81b71a31c6f59cc987dde00e04cf29434508ea0307b475431a",
+    "context-start": "77d9230b2a6131d52fb72c6e0360b3d324c92bb5d1e5e3eaf9bba3409c7d22d4",
+    "update": "8b6911e49997dfcf39f0ff3ceaadba57561e4f08c9ee7d194fa0ce0ce789d598",
+    "context-update": "e6df6087081db3db0831b800792b501385f304472bdd2ed6b0c64643e572a4eb",
+    "end": "2c012b1d9f4c171065614094e68d1531e5de84850dcdb27fdac9d333f1254968",
+    "context-end": "47f0856a8ee0a37cd305397f7fdf5ff7966e805ce0fe6178fa92a0b11254b296"
+  },
+  "environment_names": [
+    "APPDATA",
+    "HERMES_GIT_BASH_PATH",
+    "HERMES_HOME",
+    "HOME",
+    "LOCALAPPDATA",
+    "OPENROUTER_API_KEY",
+    "PATH",
+    "PYTHONDONTWRITEBYTECODE",
+    "SYSTEMROOT",
+    "TEMP",
+    "TMP",
+    "USERPROFILE"
+  ],
+  "api_key_names": [
+    "OPENROUTER_API_KEY"
+  ],
+  "version": "Hermes Agent v0.21.4 (2026.9.21) \u00b7 upstream d94769da",
+  "failure": "HarnessError: self-read: discovery not shown",
+  "finished_at": "2026-09-27T04:26:23.920541+00:00"
+}
