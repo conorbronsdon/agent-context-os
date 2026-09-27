@@ -676,10 +676,17 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
         config_path = home / "config.yaml"
         trusted_entries = []
         if config_path.is_file():
-            # Hermes writes trusted roots as "    - <path>" list items under skills.trusted_project_dirs.
-            trusted_entries = [line.strip()[2:].strip() for line in
-                               config_path.read_text(encoding="utf-8", errors="replace").splitlines()
-                               if line.strip().startswith("- ")]
+            # Hermes writes trusted roots as "- <path>" items directly under skills.trusted_project_dirs.
+            key_indent = None
+            for line in config_path.read_text(encoding="utf-8", errors="replace").splitlines():
+                indent = len(line) - len(line.lstrip())
+                if line.strip() == "trusted_project_dirs:":
+                    key_indent = indent
+                elif key_indent is not None and line.strip():
+                    if indent <= key_indent:
+                        key_indent = None
+                    elif line.strip().startswith("- "):
+                        trusted_entries.append(line.strip()[2:].strip())
         if (trust["exit_code"]
                 or not any(line.strip() == f"Trusted: {fixture}" for line in trust_output.splitlines())
                 or str(fixture) not in trusted_entries
