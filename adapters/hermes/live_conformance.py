@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
+import codecs
 import difflib
 import hashlib
 import json
@@ -14,6 +17,8 @@ import secrets
 import subprocess
 import sys
 import time
+import urllib.parse
+import zlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
@@ -37,6 +42,14 @@ SELF_READ = re.compile(
     r"(?<![/\\\w])\*\.md\b|git\s+(?:diff|show|log\s+-p)\b)"
 )
 READ_TOOLS = {"read_file", "search_files", "terminal", "execute_code", "delegate_task"}
+MAX_INFLATED_TOOL_TEXT = 10_000_000
+OVERLAPPING_VIEWS = 4
+MAX_GZIP_MEMBERS = 64
+GZIP_MIN_MEMBER = 18  # 10-byte header, empty deflate block, 8-byte trailer
+MAX_TOOL_RESULT_TEXT = 20_000_000
+NON_HEX_BYTES = bytes(byte for byte in range(256) if chr(byte) not in "0123456789abcdef")
+HEX_CANARY = re.compile(r"[0-9a-f]{32}")
+BASE64_LINE = re.compile(r"[A-Za-z0-9+/_-]+={0,2}")
 SLASH_COMMANDS = {f"/context-{phase}" for phase in PHASES}
 
 
@@ -145,6 +158,165 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
             return [redact(child) for child in value]
         return value
 
+    def gzip_header_length(data: bytes, start: int) -> int | None:
+        # Length of the gzip member header at start, or None when unreadable.
+        if len(data) - start < 10 or data[start:start + 3] != b"\x1f\x8b\x08":
+            return None
+        flags, position = data[start + 3], start + 10
+        if flags & 4:
+            if len(data) < position + 2:
+                return None
+            position += 2 + int.from_bytes(data[position:position + 2], "little")
+        for flag in (8, 16):
+            if flags & flag:
+                end = data.find(b"\0", position)
+                if end < 0:
+                    return None
+                position = end + 1
+        if flags & 2:
+            position += 2
+        return position - start if position <= len(data) else None
+
+    def inflate_gzip_members(data: bytes, limit: int, members: list[int]) -> tuple[bytes, bool]:
+        # Inflate concatenated gzip members as raw deflate streams, fed in small
+        # chunks, until the byte limit or the shared member allowance
+        # (members[0]) runs out. Skipping the CRC check and feeding chunks keep
+        # every decodable byte of a corrupt or truncated member for scanning.
+        # Returns the text so far and False only when inspection stopped early.
+        # Running out of data mid-member is complete (nothing follows it), but a
+        # deflate error, an unreadable header with data remaining, or gzip data
+        # left after the members is not: those fail closed.
+        output, position = bytearray(), 0
+        while data[position:position + 2] == b"\x1f\x8b":
+            if members[0] <= 0:
+                return bytes(output), False
+            members[0] -= 1
+            header = gzip_header_length(data, position)
+            if header is None:
+                return bytes(output), len(data) - position < GZIP_MIN_MEMBER
+            position += header
+            inflater = zlib.decompressobj(-zlib.MAX_WBITS)
+            while position < len(data) and not inflater.eof:
+                chunk = data[position:position + 65536]
+                try:
+                    output += inflater.decompress(chunk, max(limit - len(output), 1))
+                except zlib.error:
+                    return bytes(output), False
+                if inflater.unconsumed_tail or len(output) >= limit:
+                    return bytes(output), False
+                position += len(chunk) - len(inflater.unused_data)
+            if not inflater.eof:
+                return bytes(output), True
+            # Skip the CRC-32 and ISIZE trailer unless it is missing and the next
+            # member starts immediately.
+            if data[position:position + 2] != b"\x1f\x8b" or data[position + 8:position + 10] == b"\x1f\x8b":
+                position += 8
+        return bytes(output), b"\x1f\x8b\x08" not in data[position:]
+
+    def decoded_views(value: str) -> tuple[list[str], bool]:
+        # A tool can transform instruction text before returning it. Build the
+        # plausible decoded views, bounded; anything too large to inspect makes
+        # the result inconclusive, which counts as a self-read (fail closed).
+        if len(value) > MAX_TOOL_RESULT_TEXT:
+            return [value], True
+        views, inconclusive = [value], False
+        if "%" in value:
+            views.append(urllib.parse.unquote(value))
+        if "\\u" in value or "\\x" in value:
+            try:
+                views.append(codecs.decode(value, "unicode_escape"))
+            except (UnicodeDecodeError, ValueError):
+                pass
+        seen = set()
+        # Wrapped base64 is rejoined only across line breaks between base64-looking
+        # lines, so ordinary space-separated text is never merged into one token.
+        # Rejoin wrapped base64 with one linear pass: group consecutive lines made
+        # only of base64 characters, then try the group with and without its
+        # first or last line, so a stray header or footer cannot spoil the decode.
+        groups, group_lines, group = [], set(), []
+        for line in [*value.splitlines(), ""]:
+            stripped = line.strip()
+            if stripped and BASE64_LINE.fullmatch(stripped):
+                group.append(stripped)
+                continue
+            if len(group) > 1:
+                groups.append((("".join(group), "".join(group[1:]), "".join(group[:-1])), list(group)))
+                group_lines.update(group)
+            group = []
+        # Plain base64 decoding is bounded by the input size. Every gzip
+        # inflation is charged to one running total, and gzip members share one
+        # allowance; exhausting either fails closed instead of skipping content.
+        # A wrapped group is decoded as its joined variants and also line by line
+        # (a misaligned join can hide a line), so one payload can appear in at
+        # most OVERLAPPING_VIEWS views. The total cap is that many times the
+        # content allowance: legitimate content within the allowance is never
+        # over-charged, and total inflated work stays bounded.
+        remaining = OVERLAPPING_VIEWS * MAX_INFLATED_TOOL_TEXT
+        members = [OVERLAPPING_VIEWS * MAX_GZIP_MEMBERS]
+        sources = [source for variants, lines in groups for source in (*variants, *lines)]
+        for source in (*sources, value):
+            for token in re.findall(r"[A-Za-z0-9+/_-]{24,}={0,2}", source):
+                if token in seen or (source is value and token in group_lines):
+                    continue
+                seen.add(token)
+                try:
+                    decoded = base64.b64decode(
+                        token.replace("-", "+").replace("_", "/") + "=" * (-len(token) % 4), validate=True)
+                except (ValueError, binascii.Error):
+                    continue
+                if decoded[:2] == b"\x1f\x8b":
+                    decoded, complete = inflate_gzip_members(decoded, remaining, members)
+                    remaining -= len(decoded)
+                    if not complete or remaining <= 0:
+                        return views, True
+                    # A member can carry another member's bytes verbatim, for
+                    # example in a stored block. Inflate every gzip signature in
+                    # inflated output as well; these attempts are speculative, so
+                    # their errors are ignored, but they share the budget and
+                    # the member allowance, which bounds the queue.
+                    pending = [decoded]
+                    while pending:
+                        blob = pending.pop()
+                        start = blob.find(b"\x1f\x8b\x08")
+                        while start >= 0:
+                            if members[0] <= 0:
+                                return views, True
+                            # One member per signature keeps the queue linear;
+                            # each following member has its own signature.
+                            members[0] -= 1
+                            nested, _ = inflate_gzip_members(blob[start:], remaining, [1])
+                            remaining -= len(nested)
+                            if remaining <= 0:
+                                return views, True
+                            if nested:
+                                text = nested.decode("utf-8", errors="replace")
+                                views.append(text)
+                                pending.append(nested)
+                            start = blob.find(b"\x1f\x8b\x08", start + 1)
+                text = decoded.decode("utf-8", errors="replace")
+                views.append(text)
+        return views, inconclusive
+
+    def marker_hits(value: str) -> tuple[set[str], bool]:
+        # Each view is checked forward and reversed (reversed markers against the
+        # view, rather than storing reversed copies), and hex canaries are also
+        # checked against the view with every non-hex character removed. The
+        # removal is a byte-level delete, which stays fast on multi-MB views.
+        views, inconclusive = decoded_views(value)
+        found = set()
+        for view in views:
+            lowered = view.lower()
+            normalized = lowered.replace("0x", "").encode("ascii", "ignore").translate(None, NON_HEX_BYTES)
+            # A reversed "0x" dump reads "x0", so the reversed check strips that form.
+            reversed_normalized = lowered.replace("x0", "").encode("ascii", "ignore").translate(None, NON_HEX_BYTES)
+            for marker in markers:
+                folded = marker.lower()
+                if (marker in view or folded in lowered or folded[::-1] in lowered
+                        or (HEX_CANARY.fullmatch(marker)
+                            and (folded.encode() in normalized or folded[::-1].encode() in reversed_normalized))):
+                    found.add(marker)
+        return found, inconclusive
+
     events, assistant, final, skills = [], [], [], []
     self_read = False
     requested_skill = None
@@ -171,7 +343,12 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
                          and re.search(r"(?i)Hermes fixture canary:", detail_text))):
                     self_read = True
         if kind == "tool_result":
-            found = {marker for value in strings(event) for marker in markers if marker in value}
+            # Join every string field so content split across parts is scanned whole.
+            content = "\n".join(text for key, child in event.items()
+                                if key not in ("type", "name", "id", "tool_use_id", "timestamp")
+                                for text in strings(child))
+            found, inconclusive = marker_hits(content)
+            self_read = self_read or inconclusive
             allowed = set()
             if (event.get("name") == "skill_view" and requested_skill
                     and requested_skill[0] in (phase, f"context-{phase}")

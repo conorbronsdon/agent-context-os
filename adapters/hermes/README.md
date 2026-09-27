@@ -52,7 +52,15 @@ apply, exact-digest apply receipts, wrong-digest and stale-target rejection,
 memory separation,
 and a byte-identical sentinel. The manifest stays outside the fixture, and
 the canary edits are committed in the disposable fixture. Evidence names both
-the source and fixture commits. By default, pass-through is limited to
+the source and fixture commits.
+Tool-result self-read detection checks, before redacting tool results: literal
+canaries, case changes, separators or `0x` prefixes in hex canaries, reversed
+text, percent-encoding, `\u` escapes, and base64/base64url (including wrapped
+output and gzip payloads). A result too large to decode within the harness limit
+counts as a self-read. It does not prove discovery against arbitrary
+transformations or unusual read commands; treat the recorded discovery control
+as bounded evidence.
+By default, pass-through is limited to
 `PATH`, `SYSTEMROOT`, `HOME`, `USERPROFILE`, `TEMP`, `TMP`, `APPDATA`,
 `LOCALAPPDATA`, `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` (including lowercase
 forms), `SSL_CERT_FILE`, `SSL_CERT_DIR`, `REQUESTS_CA_BUNDLE`,
