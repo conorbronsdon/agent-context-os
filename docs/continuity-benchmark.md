@@ -84,7 +84,8 @@ profile. The instructions baseline tests safe uncertainty, not retention.
 
 The long-only `handoff-sentences` profile rewrites the compact `HANDOFF.md`
 with one self-contained sentence per fact, naming its subject without label
-prefixes. It preserves the handoff facts and `AGENTS.md` instructions for the
+prefixes. Statuses now keep their qualifiers in one sentence (#218).
+It preserves the handoff facts and `AGENTS.md` instructions for the
 #206 rerun. Its fixture overrides only the expected citation source and quote;
 answer values and the grounding rule stay the same. The original three
 profiles remain unchanged so the September 23 evidence can still be rescored.

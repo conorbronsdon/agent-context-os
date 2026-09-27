@@ -103,6 +103,7 @@ class LongSequenceTest(unittest.TestCase):
         sentences = re.findall(r"[^.!?]+[.!?]", note)
         sentences = [sentence.strip() for sentence in sentences]
         for sentence in sentences:
+            self.assertNotRegex(sentence, r"^\w+:")
             self.assertRegex(sentence, r"^(Atlas|Beacon)(?:'s)? ")
         overrides = LONG["expected_by_profile"]
         self.assertEqual({"handoff-sentences"}, set(overrides))
@@ -112,11 +113,27 @@ class LongSequenceTest(unittest.TestCase):
                 self.assertEqual({"source", "quote"}, set(evidence))
                 self.assertEqual("HANDOFF.md", evidence["source"])
                 self.assertIn(evidence["quote"], sentences)
-        # Preserve interruption details as well as the ten answer sentences.
+        self.assertEqual(len(LONG["questions"]), len(sentences))
         self.assertEqual(set(sentences), {
             evidence["quote"] for evidence in overrides["handoff-sentences"].values()
-        } | {"Atlas's staging migration was interrupted before execution.",
-             "Beacon's import review was interrupted after the draft."})
+        })
+
+    def test_sentence_handoff_status_qualifiers(self):
+        original = LONG["sources"]["HANDOFF.md"]
+        overrides = LONG["expected_by_profile"]["handoff-sentences"]
+        clauses = (
+            ("atlas_migration", "Atlas's staging migration was interrupted before execution; it has not run.",
+             ("interrupted before execution", "not run")),
+            ("beacon_review", "Beacon's import review was interrupted after the draft, before approval.",
+             ("draft", "approval")),
+        )
+        for key, clause, qualifiers in clauses:
+            with self.subTest(question=key):
+                self.assertIn(clause, original)
+                quote = overrides[key]["quote"].lower()
+                for qualifier in qualifiers:
+                    self.assertIn(qualifier, clause.lower())
+                    self.assertIn(qualifier, quote)
 
     def test_sentence_handoff_grounding_controls(self):
         profile = "handoff-sentences"
@@ -148,6 +165,25 @@ class LongSequenceTest(unittest.TestCase):
             line["score"] = benchmark.evaluate(LONG, line["profile"], line["raw_response"])
         self.assertEqual(table, benchmark.summarize(lines))
 
+    def test_september_26_original_profiles_rescore_reproduces_evidence_table(self):
+        directory = ROOT / "docs/evidence/continuity-rerun-2026-09-26"
+        lines = [json.loads(line) for line in (directory / "trials.jsonl").read_text(encoding="utf-8").splitlines()]
+        readme = (directory / "README.md").read_text(encoding="utf-8")
+        table = next(block for block in readme.split("\n\n") if block.startswith("| Model | Profile |"))
+        self.assertIn("`handoff-sentences`: the same facts rewritten to the new rule (771", readme)
+        self.assertIn("Atlas's staging migration was interrupted before execution.", readme)
+        self.assertIn("Beacon's import review was interrupted after the draft.", readme)
+        original_profiles = {"handoff", "contextos"}
+        self.assertEqual(original_profiles | {"handoff-sentences"}, {line["profile"] for line in lines})
+        unchanged = [line for line in lines if line["profile"] in original_profiles]
+        self.assertEqual(18, len(unchanged))
+        for line in unchanged:
+            prompt = benchmark.prepare(LONG, line["profile"])
+            self.assertEqual(line["prompt_sha256"], hashlib.sha256(prompt.encode("utf-8")).hexdigest())
+            line["score"] = benchmark.evaluate(LONG, line["profile"], line["raw_response"])
+        historical_rows = [row for row in table.splitlines() if "| handoff-sentences |" not in row]
+        self.assertEqual("\n".join(historical_rows), benchmark.summarize(unchanged))
+
     def test_sentence_handoff_cli_prepare_record_and_summarize(self):
         directory = ROOT / "tests/fixtures/continuity"
         suffix = uuid4().hex
@@ -170,11 +206,11 @@ class LongSequenceTest(unittest.TestCase):
             self.assertEqual(0, recorded.returncode, recorded.stderr)
             line = json.loads(results.read_text(encoding="utf-8"))
             self.assertEqual(10, line["score"]["grounded_correct"])
-            self.assertEqual(771, line["score"]["context_characters"])
+            self.assertEqual(719, line["score"]["context_characters"])
             summary = subprocess.run(command + ["summarize", "--results", str(results)],
                                      capture_output=True, text=True)
             self.assertEqual(0, summary.returncode, summary.stderr)
-            self.assertIn("| model-1 | handoff-sentences | 771 | 1 | 10.00 | 10.00 | 0.00 | 8.00 | 2.00 | 0.00 | 0 |", summary.stdout)
+            self.assertIn("| model-1 | handoff-sentences | 719 | 1 | 10.00 | 10.00 | 0.00 | 8.00 | 2.00 | 0.00 | 0 |", summary.stdout)
             unsupported = subprocess.run(command + ["prepare", "--profile", "handoff-sentences"],
                                          capture_output=True, text=True)
             self.assertEqual(2, unsupported.returncode)

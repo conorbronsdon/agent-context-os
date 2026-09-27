@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Fixed
+- The long continuity `handoff-sentences` fixture keeps interrupted status and
+  its qualifiers in one sentence, with full-answer citation quotes (#218).
 - Cursor CLI conformance rejects confounding user write/shell allowances,
   inspects the same configuration directory used by the child process,
   records the logical launcher name and SHA-256 across the Windows batch
