@@ -2,7 +2,7 @@
   "binary_name": "agent.cmd",
   "binary_sha256": "299eaddf3327768e7fcd64f29ad01747c740f7e316931575fb3cee617c92ccfc",
   "binary_version": "2026.09.26-dd393fe",
-  "checked_at": "2026-09-27T03:42:08.910208+00:00",
+  "checked_at": "2026-09-27T03:47:34.585645+00:00",
   "commands": [
     {
       "argv_sha256": "c8c459b021d9cd0a5e9671f0609ee0f631ba2e34a7dac404abbf08b8cb37a326",
@@ -26,60 +26,60 @@
       "stdout_sha256": "597220d5e2f8d15dbb9ed65208e5c3211855aa0b8460f03d94766e37422a3859"
     },
     {
-      "argv_sha256": "0864073679be1e917fac398229d1f4f4ca897afd9ca72ce757f38ea12cdc492c",
+      "argv_sha256": "fa2b7ea280931222886a4a12a315568096a14f2712e8919dd2bf3bcdb4401d0d",
       "command": "cmd.exe",
       "returncode": 0,
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stdout_sha256": "c26f75559ed17203df1a82c0f5b66c017a99f1b1814887ac0a31c0751ebd17ea"
+      "stdout_sha256": "802e72d0899e3cfd1edf24c253977a7a9b0dffe655cdb049805df182ebe88894"
     },
     {
-      "argv_sha256": "e2083f3fe28fec66c45f94c555474e70f5ab7536f4def3cf6fbac9bbe62814a1",
+      "argv_sha256": "a7562edcfc0fe1dcd3fd40ca7586c567190325d27f55ba94768ca38f1d7af56c",
       "command": "cmd.exe",
       "returncode": 0,
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stdout_sha256": "9214dcc02f39faeede49c6bdb5d63704f3ac951c3e9673110696e23147a36859"
+      "stdout_sha256": "a51033e3689567be23f68cb20563cc10040225ec30ee0404e998cf51627508d2"
     },
     {
-      "argv_sha256": "6e76aa5331efcbfe52fa9e6643ee6af3d795b4ec988deaa9a54541791664da7c",
+      "argv_sha256": "510f01f0c5634e22d32e36a22457a72ff5f4198001a621e90f724f4b2bb00e8d",
       "command": "cmd.exe",
       "returncode": 0,
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stdout_sha256": "b08444084382438e35c047c2ede1fbf9a344747edeef937615594fc572de8197"
+      "stdout_sha256": "a0be18616c574d6e1fce1f859bd3c2c415b1f25d7fb0fabf0dcd39fa10f05375"
     },
     {
-      "argv_sha256": "d0319f1cabf9b1e43bf7e6f70f9150f0cec13f405db3b14d061ac12c68c7e2cf",
+      "argv_sha256": "acf8f3849c13f2cf0a652746ecf8fc4c503629ea851f000d43f41d0f6a30fe8a",
       "command": "cmd.exe",
       "returncode": 0,
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stdout_sha256": "ac78b4ee25309a4bae0a441ca6388ee94d2994fd4d50e71faeacd9a687c8e38a"
+      "stdout_sha256": "86ab4fc2c733a1cfdafb5fe3c164b511147b1fafe35b1dae0091dd4454345cc0"
     },
     {
-      "argv_sha256": "facc836dde16223e3f30af89c3376806081a2c8a5d6197587f1ad696f8eadf13",
+      "argv_sha256": "e8e0a0aac0ef47233c549f7cb81a6372815d5d027b7a5a75ae85fd6aa73ac79f",
       "command": "cmd.exe",
       "returncode": 0,
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stdout_sha256": "172d249a4b854fdb8cca33acdd2e7b7b221beeac8378635c265ff36477ba7e16"
+      "stdout_sha256": "2bfd83943bae0a1f585df86219f8b04450bb8355eb139a3415b4173410ad0445"
     },
     {
-      "argv_sha256": "6632f2dd69b205509196229644a9592fe591768a0c00484abc4fcf2ca02b078a",
+      "argv_sha256": "1ea982c479daeb5d31b1ba6ea0b92d74e88f2f37e5a79c49898a5e5650a0c79a",
       "command": "cmd.exe",
       "returncode": 0,
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stdout_sha256": "ebdf6050fe05b3b34b64aef5db23964bb66c5a8a76957e7b5f8b4650b31ba569"
+      "stdout_sha256": "71a84cdb730d80b80cb35a14adab91b096872517a1e9d40782c8f4229cb02923"
     },
     {
-      "argv_sha256": "3b2b4828b971fea9382290f296c8959ddef96c5afce09362cb571dcfe2d49436",
+      "argv_sha256": "1868c9c539551b8a11fa434fc38a6b84401237dc92db299aec004afb420bb823",
       "command": "cmd.exe",
       "returncode": 0,
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stdout_sha256": "90b2290b643150d6db2587f70ee19ac552ec5ed0481f5aecfa137ecbc90a7987"
+      "stdout_sha256": "eaa4544b85bf63de611d95c21092a7734a077bf5ae467dcef69695f7298e6c43"
     },
     {
-      "argv_sha256": "d6ad922c8a80ec68245a6f107842710189739741fcf128c66a8b9115e459d443",
+      "argv_sha256": "1c53948cb96afb3ccada3f3ea90dc51772fe4c28c6a2775e7cd7482c3ef8ffc7",
       "command": "cmd.exe",
       "returncode": 0,
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stdout_sha256": "4c5d95f68f1c3e9887a4cc91ad1fa37743e03f4ecf9f6a2f4652712e9c0596e1"
+      "stdout_sha256": "d0619a052a4de2fa6180e4f87bfb97a703ab931e524e13d9da0d0fb119312ba0"
     }
   ],
   "controls": {
@@ -101,8 +101,8 @@
   "expected_version": "2026.09.26-dd393fe",
   "runtime": "cursor",
   "schema_version": 1,
-  "source_sha": "dc453d669e0b99d200737cc401025b41b78d3628",
+  "source_sha": "281c85997033030d15c1e0c86920d4ccd3498f2d",
   "surface": "cli",
-  "user_cli_config_sha256": "769616a7f8af90c3bdcfe7e1162089ed71845cae98058c13ae075163b384e793",
+  "user_cli_config_sha256": "6395ae5c0f30d3451955f67c1b8ee6041cdfba43b204ef31e79777b918ab5572",
   "workspace_cleanup": "completed"
 }

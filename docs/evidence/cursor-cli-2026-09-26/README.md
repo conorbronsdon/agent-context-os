@@ -8,12 +8,12 @@ Items marked *operator-observed* are not recorded in `evidence.json`.
 
 ## Recorded in `evidence.json`
 
-- Source commit: `dc453d669e0b99d200737cc401025b41b78d3628`, which contains
+- Source commit: `281c85997033030d15c1e0c86920d4ccd3498f2d`, which contains
   the final deny-stream parser.
 - Cursor CLI: `2026.09.26-dd393fe`. The launcher `agent.cmd` has SHA-256
   `299eaddf3327768e7fcd64f29ad01747c740f7e316931575fb3cee617c92ccfc`.
 - The CLI configuration file's SHA-256 at preflight:
-  `769616a7f8af90c3bdcfe7e1162089ed71845cae98058c13ae075163b384e793`.
+  `6395ae5c0f30d3451955f67c1b8ee6041cdfba43b204ef31e79777b918ab5572`.
 - All 14 controls passed, and the workspace cleanup completed.
 
 ## Operator-observed
@@ -51,8 +51,8 @@ The harness never invoked Cursor's built-in `/update`.
   test fixture `tests/fixtures/cursor/deny-stream-2026.09.23-86fc751.jsonl`.
 - **Version drift:** the CLI then updated itself to `2026.09.26-dd393fe`. A run
   pinned to the earlier version correctly stopped at the exact-version check.
-- **Superseded passes:** runs from `fb761f8`, `f2e76bd`, `f39452d`, and `4dec95e`, with less strict parsers, also
-  passed all 14 controls. Review then tightened the parser four times, and this artifact
+- **Superseded passes:** runs from `fb761f8`, `f2e76bd`, `f39452d`, `4dec95e`, and `dc453d6`, with less strict parsers, also
+  passed all 14 controls. Review then tightened the parser five times, and this artifact
   replaces theirs.
 
 ## Limits
