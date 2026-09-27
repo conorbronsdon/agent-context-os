@@ -21,9 +21,9 @@ which was taken after the run from the same install.
 | Platform | Windows 11 (`Windows-11-10.0.26200`) | Provenance capture. |
 | OpenClaw | `2026.9.6 (eb377ac)` | npm `openclaw@2026.9.6`, installed into a private prefix. The lockfile integrity equals the registry's `dist.integrity`. The package names `openclaw/openclaw` as its repository and MIT as its license. It requires Node `>=24.16.0 <25 \|\| >=26.1.0`. *Operator-observed:* npm skipped the package's install scripts. |
 | Node.js | `v24.21.0` win-x64 | The capture shows the zip's SHA-256 next to a matching checksum line. *Operator-observed:* both the zip and `SHASUMS256.txt` were downloaded from nodejs.org. |
-| markitdown-mcp | `0.0.1a7` | PyPI, source `microsoft/markitdown`. The capture lists PyPI's published file hashes. The installed version appears in [the uninstall capture](captures/09-pip-uninstall.txt). The installed wheel was not hash-pinned. It was installed with uv into an isolated Python 3.12 virtual environment. |
+| markitdown-mcp | `0.0.1a7` | PyPI, source `microsoft/markitdown`. The capture lists PyPI's published file hashes. The installed version appears in [the uninstall capture](captures/09-pip-uninstall.txt). The provenance capture shows a Python 3.12.6 `md-venv` environment. *Operator-observed:* it was installed with uv without hash pinning; the install command was not captured. |
 | markitdown | `0.1.7` | The release the catalog entry's evidence cites; the installed version is in the uninstall capture. *Operator-observed:* the resolver first chose `0.1.8`, the operator pinned `0.1.7`, and `uv pip check` then reported no conflicts. |
-| Agent model | `anthropic/claude-sonnet-5` | Runs through OpenClaw's bundled `claude-cli` runtime, which launches the operator's logged-in Claude Code CLI ([config](inputs/exec-config.json), [result](captures/06-agent-exec.json)). |
+| Agent model | `anthropic/claude-sonnet-5` | Runs through OpenClaw's bundled `claude-cli` runtime, which launches the Claude Code CLI; *operator-observed:* it used the operator's existing login ([config](inputs/exec-config.json), [result](captures/06-agent-exec.json)). |
 
 `MARKITDOWN_ENABLE_PLUGINS` was unset in the capture environment. The server
 was configured with a tool filter that includes only `convert_to_markdown`
