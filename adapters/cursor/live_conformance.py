@@ -175,6 +175,7 @@ def require_denied_write_attempt(
     # The whole stream is checked. The project denies every write, so every
     # write must stay in the workspace and every completion must be a policy
     # denial for its own started target; one must be the requested file.
+    # Each started call_id must be completed exactly once as that same kind.
     root = workspace.resolve()
     expected = (root / filename).resolve(strict=False)
 
@@ -182,15 +183,42 @@ def require_denied_write_attempt(
         return Path(path).resolve(strict=False) if Path(path).is_absolute() else (root / path).resolve(strict=False)
 
     attempts: dict[str, tuple[str, Path]] = {}
+    completed: set[str] = set()
     denied = False
     for event in events:
+        call_id = event.get("call_id")
         tool_call = event.get("tool_call")
+        if isinstance(call_id, str) and call_id in attempts:
+            kind, target = attempts[call_id]
+            if (
+                event.get("subtype") != "completed"
+                or call_id in completed
+                or not isinstance(tool_call, dict)
+                or [name for name in WRITE_TOOL_KINDS if name in tool_call] != [kind]
+                or not isinstance(tool_call[kind], dict)
+            ):
+                raise HarnessError(f"{subject} returned an ambiguous write event")
+            completed.add(call_id)
+            write = tool_call[kind]
+            outcome = write.get("result")
+            payload = outcome.get("writePermissionDenied") if isinstance(outcome, dict) else None
+            reported = payload.get("path") if isinstance(payload, dict) else None
+            if (
+                not isinstance(outcome, dict)
+                or set(outcome) != {"writePermissionDenied"}
+                or not isinstance(payload, dict)
+                or not isinstance(reported, str)
+                or (reported and resolve(reported) != target)
+                or target.name not in str(payload.get("error", ""))
+            ):
+                raise HarnessError(f"{subject} write failed for a reason other than policy denial")
+            denied = denied or target == expected
+            continue
         if not isinstance(tool_call, dict):
             continue
         kinds = [kind for kind in WRITE_TOOL_KINDS if kind in tool_call]
         if not kinds:
             continue
-        call_id = event.get("call_id")
         if len(kinds) != 1 or not isinstance(tool_call[kinds[0]], dict) or not isinstance(call_id, str):
             raise HarnessError(f"{subject} returned an ambiguous write event")
         write = tool_call[kinds[0]]
@@ -206,22 +234,9 @@ def require_denied_write_attempt(
                 raise HarnessError(f"{subject} attempted a write outside the disposable workspace") from exc
             attempts[call_id] = (kinds[0], target)
         elif event.get("subtype") == "completed":
-            if attempts.get(call_id, ("", None))[0] != kinds[0]:
-                raise HarnessError(f"{subject} returned an ambiguous write event")
-            target = attempts[call_id][1]
-            outcome = write.get("result")
-            payload = outcome.get("writePermissionDenied") if isinstance(outcome, dict) else None
-            reported = payload.get("path") if isinstance(payload, dict) else None
-            if (
-                not isinstance(outcome, dict)
-                or set(outcome) != {"writePermissionDenied"}
-                or not isinstance(payload, dict)
-                or not isinstance(reported, str)
-                or (reported and resolve(reported) != target)
-                or target.name not in str(payload.get("error", ""))
-            ):
-                raise HarnessError(f"{subject} write failed for a reason other than policy denial")
-            denied = denied or target == expected
+            raise HarnessError(f"{subject} returned an ambiguous write event")
+    if any(call_id not in completed for call_id in attempts):
+        raise HarnessError(f"{subject} left a write attempt without a denial")
     if not denied:
         raise HarnessError(f"{subject} did not record a rejected denied write through Cursor")
 

@@ -357,6 +357,89 @@ class CursorLiveHarnessTest(unittest.TestCase):
                 event["tool_call"] = {"writeToolCall": event["tool_call"].pop("editToolCall")}
         self.assert_deny_stream_rejected(events, "ambiguous")
 
+    def test_write_completion_kind_switch_is_ambiguous(self) -> None:
+        events = observed_deny_stream(str(self.root / "denied.txt"))
+        for event in events:
+            tool_call = event.get("tool_call")
+            if (
+                event.get("subtype") == "completed"
+                and isinstance(tool_call, dict)
+                and "editToolCall" in tool_call
+            ):
+                del tool_call["editToolCall"]
+                tool_call["shellToolCall"] = {"result": {"success": {"stdout": "DENIED_CONTROL"}}}
+                break
+        self.assert_deny_stream_rejected(events, "ambiguous write event")
+
+    def test_other_write_completed_as_non_write_is_ambiguous(self) -> None:
+        events = observed_deny_stream(str(self.root / "denied.txt"))
+        started = next(
+            event for event in events
+            if event.get("subtype") == "started"
+            and "editToolCall" in (event.get("tool_call") or {})
+        )
+        completed = next(
+            event for event in events
+            if event.get("subtype") == "completed"
+            and "editToolCall" in (event.get("tool_call") or {})
+        )
+        switched_id = "tool_switched_write"
+        switched_start = json.loads(json.dumps(started))
+        switched_start["call_id"] = switched_id
+        switched_start["tool_call"]["editToolCall"]["args"]["path"] = str(self.root / "other.txt")
+        switched_done = json.loads(json.dumps(completed))
+        switched_done["call_id"] = switched_id
+        del switched_done["tool_call"]["editToolCall"]
+        switched_done["tool_call"]["shellToolCall"] = {"result": {"success": {"stdout": "DENIED_CONTROL"}}}
+        index = events.index(completed) + 1
+        events[index:index] = [switched_start, switched_done]
+        self.assert_deny_stream_rejected(events, "ambiguous write event")
+
+    def test_started_write_without_completion_is_rejected(self) -> None:
+        events = [
+            event for event in observed_deny_stream(str(self.root / "denied.txt"))
+            if not (
+                event.get("subtype") == "completed"
+                and "editToolCall" in (event.get("tool_call") or {})
+            )
+        ]
+        self.assert_deny_stream_rejected(events, "left a write attempt without a denial")
+
+    def test_unfinished_extra_write_is_rejected(self) -> None:
+        events = observed_deny_stream(str(self.root / "denied.txt"))
+        started = next(
+            event for event in events
+            if event.get("subtype") == "started"
+            and "editToolCall" in (event.get("tool_call") or {})
+        )
+        unfinished = json.loads(json.dumps(started))
+        unfinished["call_id"] = "tool_unfinished"
+        unfinished["tool_call"]["editToolCall"]["args"]["path"] = str(self.root / "other.txt")
+        events.insert(events.index(started), unfinished)
+        self.assert_deny_stream_rejected(events, "left a write attempt without a denial")
+
+    def test_reused_write_call_id_is_ambiguous(self) -> None:
+        events = observed_deny_stream(str(self.root / "denied.txt"))
+        started = next(
+            event for event in events
+            if event.get("subtype") == "started"
+            and "editToolCall" in (event.get("tool_call") or {})
+        )
+        forgotten = json.loads(json.dumps(started))
+        forgotten["tool_call"]["editToolCall"]["args"]["path"] = str(self.root / "other.txt")
+        events.insert(events.index(started), forgotten)
+        self.assert_deny_stream_rejected(events, "ambiguous write event")
+
+    def test_duplicate_write_completion_is_ambiguous(self) -> None:
+        events = observed_deny_stream(str(self.root / "denied.txt"))
+        completed = next(
+            event for event in events
+            if event.get("subtype") == "completed"
+            and "editToolCall" in (event.get("tool_call") or {})
+        )
+        events.insert(events.index(completed) + 1, json.loads(json.dumps(completed)))
+        self.assert_deny_stream_rejected(events, "ambiguous write event")
+
     def test_deny_precedence_rejects_other_completions_and_unmatched_calls(self) -> None:
         cases = {
             "success": {"success": {"path": "denied.txt"}},
