@@ -319,7 +319,7 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
 
     events, assistant, final, skills = [], [], [], []
     self_read = False
-    requested_skills = set()
+    requested_skills: list[tuple[str, object]] = []
     for line in output.splitlines():
         try:
             event = json.loads(line)
@@ -332,7 +332,7 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
             name = event.get("name")
             detail = event.get("input", {})
             if name == "skill_view" and isinstance(detail, dict) and isinstance(detail.get("name"), str):
-                requested_skills.add((detail["name"], event.get("id")))
+                requested_skills.append((detail["name"], event.get("id")))
                 skills.append(clean(detail["name"], markers))
             if name != "write_file" and (name in READ_TOOLS or (isinstance(detail, dict) and
                                       any(key in detail for key in ("path", "command", "pattern", "code")))):
@@ -349,12 +349,18 @@ def stream_evidence(output: str, known: Sequence[str] | dict[str, str],
             found, inconclusive = marker_hits(content)
             self_read = self_read or inconclusive
             allowed = set()
-            matching = [request for request in requested_skills if request[1] == event.get("id")]
-            if event.get("name") == "skill_view" and len(matching) == 1:
-                request = matching[0]
-                requested_skills.remove(request)
-                if request[0] in (phase, f"context-{phase}") and isinstance(known, dict):
-                    allowed = {known[request[0]]}
+            event_id = event.get("id")
+            matching = [request for request in requested_skills if request[1] == event_id]
+            if event.get("name") == "skill_view" and matching:
+                # ID-less requests can share a result slot; allow only this phase's skill.
+                own = [request for request in matching if request[0] in (phase, f"context-{phase}")]
+                if own and isinstance(known, dict) and f"context-{phase}" in known:
+                    allowed = {known[f"context-{phase}"]}
+                requested_skills.remove((own or matching)[0])
+            elif event_id is not None:
+                # Any other result for a pending ID consumes it, so it cannot be replayed.
+                for request in matching:
+                    requested_skills.remove(request)
             if found - allowed:
                 self_read = True
         if kind in ("assistant", "assistant_message") or (kind == "message" and event.get("role") == "assistant"):

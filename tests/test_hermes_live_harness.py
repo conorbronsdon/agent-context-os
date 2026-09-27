@@ -38,7 +38,13 @@ if sys.argv[sys.argv.index('--format') + 1] != 'stream-json':
     sys.exit(3)
 def emit(event):
     print(json.dumps(event))
-emit({'type': 'tool_use', 'id': 'skill-1', 'name': 'skill_view', 'input': {'name': 'context-' + phase}})
+if mode == 'skill-view-idless-pair':
+    emit({'type': 'tool_use', 'name': 'skill_view', 'input': {'name': phase}})
+    emit({'type': 'tool_use', 'name': 'skill_view', 'input': {'name': 'context-' + phase}})
+else:
+    emit({'type': 'tool_use', 'id': 'skill-1', 'name': 'skill_view', 'input': {'name': 'context-' + phase}})
+if mode == 'skill-view-id-consumed':
+    emit({'type': 'tool_result', 'id': 'skill-1', 'name': 'read_file', 'output': 'ordinary fixture data'})
 if mode.startswith('parallel-skill-view'):
     emit({'type': 'tool_use', 'id': 'ordinary-1', 'name': 'read_file', 'input': {'path': 'TODO.md'}})
     emit({'type': 'tool_result', 'id': 'ordinary-1', 'name': 'read_file', 'output': 'ordinary fixture data'})
@@ -47,7 +53,11 @@ if mode in ('skill-view-other-phase', 'parallel-skill-view-other-phase'):
     skill += (root / '.agents' / 'skills' / 'context-start' / 'SKILL.md').read_text()
 if mode in ('skill-view-native-memory', 'parallel-skill-view-native-memory'):
     skill += (pathlib.Path(os.environ['HERMES_HOME']) / 'memories' / 'USER.md').read_text()
-emit({'type': 'tool_result', 'id': 'skill-1', 'name': 'skill_view', 'output': skill})
+if mode == 'skill-view-idless-pair':
+    emit({'type': 'tool_result', 'name': 'skill_view', 'output': skill})
+    emit({'type': 'tool_result', 'name': 'skill_view', 'output': skill})
+else:
+    emit({'type': 'tool_result', 'id': 'skill-1', 'name': 'skill_view', 'output': skill})
 if mode == 'skill-view-replayed-result':
     emit({'type': 'tool_result', 'id': 'skill-1', 'name': 'skill_view', 'output': skill})
 if mode == 'write-agents-word':
@@ -347,9 +357,17 @@ class HermesLiveHarnessTest(unittest.TestCase):
         self.assertEqual("passed", report["controls"]["run"], report.get("failure"))
 
     def test_replayed_skill_view_result_is_self_read(self) -> None:
-        report = self.run_record("skill-view-replayed-result")
-        self.assertEqual("failed", report["controls"]["setup_discovery"])
-        self.assertEqual("HarnessError: self-read: discovery not shown", report["failure"])
+        for mode in ("skill-view-replayed-result", "skill-view-id-consumed"):
+            with self.subTest(mode=mode):
+                self.evidence.unlink(missing_ok=True)
+                report = self.run_record(mode)
+                self.assertEqual("failed", report["controls"]["setup_discovery"])
+                self.assertEqual("HarnessError: self-read: discovery not shown", report["failure"])
+
+    def test_idless_skill_view_pair_passes_discovery(self) -> None:
+        report = self.run_record("skill-view-idless-pair")
+        self.assertEqual("passed", report["controls"]["setup_discovery"], report.get("failure"))
+        self.assertEqual("passed", report["controls"]["run"], report.get("failure"))
 
     def test_skill_view_native_memory_is_self_read(self) -> None:
         report = self.run_record("skill-view-native-memory")
