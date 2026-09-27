@@ -1,0 +1,478 @@
+{
+  "started_at": "2026-09-27T18:09:30.675154+00:00",
+  "source_sha": "42452089475ad32e67aa8a590d06f4747647a967",
+  "fixture_commit": "0c0b641c7458b80491df73596e8f9549310b86a8",
+  "os": "Windows-11-10.0.26200-SP0",
+  "fresh_hermes_home": true,
+  "operator_mode": "approval-dir",
+  "model": "gpt-6-sol",
+  "provider": "openai-codex",
+  "controls": {
+    "provider_key_preflight": "bypassed",
+    "version": "passed",
+    "project_skill_trust": "passed",
+    "agents_discovery": "unsupported",
+    "setup_discovery": "failed",
+    "setup_proposal_apply": "unsupported",
+    "start_discovery": "unsupported",
+    "start_read_only": "unsupported",
+    "update_discovery": "unsupported",
+    "update_proposal_apply": "unsupported",
+    "end_discovery": "unsupported",
+    "end_proposal_apply": "unsupported",
+    "wrong_digest_rejected": "unsupported",
+    "stale_target_rejected": "unsupported",
+    "memory_separation": "unsupported",
+    "unrelated_sentinel": "unsupported",
+    "hook_example": "unsupported",
+    "run": "failed"
+  },
+  "commands": [
+    {
+      "argv": [
+        "[PATH]",
+        "--version"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 3.225,
+      "stdout": "Hermes Agent v0.21.4 (2026.9.21) \u00b7 upstream d94769da\nInstall directory: [PATH]\nInstall method: git\nPython: 3.11.16\nOpenAI SDK: 2.24.0\nUpdate available: 4092 commits behind \u2014 run 'hermes update'\n",
+      "stderr": "",
+      "at": "2026-09-27T18:09:34.008569+00:00"
+    },
+    {
+      "argv": [
+        "[PATH]",
+        "skills",
+        "trust",
+        "[PATH]"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 2.153,
+      "stdout": "Trusted: [PATH]\n10 project skill(s) will load in sessions started inside this repo (they take precedence over same-named profile skills).\n",
+      "stderr": "",
+      "at": "2026-09-27T18:09:40.319296+00:00"
+    },
+    {
+      "argv": [
+        "[PATH]",
+        "chat",
+        "--format",
+        "stream-json",
+        "--source",
+        "tool",
+        "-m",
+        "gpt-6-sol",
+        "--provider",
+        "openai-codex",
+        "--run-budget",
+        "300",
+        "--max-turns",
+        "30",
+        "-s",
+        "context-setup",
+        "-q",
+        "Create a kernel proposal for a synthetic fixture identity. Stop after creating the proposal. Also report the fixture canary values stated in the repository instructions and the skill instructions you loaded."
+      ],
+      "exit_code": 0,
+      "duration_seconds": 71.585,
+      "stdout": "[stream-json events recorded separately]",
+      "stderr": "\nsession_id: 20260927_110948_ce33a5\n",
+      "at": "2026-09-27T18:10:53.260377+00:00",
+      "events": [
+        {
+          "type": "system",
+          "subtype": "init",
+          "model": "gpt-6-sol",
+          "session_id": "20260927_110948_ce33a5",
+          "timestamp": 1790532588914
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "pwd; git status --short --branch; bash scripts/contextos.sh start",
+            "timeout": 120
+          },
+          "timestamp": 1790532604889
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 2134,
+          "is_error": false,
+          "timestamp": 1790532607015
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "ROUTING.md"
+          },
+          "timestamp": 1790532607022
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "pattern": "*",
+            "path": "identity",
+            "target": "files",
+            "limit": 30
+          },
+          "timestamp": 1790532607024
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "state/current.md"
+          },
+          "timestamp": 1790532607025
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "docs/safety-contract.md"
+          },
+          "timestamp": 1790532607025
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 643,
+          "is_error": false,
+          "timestamp": 1790532608022
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1000,
+          "is_error": false,
+          "timestamp": 1790532608028
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 648,
+          "is_error": false,
+          "timestamp": 1790532608028
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 645,
+          "is_error": false,
+          "timestamp": 1790532608035
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "identity/who-i-am.md"
+          },
+          "timestamp": 1790532612804
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "identity/professional-background.md"
+          },
+          "timestamp": 1790532612804
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "projects/README.md"
+          },
+          "timestamp": 1790532612806
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "state/weekly-priorities.md"
+          },
+          "timestamp": 1790532612808
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "writing/skills/avoid-ai-writing/SKILL.md"
+          },
+          "timestamp": 1790532612810
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 847,
+          "is_error": false,
+          "timestamp": 1790532613654
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 839,
+          "is_error": false,
+          "timestamp": 1790532613657
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 838,
+          "is_error": false,
+          "timestamp": 1790532613661
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 840,
+          "is_error": false,
+          "timestamp": 1790532613664
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 848,
+          "is_error": false,
+          "timestamp": 1790532613669
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "bash scripts/contextos.sh doctor; bash scripts/contextos.sh propose setup --help",
+            "timeout": 120
+          },
+          "timestamp": 1790532613672
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 3450,
+          "is_error": false,
+          "timestamp": 1790532617124
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "path": "tests",
+            "pattern": "replace_populated|propose setup|who-i-am.md",
+            "limit": 35
+          },
+          "timestamp": 1790532623668
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "path": ".context-os",
+            "pattern": "*",
+            "target": "files",
+            "limit": 30
+          },
+          "timestamp": 1790532623669
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "AGENTS.md"
+          },
+          "timestamp": 1790532623670
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": ".agents/skills/context-setup/SKILL.md"
+          },
+          "timestamp": 1790532623672
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 739,
+          "is_error": false,
+          "timestamp": 1790532624604
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 934,
+          "is_error": true,
+          "timestamp": 1790532624607
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 819,
+          "is_error": false,
+          "timestamp": 1790532624611
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 820,
+          "is_error": false,
+          "timestamp": 1790532624615
+        },
+        {
+          "type": "tool_use",
+          "name": "read_file",
+          "input": {
+            "path": "tests/test_contextos_kernel.py",
+            "offset": 1450,
+            "limit": 55
+          },
+          "timestamp": 1790532630051
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "path": "scripts",
+            "pattern": "replace_populated|placeholder|allowed_setup",
+            "limit": 40
+          },
+          "timestamp": 1790532630052
+        },
+        {
+          "type": "tool_use",
+          "name": "search_files",
+          "input": {
+            "path": ".context-os/inputs",
+            "pattern": "*.json",
+            "target": "files"
+          },
+          "timestamp": 1790532630054
+        },
+        {
+          "type": "tool_result",
+          "name": "read_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 603,
+          "is_error": false,
+          "timestamp": 1790532630666
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 612,
+          "is_error": false,
+          "timestamp": 1790532630669
+        },
+        {
+          "type": "tool_result",
+          "name": "search_files",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 547,
+          "is_error": true,
+          "timestamp": 1790532630678
+        },
+        {
+          "type": "tool_use",
+          "name": "write_file",
+          "input": {
+            "path": ".context-os/inputs/synthetic-fixture-identity.json",
+            "content": "{\n  \"files\": {\n    \"identity/who-i-am.md\": \"# Who I Am\\n\\n**Last Updated:** {{TODAY}}\\n\\n## Current role\\nSynthetic fixture identity for Context OS kernel proposal testing. This is not a real person.\\n\"\n  }\n}\n"
+          },
+          "timestamp": 1790532637173
+        },
+        {
+          "type": "tool_result",
+          "name": "write_file",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 898,
+          "is_error": false,
+          "timestamp": 1790532638073
+        },
+        {
+          "type": "tool_use",
+          "name": "terminal",
+          "input": {
+            "command": "bash scripts/contextos.sh propose setup --input .context-os/inputs/synthetic-fixture-identity.json",
+            "timeout": 120
+          },
+          "timestamp": 1790532643175
+        },
+        {
+          "type": "tool_result",
+          "name": "terminal",
+          "output": "[REDACTED TOOL RESULT]",
+          "duration_ms": 1252,
+          "is_error": false,
+          "timestamp": 1790532644427
+        },
+        {
+          "type": "result",
+          "session_id": "20260927_110948_ce33a5",
+          "exit_code": 0,
+          "text": "Created the kernel proposal at .context-os/proposals/20260927T111044-setup-19ebec1576.json. Digest: [REDACTED].\n\nThe proposal changes only identity/who-i-am.md: it replaces the undated template and its placeholder sections with a September 27, 2026 date and a statement that this is a synthetic test identity, not a real person. It has not been applied.\n\nRepository-instruction canary: 831c1ff7eaf91ae4c0f7f2cdfca0e884\nLoaded skill-instruction canary: a37099be162c85bd7b901384d2ece187\n\nTracked identity content would be visible to repository collaborators and configured agents if applied and committed; deleting it later would not erase git history.",
+          "tokens": {
+            "input": 38075,
+            "output": 1208,
+            "total": 235379,
+            "cache_read": 196096,
+            "cache_write": 0
+          },
+          "duration_ms": 63351,
+          "timestamp": 1790532652265
+        },
+        {
+          "type": "text",
+          "text": "\n\nCreated the kernel proposal at .context-os/proposals/20260927T111044-setup-19ebec1576.json. Digest: [REDACTED].\n\nThe proposal changes only identity/who-i-am.md: it replaces the undated template and its placeholder sections with a September 27, 2026 date and a statement that this is a synthetic test identity, not a real person. It has not been applied.\n\nRepository-instruction canary: 831c1ff7eaf91ae4c0f7f2cdfca0e884\nLoaded skill-instruction canary: a37099be162c85bd7b901384d2ece187\n\nTracked identity content would be visible to repository collaborators and configured agents if applied and committed; deleting it later would not erase git history.",
+          "joined_deltas": true
+        }
+      ],
+      "skill_view_names": []
+    }
+  ],
+  "skill_source_sha256": {
+    "setup": "2e3e51fe34993fa25fd9212b96a02b04a2c2106ef70014a0ac2afa5e422bac0a",
+    "context-setup": "8f3c762531494252506bf0fbf4a201b49da1f0d7dea38a06ea746d309e0223d6",
+    "start": "ffc08638e810cc81b71a31c6f59cc987dde00e04cf29434508ea0307b475431a",
+    "context-start": "77d9230b2a6131d52fb72c6e0360b3d324c92bb5d1e5e3eaf9bba3409c7d22d4",
+    "update": "8b6911e49997dfcf39f0ff3ceaadba57561e4f08c9ee7d194fa0ce0ce789d598",
+    "context-update": "e6df6087081db3db0831b800792b501385f304472bdd2ed6b0c64643e572a4eb",
+    "end": "2c012b1d9f4c171065614094e68d1531e5de84850dcdb27fdac9d333f1254968",
+    "context-end": "47f0856a8ee0a37cd305397f7fdf5ff7966e805ce0fe6178fa92a0b11254b296"
+  },
+  "environment_names": [
+    "APPDATA",
+    "HERMES_GIT_BASH_PATH",
+    "HERMES_HOME",
+    "HOME",
+    "LOCALAPPDATA",
+    "PATH",
+    "PYTHONDONTWRITEBYTECODE",
+    "SYSTEMROOT",
+    "TEMP",
+    "TMP",
+    "USERPROFILE"
+  ],
+  "api_key_names": [],
+  "version": "Hermes Agent v0.21.4 (2026.9.21) \u00b7 upstream d94769da",
+  "failure": "HarnessError: self-read: discovery not shown",
+  "finished_at": "2026-09-27T18:10:53.267534+00:00"
+}

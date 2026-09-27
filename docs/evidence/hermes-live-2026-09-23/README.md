@@ -84,6 +84,28 @@ read these results from Hermes's session state because the harness redacts
 tool results. A model that fills optional tool arguments can look stalled
 under Hermes v0.21.4.
 
+### Attempts 9–11: the trusted, preloaded harness
+
+These three attempts ran on the harness after the #163 change. `record` trusts
+the fixture and preloads each phase skill with `-s`. All three used GPT-6 Sol
+through the `openai-codex` provider, and each ran on a freshly prepared fixture.
+In every attempt, `project_skill_trust` passed.
+
+| Attempt | Source | Furthest control | Why it stopped |
+|---|---|---|---|
+| [9](attempt-9.json) | `6dd88c6` | `setup_discovery` failed | The model reported both canaries. It also ran `search_files` with `file_glob: "*.md"`, which the strict rule counts as a possible instruction-file read. Hermes's session state shows that no tool result carried a canary. |
+| [10](attempt-10.json) | `27d204e` | setup passed; `start_discovery` failed | These controls passed: agents and setup discovery, `setup_proposal_apply`, and `wrong_digest_rejected`. In the start turn, the model read `AGENTS.md` and `.agents/skills/context-start/SKILL.md` directly, and those results carried their canaries. The start skill does not ask for either read. |
+| [11](attempt-11.json) | `4245208` | `setup_discovery` failed | The model read `AGENTS.md` and `.agents/skills/context-setup/SKILL.md` directly, and those results carried their canaries. |
+
+With the fixture trusted, Hermes delivered the skill instructions: in attempt 9,
+GPT-6 Sol reported both canaries without any tool result carrying them.
+Attempt 10's setup phase ran through proposal, digest rejection, and apply.
+The remaining failures are model behaviour. This model often re-reads
+instruction files that are already in its context, and the strict self-read
+rule correctly refuses to count a discovery the model may have made from files.
+The operator stopped after attempt 11, as agreed with the maintainer, rather
+than retrying until a run happened to pass. Hermes is not promoted.
+
 What each failure means:
 
 1. **Attempt 1.** In the setup turn, Hermes loaded `context-setup` through its
