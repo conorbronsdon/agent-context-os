@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Fixed
+- The Cursor CLI deny-precedence control recognizes the client's observed
+  `editToolCall` / `writePermissionDenied` stream. Cursor CLI
+  `2026.09.26-dd393fe` then passed all live CLI controls
+  (`docs/evidence/cursor-cli-2026-09-26/`); the IDE surface is still
+  unverified (#73).
 - The long continuity `handoff-sentences` fixture keeps interrupted status and
   its qualifiers in one sentence, with full-answer citation quotes (#218).
 - A 15-trial same-day rerun (`docs/evidence/continuity-rerun-218-2026-09-26/`)

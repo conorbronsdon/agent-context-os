@@ -206,6 +206,16 @@ headless ask, no-`--force`, and `--force` behavior, deny precedence, MCP scope,
 native-state isolation, and either a tested Cursor-specific hook adapter or a
 continuing explicit no-hook claim.
 
+### September 26, 2026 CLI conformance
+
+CLI `2026.09.26-dd393fe` passed all 14 live controls from source commit
+`fb761f8` ([evidence](../../docs/evidence/cursor-cli-2026-09-26/README.md)).
+That commit fixed the deny-precedence parser. The client reports a denied file
+write as `editToolCall` with a `writePermissionDenied` result, and the harness
+had been looking for a different event shape. This is CLI evidence only. The
+IDE surface still needs an uncontaminated operator run, so support remains
+experimental.
+
 ### September 24, 2026 live diagnostics
 
 These observations used clean source commit
