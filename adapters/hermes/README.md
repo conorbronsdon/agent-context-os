@@ -53,6 +53,11 @@ memory separation,
 and a byte-identical sentinel. The manifest stays outside the fixture, and
 the canary edits are committed in the disposable fixture. Evidence names both
 the source and fixture commits.
+
+Hermes Agent v0.21.4 emitted only valid JSON lines in a three-line live
+`hermes chat -Q --format stream-json` probe, both with and without `-Q`.
+The installed-client launch test keeps `-Q`.
+
 Tool-result self-read detection checks, before redacting tool results: literal
 canaries, case changes, separators or `0x` prefixes in hex canaries, reversed
 text, percent-encoding, `\u` escapes, and base64/base64url (including wrapped
@@ -67,6 +72,13 @@ forms), `SSL_CERT_FILE`, `SSL_CERT_DIR`, `REQUESTS_CA_BUNDLE`,
 `CURL_CA_BUNDLE`, and `HERMES_*` variables other than `HERMES_ACCEPT_HOOKS`.
 For `openrouter`, it also passes `OPENROUTER_API_KEY`. Other provider keys
 require an explicit `--env-allow NAME`.
+Before a model call, `record` checks for a populated provider key in that
+filtered environment. `openrouter`, `openai`, and `anthropic` require
+`OPENROUTER_API_KEY`, `OPENAI_API_KEY`, and `ANTHROPIC_API_KEY`, respectively.
+An unknown provider requires an allowed variable ending in `_API_KEY` or
+`_TOKEN`, unless `--no-key-check` is set. Evidence records this setup control
+separately from discovery, including when the check is bypassed.
+
 The harness sets `HERMES_HOME` and `PYTHONDONTWRITEBYTECODE`. Evidence lists
 passed variable names and API key names without values. Use `--env-allow NAME`
 for an additional required variable. Inspect each printed proposal diff
@@ -74,6 +86,13 @@ and type its digest yourself. The evidence file is create-only and outside the
 checkout. A failed control remains failed; prepare a new fixture for another
 attempt. Model calls are opt-in and are not part of CI. The optional hook example
 is recorded as unsupported unless separately exercised and reviewed.
+
+In Hermes Agent v0.21.4, `tools/environments/local.py` uses
+`_scrub_credentials` with the credential list in
+`tools/environments/local_env_policy.py`; it includes `OPENROUTER_API_KEY`.
+The key reaches Hermes's process environment, but terminal subprocesses have
+it removed unless credential inheritance is enabled. A live terminal-tool
+probe on 2026-09-26 returned `KEY_ABSENT` for `OPENROUTER_API_KEY`.
 
 For an operator watching another process, pass `--approval-dir <existing-dir>`
 to `record`. Keep that directory outside the fixture and `HERMES_HOME`.

@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Hermes live conformance checks provider keys before model calls and records a
+  separate setup control. Parallel `skill_view` requests now retain their
+  matching result across other tool events; the adapter documents the
+  v0.21.4 stream flags and terminal credential scrubbing (#214).
 - The Hermes live harness treats fixture canaries that reach tool results in
   transformed form (case, separators or `0x`, reversed, percent or `\u`
   escapes, base64/base64url including wrapped output, and gzip members) as

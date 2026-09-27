@@ -15,9 +15,12 @@ included.
   attempts ran with that fix.
 - Provider: OpenRouter zero-priced (`:free`) routes, tools enabled inside the
   fixture only. The OpenRouter key was supplied to the Hermes process through
-  its environment and was never written into the fixture or a prompt. Nothing
-  here verifies whether Hermes removes it from its terminal subprocesses, so a
-  model with terminal access could have been able to read it.
+  its environment and was never written into the fixture or a prompt. Hermes
+  Agent v0.21.4, the version used for every attempt, removes that key from
+  terminal subprocesses unless credential inheritance is enabled, which the
+  harness does not enable. This was verified on 2026-09-26 by reading
+  `tools/environments/local.py` and `tools/environments/local_env_policy.py`
+  and by a live terminal-tool probe that returned `KEY_ABSENT`.
 - Operator: the orchestrating agent (Claude), acting on the maintainer's
   instruction to run conformance, using the file-based approval mode.
 
