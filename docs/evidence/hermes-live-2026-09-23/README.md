@@ -13,7 +13,7 @@ included.
 - Host: Windows 11, Git for Windows bash. Hermes's terminal tool disables MSYS
   path conversion, which broke every kernel call until the fix in #209; all
   attempts ran with that fix.
-- Provider: OpenRouter zero-priced (`:free`) routes, tools enabled inside the
+- Provider (attempts 1–5): OpenRouter zero-priced (`:free`) routes, tools enabled inside the
   fixture only. The OpenRouter key was supplied to the Hermes process through
   its environment and was never written into the fixture or a prompt. Hermes
   Agent v0.21.4, the version used for every attempt, removes that key from
@@ -45,9 +45,13 @@ redacts the joined text once and records it as a single event.
 | [attempt-5.json](attempt-5.json) | `a2b7577` (fixture `8f67ea5`) | `nvidia/nemotron-3-ultra-550b-a55b:free` | version | `HarnessError: self-read: discovery not shown` |
 
 \* Recorded as passed by a harness later found to allow false greens; see attempt 4 below.
-Attempt 5 used the final harness in this PR.
+Attempt 5 used the final harness of that PR, before the #163 trust and preload change.
 
 ## 2026-09-26 model attempts
+
+Routes differ from the setup above: attempts 6 and 7 used paid OpenRouter
+routes, and attempt 8 used Hermes's `openai-codex` provider (a ChatGPT subscription
+signed in to the disposable home; `provider_key_preflight` is recorded as `bypassed`).
 
 Attempts [6](attempt-6.json) and [7](attempt-7.json) ran on source `44d6a32`
 through paid OpenRouter routes, costing $0.37 together. [Attempt 8](attempt-8.json)

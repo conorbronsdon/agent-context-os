@@ -673,7 +673,16 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
         trust = command([*binary, "skills", "trust", str(fixture)], fixture, env, raw_output=True)
         trust_output = trust.pop("_raw_stdout") + "\n" + trust.pop("_raw_stderr")
         result["commands"].append(trust)
-        if (trust["exit_code"] or "Trusted:" not in trust_output or str(fixture) not in trust_output
+        config_path = home / "config.yaml"
+        trusted_entries = []
+        if config_path.is_file():
+            # Hermes writes trusted roots as "    - <path>" list items under skills.trusted_project_dirs.
+            trusted_entries = [line.strip()[2:].strip() for line in
+                               config_path.read_text(encoding="utf-8", errors="replace").splitlines()
+                               if line.strip().startswith("- ")]
+        if (trust["exit_code"]
+                or not any(line.strip() == f"Trusted: {fixture}" for line in trust_output.splitlines())
+                or str(fixture) not in trusted_entries
                 or tracked_state(fixture) != before_trust):
             raise HarnessError("project skill trust failed or changed the fixture")
         result["controls"][current_control] = "passed"
