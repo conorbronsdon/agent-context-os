@@ -440,6 +440,22 @@ class CursorLiveHarnessTest(unittest.TestCase):
         events.insert(events.index(completed) + 1, json.loads(json.dumps(completed)))
         self.assert_deny_stream_rejected(events, "ambiguous write event")
 
+    def test_deny_precedence_requires_every_shell_call_to_be_denied(self) -> None:
+        def shell_events(events: list[dict], subtype: str) -> list[dict]:
+            return [e for e in events if e.get("subtype") == subtype and "shellToolCall" in e.get("tool_call", {})]
+
+        events = observed_deny_stream(str(self.root / "denied.txt"))
+        self.assertEqual(1, len(shell_events(events, "completed")))
+        shell_events(events, "completed")[0]["tool_call"]["shellToolCall"]["result"] = {"success": {"exitCode": 0}}
+        self.assert_deny_stream_rejected(events, "ran a shell command despite the project deny")
+        events = observed_deny_stream(str(self.root / "denied.txt"))
+        events.remove(shell_events(events, "completed")[0])
+        self.assert_deny_stream_rejected(events, "left a shell command without a denial")
+        events = observed_deny_stream(str(self.root / "denied.txt"))
+        duplicate = json.loads(json.dumps(shell_events(events, "started")[0]))
+        events.insert(events.index(shell_events(events, "started")[0]), duplicate)
+        self.assert_deny_stream_rejected(events, "ambiguous shell event")
+
     def test_deny_precedence_rejects_other_completions_and_unmatched_calls(self) -> None:
         cases = {
             "success": {"success": {"path": "denied.txt"}},

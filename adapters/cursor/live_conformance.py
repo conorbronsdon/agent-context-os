@@ -24,6 +24,7 @@ from typing import Callable, Mapping, Sequence
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 REQUIRED_FLAGS = ("--print", "--force", "--workspace", "--trust", "--mode", "--output-format")
 WRITE_TOOL_KINDS = ("editToolCall", "writeToolCall")
+SHELL_TOOL_KIND = "shellToolCall"
 DISPOSABLE_MARKER = ".context-os-cursor-live-disposable"
 
 
@@ -184,6 +185,7 @@ def require_denied_write_attempt(
 
     attempts: dict[str, tuple[str, Path]] = {}
     completed: set[str] = set()
+    shell_calls: dict[str, bool] = {}
     denied = False
     for event in events:
         call_id = event.get("call_id")
@@ -216,6 +218,26 @@ def require_denied_write_attempt(
             continue
         if not isinstance(tool_call, dict):
             continue
+        if SHELL_TOOL_KIND in tool_call:
+            # The control also denies Shell(*), so no shell command may run.
+            shell = tool_call[SHELL_TOOL_KIND]
+            if (
+                not isinstance(shell, dict) or not isinstance(call_id, str)
+                or any(kind in tool_call for kind in WRITE_TOOL_KINDS)
+            ):
+                raise HarnessError(f"{subject} returned an ambiguous shell event")
+            if event.get("subtype") == "started":
+                if call_id in shell_calls:
+                    raise HarnessError(f"{subject} returned an ambiguous shell event")
+                shell_calls[call_id] = False
+            elif event.get("subtype") == "completed":
+                if shell_calls.get(call_id) is not False:
+                    raise HarnessError(f"{subject} returned an ambiguous shell event")
+                outcome = shell.get("result")
+                if not isinstance(outcome, dict) or set(outcome) != {"permissionDenied"}:
+                    raise HarnessError(f"{subject} ran a shell command despite the project deny")
+                shell_calls[call_id] = True
+            continue
         kinds = [kind for kind in WRITE_TOOL_KINDS if kind in tool_call]
         if not kinds:
             continue
@@ -235,6 +257,8 @@ def require_denied_write_attempt(
             attempts[call_id] = (kinds[0], target)
         elif event.get("subtype") == "completed":
             raise HarnessError(f"{subject} returned an ambiguous write event")
+    if not all(shell_calls.values()):
+        raise HarnessError(f"{subject} left a shell command without a denial")
     if any(call_id not in completed for call_id in attempts):
         raise HarnessError(f"{subject} left a write attempt without a denial")
     if not denied:

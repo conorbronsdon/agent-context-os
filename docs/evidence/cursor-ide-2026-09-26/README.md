@@ -59,10 +59,13 @@ root value. The implicit response did not contain the skill canary.
 - On IDE `3.21.18`, the default Agent mode applies file writes without a
   pre-write approval. Treat Review, Keep, and Undo as post-hoc, not as a
   confirmation gate.
-- Ask and Agent modes will search outside the opened workspace when a prompt
-  invites it. Keep anything a control must not see unreadable to the operator
-  account, not merely outside the workspace.
-- A workspace skill named `update` wins the IDE's `/update` slash menu.
+- In Ask mode, the implicit prompt led the model to search outside the opened
+  workspace. Agent-mode search behaviour was not tested. Keep anything a
+  control must not see unreadable to the operator account, not merely outside
+  the workspace.
+- A workspace skill named `update` was listed first in the IDE's `/update`
+  slash menu. The command was only viewed, not submitted, so its execution was
+  not tested.
 - Auto-update can replace the binary between `prepare` and `record`. Disable
   updates in the isolated profile before a run.
 - The IDE surface remains unverified, and Cursor support remains experimental.
