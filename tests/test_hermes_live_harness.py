@@ -40,7 +40,10 @@ if sys.argv[1:3] == ['skills', 'trust']:
     print('10 project skill(s) will load from ' + (sys.argv[3] if mode in ('trust-wrong-root', 'trust-wrong-output-root') else trust_path))
     if mode == 'trust-wrong-output-root':
         trust_path = sys.argv[3]
-    if mode == 'trust-path-under-other-key':
+    if mode == 'trust-under-other-parent':
+        (pathlib.Path(os.environ['HERMES_HOME']) / 'config.yaml').write_text(
+            'skills:\n  trusted_project_dirs:\n    - different-fixture\nother:\n  trusted_project_dirs:\n    - ' + trust_path + '\n')
+    elif mode == 'trust-path-under-other-key':
         (pathlib.Path(os.environ['HERMES_HOME']) / 'config.yaml').write_text(
             'skills:\n  trusted_project_dirs:\n    - different-fixture\nrecent_paths:\n  - ' + trust_path + '\n')
     elif mode != 'trust-no-config':
@@ -372,7 +375,7 @@ class HermesLiveHarnessTest(unittest.TestCase):
             self.assertFalse(argv[argv.index("-q") + 1].startswith("/"))
 
     def test_trust_failures_stop_before_chat(self) -> None:
-        for mode in ("trust-nonzero", "trust-missing-output", "trust-missing-path", "trust-wrong-root", "trust-wrong-output-root", "trust-no-config", "trust-path-under-other-key",
+        for mode in ("trust-nonzero", "trust-missing-output", "trust-missing-path", "trust-wrong-root", "trust-wrong-output-root", "trust-no-config", "trust-path-under-other-key", "trust-under-other-parent",
                      "trust-mutate-fixture", "trust-mutate-sentinel"):
             with self.subTest(mode=mode):
                 self.evidence.unlink(missing_ok=True)

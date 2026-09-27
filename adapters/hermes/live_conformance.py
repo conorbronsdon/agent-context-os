@@ -678,9 +678,12 @@ def record(fixture: Path, home: Path, evidence: Path, binary: Sequence[str], mod
         if config_path.is_file():
             # Hermes writes trusted roots as "- <path>" items directly under skills.trusted_project_dirs.
             key_indent = None
+            top_level = None
             for line in config_path.read_text(encoding="utf-8", errors="replace").splitlines():
                 indent = len(line) - len(line.lstrip())
-                if line.strip() == "trusted_project_dirs:":
+                if line.strip() and indent == 0:
+                    top_level = line.strip()
+                if line.strip() == "trusted_project_dirs:" and top_level == "skills:" and indent > 0:
                     key_indent = indent
                 elif key_indent is not None and line.strip():
                     if indent <= key_indent:
