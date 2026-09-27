@@ -5,6 +5,9 @@
 ### Fixed
 - The long continuity `handoff-sentences` fixture keeps interrupted status and
   its qualifiers in one sentence, with full-answer citation quotes (#218).
+- A 15-trial same-day rerun (`docs/evidence/continuity-rerun-218-2026-09-26/`)
+  observed 0/150 citation rejections for the rule-following note, against 12/150
+  for the original compact note and 2/150 for Context OS (#218).
 - Cursor CLI conformance rejects confounding user write/shell allowances,
   inspects the same configuration directory used by the child process,
   records the logical launcher name and SHA-256 across the Windows batch

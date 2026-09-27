@@ -100,6 +100,8 @@ python scripts/continuity-benchmark.py score --scenario long --profile contextos
 The [September 26 rerun](evidence/continuity-rerun-2026-09-26/README.md) compares the three
 informed profiles on the same day. It observed no reduction in citation
 rejections from the self-contained-sentence rule.
+After statuses were kept whole (#218), a [15-trial rerun](evidence/continuity-rerun-218-2026-09-26/README.md)
+observed 0/150 citation rejections for the rule-following note, against 12/150 for the original.
 
 `score` reports grounded correctness, retention among the eight resolved
 questions, correct handling of replaced decisions (`corrections`), safe
