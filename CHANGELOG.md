@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+---
+
+## [0.14.0] — 2026-09-29 — OpenCode, continuity evidence, and live conformance
+
 ### Fixed
 - Hermes live conformance trusts its disposable fixture before model calls and
   preloads each phase skill with `-s`. Single-query prompts no longer use slash
