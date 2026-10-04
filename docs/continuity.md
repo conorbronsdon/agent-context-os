@@ -66,7 +66,8 @@ status while agents read `revision_check.status` for each source.
 This compares selected files only. It does not traverse claim dependencies,
 authenticate a reviewer, prove which revision a host retrieved, or authorize
 an outbound action. Stop relying on a mismatched record until its claim and
-dependencies have been reviewed against the current source.
+dependencies have been reviewed against the current source. The remaining
+design recommendations are in the [feedback review](feedback-review-2026-10-04.md).
 
 This is a source preview, not an agent read log. A recent date does not prove a
 claim is correct, and an old decision can still be valid. Cite actual source
@@ -103,8 +104,7 @@ receipt, under `files_changed`. Content writes use normalized-text
 `sha256_before_raw`/`sha256_after_raw`. An absent file is represented by `null`.
 The proposal digest identifies the reviewed proposal, not the post-apply
 workspace. Apply rejects changed input snapshots before writing; a rejected
-apply creates no successful receipt. The [revision benchmark](continuity-benchmark.md#test-revision-attribution-and-proposed-actions)
-scores evidence and proposed actions separately.
+apply creates no successful receipt.
 
 For attached application repositories, supply the same explicit `--kernel-root`,
 `--context-root`, and `--working-root` arguments used by lifecycle commands.

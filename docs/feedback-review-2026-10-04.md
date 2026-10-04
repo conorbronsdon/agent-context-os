@@ -14,10 +14,10 @@ action. Keep the distinction between a proposal, applied context and a
 reviewer's identity visible throughout the handoff.
 
 The immediate changes add the Claude import, single-snapshot freshness and
-revision comparisons, explicit Markdown review/supersession conventions, a
-separate layered synthetic evaluation, and paired-receipt regression controls.
-See [continuity](continuity.md), [first handoff](first-handoff.md), and the
-[revision evaluation](continuity-benchmark.md#test-revision-attribution-and-proposed-actions).
+revision comparisons, explicit Markdown review/supersession conventions, and
+paired-receipt regression controls. See [continuity](continuity.md) and
+[first handoff](first-handoff.md). A layered synthetic revision evaluation is
+proposed separately.
 
 The remaining product change should be a versioned decision-record contract,
 tracked in [#235](https://github.com/conorbronsdon/agent-context-os/issues/235).
@@ -35,8 +35,8 @@ tracks binding each memory record to source ID, exact content
 revision and dependency results from the actual retrieval event. Return the
 replacement source pointer on invalidation, including when the proposed value
 has not changed. Score recorded retrieval, citation, value and action layers
-independently. The new synthetic evaluation establishes a response contract;
-it does not implement or prove that live retrieval boundary.
+independently. A synthetic evaluation can establish a response contract; it
+would not implement or prove that live retrieval boundary.
 
 ## Open issues
 
