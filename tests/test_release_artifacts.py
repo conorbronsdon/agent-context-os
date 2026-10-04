@@ -320,29 +320,38 @@ class ReleaseArtifactTest(unittest.TestCase):
 
     def assert_workflow_diagnostics_cannot_bypass_gates(self, workflow: str) -> None:
         # Recognize plain or quoted block-mapping keys, including the first
-        # key of a list item. This is deliberately not a general YAML parser.
-        conditional_key = re.compile(
-            r"^\s*(?:-\s+)?(?:if|\"if\"|'if')\s*:"
+        # key of a list item, and the same keys inside a flow mapping. Unusual
+        # key case fails closed. This is deliberately not a general YAML parser.
+        def key(name: str) -> str:
+            return rf"(?:{name}|\"{name}\"|'{name}')\s*:"
+
+        conditional_key = re.compile(r"^\s*(?:-\s+)?" + key("if"), re.IGNORECASE)
+        continue_key = re.compile(r"^\s*(?:-\s+)?" + key("continue-on-error"), re.IGNORECASE)
+        flow_key = re.compile(
+            r"[{,]\s*(?:" + key("if") + "|" + key("continue-on-error") + ")", re.IGNORECASE
         )
-        continue_key = re.compile(
-            r"^\s*(?:-\s+)?(?:continue-on-error|\"continue-on-error\"|'continue-on-error')\s*:"
-        )
-        for line in workflow.splitlines():
+        # Scan every line, not only parsed job bodies: a job header the split
+        # below cannot recognize (for example one with a trailing comment)
+        # must not hide its conditions.
+        all_lines = workflow.splitlines()
+        for index, line in enumerate(all_lines):
             self.assertIsNone(continue_key.match(line))
+            self.assertIsNone(flow_key.search(line))
+            if conditional_key.match(line):
+                self.assertEqual(line, "        if: always()")
+                self.assertGreater(index, 0)
+                self.assertRegex(all_lines[index - 1], r"^      - uses: actions/upload-artifact@[0-9a-f]{40}")
         jobs = dict(re.findall(
             r"^  ([a-z][a-z0-9-]*):\n(.*?)(?=^  [a-z][a-z0-9-]*:|\Z)",
             workflow, re.MULTILINE | re.DOTALL,
         ))
-        for name, job in jobs.items():
-            lines = job.splitlines()
-            for index, line in enumerate(lines):
-                if conditional_key.match(line):
-                    self.assertIn(name, {"verify-candidate-linux", "verify-candidate-windows"})
-                    self.assertEqual(line, "        if: always()")
-                    self.assertGreater(index, 0)
-                    self.assertRegex(lines[index - 1], r"^      - uses: actions/upload-artifact@[0-9a-f]{40}")
-        for name in ("stage-draft", "verify-draft-linux", "verify-draft-windows", "ready-to-publish"):
+        for name in ("build-linux", "verify-candidate-linux", "verify-candidate-windows", "stage-draft",
+                     "verify-draft-linux", "verify-draft-windows", "ready-to-publish"):
             self.assertIn(name, jobs)
+        for name, job in jobs.items():
+            if any(conditional_key.match(line) for line in job.splitlines()):
+                self.assertIn(name, {"verify-candidate-linux", "verify-candidate-windows"})
+        for name in ("stage-draft", "verify-draft-linux", "verify-draft-windows", "ready-to-publish"):
             self.assertNotIn("always()", jobs[name])
 
     def test_diagnostic_retention_cannot_allow_staging_after_failed_gates(self) -> None:
@@ -355,6 +364,12 @@ class ReleaseArtifactTest(unittest.TestCase):
                 with self.subTest(job=name, condition=condition), self.assertRaises(AssertionError):
                     self.assert_workflow_diagnostics_cannot_bypass_gates(bypass)
         bypass = workflow.replace("        if: always()", "        if: ${{ !cancelled() }}")
+        with self.assertRaises(AssertionError):
+            self.assert_workflow_diagnostics_cannot_bypass_gates(bypass)
+        bypass = workflow.replace(
+            "      - name: Qualify published upgrades, recovery and fresh onboarding\n",
+            "      - name: Qualify published upgrades, recovery and fresh onboarding\n        continue-on-error: true\n",
+        )
         with self.assertRaises(AssertionError):
             self.assert_workflow_diagnostics_cannot_bypass_gates(bypass)
 
@@ -385,12 +400,26 @@ class ReleaseArtifactTest(unittest.TestCase):
                     mutation = workflow.replace(gate, f"{prefix}{key}{space}: true\n" + gate)
                     with self.subTest(key=key, space=space, prefix=prefix), self.assertRaises(AssertionError):
                         self.assert_workflow_diagnostics_cannot_bypass_gates(mutation)
-        bypass = workflow.replace(
-            "      - name: Qualify published upgrades, recovery and fresh onboarding\n",
-            "      - name: Qualify published upgrades, recovery and fresh onboarding\n        continue-on-error: true\n",
-        )
-        with self.assertRaises(AssertionError):
-            self.assert_workflow_diagnostics_cannot_bypass_gates(bypass)
+        # A trailing comment hides a job header from the job split; flow
+        # mappings and unusual key case are outside the block-key patterns
+        # above. Each must still fail closed.
+        hidden_job = workflow.replace("  build-linux:\n", "  build-linux: # Build the candidate\n", 1)
+        self.assertNotEqual(hidden_job, workflow)
+        mutations = {
+            "commented-first-job-gate-step": hidden_job.replace(gate, gate + "        if: false\n"),
+            "commented-first-job-condition": hidden_job.replace(
+                "  build-linux: # Build the candidate\n", "  build-linux: # Build the candidate\n    if: false\n"),
+            "commented-staging-job": workflow.replace("  stage-draft:\n", "  stage-draft: # Stage\n", 1),
+            "flow-step-condition": workflow.replace(gate, "      - {name: Skip, run: 'true', if: false}\n" + gate),
+            "flow-leading-condition": workflow.replace(gate, "      - {if: false, run: 'true'}\n" + gate),
+            "flow-quoted-continue": workflow.replace(gate, "      - {\"continue-on-error\": true, run: 'true'}\n" + gate),
+            "upper-case-condition": workflow.replace(gate, gate + "        IF: false\n"),
+            "mixed-case-continue": workflow.replace(gate, gate + "        Continue-On-Error: true\n"),
+        }
+        for label, mutation in mutations.items():
+            self.assertNotEqual(mutation, workflow, label)
+            with self.subTest(mutation=label), self.assertRaises(AssertionError):
+                self.assert_workflow_diagnostics_cannot_bypass_gates(mutation)
 
 
 if __name__ == "__main__":
