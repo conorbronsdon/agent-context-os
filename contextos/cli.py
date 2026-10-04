@@ -111,6 +111,8 @@ def parser() -> argparse.ArgumentParser:
     start.add_argument("--format", choices=("json", "markdown"), default="json")
     start.add_argument("--briefing", action="store_true", help="Include source-attributed excerpts in JSON (Markdown includes them automatically)")
     start.add_argument("--source", action="append", default=[], help="Explicit repository-relative Markdown task source (repeatable)")
+    start.add_argument("--expect-source-revision", action="append", default=[], metavar="PATH=SHA256",
+                       help="Compare a selected source with its prior normalized-text SHA-256 (repeatable; read-only)")
 
     history = commands.add_parser("history", help="Read local context change receipts")
     history.add_argument("--format", choices=("json", "markdown"), default="markdown")
@@ -918,8 +920,10 @@ def main(argv: list[str] | None = None) -> int:
         ):
             load_project_attachment(roles)
         if args.command == "start":
-            if args.briefing or args.source or args.format == "markdown":
-                report = briefing_report(root, parse_now(args.now), sources=args.source, roles=roles if split_mode else None)
+            if args.briefing or args.source or args.expect_source_revision or args.format == "markdown":
+                report = briefing_report(root, parse_now(args.now), sources=args.source,
+                                         expected_revisions=args.expect_source_revision,
+                                         roles=roles if split_mode else None)
             else:
                 report = start_report(root, parse_now(args.now), roles=roles if split_mode else None)
             _print_report(render_briefing(report)) if args.format == "markdown" else emit(report)

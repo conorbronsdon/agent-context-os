@@ -2,9 +2,26 @@
 
 ## [Unreleased]
 
+### Added
+- Read-only briefings expose source IDs, raw and normalized revisions, and
+  optional prior-revision comparisons without expanding the selected read set.
+- A separate synthetic revision benchmark scores retrieved records, cited
+  revisions, proposed values and outbound action proposals independently.
+
 ### Fixed
 - The Hermes environment-filter control isolates inherited case variants of
   proxy settings so its fixture assertions do not depend on the runner's proxy.
+- Root `CLAUDE.md` explicitly imports shared `AGENTS.md` instructions when both
+  files are present. A portability guard checks the import.
+- Briefing ages, hashes and excerpts describe the same source snapshot, with
+  explicit unknown ages and future-date labels.
+
+### Changed
+- The first-handoff guide records self-reported reviewers, decision IDs and
+  supersession links using existing Markdown fields, and distinguishes those
+  conventions from authenticated approval and kernel-enforced metadata.
+- Continuity guidance explains the existing paired pre/post-apply receipt
+  digests and the remaining gaps in host retrieval and dependency evidence.
 
 ## [1.0.0] — 2026-09-29 — Reviewed handoffs and stable interfaces
 

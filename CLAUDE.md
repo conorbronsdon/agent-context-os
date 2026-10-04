@@ -1,5 +1,7 @@
 # [Your Name] — Context
 
+@AGENTS.md
+
 ## Who I Am
 
 → Read `identity/who-i-am.md` for bio and background.

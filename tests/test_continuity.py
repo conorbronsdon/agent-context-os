@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
 import tempfile
@@ -53,6 +54,87 @@ class ContinuityTest(unittest.TestCase):
         self.assertEqual(1, paths.count("chosen.md"))
         self.assertEqual("unknown", report["sources"][-1]["freshness_status"])
         self.assertIn("Durable fact", render_briefing(report))
+
+    def test_revision_mismatch_points_to_new_snapshot_even_when_value_is_unchanged(self):
+        path = self.root / "selected.md"
+        old = "**Last Updated:** 2026-08-20\nUse CSV. Proposed by the agent.\n"
+        path.write_text(old, encoding="utf-8")
+        digest = hashlib.sha256(old.encode()).hexdigest()
+        current = "**Last Updated:** 2026-08-23\nUse CSV. Reviewed by Demo reviewer.\n"
+        path.write_bytes(current.replace("\n", "\r\n").encode())
+        report = briefing_report(self.root, NOW, sources=["selected.md"],
+                                  expected_revisions=[f"selected.md={digest}"])
+        source = report["sources"][-1]
+        self.assertEqual("selected.md", source["source_id"])
+        self.assertEqual("mismatch", source["revision_check"]["status"])
+        self.assertEqual(digest, source["revision_check"]["expected_sha256"])
+        self.assertEqual(hashlib.sha256(current.encode()).hexdigest(), source["sha256"])
+        self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), source["sha256_raw"])
+        self.assertEqual(0, source["age_days"])
+        self.assertIn("Demo reviewer", source["excerpt"])
+        self.assertIn("Revision check: mismatch", render_briefing(report))
+        matched = briefing_report(self.root, NOW, sources=["selected.md"],
+                                   expected_revisions=[f"selected.md={source['sha256']}"])
+        self.assertEqual("matched", matched["sources"][-1]["revision_check"]["status"])
+
+    def test_freshness_hash_and_excerpt_use_one_source_snapshot(self):
+        # start_report has an earlier metadata inventory. A file may change
+        # before its preview snapshot; the excerpt's date must describe it.
+        path = self.root / "state/current.md"
+        current = "**Last Updated:** 2026-08-23\nNew snapshot\n"
+        from contextos.continuity import start_report as real_start
+        def changed_after_inventory(*args, **kwargs):
+            report = real_start(*args, **kwargs)
+            path.write_text(current, encoding="utf-8")
+            return report
+        with patch("contextos.continuity.start_report", side_effect=changed_after_inventory):
+            source = next(s for s in briefing_report(self.root, NOW)["sources"]
+                          if s["path"] == "state/current.md")
+        self.assertEqual(0, source["age_days"])
+        self.assertEqual(hashlib.sha256(current.encode()).hexdigest(), source["sha256"])
+
+    def test_unknown_future_and_unavailable_source_ages_are_explicit(self):
+        (self.root / "unknown.md").write_text("No date", encoding="utf-8")
+        (self.root / "future.md").write_text("**Last Updated:** 2026-08-25\nFuture", encoding="utf-8")
+        report = briefing_report(self.root, NOW, sources=["unknown.md", "future.md", "missing.md"],
+                                  expected_revisions=[f"missing.md={'0' * 64}"])
+        self.assertEqual("unavailable", report["sources"][-1]["revision_check"]["status"])
+        rendered = render_briefing(report)
+        self.assertIn("Source age: unknown", rendered)
+        self.assertIn("2 days in the future", rendered)
+        self.assertNotIn("-2 days ago", rendered)
+
+    def test_revision_checks_require_selected_sources_and_unambiguous_hashes(self):
+        (self.root / "ROUTING.md").write_text("# Routing\n", encoding="utf-8")
+        for specification in ("../outside.md=" + "0" * 64, "secret.md=" + "0" * 64,
+                              "ROUTING.md=wrong", "ROUTING.md"):
+            with self.subTest(specification=specification), self.assertRaises(ContextOSError):
+                briefing_report(self.root, NOW, expected_revisions=[specification])
+        with self.assertRaisesRegex(ContextOSError, "conflicting"):
+            briefing_report(self.root, NOW, expected_revisions=["ROUTING.md=" + "0" * 64,
+                                                               "ROUTING.md=" + "1" * 64])
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(0, main(["--root", str(self.root), "start",
+                                     "--expect-source-revision", "ROUTING.md=" + "0" * 64]))
+        self.assertEqual("mismatch", json.loads(out.getvalue())["sources"][0]["revision_check"]["status"])
+
+    def test_receipt_before_and_after_digests_match_real_content_and_reject_changed_dependency(self):
+        path, proposal = create_proposal(self.root, "update", {"progress": ["Saved progress"]}, NOW)
+        before = {c["path"]: (self.root / c["path"]).read_text(encoding="utf-8")
+                  if (self.root / c["path"]).exists() else None for c in proposal["changes"]}
+        _, receipt = apply_proposal(self.root, path, proposal["proposal_digest"], "codex")
+        for change in receipt["files_changed"]:
+            old = before[change["path"]]
+            self.assertEqual(None if old is None else hashlib.sha256(old.encode()).hexdigest(),
+                             change["sha256_before"])
+            self.assertEqual(hashlib.sha256((self.root / change["path"]).read_text(encoding="utf-8").encode()).hexdigest(),
+                             change["sha256_after"])
+        path, proposal = create_proposal(self.root, "update", {"progress": ["Next progress"]}, NOW)
+        target = self.root / proposal["changes"][0]["path"]
+        target.write_text(target.read_text(encoding="utf-8") + "Concurrent change\n", encoding="utf-8")
+        with self.assertRaises(ContextOSError):
+            apply_proposal(self.root, path, proposal["proposal_digest"], "codex")
+        self.assertFalse((self.root / ".context-os/receipts" / f"{proposal['proposal_id']}.json").exists())
 
     def test_explicit_paths_cannot_escape_or_read_non_markdown(self):
         for raw in ("../outside.md", "C:/outside.md", "..\\outside.md", "input.json"):
@@ -111,6 +193,27 @@ class ContinuityTest(unittest.TestCase):
         history = history_report(self.root, path="state/decisions.md", details=True)
         self.assertEqual("claude", history["entries"][0]["runtime"])
         self.assertIn("Spreadsheet analysis", render_history(history))
+
+    def test_review_metadata_and_supersession_convention_preserve_both_decisions(self):
+        for identifier, decision, predecessor in (("export-001", "Use CSV", "none"),
+                                                  ("export-002", "Use JSON", "export-001")):
+            path, proposal = create_proposal(self.root, "end", {
+                "what_happened": ["Reviewed export format"],
+                "decisions": [{"decision": f"{identifier}: {decision}",
+                               "rationale": f"Review status: accepted after exact-proposal review; "
+                                            f"Reviewed by: Demo reviewer (self-reported); Supersedes: {predecessor}",
+                               "rejected_alternatives": "PDF"}],
+                "next_time": [f"Use {identifier}; launch date unconfirmed"],
+            }, NOW)
+            apply_proposal(self.root, path, proposal["proposal_digest"], "claude")
+        decisions = (self.root / "state/decisions.md").read_text(encoding="utf-8")
+        self.assertIn("export-001: Use CSV", decisions)
+        self.assertIn("export-002: Use JSON", decisions)
+        self.assertIn("Supersedes: export-001", decisions)
+        self.assertIn("Demo reviewer (self-reported)", decisions)
+        history = history_report(self.root, path="state/decisions.md", details=True)
+        self.assertEqual(2, history["matching_receipts"])
+        self.assertIn("not authenticated", history["evidence_notice"])
 
     def test_changed_proposal_does_not_supply_unbound_text(self):
         path, _, _ = self.apply_update()

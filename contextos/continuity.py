@@ -10,7 +10,7 @@ from typing import Any
 
 from .attachment import RootRoles
 from .kernel import (
-    ContextOSError, _guard_local_state_path, _state_freshness, load_workspace,
+    ContextOSError, _guard_local_state_path, _snapshot_freshness, load_workspace,
     safe_repo_path, start_report, validate_proposal,
 )
 from .primitives import read_regular_file_snapshot, sha256_bytes
@@ -29,7 +29,7 @@ def _display_path(raw: str) -> str:
     return raw
 
 
-def _text(root: Path, path: Path) -> str:
+def _snapshot(root: Path, path: Path) -> tuple[bytes, str]:
     _guard_local_state_path(root, path)
     metadata = path.lstat()
     if not stat.S_ISREG(metadata.st_mode):
@@ -39,7 +39,11 @@ def _text(root: Path, path: Path) -> str:
     raw, _ = read_regular_file_snapshot(path, subject="continuity source")
     if len(raw) > MAX_BYTES:
         raise ContextOSError("source exceeds the 1 MiB report limit")
-    return raw.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    return raw, raw.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _text(root: Path, path: Path) -> str:
+    return _snapshot(root, path)[1]
 
 
 def _object(root: Path, path: Path) -> dict[str, Any]:
@@ -51,6 +55,7 @@ def _object(root: Path, path: Path) -> dict[str, Any]:
 
 def briefing_report(
     root: Path, now: datetime, *, sources: list[str] | None = None,
+    expected_revisions: list[str] | None = None,
     roles: RootRoles | None = None,
 ) -> dict[str, Any]:
     """Expose the fixed lifecycle sources plus explicitly selected Markdown files.
@@ -80,11 +85,12 @@ def briefing_report(
         if relative in seen:
             continue
         seen.add(relative)
-        item: dict[str, Any] = {"path": relative, "reason": reason}
+        item: dict[str, Any] = {"path": relative, "source_id": relative, "reason": reason}
         path = root / relative
         try:
-            body = _text(root, path)
-            item.update(report["state"].get(relative) or _state_freshness(path, now.date(), 90))
+            raw, body = _snapshot(root, path)
+            threshold = report["state"].get(relative, {}).get("stale_after_days", 90)
+            item.update(_snapshot_freshness(raw, now.date(), threshold))
             lines = body.splitlines()
             if reason == "recent decisions":
                 rows = [line for line in lines if line.startswith("|")]
@@ -93,16 +99,38 @@ def briefing_report(
                 excerpt = "\n".join(lines[:24])
             item.update({
                 "sha256": sha256_bytes(body.encode("utf-8")),
+                "sha256_raw": sha256_bytes(raw),
+                "revision_basis": "sha256 of normalized UTF-8 text; not a Git commit",
                 "characters": len(body), "excerpt": excerpt[:2400],
                 "excerpt_truncated": excerpt != body.rstrip("\n") or len(excerpt) > 2400,
             })
         except (OSError, ValueError, ContextOSError) as exc:
             item.update({"freshness_status": "unavailable", "unavailable_reason": str(exc)})
         selected.append(item)
+    expected: dict[str, str] = {}
+    for specification in expected_revisions or []:
+        relative, separator, digest = specification.rpartition("=")
+        if not separator or not re.fullmatch(r"[a-f0-9]{64}", digest):
+            raise ContextOSError("expected source revision must be PATH=SHA256 (normalized text)")
+        _display_path(relative)
+        if relative not in seen:
+            raise ContextOSError("expected revision must name a selected source; select it with --source")
+        if relative in expected and expected[relative] != digest:
+            raise ContextOSError("conflicting expected revisions for the same source")
+        expected[relative] = digest
+    for item in selected:
+        digest = expected.get(item["path"])
+        observed = item.get("sha256")
+        item["revision_check"] = {
+            "status": ("not_requested" if digest is None else "unavailable" if observed is None
+                       else "matched" if digest == observed else "mismatch"),
+            "expected_sha256": digest, "observed_sha256": observed,
+        }
     report.update({
         "sources": selected,
         "source_scope": "preview of lifecycle and explicitly selected sources; not a host read log",
         "freshness_notice": "Dates are review signals, not proof that a claim is correct.",
+        "dependency_check_notice": "Revision checks compare selected source snapshots only; claim dependencies and host retrieval are not verified.",
         "writes": False,
     })
     return report
@@ -212,12 +240,25 @@ def _quote(value: str) -> str:
 
 def render_briefing(report: dict[str, Any]) -> str:
     lines = ["# Context briefing", "", report["source_scope"], report["freshness_notice"], ""]
+    if report.get("dependency_check_notice"):
+        lines.extend([report["dependency_check_notice"], ""])
     if report["next_action"]:
         lines.extend([report["next_action"], ""])
     for source in report["sources"]:
         lines.extend([f"## {source['path']}", f"Selected for: {source['reason']}. Freshness: {source['freshness_status']}."])
         if source.get("last_updated"):
-            lines.append(f"Last recorded update: {source['last_updated']} ({source['age_days']} days ago).")
+            age = source['age_days']
+            label = f"{age} days ago" if age >= 0 else f"{-age} days in the future"
+            lines.append(f"Last recorded update: {source['last_updated']} ({label}).")
+        else:
+            reason = "source unavailable" if source["freshness_status"] == "unavailable" else "no valid recorded review date"
+            lines.append(f"Source age: unknown ({reason}).")
+        if source.get("sha256"):
+            lines.append(f"Source ID: {source.get('source_id', source['path'])}; normalized-text revision: {source['sha256']}.")
+        check = source.get("revision_check", {"status": "not_requested", "expected_sha256": None})
+        lines.append(f"Revision check: {check['status']}.")
+        if check["expected_sha256"]:
+            lines.append(f"Expected revision: {check['expected_sha256']}.")
         if "excerpt" in source:
             lines.extend(["", _quote(source["excerpt"]), ""])
             if source["excerpt_truncated"]:
