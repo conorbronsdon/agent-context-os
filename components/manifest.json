@@ -1055,6 +1055,18 @@
                 {
                     "path": "tests/fixtures/continuity/revision-invalidation.json",
                     "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/continuity-revision-2026-10-04/README.md",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/continuity-revision-2026-10-04/fence-normalization.jsonl",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/continuity-revision-2026-10-04/trials.jsonl",
+                    "policy": "development"
                 }
             ]
         },

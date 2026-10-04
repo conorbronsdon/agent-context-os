@@ -187,6 +187,10 @@ from record and action failures.
 of format failures. Keep revision results in a separate JSONL from the legacy
 scenarios. `instructions` and `handoff-sentences` are unsupported for this case.
 
+The [2026-10-04 revision trials](evidence/continuity-revision-2026-10-04/README.md)
+ran three models through Codex and Cursor. All 18 trials passed every layer,
+so this version does not separate those models; a harder case is needed.
+
 This is a response-format and attribution evaluation over supplied synthetic
 evidence. It does not observe a host's retrieval, execute a dependency graph,
 authenticate the reviewer, or send an outbound action. Unit controls validate
