@@ -115,10 +115,33 @@ class ContinuityTest(unittest.TestCase):
         with self.assertRaisesRegex(ContextOSError, "conflicting"):
             briefing_report(self.root, NOW, expected_revisions=["ROUTING.md=" + "0" * 64,
                                                                "ROUTING.md=" + "1" * 64])
-        with contextlib.redirect_stdout(io.StringIO()) as out:
-            self.assertEqual(0, main(["--root", str(self.root), "start",
-                                     "--expect-source-revision", "ROUTING.md=" + "0" * 64]))
-        self.assertEqual("mismatch", json.loads(out.getvalue())["sources"][0]["revision_check"]["status"])
+
+    def test_revision_expectation_exit_status_gates_on_unconfirmed_sources(self):
+        (self.root / "ROUTING.md").write_text("# Routing\n", encoding="utf-8")
+        current = hashlib.sha256(b"# Routing\n").hexdigest()
+
+        def run(*arguments):
+            with contextlib.redirect_stdout(io.StringIO()) as out, \
+                    contextlib.redirect_stderr(io.StringIO()):
+                code = main(["--root", str(self.root), "start", *arguments])
+            return code, out.getvalue()
+
+        code, out = run("--expect-source-revision", f"ROUTING.md={current}")
+        self.assertEqual(0, code)
+        self.assertEqual("matched", json.loads(out)["sources"][0]["revision_check"]["status"])
+        # A mismatch still prints the full report before failing the check.
+        code, out = run("--expect-source-revision", "ROUTING.md=" + "0" * 64)
+        self.assertEqual(1, code)
+        self.assertEqual("mismatch", json.loads(out)["sources"][0]["revision_check"]["status"])
+        code, out = run("--format", "markdown", "--expect-source-revision", "ROUTING.md=" + "0" * 64)
+        self.assertEqual(1, code)
+        self.assertIn("Revision check: mismatch", out)
+        code, out = run("--source", "missing.md", "--expect-source-revision", "missing.md=" + "0" * 64,
+                        "--expect-source-revision", f"ROUTING.md={current}")
+        self.assertEqual(1, code)
+        self.assertEqual("unavailable", json.loads(out)["sources"][-1]["revision_check"]["status"])
+        self.assertEqual(2, run("--expect-source-revision", "ROUTING.md=wrong")[0])
+        self.assertEqual(0, run("--briefing")[0])
 
     def test_receipt_before_and_after_digests_match_real_content_and_reject_changed_dependency(self):
         path, proposal = create_proposal(self.root, "update", {"progress": ["Saved progress"]}, NOW)

@@ -58,8 +58,10 @@ and observed hashes. Sources without an expectation return `not_requested`.
 An expectation never selects a new file; select additional files with
 `--source`. A mismatch still returns the current source path, revision and
 excerpt, so a reviewer can inspect the replacement even when its value is
-unchanged. The command is a read-only report and returns success for a completed
-comparison, including a mismatch. Callers must inspect `revision_check.status`.
+unchanged. The command is read-only and always prints the report. It exits 0
+when every expected revision matches, 1 when any is `mismatch` or
+`unavailable`, and 2 for invalid arguments, so scripts can gate on the exit
+status while agents read `revision_check.status` for each source.
 
 This compares selected files only. It does not traverse claim dependencies,
 authenticate a reviewer, prove which revision a host retrieved, or authorize

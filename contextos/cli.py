@@ -113,7 +113,7 @@ def parser() -> argparse.ArgumentParser:
     start.add_argument("--source", action="append", default=[], help="Explicit repository-relative Markdown task source (repeatable)")
     start.add_argument("--expect-source-revision", action="append", default=[], metavar="PATH=SHA256",
                        help="Compare a selected source with its prior normalized-text SHA-256 (repeatable; read-only). "
-                            "A completed comparison exits 0, including a mismatch; inspect revision_check.status")
+                            "Exits 1 after printing the report if any expectation is mismatched or unavailable")
 
     history = commands.add_parser("history", help="Read local context change receipts")
     history.add_argument("--format", choices=("json", "markdown"), default="markdown")
@@ -928,6 +928,13 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 report = start_report(root, parse_now(args.now), roles=roles if split_mode else None)
             _print_report(render_briefing(report)) if args.format == "markdown" else emit(report)
+            # Like doctor: the report is always printed, and an unconfirmed
+            # expectation (mismatch or unavailable) is a failed check.
+            if args.expect_source_revision and any(
+                source["revision_check"]["status"] not in {"matched", "not_requested"}
+                for source in report["sources"]
+            ):
+                return 1
         elif args.command == "history":
             report = history_report(root, limit=args.limit, path=args.path, details=args.details)
             _print_report(render_history(report)) if args.format == "markdown" else emit(report)
