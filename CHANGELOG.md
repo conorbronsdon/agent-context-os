@@ -5,6 +5,9 @@
 ### Fixed
 - The Hermes environment-filter control isolates inherited case variants of
   proxy settings so its fixture assertions do not depend on the runner's proxy.
+- Release regression guards recognize list-leading and quoted conditional
+  keys, including spaces before colons (#230). This covers those block-mapping
+  spellings without claiming general YAML parsing or changing the workflow.
 
 ## [1.0.0] — 2026-09-29 — Reviewed handoffs and stable interfaces
 

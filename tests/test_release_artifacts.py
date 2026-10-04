@@ -319,7 +319,16 @@ class ReleaseArtifactTest(unittest.TestCase):
             self.assertRegex(reference, r"^actions/[a-z-]+@[0-9a-f]{40}$")
 
     def assert_workflow_diagnostics_cannot_bypass_gates(self, workflow: str) -> None:
-        self.assertNotIn("continue-on-error:", workflow)
+        # Recognize plain or quoted block-mapping keys, including the first
+        # key of a list item. This is deliberately not a general YAML parser.
+        conditional_key = re.compile(
+            r"^\s*(?:-\s+)?(?:if|\"if\"|'if')\s*:"
+        )
+        continue_key = re.compile(
+            r"^\s*(?:-\s+)?(?:continue-on-error|\"continue-on-error\"|'continue-on-error')\s*:"
+        )
+        for line in workflow.splitlines():
+            self.assertIsNone(continue_key.match(line))
         jobs = dict(re.findall(
             r"^  ([a-z][a-z0-9-]*):\n(.*?)(?=^  [a-z][a-z0-9-]*:|\Z)",
             workflow, re.MULTILINE | re.DOTALL,
@@ -327,7 +336,7 @@ class ReleaseArtifactTest(unittest.TestCase):
         for name, job in jobs.items():
             lines = job.splitlines()
             for index, line in enumerate(lines):
-                if re.match(r"\s*if\s*:", line):
+                if conditional_key.match(line):
                     self.assertIn(name, {"verify-candidate-linux", "verify-candidate-windows"})
                     self.assertEqual(line, "        if: always()")
                     self.assertGreater(index, 0)
@@ -348,6 +357,34 @@ class ReleaseArtifactTest(unittest.TestCase):
         bypass = workflow.replace("        if: always()", "        if: ${{ !cancelled() }}")
         with self.assertRaises(AssertionError):
             self.assert_workflow_diagnostics_cannot_bypass_gates(bypass)
+
+    def test_alternative_yaml_condition_keys_cannot_hide_gate_mutations(self) -> None:
+        workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        # Passing control retains exactly the two pinned diagnostic uploads.
+        self.assert_workflow_diagnostics_cannot_bypass_gates(workflow)
+        self.assertEqual(2, workflow.count("        if: always()"))
+        gate = "      - name: Run the canonical validator on the release source\n"
+        self.assertIn(gate, workflow)
+        for key in ("if", '"if"', "'if'"):
+            for space in ("", " "):
+                for condition in ("false", "failure()", "always()"):
+                    mutations = (
+                        workflow.replace(gate, f"      - {key}{space}: {condition}\n        name: Run the canonical validator on the release source\n"),
+                        workflow.replace(gate, gate + f"        {key}{space}: {condition}\n"),
+                        workflow.replace("  build-linux:\n", f"  build-linux:\n    {key}{space}: {condition}\n"),
+                        workflow.replace("        if: always()", f"        {key}{space}: {condition}"),
+                    )
+                    for index, mutation in enumerate(mutations):
+                        if mutation == workflow:
+                            continue  # The canonical diagnostic spelling is allowed.
+                        with self.subTest(key=key, space=space, condition=condition, mutation=index), self.assertRaises(AssertionError):
+                            self.assert_workflow_diagnostics_cannot_bypass_gates(mutation)
+        for key in ("continue-on-error", '"continue-on-error"', "'continue-on-error'"):
+            for space in ("", " "):
+                for prefix in ("        ", "      - "):
+                    mutation = workflow.replace(gate, f"{prefix}{key}{space}: true\n" + gate)
+                    with self.subTest(key=key, space=space, prefix=prefix), self.assertRaises(AssertionError):
+                        self.assert_workflow_diagnostics_cannot_bypass_gates(mutation)
         bypass = workflow.replace(
             "      - name: Qualify published upgrades, recovery and fresh onboarding\n",
             "      - name: Qualify published upgrades, recovery and fresh onboarding\n        continue-on-error: true\n",
