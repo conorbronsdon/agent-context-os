@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- The Hermes environment-filter control isolates inherited case variants of
+  proxy settings so its fixture assertions do not depend on the runner's proxy.
+
 ## [1.0.0] — 2026-09-29 — Reviewed handoffs and stable interfaces
 
 ### Fixed

@@ -767,7 +767,13 @@ class HermesLiveHarnessTest(unittest.TestCase):
                   "HERMES_OTHER_API_KEY": "fixture-hermes-other",
                   "HTTP_PROXY": "http://proxy.invalid", "https_proxy": "http://proxy.invalid",
                   "SSL_CERT_FILE": "fixture-ca.pem", "REQUESTS_CA_BUNDLE": "fixture-bundle.pem"}
-        with mock.patch.dict(os.environ, values):
+        # POSIX can contain HTTPS_PROXY and https_proxy with different values.
+        # Isolate every case variant of the fixture settings before checking
+        # their case-insensitive names; keep unrelated execution environment.
+        patched_names = {name.upper() for name in values}
+        inherited = {name: value for name, value in os.environ.items()
+                     if name.upper() not in patched_names}
+        with mock.patch.dict(os.environ, {**inherited, **values}, clear=True):
             env = live.hermes_environment(self.home, "openrouter")
             self.assertIn("OPENROUTER_API_KEY", env)
             self.assertNotIn("OTHER_API_KEY", env)
