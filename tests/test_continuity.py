@@ -136,6 +136,29 @@ class ContinuityTest(unittest.TestCase):
             apply_proposal(self.root, path, proposal["proposal_digest"], "codex")
         self.assertFalse((self.root / ".context-os/receipts" / f"{proposal['proposal_id']}.json").exists())
 
+    def test_content_target_changed_after_preflight_is_rejected_without_clobbering(self):
+        # The first stale check passes; the source changes while apply stages
+        # its transaction. The pre-mutation recheck must reject it, keep the
+        # concurrent bytes and publish no receipt.
+        path, proposal = create_proposal(self.root, "update", {"progress": ["Saved progress"]}, NOW)
+        apply_proposal(self.root, path, proposal["proposal_digest"], "codex")
+        path, proposal = create_proposal(self.root, "update", {"progress": ["Next progress"]}, NOW)
+        target = next(self.root / change["path"] for change in proposal["changes"]
+                      if (self.root / change["path"]).exists())
+        from contextos import kernel
+        original = kernel._create_agent_journal
+
+        def mutate_after_staging(*args, **kwargs):
+            result = original(*args, **kwargs)
+            target.write_text(target.read_text(encoding="utf-8") + "Concurrent change\n", encoding="utf-8")
+            return result
+
+        with patch("contextos.kernel._create_agent_journal", side_effect=mutate_after_staging):
+            with self.assertRaisesRegex(ContextOSError, "target changed during apply"):
+                apply_proposal(self.root, path, proposal["proposal_digest"], "codex")
+        self.assertTrue(target.read_text(encoding="utf-8").endswith("Concurrent change\n"))
+        self.assertFalse((self.root / ".context-os/receipts" / f"{proposal['proposal_id']}.json").exists())
+
     def test_explicit_paths_cannot_escape_or_read_non_markdown(self):
         for raw in ("../outside.md", "C:/outside.md", "..\\outside.md", "input.json"):
             with self.subTest(raw=raw), self.assertRaises(ContextOSError):

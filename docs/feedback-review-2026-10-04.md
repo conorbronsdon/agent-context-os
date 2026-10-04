@@ -82,6 +82,18 @@ Whether supplying `scheduledAt` actually schedules publishing remains a
 backend behavior to verify; the exposed request path alone warrants inclusion
 in the catalog's scheduling discussion.
 
+The same commit has further paths outside those two tools: `publish-clip`
+accepts `publish` and `schedule` modes, `retry-post` retries publishing, and
+`create-agent`/`update-agent` configure publish agents and their schedules.
+`api-request` can call any route the hosted allow-list returns, with an
+arbitrary query and JSON body. The list is fetched once per client and
+cached, so a tool-name or argument restriction does not bound it unless the
+bridge is removed or its routes are filtered locally. `upload-media` and
+`upload-clip` read whatever local path the model supplies and send the bytes
+to the backend, so the inventory also needs a local-file egress boundary.
+(Claude Code source check of the same pinned files, 2026-10-04; no install or
+backend call.)
+
 Before an entry PR, resolve these acceptance points:
 
 1. Enumerate the selected authenticated dynamic routes out of band and redact

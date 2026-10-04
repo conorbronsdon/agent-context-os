@@ -40,6 +40,33 @@ class RevisionInvalidationTest(unittest.TestCase):
                 self.assertNotIn('"expected"', prompt)
                 self.assertNotIn('"action":', prompt)
                 self.assertIn("not observed host retrieval", result["scope"])
+                records = json.loads(prompt.split("\n\n", 1)[1])["retrieval_records"]
+                self.assertIsInstance(records, list)
+                expected_ids = {"export-002", "launch-002"} | (
+                    {"export-001", "launch-001"} if profile == "contextos" else set())
+                self.assertEqual(expected_ids, {record["record_id"] for record in records})
+
+    def test_copying_a_consistent_superseded_record_fails_record_and_citation(self):
+        # The old session record has the same CSV value and its own check
+        # matches; copying it must not pass the record or revision layers.
+        prompt = benchmark.prepare(REVISION, "contextos")
+        records = {record["record_id"]: record
+                   for record in json.loads(prompt.split("\n\n", 1)[1])["retrieval_records"]}
+        stale = records["export-001"]
+        response = self.answer()
+        response["answers"]["export"].update({
+            "record_id": stale["record_id"], "source": stale["source_id"],
+            "source_revision": stale["source_revision"], "supersedes": stale["supersedes"],
+            "dependency_check": stale["dependency_check"],
+            "quote": "The agent proposed CSV export for spreadsheet analysis",
+        })
+        result = benchmark.score(REVISION, "contextos", response)
+        export = next(item for item in result["results"] if item["question"] == "export")
+        self.assertEqual({"retrieved_record": False, "cited_revision": False,
+                          "proposed_value": True, "outbound_action": True}, export["layers"])
+        self.assertEqual(1, result["grounded_correct"])
+        self.assertEqual(2, result["value_correct"])
+        self.assertEqual(1, result["citation_rejected"])
 
     def test_correct_value_cannot_hide_failure_at_any_other_layer(self):
         for field, wrong, layer in (

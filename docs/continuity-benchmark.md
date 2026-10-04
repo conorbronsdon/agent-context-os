@@ -157,12 +157,15 @@ python scripts/continuity-benchmark.py prepare --scenario revision --profile han
 python scripts/continuity-benchmark.py score --scenario revision --profile contextos --response response.json
 ```
 
-Each profile receives the same facts and current retrieval metadata; `handoff`
+Each profile receives the same facts and current retrieval records; `handoff`
 uses the concise handoff source. Use fresh sessions with tools disabled and
 keep the answer key outside them, as with the other scenarios. The extended
 answer contains `value`, `source`, `quote`, `record_id`, `source_revision`,
-`supersedes`, `dependency_check`, and `action`. The prompt supplies current
-source revisions, record IDs, supersession links and a recorded mismatch.
+`supersedes`, `dependency_check`, and `action`. The prompt supplies an
+unordered list of retrieval records with source revisions, supersession links
+and dependency-check results; it is not keyed by question. In `contextos`, the
+list also contains the superseded session records, whose own checks still
+match, so copying a record passes only when the agent selects the current one.
 Actions are proposed codes, never executed operations.
 
 The scorer reports each layer independently:

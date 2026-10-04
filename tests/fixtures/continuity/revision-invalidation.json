@@ -17,6 +17,10 @@
     "export": {"value": "csv", "source": "projects/lantern/requirements.md", "quote": "Demo reviewer accepted CSV export for spreadsheet analysis.", "record_id": "export-002", "supersedes": "export-001", "dependency_check": "mismatch", "action": "outline_csv_columns"},
     "launch": {"value": "unconfirmed", "source": "state/blockers.md", "quote": "The launch date remains unconfirmed.", "record_id": "launch-002", "supersedes": "launch-001", "dependency_check": "mismatch", "action": "hold_launch_announcement"}
   },
+  "superseded_records": [
+    {"record_id": "export-001", "source": "sessions/2026-10-01.md", "supersedes": null, "dependency_check": "matched"},
+    {"record_id": "launch-001", "source": "sessions/2026-10-01.md", "supersedes": null, "dependency_check": "matched"}
+  ],
   "expected_by_profile": {
     "handoff": {
       "export": {"value": "csv", "source": "HANDOFF.md", "quote": "Demo reviewer accepted CSV export for spreadsheet analysis.", "record_id": "export-002", "supersedes": "export-001", "dependency_check": "mismatch", "action": "outline_csv_columns"},
