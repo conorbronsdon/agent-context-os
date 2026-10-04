@@ -104,7 +104,8 @@ receipt, under `files_changed`. Content writes use normalized-text
 `sha256_before_raw`/`sha256_after_raw`. An absent file is represented by `null`.
 The proposal digest identifies the reviewed proposal, not the post-apply
 workspace. Apply rejects changed input snapshots before writing; a rejected
-apply creates no successful receipt.
+apply creates no successful receipt. The [revision benchmark](continuity-benchmark.md#test-revision-attribution-and-proposed-actions)
+scores evidence and proposed actions separately.
 
 For attached application repositories, supply the same explicit `--kernel-root`,
 `--context-root`, and `--working-root` arguments used by lifecycle commands.

@@ -19,6 +19,10 @@ run these commands there; the benchmark never needs your personal workspace.
 - `contextos`: the same instructions plus canonical decisions, blockers, current
   priorities, and an older session containing superseded ideas.
 
+The separate revision scenario below has two supported profiles and an extended
+response format. The original short and long prompts and historical scores
+remain unchanged.
+
 ```bash
 python scripts/continuity-benchmark.py prepare --profile handoff > handoff-prompt.txt
 python scripts/continuity-benchmark.py prepare --profile contextos > contextos-prompt.txt
@@ -139,3 +143,53 @@ measure it. Installed-host conformance remains a separate test suite.
 
 The [2026-09-23 long-sequence evidence](evidence/continuity-long-2026-09-23/README.md)
 reports 27 fresh-session trials, category counts, rejected answers, and limits.
+
+## Test revision attribution and proposed actions
+
+The `revision` scenario tests two questions with synthetic retrieval records.
+An old record and its reviewed replacement both select CSV, so returning CSV
+alone cannot establish that invalidation worked. A second question keeps a
+launch date unconfirmed and requires holding the launch announcement.
+
+```bash
+python scripts/continuity-benchmark.py prepare --scenario revision --profile contextos
+python scripts/continuity-benchmark.py prepare --scenario revision --profile handoff
+python scripts/continuity-benchmark.py score --scenario revision --profile contextos --response response.json
+```
+
+Each profile receives the same facts and current retrieval records; `handoff`
+uses the concise handoff source. Use fresh sessions with tools disabled and
+keep the answer key outside them, as with the other scenarios. The extended
+answer contains `value`, `source`, `quote`, `record_id`, `source_revision`,
+`supersedes`, `dependency_check`, and `action`. The prompt supplies an
+unordered list of retrieval records with source revisions, supersession links
+and dependency-check results; it is not keyed by question. In `contextos`, the
+list also contains the superseded session records, whose own checks still
+match, so copying a record passes only when the agent selects the current one.
+Actions are proposed codes, never executed operations.
+
+The scorer reports each layer independently:
+
+| Layer | Passing evidence |
+|---|---|
+| Retrieved record | Correct current record ID, superseded ID and supplied dependency-check result |
+| Cited revision | Current source path, full normalized-text SHA-256 and supporting sentence |
+| Proposed value | Correct CSV choice or unresolved launch status |
+| Outbound action | Outline CSV columns locally or hold the public announcement |
+
+All four layers must pass for a question to count as grounded correct. A
+correct value with a stale citation, missing supersession link, false check
+result, or publishing proposal fails. Citation rejection is counted separately
+from record and action failures.
+
+`record --scenario revision` preserves raw responses and layer scores in JSONL.
+`summarize` returns mean passing-question counts for each layer and the count
+of format failures. Keep revision results in a separate JSONL from the legacy
+scenarios. `instructions` and `handoff-sentences` are unsupported for this case.
+
+This is a response-format and attribution evaluation over supplied synthetic
+evidence. It does not observe a host's retrieval, execute a dependency graph,
+authenticate the reviewer, or send an outbound action. Unit controls validate
+the scorer; they are not model trials or evidence of live stale-memory repair.
+For actual selected-file checks, use [source revision expectations](continuity.md).
+The remaining design recommendations are in the [feedback review](feedback-review-2026-10-04.md).

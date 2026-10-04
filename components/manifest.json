@@ -1051,6 +1051,10 @@
                 {
                     "path": "docs/feedback-review-2026-10-04.md",
                     "policy": "development"
+                },
+                {
+                    "path": "tests/fixtures/continuity/revision-invalidation.json",
+                    "policy": "development"
                 }
             ]
         },
