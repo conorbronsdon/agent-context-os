@@ -807,6 +807,8 @@ class HermesLiveHarnessTest(unittest.TestCase):
         with mock.patch.dict(os.environ, runner, clear=True), \
                 mock.patch.object(live, "hermes_environment", side_effect=record):
             self.test_environment_only_passes_selected_provider_key_and_network_settings()
+        self.assertEqual([], [key for key, value in observed[0].items()
+                              if key.upper() in {"HTTP_PROXY", "HTTPS_PROXY"} and "runner-" in value])
         names = {key.upper(): value for key, value in observed[0].items()}
         self.assertEqual("http://proxy.invalid", names["HTTPS_PROXY"])
         self.assertEqual("http://proxy.invalid", names["HTTP_PROXY"])
