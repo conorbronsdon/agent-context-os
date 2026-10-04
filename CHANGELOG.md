@@ -8,6 +8,11 @@
   `start --expect-source-revision` exits 1 when any expected revision is
   mismatched or unavailable (the report is still printed), 0 when all match,
   and 2 for invalid arguments.
+- A separate synthetic revision benchmark scores retrieved records, cited
+  revisions, proposed values and outbound action proposals independently. Its
+  unkeyed record list includes superseded records, so copying a stale record
+  with the correct value fails the record and citation layers. First trials
+  (18, three models) all passed every layer; the evidence records this ceiling.
 
 ### Fixed
 - The Hermes environment-filter control isolates inherited case variants of
