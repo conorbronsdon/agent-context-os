@@ -5,12 +5,19 @@
 ### Added
 - Read-only briefings expose source IDs, raw and normalized revisions, and
   optional prior-revision comparisons without expanding the selected read set.
-- A separate synthetic revision benchmark scores retrieved records, cited
-  revisions, proposed values and outbound action proposals independently.
+  `start --expect-source-revision` exits 1 when any expected revision is
+  mismatched or unavailable (the report is still printed), 0 when all match,
+  and 2 for invalid arguments.
 
 ### Fixed
 - The Hermes environment-filter control isolates inherited case variants of
   proxy settings so its fixture assertions do not depend on the runner's proxy.
+- Release regression guards recognize list-leading and quoted conditional
+  keys, including spaces before colons, keys inside flow mappings and unusual
+  key case (#230). Conditions are checked on every workflow line, so a job
+  header the guard cannot split (for example one with a trailing comment) no
+  longer hides them. This covers the tested spellings without claiming general
+  YAML parsing or changing the workflow.
 - Root `CLAUDE.md` explicitly imports shared `AGENTS.md` instructions when both
   files are present. A portability guard checks the import.
 - Briefing ages, hashes and excerpts describe the same source snapshot, with
