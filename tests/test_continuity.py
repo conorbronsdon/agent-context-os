@@ -110,6 +110,8 @@ class ContinuityTest(unittest.TestCase):
                               "ROUTING.md=wrong", "ROUTING.md"):
             with self.subTest(specification=specification), self.assertRaises(ContextOSError):
                 briefing_report(self.root, NOW, expected_revisions=[specification])
+        with self.assertRaisesRegex(ContextOSError, "expected revision path must be"):
+            briefing_report(self.root, NOW, expected_revisions=["./ROUTING.md=" + "0" * 64])
         with self.assertRaisesRegex(ContextOSError, "conflicting"):
             briefing_report(self.root, NOW, expected_revisions=["ROUTING.md=" + "0" * 64,
                                                                "ROUTING.md=" + "1" * 64])

@@ -112,7 +112,8 @@ def parser() -> argparse.ArgumentParser:
     start.add_argument("--briefing", action="store_true", help="Include source-attributed excerpts in JSON (Markdown includes them automatically)")
     start.add_argument("--source", action="append", default=[], help="Explicit repository-relative Markdown task source (repeatable)")
     start.add_argument("--expect-source-revision", action="append", default=[], metavar="PATH=SHA256",
-                       help="Compare a selected source with its prior normalized-text SHA-256 (repeatable; read-only)")
+                       help="Compare a selected source with its prior normalized-text SHA-256 (repeatable; read-only). "
+                            "A completed comparison exits 0, including a mismatch; inspect revision_check.status")
 
     history = commands.add_parser("history", help="Read local context change receipts")
     history.add_argument("--format", choices=("json", "markdown"), default="markdown")

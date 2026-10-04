@@ -112,7 +112,10 @@ def briefing_report(
         relative, separator, digest = specification.rpartition("=")
         if not separator or not re.fullmatch(r"[a-f0-9]{64}", digest):
             raise ContextOSError("expected source revision must be PATH=SHA256 (normalized text)")
-        _display_path(relative)
+        try:
+            _display_path(relative)
+        except ContextOSError as exc:
+            raise ContextOSError("expected revision path must be a canonical repository-relative label") from exc
         if relative not in seen:
             raise ContextOSError("expected revision must name a selected source; select it with --source")
         if relative in expected and expected[relative] != digest:
