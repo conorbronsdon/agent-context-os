@@ -767,7 +767,13 @@ class HermesLiveHarnessTest(unittest.TestCase):
                   "HERMES_OTHER_API_KEY": "fixture-hermes-other",
                   "HTTP_PROXY": "http://proxy.invalid", "https_proxy": "http://proxy.invalid",
                   "SSL_CERT_FILE": "fixture-ca.pem", "REQUESTS_CA_BUNDLE": "fixture-bundle.pem"}
-        with mock.patch.dict(os.environ, values):
+        # POSIX can contain HTTPS_PROXY and https_proxy with different values.
+        # Isolate every case variant of the fixture settings before checking
+        # their case-insensitive names; keep unrelated execution environment.
+        patched_names = {name.upper() for name in values}
+        inherited = {name: value for name, value in os.environ.items()
+                     if name.upper() not in patched_names}
+        with mock.patch.dict(os.environ, {**inherited, **values}, clear=True):
             env = live.hermes_environment(self.home, "openrouter")
             self.assertIn("OPENROUTER_API_KEY", env)
             self.assertNotIn("OTHER_API_KEY", env)
@@ -779,6 +785,34 @@ class HermesLiveHarnessTest(unittest.TestCase):
             report = self.run_record()
         self.assertNotIn("OTHER_API_KEY", report["api_key_names"])
         self.assertIn("api_key_names", report)
+
+    def test_environment_fixture_overrides_conflicting_inherited_proxy_spellings(self) -> None:
+        # A POSIX runner can hold both spellings. An earlier lowercase and a later
+        # uppercase variant made the inherited value win the case-insensitive
+        # lookup before the fixture isolated them. Windows folds the names.
+        runner = {name: value for name, value in os.environ.items()
+                  if name.upper() not in {"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"}}
+        runner.update({"https_proxy": "http://runner-lower.invalid",
+                       "HTTPS_PROXY": "http://runner-upper.invalid",
+                       "HTTP_PROXY": "http://runner-upper.invalid",
+                       "http_proxy": "http://runner-lower.invalid",
+                       "NO_PROXY": "runner.invalid"})
+        observed: list[dict[str, str]] = []
+        real = live.hermes_environment
+
+        def record(*args, **kwargs):
+            observed.append(real(*args, **kwargs))
+            return observed[-1]
+
+        with mock.patch.dict(os.environ, runner, clear=True), \
+                mock.patch.object(live, "hermes_environment", side_effect=record):
+            self.test_environment_only_passes_selected_provider_key_and_network_settings()
+        self.assertEqual([], [key for key, value in observed[0].items()
+                              if key.upper() in {"HTTP_PROXY", "HTTPS_PROXY"} and "runner-" in value])
+        names = {key.upper(): value for key, value in observed[0].items()}
+        self.assertEqual("http://proxy.invalid", names["HTTPS_PROXY"])
+        self.assertEqual("http://proxy.invalid", names["HTTP_PROXY"])
+        self.assertEqual("runner.invalid", names["NO_PROXY"])
 
     def test_tool_results_do_not_record_environment(self) -> None:
         raw = json.dumps({"type": "tool_result", "content": "FIXTURE_VAR=fixture-value"})
