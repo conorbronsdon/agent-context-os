@@ -7,6 +7,17 @@ Bash, Python 3.10+, and access to both agents. Use a disposable clone containing
 only this synthetic example; no personal imports or external integrations are
 needed. See [getting started](getting-started.md) if a prerequisite is missing.
 
+The source template's `CLAUDE.md` imports `@AGENTS.md`, so Claude receives the
+shared lifecycle instructions as well as its host adapter. In older releases
+or personalized copies, check for that import. Current Claude Code defaults to
+loading `AGENTS.md` only when no `CLAUDE.md`, `.claude/CLAUDE.md`, or
+`CLAUDE.local.md` is on the project path. Keeping both root files without an
+import can therefore omit the shared instructions. An alternative is the
+user-selected Project instructions value `claude-md-and-agents-md`; do not
+change global configuration automatically. Run `/memory` or `/context` to
+inspect loading. See [Anthropic's memory documentation](https://code.claude.com/docs/en/memory#agentsmd)
+(checked 2026-10-04). This source fix does not rewrite published release assets.
+
 ## 1. Set up one shared workspace
 
 Start with the five attached assets from
@@ -65,10 +76,21 @@ Invoke `/end` and provide this handoff:
 
 > Record the decision to implement CSV export, including why PDF was rejected.
 > Next session should outline CSV columns. The launch date remains unconfirmed.
+> Use decision ID `lantern-export-001`. In the rationale, record
+> `Review status: accepted after exact-proposal review; Reviewed by: Demo reviewer
+> (self-reported); Supersedes: none`. This is a fictional reviewer for the exercise.
 
 Inspect the proposed decision row and session note. Approve the exact proposal
 after review. Save the receipt path the agent reports. Do not commit or push as
 part of this exercise; the second agent reads the same local files.
+
+These labels are a Markdown convention: put the ID in the existing `decision`
+string and review/supersession details in its `rationale` string. They are not
+new kernel payload fields. Until approval and successful apply, the row is a
+proposal for acceptance; merely storing a proposal does not make it accepted.
+Use a reviewer name only when the reviewer supplied or confirmed it. Existing
+rows without review metadata remain unknown rather than retrospectively
+accepted. Neither the labels nor the receipt authenticate the reviewer.
 
 If the diff invents a launch date or omits the reason for rejecting PDF, decline
 it. Ask the agent to generate a corrected proposal, inspect its new diff and
@@ -98,6 +120,34 @@ rejected PDF option, keeps the launch date unresolved, and cites the actual
 decision/session files. It proposes outlining columns without silently making
 new durable decisions. A confident answer with no supporting source fails this
 exercise.
+
+Ask which decision ID it used and who is recorded as reviewer. The expected
+answer points to `lantern-export-001` and the self-reported Demo reviewer,
+while preserving the limit that this is not independently verified identity.
+
+## Optional: replace a decision and preserve its review trail
+
+Return to the saving agent and request a new end proposal:
+
+> The fictional reviewer now wants JSON export for API ingestion. Record
+> decision ID `lantern-export-002`, rationale `API ingestion; Review status:
+> accepted after exact-proposal review; Reviewed by: Demo reviewer
+> (self-reported); Supersedes: lantern-export-001`, and rejected alternative
+> `CSV spreadsheet export`. Preserve the original decision row. Update the
+> current handoff to point to the replacement. The launch date stays unconfirmed.
+
+Inspect the full diff and approve only if those links and facts are present.
+An append-only decision log preserves the old row, so the new row must name
+what it replaces; a newer timestamp alone does not explain supersession.
+Resume in a fresh receiving session and ask for the current format, ID,
+reviewer, superseded ID and supporting source. It should cite JSON and
+`lantern-export-002`, explain its link to `lantern-export-001`, and keep the
+date unresolved. Finding CSV in history is expected; treating it as current
+fails the replacement check.
+
+This convention leaves enforcement of record IDs and supersession links to
+review. Git records committed authorship and changes; it does not, by itself,
+establish decision-level acceptance or authenticate the human reviewer.
 
 ## 4. Inspect and compare
 

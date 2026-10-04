@@ -12,6 +12,8 @@ fail() {
 }
 
 test -f AGENTS.md || fail "missing root AGENTS.md"
+tr -d '\r' < CLAUDE.md | grep -qx '@AGENTS.md' \
+  || fail "CLAUDE.md must import shared AGENTS.md instructions"
 test -f docs/codex-onboarding.md || fail "missing Codex onboarding guide"
 test -f state/current-log.md || fail "missing current.md history seed"
 

@@ -4659,8 +4659,6 @@ def render_hook_payload(
 
 
 def _state_freshness(path: Path, today: date, threshold: int) -> dict[str, Any]:
-    updated = None
-    age = None
     exists = False
     raw: bytes | None = None
     try:
@@ -4675,6 +4673,15 @@ def _state_freshness(path: Path, today: date, threshold: int) -> dict[str, Any]:
             exists = True
         else:
             raise ContextOSError(str(exc)) from exc
+    return _snapshot_freshness(raw, today, threshold, exists=exists)
+
+
+def _snapshot_freshness(
+    raw: bytes | None, today: date, threshold: int, *, exists: bool = True
+) -> dict[str, Any]:
+    """Date metadata for the same snapshot whose excerpt/hash is reported."""
+    updated = None
+    age = None
     if raw is not None:
         try:
             match = LAST_UPDATED_RE.search(raw.decode("utf-8"))
