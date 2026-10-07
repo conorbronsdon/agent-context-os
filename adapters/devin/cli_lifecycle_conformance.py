@@ -45,7 +45,11 @@ def lifecycle_permissions(root: Path) -> dict[str, list[str]]:
     modules = ["python3 -m contextos", "python -m contextos"]
     return {
         "allow": [f"Exec({form})" for form in wrappers]
-        + ["Exec(git status)", "Exec(git diff)", "Exec(git log)", "Write(.context-os/inputs/**)"],
+        + ["Exec(git status)", "Exec(git diff)", "Exec(git log)", "Write(.context-os/inputs/**)",
+           "Exec(mkdir -p .context-os/inputs)"]
+        # Read-only utilities the skills commonly chain; Devin did not classify
+        # every one as read-only, and one rejected call ends a print session.
+        + [f"Exec({tool})" for tool in ("date", "pwd", "ls", "cat", "head", "tail", "wc", "find", "grep")],
         "deny": [f"Exec({form} apply)" for form in wrappers + modules]
         + [f"Exec({form})" for form in modules] + ["webfetch", "web_search"],
     }
