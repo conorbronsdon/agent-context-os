@@ -325,6 +325,8 @@ class LifecycleControlTest(unittest.TestCase):
             self.assertIn("Exec(bash scripts/contextos.sh apply)", permissions["deny"])
             self.assertIn("Exec(bash /w/scripts/contextos.sh apply)", permissions["deny"])
             self.assertIn("Exec(python3)", permissions["deny"])
+            for form in ("sh /w/scripts/contextos.sh", "./scripts/contextos.sh", "/w/scripts/contextos.sh"):
+                self.assertIn(f"Exec({form} apply)", permissions["deny"])
         self.assertIn("Exec(bash scripts/contextos.sh propose)", read_only["deny"])
         self.assertIn("write", read_only["deny"])
         self.assertNotIn("Exec(bash scripts/contextos.sh propose)", mutation["deny"])

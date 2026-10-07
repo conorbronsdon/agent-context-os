@@ -50,8 +50,8 @@ def lifecycle_permissions(root: Path, *, read_only: bool = False) -> dict[str, l
     Cursor run's ask mode: they also deny file tools and proposals. The start skill's board sync
     stays allowed; with the fixture's remote removed it fails without writes.
     """
-    wrappers = ["bash scripts/contextos.sh", f"bash {root.as_posix()}/scripts/contextos.sh",
-                "sh scripts/contextos.sh"]
+    paths = ["scripts/contextos.sh", "./scripts/contextos.sh", f"{root.as_posix()}/scripts/contextos.sh"]
+    wrappers = [f"{shell} {path}" for shell in ("bash", "sh") for path in paths] + paths
     mutating = ("apply",) if not read_only else ("apply", "propose")
     return {
         "allow": ["exec"] + ([] if read_only else ["Write(.context-os/inputs/**)"]),
