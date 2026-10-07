@@ -346,22 +346,33 @@ separately approved Review fixture; neither may inherit this result.
 
 ## Review conformance fixture
 
-`adapters/devin/review-fixture/` is a separate inert control for the Review
-surface. Its `REVIEW.md.fixture` source must be placed as `REVIEW.md` only in a
-dedicated disposable Review fixture checkout. That scoped instruction requires
-one unique canary when a changed file
-adds the benign prohibited marker in `control.txt`. A pull request containing
-both files can therefore prove instruction ingestion without using a private
-repository or real defect. Merely shipping the fixture does not trigger Review.
+`adapters/devin/review-fixture/` holds two inert control sets for the Review
+surface. `REVIEW.md.fixture` with `control.txt` tests Review's own guidelines
+file. `AGENTS.md.fixture` with `agents-control.txt` tests `AGENTS.md`, the file
+Context OS ships. Each instruction requires a unique canary when a changed file
+adds that set's benign prohibited marker, so a pull request can prove
+instruction ingestion without a private repository or a real defect. Place
+each source only on its own base commit in a dedicated public fixture
+repository; merely shipping the fixture does not trigger Review.
 
-For a public GitHub pull request, Devin documents that replacing `github.com`
-with `devinreview.com` starts a free read-only review without an account, or the
-exact pinned `devin-review` CLI may be run from the local clone. Both paths send
-the diff and file contents to Devin servers. Require explicit external-data-
-transfer approval immediately before either path, bind evidence to the PR head
-SHA and Review version or result identity, and verify that the result contains
-`CONTEXTOS_DEVIN_REVIEW_CANARY_63F0A2D8`. Do not comment, approve, merge, apply
-changes, enable auto-review, or install the GitHub App as part of conformance.
+`adapters/devin/review_conformance.py` verifies each set through the GitHub API
+alone. The base commit must hold exactly `README.md` and the instruction file,
+byte-identical to this directory. The must-fire pull request must add exactly
+`control.txt` with the marker. The must-not-fire pull request must add exactly
+a `benign.txt` free of the marker and canary. Devin Review must have reviewed
+each exact head commit. A Devin Review comment on `control.txt` at the head
+must carry the canary, and nothing Devin posts on the benign pull request may.
+The script only reads GitHub; it never triggers Review, comments, approves, or
+merges.
+
+Running the controls sends the synthetic fixture to Devin servers. Trigger
+Review on each pull request from the Devin Review page (or let auto-review run).
+When the organization's Review settings keep findings in the Devin UI, publish
+the must-fire finding with Review's **Post to GitHub** action. Devin marks such a
+comment `user_posted`, and the evidence records `finding_publication`
+accordingly. Do not approve, merge, apply changes, or change Review settings
+as part of conformance. The [Review evidence](../../docs/evidence/devin-review-2026-10-07/README.md)
+records the dated runs.
 
 Promotion requires dated live-account fixtures that demonstrate instruction
 and skill discovery, explicit lifecycle behavior, proposal/apply authorization,

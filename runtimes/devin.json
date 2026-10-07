@@ -190,11 +190,16 @@
       "hook_output": null,
       "binary_probes": [],
       "conformance_tests": [
-        "tests/test_devin_conformance.py"
+        "tests/test_devin_conformance.py",
+        "tests/test_devin_review_harness.py",
+        "adapters/devin/review_conformance.py",
+        "docs/evidence/devin-review-2026-10-07/README.md"
       ],
       "evidence": [
         "devin-review",
-        "devin-conformance"
+        "devin-conformance",
+        "devin-review-harness",
+        "devin-review-live-evidence"
       ]
     }
   },
@@ -355,6 +360,23 @@
         "id": "devin-review",
         "type": "official",
         "location": "https://docs.devin.ai/work-with-devin/devin-review",
+        "claims": [
+          "instruction_sources",
+          "support"
+        ]
+      },
+      {
+        "id": "devin-review-harness",
+        "type": "conformance",
+        "location": "adapters/devin/review_conformance.py",
+        "claims": [
+          "support"
+        ]
+      },
+      {
+        "id": "devin-review-live-evidence",
+        "type": "conformance",
+        "location": "docs/evidence/devin-review-2026-10-07/README.md",
         "claims": [
           "instruction_sources",
           "support"

@@ -1,9 +1,11 @@
 """Devin Review instruction conformance on a dedicated public fixture.
 
-The fixture repository's base commit holds only ``README.md`` and the synthetic
-``REVIEW.md`` from ``adapters/devin/review-fixture/``. One pull request adds the
-prohibited marker (``control.txt``): Devin Review must report a finding that
-carries the canary. A second adds a benign file: the canary must not appear.
+Each control set has its own fixture base commit holding only ``README.md`` and
+one synthetic instruction file from ``adapters/devin/review-fixture/``:
+``REVIEW.md`` (Review's own guidelines file) or ``AGENTS.md`` (the file Context
+OS ships). One pull request adds that set's prohibited marker as
+``control.txt``: Devin Review must report a finding that carries the set's
+canary. A second adds a benign ``benign.txt``: the canary must not appear.
 
 Every control is read from GitHub: fixture bytes, the exact files each pull
 request changes, a Devin Review review bound to each exact head commit, and
@@ -32,10 +34,21 @@ from adapters.devin.ui_conformance import (  # noqa: E402
 )
 
 FIXTURE = Path(__file__).resolve().parent / "review-fixture"
-REVIEW_CANARY = "CONTEXTOS_DEVIN_REVIEW_CANARY_63F0A2D8"
-MARKER = "CONTEXTOS_DEVIN_REVIEW_PROHIBITED_MARKER"
 REVIEW_BOT = "devin-ai-integration[bot]"
-BASE_FILES = {"README.md", "REVIEW.md"}
+CONTROL_SETS = {
+    "REVIEW.md": {
+        "fixture": "REVIEW.md.fixture",
+        "control": "control.txt",
+        "canary": "CONTEXTOS_DEVIN_REVIEW_CANARY_63F0A2D8",
+        "marker": "CONTEXTOS_DEVIN_REVIEW_PROHIBITED_MARKER",
+    },
+    "AGENTS.md": {
+        "fixture": "AGENTS.md.fixture",
+        "control": "agents-control.txt",
+        "canary": "CONTEXTOS_DEVIN_AGENTS_CANARY_E6DF38BF",
+        "marker": "CONTEXTOS_DEVIN_AGENTS_PROHIBITED_MARKER",
+    },
+}
 
 
 def sha256(data: bytes) -> str:
@@ -43,7 +56,13 @@ def sha256(data: bytes) -> str:
 
 
 class ReviewFixture:
-    def __init__(self, repository: str, base_sha: str, *, transport: Transport = default_transport) -> None:
+    def __init__(
+        self, repository: str, base_sha: str, instruction_file: str, *,
+        transport: Transport = default_transport,
+    ) -> None:
+        if instruction_file not in CONTROL_SETS:
+            raise HarnessError(f"--instruction-file must be one of {sorted(CONTROL_SETS)}")
+        self.instruction_file, self.controls = instruction_file, CONTROL_SETS[instruction_file]
         if not REPO_RE.fullmatch(repository):
             raise HarnessError("--repository must be an exact owner/name path")
         if not SHA_RE.fullmatch(base_sha):
@@ -64,12 +83,13 @@ class ReviewFixture:
         if not isinstance(tree, dict) or tree.get("truncated") is not False:
             raise HarnessError("GitHub did not return the complete base tree")
         paths = {item["path"] for item in tree.get("tree", []) if item.get("type") == "blob"}
-        if paths != BASE_FILES:
-            raise HarnessError(f"base commit must hold exactly {sorted(BASE_FILES)}, found {sorted(paths)}")
-        review = self.blob("REVIEW.md", self.base_sha)
-        if review != (FIXTURE / "REVIEW.md.fixture").read_bytes():
-            raise HarnessError("base REVIEW.md differs from the checked-in fixture source")
-        return {"REVIEW.md": sha256(review)}
+        expected = {"README.md", self.instruction_file}
+        if paths != expected:
+            raise HarnessError(f"base commit must hold exactly {sorted(expected)}, found {sorted(paths)}")
+        instructions = self.blob(self.instruction_file, self.base_sha)
+        if instructions != (FIXTURE / self.controls["fixture"]).read_bytes():
+            raise HarnessError(f"base {self.instruction_file} differs from the checked-in fixture source")
+        return {self.instruction_file: sha256(instructions)}
 
     def verify_pull(self, number: int, *, filename: str, expected: bytes) -> dict[str, object]:
         pull = self.get(f"/pulls/{number}")
@@ -99,7 +119,7 @@ class ReviewFixture:
         body = str(latest.get("body", ""))
         return {"review_id": latest.get("id"), "commit_id": head, "state": latest.get("state"),
                 "submitted_at": latest.get("submitted_at"), "body_sha256": sha256(body.encode("utf-8")),
-                "body_has_canary": REVIEW_CANARY in body,
+                "body_has_canary": self.controls["canary"] in body,
                 "summary_line": body.splitlines()[0][:120] if body else ""}
 
 
@@ -120,7 +140,7 @@ def devin_comments(fixture: ReviewFixture, number: int, head: str) -> list[dict[
                 meta = {}
         found.append({"id": comment.get("id"), "commit_id": comment.get("commit_id"),
                       "path": comment.get("path"), "line": comment.get("line"),
-                      "has_canary": REVIEW_CANARY in body, "user_posted": meta.get("user_posted"),
+                      "has_canary": fixture.controls["canary"] in body, "user_posted": meta.get("user_posted"),
                       "kind": meta.get("kind"), "body_sha256": sha256(body.encode("utf-8")),
                       "bound_to_head": comment.get("commit_id") == head})
     return found
@@ -130,13 +150,14 @@ def record(args: argparse.Namespace, *, transport: Transport = default_transport
     if not args.allow_public_fixture_access:
         raise HarnessError("record requires --allow-public-fixture-access")
     source_sha = repository_source_sha()
-    fixture = ReviewFixture(args.repository, args.base_sha, transport=transport)
+    fixture = ReviewFixture(args.repository, args.base_sha, args.instruction_file, transport=transport)
+    canary, marker = fixture.controls["canary"], fixture.controls["marker"]
     base = fixture.verify_base()
     must_fire = fixture.verify_pull(args.must_fire_pr, filename="control.txt",
-                                    expected=(FIXTURE / "control.txt").read_bytes())
+                                    expected=(FIXTURE / fixture.controls["control"]).read_bytes())
     benign_head = fixture.get(f"/pulls/{args.must_not_fire_pr}")["head"]["sha"]
     benign_bytes = fixture.blob("benign.txt", benign_head)
-    if MARKER.encode() in benign_bytes or REVIEW_CANARY.encode() in benign_bytes:
+    if marker.encode() in benign_bytes or canary.encode() in benign_bytes:
         raise HarnessError("the must-not-fire control file contains the marker or canary")
     must_not_fire = fixture.verify_pull(args.must_not_fire_pr, filename="benign.txt", expected=benign_bytes)
     fire_review = fixture.devin_review(must_fire["number"], must_fire["head_sha"])
@@ -160,6 +181,7 @@ def record(args: argparse.Namespace, *, transport: Transport = default_transport
         "source_sha": source_sha,
         "repository": args.repository,
         "base_sha": args.base_sha,
+        "instruction_file": args.instruction_file,
         "base_file_sha256": base,
         "must_fire": {**must_fire, "review": fire_review, "findings": fire_comments},
         "must_not_fire": {**must_not_fire, "review": quiet_review, "findings": quiet_comments},
@@ -187,6 +209,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--repository", required=True)
     parser.add_argument("--base-sha", required=True)
+    parser.add_argument("--instruction-file", required=True, choices=sorted(CONTROL_SETS))
     parser.add_argument("--must-fire-pr", type=int, required=True)
     parser.add_argument("--must-not-fire-pr", type=int, required=True)
     parser.add_argument("--evidence", required=True, type=Path)
