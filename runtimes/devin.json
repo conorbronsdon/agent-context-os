@@ -2,27 +2,123 @@
   "schema_version": 2,
   "runtime": "devin",
   "display_name": "Devin",
-  "support_tier": "experimental",
-  "support_summary": "Experimental cloud-session lifecycle through repository AGENTS.md and Agent Skills, with Devin Review and all account-managed state kept separate",
-  "components": ["core", "portable-skills", "agents-instructions", "devin-adapter"],
+  "support_tier": "first-class",
+  "support_summary": "First-class Devin CLI lifecycle and handoff with exact-version evidence and an import guard; cloud sessions remain experimental and Devin Review is instruction-only compatibility",
+  "components": [
+    "core",
+    "portable-skills",
+    "agents-instructions",
+    "devin-adapter"
+  ],
   "install": {
-    "mode": "managed-account",
+    "mode": "native-project-discovery",
     "next_steps": [
-      "Connect and authorize the repository in Devin; local Context OS registration does not prove account access.",
-      "Verify the active Blueprint build and snapshot in Devin Settings, then start a fresh cloud session for this repository.",
-      "Invoke @skills:context-setup, @skills:context-start, @skills:context-update, or @skills:context-end explicitly and review every proposal before apply."
+      "Install Devin CLI separately, run devin auth login, start devin from this repository root, and record devin version.",
+      "Keep the shipped .devin/config.json so Devin loads AGENTS.md and .agents/skills without importing Claude, Cursor, Windsurf, Copilot, OpenCode, or Zed configuration.",
+      "Invoke /context-setup, /context-start, /context-update, and /context-end explicitly in Normal mode and approve apply only for the exact proposal digest you reviewed.",
+      "For cloud sessions, connect and authorize the repository in Devin and verify the Blueprint build and snapshot; local registration does not prove account access."
     ]
   },
   "onboarding_doc": "adapters/devin/README.md",
   "surfaces": {
+    "cli": {
+      "kind": "cli",
+      "support_tier": "first-class",
+      "instruction_sources": [
+        {
+          "scope": "repository",
+          "role": "canonical",
+          "path": "AGENTS.md",
+          "precedence": 100
+        }
+      ],
+      "skill_sources": [
+        {
+          "scope": "repository",
+          "role": "skills",
+          "path": ".agents/skills",
+          "precedence": 100
+        }
+      ],
+      "invocation": {
+        "setup": "/context-setup",
+        "start": "/context-start",
+        "update": "/context-update",
+        "end": "/context-end"
+      },
+      "capabilities": {
+        "agent_skills": "native",
+        "explicit_invocation": "native",
+        "project_hooks": "native",
+        "blocking_pre_tool_hook": "native",
+        "mcp": "native",
+        "native_memory": "unsupported",
+        "proposal_apply": "adapter",
+        "skill_allowlists": "native",
+        "execution_authorization": "native"
+      },
+      "hook_output": "additional-context",
+      "binary_probes": [
+        {
+          "purpose": "availability",
+          "candidates": [
+            "devin"
+          ]
+        },
+        {
+          "purpose": "version",
+          "candidates": [
+            "devin"
+          ]
+        }
+      ],
+      "conformance_tests": [
+        "tests/test_devin_conformance.py",
+        "tests/test_devin_cli_harness.py",
+        "tests/test_contextos_kernel.py",
+        "adapters/devin/cli_conformance.py",
+        "adapters/devin/cli_lifecycle_conformance.py",
+        "adapters/devin/cli_hook_conformance.py",
+        "tests/test_devin_cli_hook_harness.py",
+        "docs/evidence/devin-cli-2026-10-06/README.md"
+      ],
+      "evidence": [
+        "devin-cli-rules",
+        "devin-cli-read-config",
+        "devin-cli-skills",
+        "devin-cli-commands",
+        "devin-cli-permissions",
+        "devin-cli-mcp",
+        "devin-cli-hooks",
+        "devin-cli-lifecycle-hooks",
+        "devin-cli-skill-frontmatter",
+        "devin-kernel",
+        "devin-conformance",
+        "devin-cli-host-harness",
+        "devin-cli-lifecycle-harness",
+        "devin-cli-hook-harness",
+        "devin-cli-hook-evidence",
+        "devin-cli-live-evidence"
+      ]
+    },
     "session": {
       "kind": "cloud",
       "support_tier": "experimental",
       "instruction_sources": [
-        {"scope": "repository", "role": "canonical", "path": "AGENTS.md", "precedence": 100}
+        {
+          "scope": "repository",
+          "role": "canonical",
+          "path": "AGENTS.md",
+          "precedence": 100
+        }
       ],
       "skill_sources": [
-        {"scope": "repository", "role": "skills", "path": ".agents/skills", "precedence": 100}
+        {
+          "scope": "repository",
+          "role": "skills",
+          "path": ".agents/skills",
+          "precedence": 100
+        }
       ],
       "invocation": {
         "setup": "@skills:context-setup",
@@ -66,10 +162,20 @@
       "kind": "review",
       "support_tier": "compatibility",
       "instruction_sources": [
-        {"scope": "repository", "role": "canonical", "path": "AGENTS.md", "precedence": 100}
+        {
+          "scope": "repository",
+          "role": "canonical",
+          "path": "AGENTS.md",
+          "precedence": 100
+        }
       ],
       "skill_sources": [],
-      "invocation": {"setup": null, "start": null, "update": null, "end": null},
+      "invocation": {
+        "setup": null,
+        "start": null,
+        "update": null,
+        "end": null
+      },
       "capabilities": {
         "agent_skills": "unsupported",
         "explicit_invocation": "unsupported",
@@ -83,79 +189,240 @@
       },
       "hook_output": null,
       "binary_probes": [],
-      "conformance_tests": ["tests/test_devin_conformance.py"],
-      "evidence": ["devin-review", "devin-conformance"]
+      "conformance_tests": [
+        "tests/test_devin_conformance.py"
+      ],
+      "evidence": [
+        "devin-review",
+        "devin-conformance"
+      ]
     }
   },
   "evidence": {
-    "checked_on": "2026-09-01",
-    "tested_versions": [],
+    "checked_on": "2026-10-06",
+    "tested_versions": [
+      {
+        "surface": "cli",
+        "version": "3000.11.3 (9c803229faa4)"
+      }
+    ],
     "sources": [
+      {
+        "id": "devin-cli-rules",
+        "type": "official",
+        "location": "https://docs.devin.ai/cli/extensibility/rules",
+        "claims": [
+          "instruction_sources"
+        ]
+      },
+      {
+        "id": "devin-cli-read-config",
+        "type": "official",
+        "location": "https://docs.devin.ai/cli/reference/configuration/read-config-from",
+        "claims": [
+          "instruction_sources",
+          "support"
+        ]
+      },
+      {
+        "id": "devin-cli-skills",
+        "type": "official",
+        "location": "https://docs.devin.ai/cli/extensibility/skills/overview",
+        "claims": [
+          "agent_skills",
+          "explicit_invocation",
+          "skill_sources",
+          "invocation"
+        ]
+      },
+      {
+        "id": "devin-cli-commands",
+        "type": "official",
+        "location": "https://docs.devin.ai/cli/reference/commands",
+        "claims": [
+          "invocation",
+          "support"
+        ]
+      },
+      {
+        "id": "devin-cli-permissions",
+        "type": "official",
+        "location": "https://docs.devin.ai/cli/reference/permissions",
+        "claims": [
+          "execution_authorization"
+        ]
+      },
+      {
+        "id": "devin-cli-mcp",
+        "type": "official",
+        "location": "https://docs.devin.ai/cli/extensibility/mcp/configuration",
+        "claims": [
+          "mcp"
+        ]
+      },
+      {
+        "id": "devin-cli-hooks",
+        "type": "official",
+        "location": "https://docs.devin.ai/cli/extensibility/hooks/overview",
+        "claims": [
+          "project_hooks",
+          "blocking_pre_tool_hook",
+          "hook_output"
+        ]
+      },
+      {
+        "id": "devin-cli-lifecycle-hooks",
+        "type": "official",
+        "location": "https://docs.devin.ai/cli/extensibility/hooks/lifecycle-hooks",
+        "claims": [
+          "project_hooks",
+          "blocking_pre_tool_hook",
+          "hook_output"
+        ]
+      },
+      {
+        "id": "devin-cli-skill-frontmatter",
+        "type": "official",
+        "location": "https://docs.devin.ai/cli/extensibility/skills/creating-skills",
+        "claims": [
+          "skill_allowlists"
+        ]
+      },
+      {
+        "id": "devin-cli-host-harness",
+        "type": "conformance",
+        "location": "adapters/devin/cli_conformance.py",
+        "claims": [
+          "support"
+        ]
+      },
+      {
+        "id": "devin-cli-lifecycle-harness",
+        "type": "conformance",
+        "location": "adapters/devin/cli_lifecycle_conformance.py",
+        "claims": [
+          "support",
+          "proposal_apply"
+        ]
+      },
+      {
+        "id": "devin-cli-hook-harness",
+        "type": "conformance",
+        "location": "adapters/devin/cli_hook_conformance.py",
+        "claims": [
+          "support"
+        ]
+      },
+      {
+        "id": "devin-cli-hook-evidence",
+        "type": "conformance",
+        "location": "docs/evidence/devin-cli-2026-10-07/README.md",
+        "claims": [
+          "project_hooks",
+          "blocking_pre_tool_hook",
+          "skill_allowlists",
+          "hook_output"
+        ]
+      },
+      {
+        "id": "devin-cli-live-evidence",
+        "type": "conformance",
+        "location": "docs/evidence/devin-cli-2026-10-06/README.md",
+        "claims": [
+          "support"
+        ]
+      },
       {
         "id": "devin-agents",
         "type": "official",
         "location": "https://docs.devin.ai/onboard-devin/agents-md",
-        "claims": ["instruction_sources"]
+        "claims": [
+          "instruction_sources"
+        ]
       },
       {
         "id": "devin-skills",
         "type": "official",
         "location": "https://docs.devin.ai/product-guides/skills",
-        "claims": ["agent_skills", "explicit_invocation", "skill_sources", "invocation"]
+        "claims": [
+          "agent_skills",
+          "explicit_invocation",
+          "skill_sources",
+          "invocation"
+        ]
       },
       {
         "id": "devin-review",
         "type": "official",
         "location": "https://docs.devin.ai/work-with-devin/devin-review",
-        "claims": ["instruction_sources", "support"]
+        "claims": [
+          "instruction_sources",
+          "support"
+        ]
       },
       {
         "id": "devin-api-auth",
         "type": "official",
         "location": "https://docs.devin.ai/api-reference/authentication",
-        "claims": ["support"]
+        "claims": [
+          "support"
+        ]
       },
       {
         "id": "devin-api-sessions",
         "type": "official",
         "location": "https://docs.devin.ai/api-reference/v3/sessions/post-organizations-sessions-archive",
-        "claims": ["support"]
+        "claims": [
+          "support"
+        ]
       },
       {
         "id": "devin-api-overview",
         "type": "official",
         "location": "https://docs.devin.ai/api-reference/overview",
-        "claims": ["support"]
+        "claims": [
+          "support"
+        ]
       },
       {
         "id": "devin-api-release-notes",
         "type": "official",
         "location": "https://docs.devin.ai/api-reference/release-notes",
-        "claims": ["support"]
+        "claims": [
+          "support"
+        ]
       },
       {
         "id": "devin-kernel",
         "type": "conformance",
         "location": "tests/test_contextos_kernel.py",
-        "claims": ["proposal_apply"]
+        "claims": [
+          "proposal_apply"
+        ]
       },
       {
         "id": "devin-conformance",
         "type": "conformance",
         "location": "tests/test_devin_conformance.py",
-        "claims": ["support"]
+        "claims": [
+          "support"
+        ]
       },
       {
         "id": "devin-live-harness",
         "type": "conformance",
         "location": "adapters/devin/live_conformance.py",
-        "claims": ["support"]
+        "claims": [
+          "support"
+        ]
       },
       {
         "id": "devin-ui-harness",
         "type": "conformance",
         "location": "adapters/devin/ui_conformance.py",
-        "claims": ["support"]
+        "claims": [
+          "support"
+        ]
       }
     ]
   }

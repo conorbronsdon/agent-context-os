@@ -593,14 +593,13 @@ if grep -Eq '(^|[[:space:]])exec[[:space:]]+(cursor|agent)([[:space:]]|$)' <<<"$
 fi
 devin_setup_case=$(sed -n '/^  devin)/,/^    ;;/p' scripts/setup.sh)
 test -n "$devin_setup_case" \
-  || fail "Devin setup case could not be inspected for managed-account behavior"
-grep -Fq 'Setup records tracked intent only' <<<"$devin_setup_case" \
-  || fail "Devin setup omits the managed-account boundary"
-if grep -Fq 'contextos install' <<<"$devin_setup_case"; then
-  fail "Devin setup case locally installs a managed-account runtime"
-fi
+  || fail "Devin setup case could not be inspected for launch behavior"
+grep -Fq 'Setup does not launch or authenticate Devin or verify any account state' <<<"$devin_setup_case" \
+  || fail "Devin setup omits the launch and managed-account boundary"
+grep -Fq 'Keep .devin/config.json' <<<"$devin_setup_case" \
+  || fail "Devin setup omits the CLI import guard"
 if grep -Eq '(^|[[:space:]])exec[[:space:]]+devin([[:space:]]|$)' <<<"$devin_setup_case"; then
-  fail "setup launches an unverified Devin account surface"
+  fail "setup launches Devin"
 fi
 if bash scripts/setup.sh --agent invalid >/dev/null 2>&1; then
   fail "setup accepted an invalid agent"
@@ -808,7 +807,7 @@ assert b'Test Name' in content and b'[Your Name]' not in content, content
 assert b'\r' not in content, content
 PY
 
-devin_fixture="$portability_tmp/devin-managed-account-selection"
+devin_fixture="$portability_tmp/devin-cli-selection"
 make_setup_fixture "$devin_fixture"
 devin_output=$(printf 'y\n\nn\nn\nn\ny\nn\n' | (
   cd "$devin_fixture" &&
@@ -822,11 +821,12 @@ import sys
 config = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 assert config["agents"] == ["devin"], config["agents"]
 hosts_path = Path(sys.argv[1]).parent / ".context-os" / "hosts.json"
-if hosts_path.exists():
-    assert "devin" not in json.loads(hosts_path.read_text(encoding="utf-8"))["hosts"]
+assert "devin" in json.loads(hosts_path.read_text(encoding="utf-8"))["hosts"]
 PY
-grep -Fq 'remote onboarding remains unverified: devin' <<<"$devin_output" \
-  || fail "managed-account setup implied that Devin was locally configured"
+grep -Fq 'Registered selected runtimes on this host: devin' <<<"$devin_output" \
+  || fail "Devin CLI setup did not register the local runtime"
+grep -Fq 'remote onboarding remains unverified' <<<"$devin_output" \
+  && fail "Devin CLI setup reported a managed-account runtime"
 
 # Subset and none reruns are no-ops; a disjoint selection expands the set.
 subset_output=$(printf 'y\n\nn\nn\nn\n' | (

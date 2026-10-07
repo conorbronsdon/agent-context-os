@@ -205,6 +205,61 @@ class CrossRuntimeHookTest(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertIn("proposal/apply", json.loads(result.stdout)["systemMessage"])
 
+    def run_devin_hook(self, event: str, payload: dict) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(WRAPPER), "devin", event, "cli"],
+            cwd=ROOT,
+            input=json.dumps(payload),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    def test_devin_post_write_must_fire_control(self) -> None:
+        for tool, tool_input in (
+            ("edit", {"file_path": str(ROOT / "state/current.md")}),
+            ("write", {"file_path": "state/blockers.md"}),
+            ("apply_patch", {"patch": "*** Begin Patch\n*** Update File: state/current.md\n*** End Patch"}),
+        ):
+            with self.subTest(tool=tool):
+                result = self.run_devin_hook(
+                    "post-write",
+                    {"hook_event_name": "PostToolUse", "tool_name": tool, "tool_input": tool_input},
+                )
+                self.assertEqual(0, result.returncode, result.stderr)
+                output = json.loads(result.stdout)["hookSpecificOutput"]
+                self.assertEqual("PostToolUse", output["hookEventName"])
+                self.assertIn("proposal/apply", output["additionalContext"])
+                self.assertNotIn("decision", json.loads(result.stdout))
+
+    def test_devin_pre_write_renders_its_own_event_name(self) -> None:
+        result = self.run_devin_hook(
+            "pre-write",
+            {"hook_event_name": "PreToolUse", "tool_name": "edit",
+             "tool_input": {"file_path": str(ROOT / "state/current.md")}},
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("PreToolUse", json.loads(result.stdout)["hookSpecificOutput"]["hookEventName"])
+
+    def test_devin_post_write_must_not_fire_control(self) -> None:
+        result = self.run_devin_hook(
+            "post-write",
+            {"hook_event_name": "PostToolUse", "tool_name": "edit",
+             "tool_input": {"file_path": str(ROOT / "README.md")}},
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("", result.stdout)
+
+    def test_devin_malformed_input_is_visible_and_never_blocks(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(WRAPPER), "devin", "post-write", "cli"],
+            cwd=ROOT, input="not-json", text=True, capture_output=True, check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        output = json.loads(result.stdout)
+        self.assertNotIn("decision", output)
+        self.assertIn("could not run", output["hookSpecificOutput"]["additionalContext"])
+
     def test_hermes_adapter_allows_with_advisory(self) -> None:
         result = self.run_hook(
             "hermes", "pre-write", {"args": {"path": str(ROOT / "state/decisions.md")}}

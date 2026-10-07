@@ -21,7 +21,8 @@ TOP_LEVEL_KEYS = {
 COMPONENT_KEYS = {"id", "description", "depends_on", "paths"}
 PATH_KEYS = {"path", "policy"}
 RESERVED_OWNERSHIP_PATHS = {
-    ".claude/settings.local.json", "repo_map.md", ".env", ".env.local",
+    ".claude/settings.local.json", ".devin/config.local.json", "repo_map.md",
+    ".env", ".env.local",
 }
 RESERVED_OWNERSHIP_ROOTS = {
     ".git", ".context-os", "__pycache__", ".vscode", ".idea", ".appledouble",

@@ -3,6 +3,36 @@
 ## [Unreleased]
 
 ### Added
+- Devin CLI ships `.devin/hooks.v1.json`. The import guard disables Devin's
+  `.claude/` hook import, so these hooks restore the lifecycle advisories:
+  `SessionStart` and a `PostToolUse` hook on `edit`, `write`, `apply_patch`,
+  and `notebook_edit`. Both run `scripts/context-os-hook.sh devin` and return
+  Devin's `hookSpecificOutput.additionalContext`, a new `additional-context`
+  hook output mode. Devin does not inject `PreToolUse` context, so the write
+  reminder uses a new `post-write` hook event and arrives after the tool runs. They never block. The CLI surface now claims
+  `project_hooks`, `blocking_pre_tool_hook`, and `skill_allowlists`.
+  `adapters/devin/cli_hook_conformance.py` is a new opt-in live harness. It
+  checks that Devin runs the shipped hooks, that their advisories reach the
+  model, and that a synthetic probe hook can block a write. It also checks that
+  a skill's `allowed-tools` auto-approves a shell command that Normal mode
+  otherwise rejects. Live hook (`24e77a3`) and lifecycle (`f36d2c2`) runs
+  (`docs/evidence/devin-cli-2026-10-07/`) back those claims and replace the
+  stale lifecycle evidence. Lifecycle setup now also writes a dated
+  `state/current.md`, so the shipped SessionStart hook sees an initialized
+  workspace at handoff.
+- Devin CLI is a first-class lifecycle host (#71), scoped to `3000.11.3` on
+  Linux (WSL2). A shipped `.devin/config.json` stops Devin importing Claude,
+  Cursor, Windsurf, Copilot, OpenCode, and Zed configuration, which otherwise
+  loads the `CLAUDE.md` seed and user-level `~/.claude/CLAUDE.md` beside
+  `AGENTS.md`. New host and lifecycle harnesses read Devin's ATIF session
+  export; live runs passed instruction injection, the import guard and its
+  positive control, explicit and implicit skill controls, Normal-mode
+  authorization, setup/start/update/end with exact-digest operator apply, and
+  fresh-session handoff. The guide records observed permission limits: Accept
+  Edits ignores project write denies, Bypass ignores project denies, and broad
+  user or local allows override a project deny. Cloud sessions stay
+  experimental and Review stays compatibility-only; native Windows is untested
+  because Devin there reads the real profile's `~/.claude` regardless of `HOME`.
 - Read-only briefings expose source IDs, raw and normalized revisions, and
   optional prior-revision comparisons without expanding the selected read set.
   `start --expect-source-revision` exits 1 when any expected revision is

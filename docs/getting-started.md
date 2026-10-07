@@ -7,7 +7,7 @@ its lifecycle kernel and host adapters; existing workspaces keep using this path
 
 Context OS can begin with a blank interview or selected context from another
 assistant. The result is a small, reviewable repository that Claude Code,
-Codex, OpenClaw, OpenCode, Cursor CLI, and Hermes Agent, plus the experimental Cursor IDE and Devin adapters,
+Codex, OpenClaw, OpenCode, Cursor CLI, Devin CLI, and Hermes Agent, plus the experimental Cursor IDE and Devin cloud-session adapters,
 can use as shared state.
 
 For one guided example before importing your own context, try
@@ -17,7 +17,7 @@ For one guided example before importing your own context, try
 ## Before you clone
 
 You need Git, Bash, and Python 3.10 or newer. Local hosts include Claude Code,
-Codex, OpenClaw, OpenCode, Cursor CLI, Hermes Agent, and the experimental Cursor IDE adapter; verify Devin's
+Codex, OpenClaw, OpenCode, Cursor CLI, Devin CLI, Hermes Agent, and the experimental Cursor IDE adapter; verify Devin's
 managed cloud path separately in its account UI. claude.ai cannot maintain a
 local checkout directly.
 
@@ -72,8 +72,8 @@ Setup shows the exact tracked workspace diff and proposal digest, then defaults
 the apply decision to no. An approved selection is additive: rerunning with a
 subset or `none` preserves the existing set, while a new runtime expands it.
 Selected local runtimes are also registered in the gitignored local host map.
-Managed-account runtimes such as Devin record tracked intent without claiming
-the remote account is configured. Omit
+Registration never claims a remote account is configured; Devin cloud sessions
+still need the account checks in its adapter guide. Omit
 the option, or use `--agents auto`, to auto-detect local launch instructions
 without changing tracked intent. `--agent` remains a deprecated singleton
 alias. See [workspace configuration](workspace-configuration.md) for the full
@@ -145,10 +145,12 @@ Cursor has separate IDE and Agent CLI permission surfaces. Follow its
 [CLI and experimental IDE guide](../adapters/cursor/README.md); setup registers the
 runtime but launches neither surface and changes no Cursor authorization setting.
 
-For Devin, follow the [experimental managed-account guide](../adapters/devin/README.md),
-verify repository access and the active environment in Devin, then start a fresh
-cloud session and invoke `@skills:context-setup`. Local setup does not authenticate,
-launch, or verify Devin, and Devin Review is not a lifecycle surface.
+For Devin CLI, follow the [Devin guide](../adapters/devin/README.md): keep the shipped
+`.devin/config.json` import guard, start `devin` from the repository root in Normal
+mode, and invoke `/context-setup`. For an experimental cloud session, verify
+repository access and the active environment in Devin first, then invoke
+`@skills:context-setup`. Local setup does not authenticate, launch, or verify
+Devin, and Devin Review is not a lifecycle surface.
 
 ### Bring existing context
 
@@ -189,11 +191,11 @@ Commit and push only after the diff matches what you intend to preserve.
 
 ## Run the daily loop
 
-| Moment | Claude Code | Codex | OpenCode | Hermes | OpenClaw | Cursor CLI / IDE (experimental) | Devin session (experimental) |
+| Moment | Claude Code | Codex | OpenCode | Hermes | OpenClaw | Cursor CLI / IDE (experimental) | Devin CLI / session (experimental) |
 |---|---|---|---|---|---|---|---|
-| Start work | `/start` | `$start` | `/context-start` | `/context-start` | `/contextos <alias> start` | `/context-start` | `@skills:context-start` |
-| Save progress without closing | `/update` | `$update` | `/context-update` | `/context-update` | `/contextos <alias> update` | `/context-update` | `@skills:context-update` |
-| End with a reviewed handoff | `/end` | `$end` | `/context-end` | `/context-end` | `/contextos <alias> end` | `/context-end` | `@skills:context-end` |
+| Start work | `/start` | `$start` | `/context-start` | `/context-start` | `/contextos <alias> start` | `/context-start` | `/context-start` / `@skills:context-start` |
+| Save progress without closing | `/update` | `$update` | `/context-update` | `/context-update` | `/contextos <alias> update` | `/context-update` | `/context-update` / `@skills:context-update` |
+| End with a reviewed handoff | `/end` | `$end` | `/context-end` | `/context-end` | `/contextos <alias> end` | `/context-end` | `/context-end` / `@skills:context-end` |
 
 The lifecycle kernel writes shared continuity to `state/` and `sessions/` only
 after exact-proposal approval, then emits a local receipt. Each host retains

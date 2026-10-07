@@ -1,0 +1,95 @@
+{
+  "runtime": "devin",
+  "surface": "cli",
+  "harness": "hooks-and-skill-allowlists",
+  "os": "Linux-6.8.0-1061-aws-x86_64-with-glibc2.35",
+  "started_at": "2026-10-07T07:44:47.490520+00:00",
+  "finished_at": "2026-10-07T07:45:57.245486+00:00",
+  "model_selection": "swe-2-high",
+  "permission_mode": "Normal (default)",
+  "shipped_hooks_sha256": "e94b075afd40c10e02e266a3e619ac1cb35507b72c3dbc505b39e3869ce4a70a",
+  "host": {
+    "expected_version": "3000.11.3",
+    "source_sha": "359995e7fd9cb3b04c8f4c068cce56719b91c55c",
+    "binary_version": "devin 3000.11.3 (9c803229faa4)",
+    "binary_sha256": "5a8649d9c4e6dcb7a0b223b6043a0af9256dc0d44d7c980b7d47caec275443ab",
+    "shipped_project_config_sha256": "8e771c895b4b468c957764607d1b9b360d52ebf28331c601e44dec39aacfc60a",
+    "workspace_cleanup": "removed",
+    "commands": [
+      {
+        "command": "devin",
+        "argv_sha256": "f5842bdd6957a42f0bc458874c6d2b331b3e0afedd69bc6fd02f4a736038fd57",
+        "returncode": 0,
+        "stdout_sha256": "0baf682aea5c8329e108e376517722f310ee92a40b19d8915f191c9dd4254d3d",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "version"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "dd64e2a0e8970578d0fbbc1c1f436c0b02ddf05c8356d1e65a4d1f0ddce64aa9",
+        "returncode": 0,
+        "stdout_sha256": "eaa162a8541c9f4575f849a6db4daf9257f424a3d3a42970169560ec6f92b8e8",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "auth"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "295e4d7dbb41b768b78d753eb123d35e3876df4996c18c5201a6b64f4fcf7a11",
+        "returncode": 0,
+        "stdout_sha256": "d8d23f1d802cb38e5745b7679e7e44ea0d2ee4aa2bd6777c270c0249d706080f",
+        "stderr_sha256": "ac1cf8b170d7fbc1b100c82fe06648ab4c70567884cf3aa6c202a6400a385500",
+        "subject": "session_start_hooks_fire"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "4cbc0d5dd28a4165533c9f4dd23f2811ae10efbf4f669ee3743d971719fe25dc",
+        "returncode": 0,
+        "stdout_sha256": "55caf06e04bd25ecfcff7993b652ee391462fb81069a6a53991f86585d7900a4",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "write_hook_fires_on_lifecycle_state"
+      }
+    ],
+    "sessions": {
+      "session_start_hooks_fire": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "ae3dfbbe1ec8b37c9b27d75ce5aec74f7731efbea5909138fdf746b9ea1e1aa1",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": []
+      },
+      "write_hook_fires_on_lifecycle_state": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "90330a358045717b2a4348a5d601521aa7ee2257606be0e08fbd81761808f52d",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": [
+          "write",
+          "read",
+          "grep",
+          "exec",
+          "find_file_by_name",
+          "read"
+        ]
+      },
+      "failure": {
+        "type": "HarnessError"
+      }
+    },
+    "controls": {
+      "preflight": "passed",
+      "session_start_hooks_fire": "passed",
+      "write_hook_fires_on_lifecycle_state": "failed",
+      "run": "failed"
+    },
+    "observations": {}
+  },
+  "limits": [
+    "Synthetic fixture only; scoped to the recorded client, model, and operating system.",
+    "Shipped hooks are advisory; the blocking control uses a synthetic local probe.",
+    "No MCP execution, cloud handoff, native-memory, or native Windows claim."
+  ]
+}

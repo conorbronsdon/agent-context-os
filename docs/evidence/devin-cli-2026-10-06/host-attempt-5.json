@@ -1,0 +1,204 @@
+{
+  "runtime": "devin",
+  "surface": "cli",
+  "harness": "host-controls",
+  "os": "Linux-6.18.40.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "started_at": "2026-10-07T01:22:57.345697+00:00",
+  "finished_at": "2026-10-07T01:23:52.014534+00:00",
+  "model_selection": "Devin CLI default",
+  "host": {
+    "expected_version": "3000.11.3",
+    "source_sha": "112123aaa108bbbbd2bf079de523e5426d62c8e5",
+    "binary_version": "devin 3000.11.3 (9c803229faa4)",
+    "binary_sha256": "5a8649d9c4e6dcb7a0b223b6043a0af9256dc0d44d7c980b7d47caec275443ab",
+    "shipped_project_config_sha256": "c9908a9311494265a753231250c2daed0530e774a6fd16c65007320b9c734843",
+    "workspace_cleanup": "removed",
+    "commands": [
+      {
+        "command": "devin",
+        "argv_sha256": "fe570b4ea676e01c90c36a78613218876e1160516444693fc52792ead964d434",
+        "returncode": 0,
+        "stdout_sha256": "0baf682aea5c8329e108e376517722f310ee92a40b19d8915f191c9dd4254d3d",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "version"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "7dc56447bfade972dbb322644e7054a014e4d912ad91b29439aa58b2898bd97d",
+        "returncode": 0,
+        "stdout_sha256": "aa4fdcff97e51be71b89275d3dcde29ae1d2d99344a79d9c503681ae3a16f600",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "auth"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "32ce1579571bee56ac7fc4549cd34122673e07aca35326c2b479c3494222daa3",
+        "returncode": 0,
+        "stdout_sha256": "c00d67a32b9efbc7f1b3f687207afc5a5d31e52c380fa231e5e7ed1e0fe913ae",
+        "stderr_sha256": "c8b8e60abd180ff6f2f619a20ec75fdca88f52ed2da9ab1df7cb1780f5efbe57",
+        "subject": "positive_import_control"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "410a404f4e35244c6e28d16bc1292f38398584ae5d619edf8a531beaefafe968",
+        "returncode": 0,
+        "stdout_sha256": "cb5333403d2a339bf6b45b2d8f156cd5f30675e82bfa7c33589fe67c604790f3",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "root_instruction_and_import_guard"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "df1fd348c35e94bf943fe997fa388cbddef2259ac388d3920313c97f0cd554ba",
+        "returncode": 0,
+        "stdout_sha256": "17070dd2f693c02b891d22bc89ab5bb67ab6fbcf99d303b95ee4078c76bab339",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "explicit_skill_must_fire"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "f2813a57f4ebfc869ddb197f8df26b1c276596bd5d2e2657005df7e4cf5d7b3c",
+        "returncode": 0,
+        "stdout_sha256": "0bbc73876be58c9c5bc633f05790ca88420591bc74fe3cf7626ace93b9e6d42e",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "implicit_skill_must_not_fire"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "f2523e3ee27c3371ad9f5d8bde5f722e599df264935ba85d99128ebd2f8e4ef5",
+        "returncode": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e28cbac8ef22e2fb12d1af7c513a9d985efd96cc6c33c8716710c890f20801eb",
+        "subject": "print_mode_rejects_unapproved_write"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "f792b60602dd7bc6a111a084c16228525de7ac1a9ae97854ae62d240a57ef94b",
+        "returncode": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "project_write_deny_beats_allow"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "99e3e86ac6ffc0bb411e9702275e6e9a1282f30e8daae45b42dbd0e8bf0f4d6a",
+        "returncode": 0,
+        "stdout_sha256": "7c3f6af09e15d38d0412afba4b36d8d76ec33d85e4c84be8ae811c493cc3f744",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "scoped_write_allowed"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "06c8a5e675cdd6a8cfeb84ce1f82d37875e8be87594e39c5b879a0f9f2ea465f",
+        "returncode": 0,
+        "stdout_sha256": "5f7c909b54828f43a49bcadc304aa3cef7837c50bd44399df3794d8c91f45042",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "shipped_apply_ask_rejected_unattended"
+      }
+    ],
+    "sessions": {
+      "positive_import_control": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "1860372dceea786f0e7f9f0a3d054a3935e57f11eb44815fdac7e8d117d3fd67",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": []
+      },
+      "root_instruction_and_import_guard": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "59bf94eab23c8105c935a083116acb8c24b79dbe9dcdecbe71e640eb5edb76db",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": []
+      },
+      "explicit_skill_must_fire": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "f107ccf27d2cc555ab4b088444a720ba9346ac354dab4c9839edcce67468ff80",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": []
+      },
+      "implicit_skill_must_not_fire": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "234fe75ff463880817857ba2ae2f500a97d779b002b5e3c9a1f89f2615ef3ed3",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": [
+          "exec"
+        ]
+      },
+      "print_mode_rejects_unapproved_write": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "b8bdfe33ef03fe3a920d2d55284d19436cd3d1d172e720cd2d8ead034e538532",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": [
+          "write"
+        ]
+      },
+      "project_write_deny_beats_allow": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "675f90a05efe90157b4db9157216d32e1d266e4d31bbf9c91650d9eea2a4e9a9",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": [
+          "write"
+        ]
+      },
+      "scoped_write_allowed": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "37d0a23e25b610bfc722bc2f5a89a429050b6930c6e3e481642fd8ad85dc78ed",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": [
+          "write"
+        ]
+      },
+      "shipped_apply_ask_rejected_unattended": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "f07a7851c2c183c932893e367c1a1651151cd1b0eb80a3973ba7c85787dfae47",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": [
+          "exec"
+        ]
+      },
+      "failure": {
+        "type": "HarnessError"
+      }
+    },
+    "controls": {
+      "preflight": "passed",
+      "positive_import_control": "passed",
+      "root_instruction_and_import_guard": "passed",
+      "explicit_skill_must_fire": "passed",
+      "implicit_skill_must_not_fire": "passed",
+      "print_mode_rejects_unapproved_write": "passed",
+      "project_write_deny_beats_allow": "passed",
+      "scoped_write_allowed": "passed",
+      "shipped_apply_ask_rejected_unattended": "failed",
+      "run": "failed"
+    },
+    "observations": {}
+  },
+  "limits": [
+    "Synthetic fixture only; scoped to the recorded client, model, and operating system.",
+    "No hook, MCP execution, sandbox, cloud handoff, or native Windows claim.",
+    "Project write rules are claimed only in Normal mode; observations record other modes."
+  ]
+}

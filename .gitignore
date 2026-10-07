@@ -15,6 +15,7 @@
 *.pem
 *.key
 .claude/settings.local.json
+.devin/config.local.json
 
 # Logs
 *.log

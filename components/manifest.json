@@ -1067,6 +1067,110 @@
                 {
                     "path": "docs/evidence/continuity-revision-2026-10-04/trials.jsonl",
                     "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-07/README.md",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-07/hooks-attempt-1.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-07/hooks-attempt-2.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-07/hooks-attempt-3.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-07/hooks-f36d2c2.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-07/hooks-24e77a3.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-07/lifecycle-attempt-1.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-07/lifecycle-f36d2c2.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/README.md",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/host-attempt-1.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/host-attempt-2.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/host-attempt-3.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/host-attempt-4.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/host-attempt-5.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/host-attempt-6.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/host-attempt-7.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/host-attempt-8.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/host-c638849.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/lifecycle-attempt-1.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/lifecycle-attempt-2.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/lifecycle-attempt-3.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/lifecycle-attempt-4.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/lifecycle-attempt-5.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/lifecycle-attempt-6.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/lifecycle-attempt-7.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/lifecycle-c638849.json",
+                    "policy": "development"
                 }
             ]
         },
@@ -1582,7 +1686,7 @@
         },
         {
             "id": "devin-adapter",
-            "description": "Experimental Devin cloud-session and Review onboarding with managed-account boundary controls.",
+            "description": "Devin CLI lifecycle host with an import-guard project config, plus experimental cloud-session and Review onboarding with managed-account boundary controls.",
             "depends_on": [
                 "core",
                 "portable-skills",
@@ -1631,6 +1735,34 @@
                 },
                 {
                     "path": "tests/test_devin_ui_harness.py",
+                    "policy": "development"
+                },
+                {
+                    "path": ".devin/config.json",
+                    "policy": "managed"
+                },
+                {
+                    "path": ".devin/hooks.v1.json",
+                    "policy": "managed"
+                },
+                {
+                    "path": "adapters/devin/cli_conformance.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "adapters/devin/cli_lifecycle_conformance.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "adapters/devin/cli_hook_conformance.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "tests/test_devin_cli_hook_harness.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_devin_cli_harness.py",
                     "policy": "development"
                 }
             ]

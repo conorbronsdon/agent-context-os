@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT))
 from contextos.kernel import (  # noqa: E402
     ContextOSError,
     hook_report,
+    render_hook_payload,
     runtime_hook_payload,
     runtime_manifest,
     runtime_surface,
@@ -24,7 +25,7 @@ from contextos.attachment import AttachmentError, resolve_root_roles  # noqa: E4
 
 def main() -> int:
     if len(sys.argv) not in (3, 4):
-        print("usage: context-os-hook.py RUNTIME session-start|pre-write [SURFACE]", file=sys.stderr)
+        print("usage: context-os-hook.py RUNTIME session-start|pre-write|post-write [SURFACE]", file=sys.stderr)
         return 2
     runtime, event = sys.argv[1:3]
     surface_id = sys.argv[3] if len(sys.argv) == 4 else None
@@ -56,7 +57,7 @@ def main() -> int:
             raise ContextOSError("hook input must be an object")
         report = hook_report(context_root, event, payload, roles=roles)
         messages = [item["message"] for item in report["findings"]]
-        rendered = runtime_hook_payload(manifest, messages, surface_id)
+        rendered = runtime_hook_payload(manifest, messages, surface_id, event)
         if rendered is not None:
             print(json.dumps(rendered))
         return 0
@@ -64,12 +65,9 @@ def main() -> int:
         # These hooks are advisory. Surface malformed input instead of silently
         # passing, but do not create a second mutation-enforcement path.
         message = f"Context OS advisory hook could not run: {exc}"
-        if hook_output is None:
-            return 0
-        if hook_output == "system-message":
-            print(json.dumps({"systemMessage": message}))
-        else:
-            print(json.dumps({"action": "allow", "message": message}))
+        rendered = render_hook_payload(hook_output, [message], event)
+        if rendered is not None:
+            print(json.dumps(rendered))
         return 0
 
 

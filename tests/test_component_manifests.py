@@ -174,7 +174,8 @@ class ComponentManifestTest(unittest.TestCase):
     def test_local_ignored_and_user_owned_paths_cannot_be_managed(self) -> None:
         for value in (
             ".context-os/runtime.json", ".git/hooks/pre-commit",
-            ".claude/settings.local.json", "REPO_MAP.md", "cache/__pycache__/x",
+            ".claude/settings.local.json", ".devin/config.local.json", "REPO_MAP.md",
+            "cache/__pycache__/x",
             "cache/result.pyc", "debug.log", "private.pem", ".VSCODE/settings.json",
             ".Context-OS/runtime.json", ".DS_Store", "secrets/.ENV.production",
             "node_modules/package/index.js", "cache/module.pyd",

@@ -1,0 +1,164 @@
+{
+  "runtime": "devin",
+  "surface": "cli",
+  "harness": "host-controls",
+  "os": "Linux-6.18.40.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "started_at": "2026-10-07T01:20:50.322782+00:00",
+  "finished_at": "2026-10-07T01:21:36.478230+00:00",
+  "model_selection": "Devin CLI default",
+  "host": {
+    "expected_version": "3000.11.3",
+    "source_sha": "e30b110b6ef56fc1e4f30303a513977563e3b766",
+    "binary_version": "devin 3000.11.3 (9c803229faa4)",
+    "binary_sha256": "5a8649d9c4e6dcb7a0b223b6043a0af9256dc0d44d7c980b7d47caec275443ab",
+    "shipped_project_config_sha256": "c9908a9311494265a753231250c2daed0530e774a6fd16c65007320b9c734843",
+    "workspace_cleanup": "removed",
+    "commands": [
+      {
+        "command": "devin",
+        "argv_sha256": "fe570b4ea676e01c90c36a78613218876e1160516444693fc52792ead964d434",
+        "returncode": 0,
+        "stdout_sha256": "0baf682aea5c8329e108e376517722f310ee92a40b19d8915f191c9dd4254d3d",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "version"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "7dc56447bfade972dbb322644e7054a014e4d912ad91b29439aa58b2898bd97d",
+        "returncode": 0,
+        "stdout_sha256": "930b3590420fea455320f5eaf985c0f5e88bfd2813be612239cdd6d56f24b83a",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "auth"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "7d5ad5bb5b092a1801701a6f1898e85181486505faf37c542f0b1221530f92c3",
+        "returncode": 0,
+        "stdout_sha256": "c00d67a32b9efbc7f1b3f687207afc5a5d31e52c380fa231e5e7ed1e0fe913ae",
+        "stderr_sha256": "7269d093e1e14e80c95c89bcd98382c2d3c13b01c125b13cc3e356f3dc956084",
+        "subject": "positive_import_control"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "b0332fa3770e32a99a80753736b9ff134eebf93f4a87803d76ce3320495a40ff",
+        "returncode": 0,
+        "stdout_sha256": "25d0277955424c2a72608a50ad553fac9ebec4fafddaeae7f6fdbe44c1d932c2",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "root_instruction_and_import_guard"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "70ed3dcf7134b32c230927f9da9be9e7eeab4bfc3428a02f2659840c013107c1",
+        "returncode": 0,
+        "stdout_sha256": "7f82e2886db0b2624ac63af562523f025d711b9a23e35060a2b56e98d4e2f8f7",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "explicit_skill_must_fire"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "fdde7b781d55e7eb8baf51d052da8ef54b1f411d3c317c9a3ee13c0505d62da3",
+        "returncode": 0,
+        "stdout_sha256": "959c00efa8d2e97ecc0b0bc683b9d6a888175bb9bb0160d767d814cae7c127be",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "implicit_skill_must_not_fire"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "355c142ebdb7155ccb076e2016012ae52c4e800f5fabf436d20598d5fec63930",
+        "returncode": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e28cbac8ef22e2fb12d1af7c513a9d985efd96cc6c33c8716710c890f20801eb",
+        "subject": "print_mode_rejects_unapproved_write"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "5a8c1f590006668b4a4853b75e6f34a5c221f1fda6cec7c0d2c1e0615910832e",
+        "returncode": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "project_write_deny_beats_allow"
+      }
+    ],
+    "sessions": {
+      "positive_import_control": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "0d3616263a00048df4a3888cf58a436c0008ec286265bfc2d974d9f34d5fc9a3",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": []
+      },
+      "root_instruction_and_import_guard": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "1576d4fbf2715147fa739f77a43c9358e4e6c0bc92c5f0ad24fe897ed1ea2b29",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": []
+      },
+      "explicit_skill_must_fire": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "cc67da2fb4a57e2aba290598c1b089d44e295911e7df9991cc6fb62d1bbb4ae6",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": []
+      },
+      "implicit_skill_must_not_fire": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "d31c548ec155f86dce2f5a27e45f874b55b4e200ea531197ac9a22919c6b1087",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": [
+          "exec"
+        ]
+      },
+      "print_mode_rejects_unapproved_write": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "2b5c695279b562081e627f184c64039abe7275324b744f24624c88d6057c3733",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": [
+          "write"
+        ]
+      },
+      "project_write_deny_beats_allow": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "1ee3bc061d9d485429f3d5dedf028fb1206356b6eb9e7906602ac05e0ea5bf0a",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": [
+          "write"
+        ]
+      },
+      "failure": {
+        "type": "HarnessError"
+      }
+    },
+    "controls": {
+      "preflight": "passed",
+      "positive_import_control": "passed",
+      "root_instruction_and_import_guard": "passed",
+      "explicit_skill_must_fire": "passed",
+      "implicit_skill_must_not_fire": "passed",
+      "print_mode_rejects_unapproved_write": "passed",
+      "project_write_deny_beats_allow": "failed",
+      "run": "failed"
+    },
+    "observations": {}
+  },
+  "limits": [
+    "Synthetic fixture only; scoped to the recorded client, model, and operating system.",
+    "No hook, MCP execution, sandbox, cloud handoff, or native Windows claim.",
+    "Project write rules are claimed only in Normal mode; observations record other modes."
+  ]
+}
