@@ -234,5 +234,67 @@ class ShippedConfigTest(unittest.TestCase):
         self.assertEqual(["devin-adapter"], owners)
 
 
+
+LIFECYCLE_PATH = ROOT / "adapters/devin/cli_lifecycle_conformance.py"
+LIFECYCLE_SPEC = importlib.util.spec_from_file_location("contextos_devin_cli_lifecycle", LIFECYCLE_PATH)
+assert LIFECYCLE_SPEC is not None and LIFECYCLE_SPEC.loader is not None
+lifecycle = importlib.util.module_from_spec(LIFECYCLE_SPEC)
+sys.modules[LIFECYCLE_SPEC.name] = lifecycle
+LIFECYCLE_SPEC.loader.exec_module(lifecycle)
+
+
+class LifecycleControlTest(unittest.TestCase):
+    def call(self, command: str):
+        return cli.ToolCall("c1", "exec", {"command": command}, ())
+
+    def test_apply_detection_covers_quoting_paths_chaining_and_module_forms(self) -> None:
+        for command in (
+            'bash scripts/contextos.sh "apply" p.json --confirm x',
+            "cd /w && bash /w/scripts/contextos.sh apply p.json --confirm x",
+            "python3 -m contextos apply p.json --confirm x",
+            "true; sh scripts/contextos.sh 'apply' p.json",
+        ):
+            with self.subTest(command=command):
+                self.assertTrue(lifecycle.is_kernel_command(self.call(command), "apply"))
+        for command in (
+            "bash scripts/contextos.sh propose update --input .context-os/inputs/apply-notes.json",
+            "bash scripts/contextos.sh start; echo apply",
+        ):
+            with self.subTest(command=command):
+                self.assertFalse(lifecycle.is_kernel_command(self.call(command), "apply"))
+        self.assertFalse(lifecycle.is_kernel_command(
+            cli.ToolCall("c1", "read", {"command": "contextos apply"}, ()), "apply"))
+
+    def test_skill_expansion_requires_the_shipped_skill_body_in_a_user_turn(self) -> None:
+        body = lifecycle.skill_body(ROOT, "start")
+        self.assertTrue(body.startswith("# Start a workspace session"))
+        expanded = cli.Trajectory(atif([rules(("AGENTS", "x")), {"source": "user", "message": body},
+                                        agent("done")]), VERSION)
+        lifecycle.require_skill_expanded(expanded, ROOT, "start")
+        bare = cli.Trajectory(atif([rules(("AGENTS", "x")),
+                                    {"source": "user", "message": "/context-start please"}, agent("ok")]), VERSION)
+        with self.assertRaisesRegex(lifecycle.HarnessError, "did not expand"):
+            lifecycle.require_skill_expanded(bare, ROOT, "start")
+
+    def test_end_fact_must_land_in_a_session_file(self) -> None:
+        document = {"changes": [{"path": "state/current.md", "after_text": "FACT"}]}
+        lifecycle.require_fact(document, "FACT")
+        with self.assertRaisesRegex(lifecycle.HarnessError, "omitted"):
+            lifecycle.require_fact(document, "FACT", prefix="sessions/")
+
+    def test_read_only_phases_deny_writes_and_proposals_but_keep_apply_denied_everywhere(self) -> None:
+        root = Path("/w")
+        mutation = lifecycle.lifecycle_permissions(root)
+        read_only = lifecycle.lifecycle_permissions(root, read_only=True)
+        self.assertIn("Write(.context-os/inputs/**)", mutation["allow"])
+        self.assertNotIn("Write(.context-os/inputs/**)", read_only["allow"])
+        for permissions in (mutation, read_only):
+            self.assertIn("Exec(bash scripts/contextos.sh apply)", permissions["deny"])
+            self.assertIn("Exec(bash /w/scripts/contextos.sh apply)", permissions["deny"])
+            self.assertIn("Exec(python3)", permissions["deny"])
+        self.assertIn("Exec(bash scripts/contextos.sh propose)", read_only["deny"])
+        self.assertIn("write", read_only["deny"])
+        self.assertNotIn("Exec(bash scripts/contextos.sh propose)", mutation["deny"])
+
 if __name__ == "__main__":
     unittest.main()

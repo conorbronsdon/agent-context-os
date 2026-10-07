@@ -14,7 +14,10 @@ import argparse
 import hashlib
 import json
 import platform
+import re
 import secrets
+import shlex
+import shutil
 import subprocess
 import sys
 import time
@@ -59,9 +62,55 @@ def lifecycle_permissions(root: Path, *, read_only: bool = False) -> dict[str, l
     }
 
 
-def require_fact(document: dict, fact: str) -> None:
-    if not any(fact in change["after_text"] for change in document["changes"]):
+def require_fact(document: dict, fact: str, *, prefix: str = "") -> None:
+    if not any(fact in change["after_text"] and change["path"].startswith(prefix)
+               for change in document["changes"]):
         raise HarnessError("proposal omitted the requested synthetic fact")
+
+
+def skill_body(root: Path, phase: str) -> str:
+    """Return the shipped skill text after its frontmatter."""
+    text = (root / ".agents" / "skills" / f"context-{phase}" / "SKILL.md").read_text(encoding="utf-8")
+    parts = text.split("---", 2)
+    if len(parts) != 3:
+        raise HarnessError("lifecycle skill has no frontmatter")
+    return parts[2].strip()
+
+
+def require_skill_expanded(trajectory: Trajectory, root: Path, phase: str) -> None:
+    """The slash command must make Devin place the shipped skill in the user turn."""
+    excerpt = skill_body(root, phase)[:600]
+    if not any(excerpt in message for message in trajectory.user_messages()):
+        raise HarnessError(f"/context-{phase} did not expand the shipped skill")
+
+
+SHELL_SEPARATORS = re.compile(r"&&|\|\||[;|&\n]")
+
+
+def shell_segments(command: str) -> list[list[str]]:
+    """Split a shell command into word lists, unquoting each word.
+
+    Separators inside quotes are split too, which can only over-detect a
+    kernel subcommand; the harness then demands a deny, failing closed.
+    """
+    segments = []
+    for part in SHELL_SEPARATORS.split(command):
+        try:
+            words = shlex.split(part, posix=True)
+        except ValueError:
+            words = part.replace('"', " ").replace("'", " ").split()
+        if words:
+            segments.append(words)
+    return segments
+
+
+def is_kernel_command(call, subcommand: str) -> bool:
+    """Detect a kernel subcommand in any quoting or chaining of a shell call."""
+    command = call.arguments.get("command")
+    if call.name != "exec" or not isinstance(command, str):
+        return False
+    return any(any("contextos" in token for token in segment) and subcommand in segment
+               for segment in shell_segments(command))
 
 
 def git_state(root: Path) -> dict[str, str]:
@@ -220,8 +269,8 @@ def execute(harness: DevinCliHarness, approvals: Path, evidence: Path) -> dict:
                 result["prompts"][phase] = prompt
                 trajectory = harness.session(root, f"lifecycle-{phase}", prompt)
                 require_guarded_context(trajectory)
-                apply_attempts = [call for call in trajectory.tool_calls() if call.name == "exec"
-                                  and "contextos" in json.dumps(call.arguments) and " apply" in json.dumps(call.arguments)]
+                require_skill_expanded(trajectory, root, phase)
+                apply_attempts = [call for call in trajectory.tool_calls() if is_kernel_command(call, "apply")]
                 if any(len(call.observations) != 1 or REJECTED_BY_DENY not in call.observations[0]
                        for call in apply_attempts):
                     raise HarnessError("a model apply attempt was not rejected by the fixture deny rule")
@@ -235,10 +284,14 @@ def execute(harness: DevinCliHarness, approvals: Path, evidence: Path) -> dict:
                 if git_state(root) != metadata:
                     raise HarnessError("model changed fixture Git metadata")
                 if phase == "start":
+                    inventories = [call for call in trajectory.tool_calls() if is_kernel_command(call, "start")
+                                   and len(call.observations) == 1 and '"schema_version"' in call.observations[0]]
+                    if not inventories:
+                        raise HarnessError("start did not run the read-only kernel inventory")
                     controls["start_read_only"] = "passed"
                     continue
                 path, document = proposal(root, pending, phase)
-                require_fact(document, facts[phase])
+                require_fact(document, facts[phase], prefix="sessions/" if phase == "end" else "")
                 raw = path.read_bytes()
                 approve(approvals, phase, document)
                 if path.read_bytes() != raw:
@@ -293,9 +346,20 @@ def execute(harness: DevinCliHarness, approvals: Path, evidence: Path) -> dict:
             result["prompts"]["handoff"] = ("/context-start Read the saved session and report the exact next "
                                             "action for the synthetic fixture, including its verification value.")
             write_local_permissions(root, lifecycle_permissions(root, read_only=True))
+            # A fresh session must recover the value from the saved session, not
+            # from leftover payloads or proposals, so remove pending artifacts and
+            # require the value to survive only in tracked session files.
+            for pending_dir in (".context-os/inputs", ".context-os/proposals"):
+                shutil.rmtree(root / pending_dir, ignore_errors=True)
+            holders = sorted(path.relative_to(root).as_posix() for path in root.rglob("*")
+                             if ".git" not in path.relative_to(root).parts and path.is_file()
+                             and handoff_value.encode() in path.read_bytes())
+            if not holders or any(not holder.startswith("sessions/") for holder in holders):
+                raise HarnessError("handoff value is not held only by saved session files")
             before = state(root)
             trajectory = harness.session(root, "lifecycle-handoff", result["prompts"]["handoff"])
             require_guarded_context(trajectory)
+            require_skill_expanded(trajectory, root, "start")
             answer = trajectory.final_message()
             result["handoff_value_recovered"] = handoff_value in answer
             result["handoff_read_only"] = state(root) == before
