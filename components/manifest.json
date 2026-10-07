@@ -1071,6 +1071,74 @@
                 {
                     "path": "docs/evidence/devin-cli-2026-10-06/README.md",
                     "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/host-attempt-1.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/host-attempt-2.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/host-attempt-3.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/host-attempt-4.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/host-attempt-5.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/host-attempt-6.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/host-attempt-7.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/host-attempt-8.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/host-c638849.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/lifecycle-attempt-1.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/lifecycle-attempt-2.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/lifecycle-attempt-3.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/lifecycle-attempt-4.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/lifecycle-attempt-5.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/lifecycle-attempt-6.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/lifecycle-attempt-7.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-06/lifecycle-c638849.json",
+                    "policy": "development"
                 }
             ]
         },
