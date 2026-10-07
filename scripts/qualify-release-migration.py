@@ -27,6 +27,9 @@ PUBLISHED = {
               '05d45ccedd597c706ebcad4bd61b37a6d528d42971c7e48509ea85c6a288ccca'),
 }
 
+# Published kernels that write schema-2 workspace state themselves.
+NATIVE_STATE_BASELINES = {'1.0.0'}
+
 def require(condition, message):
     if not condition:
         raise AssertionError(message)
@@ -92,12 +95,12 @@ class Run:
             'import runpy,sys; sys.path.insert(0,sys.argv.pop(1)); runpy.run_module("contextos",run_name="__main__")',
             str(candidate['source']), '--kernel-root', str(candidate['source'])]
 
-    def cli(self, label, *args, success=True, kernel=None):
+    def cli(self, label, *args, success=True, kernel=None, kernel_root=False):
         self.sequence += 1
         before = time.monotonic()
         prefix = self.prefix if kernel is None else [sys.executable, '-c',
             'import runpy,sys; sys.path.insert(0,sys.argv.pop(1)); runpy.run_module("contextos",run_name="__main__")',
-            str(kernel['source'])]
+            str(kernel['source'])] + (['--kernel-root', str(kernel['source'])] if kernel_root else [])
         command = prefix + list(map(str, args))
         result = subprocess.run(command, cwd=self.candidate['source'], env=self.env,
                                 capture_output=True, text=True, encoding='utf-8')
@@ -112,16 +115,17 @@ class Run:
         return self.cli(label, 'bundle', 'check', '--lock', b['lock'], '--source', b['source'],
                         '--expect-sha256', b['digest'])
 
-    def propose(self, target, b, label, operation='update', profile='full-template', current=None, success=True):
+    def propose(self, target, b, label, operation='update', profile='full-template', current=None, success=True,
+                kernel=None):
         args = ['workspace', operation, '--target', target, '--lock', b['lock'],
                 '--source', b['source'], '--expect-sha256', b['digest'], '--agents', 'claude,codex',
                 '--profile', profile, '--now', '2026-09-29T12:00:00-07:00']
         if current:
             args += ['--current-lock', current['lock'], '--current-source', current['source'],
                      '--expect-current-sha256', current['digest']]
-        return self.cli(label, *args, success=success)
+        return self.cli(label, *args, success=success, kernel=kernel, kernel_root=kernel is not None)
 
-    def apply(self, target, proposal, label):
+    def apply(self, target, proposal, label, kernel=None):
         path = target / proposal['proposal']
         require(path.is_file(), 'proposal not retained')
         document = json.loads(path.read_text(encoding='utf-8'))
@@ -131,7 +135,8 @@ class Run:
              {'synthetic': True, 'human_authenticated': False,
               'digest': proposal['proposal_digest'], 'changes': document['changes']})
         result = self.cli(label, 'bundle', 'apply', '--target', target, '--proposal', path,
-                          '--confirm', proposal['proposal_digest'], '--runtime', 'generic')
+                          '--confirm', proposal['proposal_digest'], '--runtime', 'generic', kernel=kernel,
+                          kernel_root=kernel is not None)
         receipt = result.get('receipt', result)
         if isinstance(receipt, dict):
             receipt = receipt.get('receipt')
@@ -194,7 +199,7 @@ def main():
     require(not args.output.exists(), 'output must not exist; preserve prior evidence')
     args.output.mkdir(parents=True)
     outcome = {'synthetic': True, 'native_runtime_evidence': False, 'human_volunteer_evidence': False,
-               'final_release_qualification': args.expect_version == '1.1.0', 'cases': []}
+               'final_release_qualification': args.expect_version == '1.1.1', 'cases': []}
     try:
         candidate = bundle(args.candidate_assets.resolve(), args.output / 'candidate', args.expect_version,
                            args.expect_commit, args.expect_archive_sha256, args.expect_bundle_sha256)
@@ -250,6 +255,31 @@ def main():
                     proposal = run.propose(root, candidate, label + '-select-profile', profile='selected')
                     run.apply(root, proposal, label + '-select-profile-apply')
                     state(root, candidate, 'selected'); preserved(root, personal)
+                    installed = json.loads((root / '.context-os/installed-bundle.json').read_text(encoding='utf-8'))
+                    require(installed['bundle']['sha256'] == candidate['digest'], 'installed pin mismatch')
+                    case.update(status='pass', final_sources=tree(root), preserved_paths=sorted(personal))
+                except Exception as exc:
+                    case.update(error=str(exc), traceback=traceback.format_exc())
+            for profile in (['full-template', 'selected'] if version in NATIVE_STATE_BASELINES else []):
+                # The published kernel itself migrates and installs the workspace,
+                # so the candidate upgrades state it did not write (#246).
+                label = version + '-native-' + profile
+                case = {'id': label, 'status': 'fail'}
+                outcome['cases'].append(case)
+                try:
+                    root = args.output / label
+                    personal = fixture(root, old, 'v1')
+                    proposal = run.propose(root, old, label + '-old-migrate', kernel=old)
+                    run.apply(root, proposal, label + '-old-migrate-apply', kernel=old)
+                    if profile == 'selected':
+                        proposal = run.propose(root, old, label + '-old-select', profile='selected', kernel=old)
+                        run.apply(root, proposal, label + '-old-select-apply', kernel=old)
+                    state(root, old, profile); preserved(root, personal)
+                    installed = json.loads((root / '.context-os/installed-bundle.json').read_text(encoding='utf-8'))
+                    require(installed['bundle']['sha256'] == old['digest'], 'published kernel did not install its bundle')
+                    proposal = run.propose(root, candidate, label + '-upgrade', profile=profile, current=old)
+                    run.apply(root, proposal, label + '-upgrade-apply')
+                    state(root, candidate, profile); preserved(root, personal)
                     installed = json.loads((root / '.context-os/installed-bundle.json').read_text(encoding='utf-8'))
                     require(installed['bundle']['sha256'] == candidate['digest'], 'installed pin mismatch')
                     case.update(status='pass', final_sources=tree(root), preserved_paths=sorted(personal))
