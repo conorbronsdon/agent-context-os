@@ -1101,6 +1101,14 @@
                     "policy": "development"
                 },
                 {
+                    "path": "docs/evidence/devin-review-2026-10-07/README.md",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-review-2026-10-07/review-md-9eb7f3f.json",
+                    "policy": "development"
+                },
+                {
                     "path": "docs/evidence/devin-cli-2026-10-06/README.md",
                     "policy": "development"
                 },
@@ -1706,6 +1714,10 @@
                     "policy": "managed"
                 },
                 {
+                    "path": "adapters/devin/review_conformance.py",
+                    "policy": "managed"
+                },
+                {
                     "path": "adapters/devin/live-fixture/AGENTS.md.fixture",
                     "policy": "development"
                 },
@@ -1722,6 +1734,14 @@
                     "policy": "development"
                 },
                 {
+                    "path": "adapters/devin/review-fixture/AGENTS.md.fixture",
+                    "policy": "development"
+                },
+                {
+                    "path": "adapters/devin/review-fixture/agents-control.txt",
+                    "policy": "development"
+                },
+                {
                     "path": "runtimes/devin.json",
                     "policy": "managed"
                 },
@@ -1735,6 +1755,10 @@
                 },
                 {
                     "path": "tests/test_devin_ui_harness.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_devin_review_harness.py",
                     "policy": "development"
                 },
                 {
