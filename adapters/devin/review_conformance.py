@@ -192,14 +192,14 @@ class ReviewFixture:
 
 def publication(findings: list[dict[str, object]]) -> str:
     """Report how the findings reached GitHub; only an explicit False is automatic."""
-    flags = {finding.get("user_posted") for finding in findings}
-    if flags == {True}:
+    flags = [finding.get("user_posted") for finding in findings]
+    if not flags or any(flag is not True and flag is not False for flag in flags):
+        return "unknown"
+    if all(flag is True for flag in flags):
         return "user_posted"
-    if flags == {False}:
+    if all(flag is False for flag in flags):
         return "automatic"
-    if flags <= {True, False}:
-        return "mixed"
-    return "unknown"
+    return "mixed"
 
 
 def record(args: argparse.Namespace, *, transport: Transport = default_transport) -> dict:

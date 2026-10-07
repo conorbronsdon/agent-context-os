@@ -234,6 +234,8 @@ class DevinReviewHarnessTest(unittest.TestCase):
         self.assertEqual(review.publication([{"user_posted": True}, {"user_posted": False}]), "mixed")
         self.assertEqual(review.publication([{"user_posted": None}]), "unknown")
         self.assertEqual(review.publication([{"user_posted": True}, {"user_posted": None}]), "unknown")
+        self.assertEqual(review.publication([{"user_posted": 0}]), "unknown")
+        self.assertEqual(review.publication([{"user_posted": 1}]), "unknown")
 
     def test_canary_outside_instruction_file_fails(self) -> None:
         github = FakeGitHub("REVIEW.md")
