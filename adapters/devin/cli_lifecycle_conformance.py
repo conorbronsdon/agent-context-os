@@ -32,18 +32,23 @@ from contextos.primitives import is_link_like, read_regular_file_snapshot  # noq
 from contextos.workspace_schema import strict_json_loads  # noqa: E402
 
 PHASES = ("setup", "start", "update", "end")
-LIFECYCLE_PERMISSIONS = {
-    "allow": [
-        "Exec(bash scripts/contextos.sh start)",
-        "Exec(bash scripts/contextos.sh propose)",
-        "Exec(bash scripts/contextos.sh doctor)",
-        "Exec(git status)",
-        "Exec(git diff)",
-        "Exec(git log)",
-        "Write(.context-os/inputs/**)",
-    ],
-    "deny": ["webfetch", "web_search"],
-}
+
+
+def lifecycle_permissions(root: Path) -> dict[str, list[str]]:
+    """Allow the kernel by relative or absolute path; deny every apply form.
+
+    Same-level deny beat allow in live probes, so the local config can grant
+    the kernel wrapper while keeping apply out of Devin's reach. A rejected
+    call ends a print-mode session, so read-only kernel help must be allowed.
+    """
+    wrappers = ["bash scripts/contextos.sh", f"bash {root.as_posix()}/scripts/contextos.sh"]
+    modules = ["python3 -m contextos", "python -m contextos"]
+    return {
+        "allow": [f"Exec({form})" for form in wrappers]
+        + ["Exec(git status)", "Exec(git diff)", "Exec(git log)", "Write(.context-os/inputs/**)"],
+        "deny": [f"Exec({form} apply)" for form in wrappers + modules]
+        + [f"Exec({form})" for form in modules] + ["webfetch", "web_search"],
+    }
 
 
 def require_fact(document: dict, fact: str) -> None:
@@ -152,7 +157,8 @@ def prompt_for(phase: str, handoff_fact: str) -> str:
         "end": "Record this outcome: The synthetic fixture completed its Devin lifecycle test. Record this exact next action: " + handoff_fact,
     }[phase]
     return (f"/context-{phase} This is an explicitly authorized synthetic lifecycle fixture. "
-            f"Use the colocated repository. {detail} "
+            "Use the colocated repository and run kernel commands from its root as "
+            f"`bash scripts/contextos.sh ...`. {detail} "
             "For mutations, create exactly one kernel proposal, display its diff and digest, "
             "then stop. Do not apply, commit, push, or modify other files. "
             "Create payloads under .context-os/inputs with the write tool, not shell redirection. "
@@ -192,7 +198,7 @@ def execute(harness: DevinCliHarness, approvals: Path, evidence: Path) -> dict:
             subprocess.run(["git", "remote", "remove", "origin"], cwd=root, capture_output=True, check=True)
             if (root / ".devin" / "config.json").read_bytes() != (REPOSITORY_ROOT / ".devin" / "config.json").read_bytes():
                 raise HarnessError("fixture does not carry the shipped Devin project config")
-            write_local_permissions(root, LIFECYCLE_PERMISSIONS)
+            write_local_permissions(root, lifecycle_permissions(root))
             metadata = git_state(root)
             (root / "unrelated-sentinel.txt").write_text(secrets.token_hex(24), encoding="utf-8")
             controls[current] = "passed"
