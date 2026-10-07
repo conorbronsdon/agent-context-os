@@ -155,7 +155,8 @@ def prompt_for(phase: str, handoff_fact: str) -> str:
             f"Use the colocated repository. {detail} "
             "For mutations, create exactly one kernel proposal, display its diff and digest, "
             "then stop. Do not apply, commit, push, or modify other files. "
-            "Use .context-os/inputs for payloads. Do not use host-native memory as input.")
+            "Create payloads under .context-os/inputs with the write tool, not shell redirection. "
+            "Do not use host-native memory as input.")
 
 
 def execute(harness: DevinCliHarness, approvals: Path, evidence: Path) -> dict:
