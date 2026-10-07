@@ -38,7 +38,7 @@ DISPOSABLE_MARKER = ".context-os-devin-cli-disposable"
 CONTROL_SKILL = "contextos-devin-cli-control"
 IMPORTED_SKILL = "contextos-devin-claude-import"
 REJECTED_BY_MODE = "Tool execution was rejected by the user"
-REJECTED_BY_DENY = "by a deny rule in the project settings"
+REJECTED_BY_DENY = "by a deny rule in the project"
 FOREIGN_IMPORTS = ("claude", "cursor", "windsurf", "copilot", "opencode", "zed")
 APPLY_FORMS = (
     "Exec(bash scripts/contextos.sh apply)",
@@ -580,14 +580,20 @@ def run_controls(harness: DevinCliHarness) -> dict[str, str]:
             # run, so a client release that changes them is visible.
             current = "observe_accept_edits_project_deny"
             write_local_permissions(guarded_root, {"deny": ["exec", "write", "edit", "Write(protected.txt)"]})
-            harness.session(guarded_root, current, WRITE_PROMPT.format(path="protected.txt", value="changed"),
-                            mode="accept-edits")
+            trajectory = harness.session(guarded_root, current,
+                                         WRITE_PROMPT.format(path="protected.txt", value="changed"),
+                                         mode="accept-edits")
+            observations["accept_edits_write_attempted"] = any(
+                call.name in {"edit", "write"} for call in trajectory.tool_calls())
             observations["accept_edits_honors_project_write_deny"] = (
                 (guarded_root / "protected.txt").read_text(encoding="utf-8") == "protected fixture\n")
             current = "observe_bypass_apply_ask"
             write_local_permissions(guarded_root, {})
-            harness.session(guarded_root, current, EXEC_PROMPT.format(
+            trajectory = harness.session(guarded_root, current, EXEC_PROMPT.format(
                 command="bash scripts/contextos.sh apply synthetic.json --confirm synthetic"), mode="dangerous")
+            observations["bypass_apply_attempted"] = any(
+                call.name == "exec" and "contextos.sh apply" in json.dumps(call.arguments)
+                for call in trajectory.tool_calls())
             observations["bypass_honors_apply_ask"] = "apply" not in markers.read_text(encoding="utf-8")
             controls["observations"] = "recorded"
 
