@@ -35,6 +35,9 @@ from adapters.devin.ui_conformance import (  # noqa: E402
 
 FIXTURE = Path(__file__).resolve().parent / "review-fixture"
 REVIEW_BOT = "devin-ai-integration[bot]"
+NO_ISSUES = "Devin Review: No Issues Found"
+COMMENT_META = "<!-- devin-review-comment "
+PAGE_SIZE = 100
 CONTROL_SETS = {
     "REVIEW.md": {
         "fixture": "REVIEW.md.fixture",
@@ -72,11 +75,28 @@ class ReviewFixture:
     def get(self, path: str) -> object:
         return self.transport(f"{GITHUB_ROOT}/repos/{self.repository}{path}")
 
+    def get_all(self, path: str) -> list[dict]:
+        """Read every page so an item past the first page cannot hide."""
+        items: list[dict] = []
+        for page in range(1, 51):
+            batch = self.get(f"{path}?per_page={PAGE_SIZE}&page={page}")
+            if not isinstance(batch, list) or not all(isinstance(item, dict) for item in batch):
+                raise HarnessError(f"GitHub returned an invalid list for {path}")
+            items.extend(batch)
+            if len(batch) < PAGE_SIZE:
+                return items
+        raise HarnessError(f"GitHub list for {path} exceeds the supported page limit")
+
     def blob(self, path: str, ref: str) -> bytes:
         content = self.get(f"/contents/{path}?ref={ref}")
         if not isinstance(content, dict) or content.get("encoding") != "base64":
             raise HarnessError(f"GitHub did not return {path} at {ref}")
         return base64.b64decode(content["content"])
+
+    def free_of_controls(self, text: str, subject: str) -> None:
+        """Only the instruction file may carry the canary or name the marker."""
+        if self.controls["canary"] in text or self.controls["marker"] in text:
+            raise HarnessError(f"{subject} carries the canary or marker outside the instruction file")
 
     def verify_base(self) -> dict[str, str]:
         tree = self.get(f"/git/trees/{self.base_sha}?recursive=1")
@@ -89,7 +109,9 @@ class ReviewFixture:
         instructions = self.blob(self.instruction_file, self.base_sha)
         if instructions != (FIXTURE / self.controls["fixture"]).read_bytes():
             raise HarnessError(f"base {self.instruction_file} differs from the checked-in fixture source")
-        return {self.instruction_file: sha256(instructions)}
+        readme = self.blob("README.md", self.base_sha)
+        self.free_of_controls(readme.decode("utf-8", errors="replace"), "base README.md")
+        return {self.instruction_file: sha256(instructions), "README.md": sha256(readme)}
 
     def verify_pull(self, number: int, *, filename: str, expected: bytes) -> dict[str, object]:
         pull = self.get(f"/pulls/{number}")
@@ -100,50 +122,54 @@ class ReviewFixture:
         head = (pull.get("head") or {}).get("sha")
         if not isinstance(head, str) or not SHA_RE.fullmatch(head):
             raise HarnessError(f"pull request #{number} has no exact head commit")
-        files = self.get(f"/pulls/{number}/files?per_page=100")
-        if not isinstance(files, list) or [(f.get("filename"), f.get("status")) for f in files] != [(filename, "added")]:
+        self.free_of_controls(f"{pull.get('title') or ''}\n{pull.get('body') or ''}",
+                              f"pull request #{number} title or body")
+        files = self.get_all(f"/pulls/{number}/files")
+        if [(f.get("filename"), f.get("status")) for f in files] != [(filename, "added")]:
             raise HarnessError(f"pull request #{number} must add exactly {filename}")
         if self.blob(filename, head) != expected:
             raise HarnessError(f"pull request #{number} {filename} differs from the fixture source")
         return {"number": number, "head_sha": head, "file": filename, "file_sha256": sha256(expected)}
 
-    def devin_review(self, number: int, head: str) -> dict[str, object]:
-        reviews = self.get(f"/pulls/{number}/reviews?per_page=100")
-        if not isinstance(reviews, list):
-            raise HarnessError("GitHub returned an invalid review list")
-        matches = [r for r in reviews if (r.get("user") or {}).get("login") == REVIEW_BOT
-                   and r.get("commit_id") == head and "Devin Review" in str(r.get("body", ""))]
-        if not matches:
+    def devin_reviews(self, number: int, head: str) -> tuple[dict[str, object], list[dict]]:
+        """Return the latest Devin Review summary on the head and every Devin review."""
+        reviews = [r for r in self.get_all(f"/pulls/{number}/reviews")
+                   if (r.get("user") or {}).get("login") == REVIEW_BOT]
+        summaries = [r for r in reviews
+                     if r.get("commit_id") == head and "Devin Review" in str(r.get("body", ""))]
+        if not summaries:
             raise HarnessError(f"no Devin Review review is bound to pull request #{number} head {head}")
-        latest = max(matches, key=lambda r: r.get("submitted_at") or "")
+        latest = max(summaries, key=lambda r: r.get("submitted_at") or "")
         body = str(latest.get("body", ""))
-        return {"review_id": latest.get("id"), "commit_id": head, "state": latest.get("state"),
-                "submitted_at": latest.get("submitted_at"), "body_sha256": sha256(body.encode("utf-8")),
-                "body_has_canary": self.controls["canary"] in body,
-                "summary_line": body.splitlines()[0][:120] if body else ""}
+        return ({"review_id": latest.get("id"), "commit_id": head, "state": latest.get("state"),
+                 "submitted_at": latest.get("submitted_at"), "body_sha256": sha256(body.encode("utf-8")),
+                 "body_has_canary": self.controls["canary"] in body,
+                 "reports_no_issues": NO_ISSUES in body,
+                 "summary_line": body.splitlines()[0][:120] if body else ""}, reviews)
 
-
-def devin_comments(fixture: ReviewFixture, number: int, head: str) -> list[dict[str, object]]:
-    comments = fixture.get(f"/pulls/{number}/comments?per_page=100")
-    if not isinstance(comments, list):
-        raise HarnessError("GitHub returned an invalid review-comment list")
-    found = []
-    for comment in comments:
-        if (comment.get("user") or {}).get("login") != REVIEW_BOT:
-            continue
-        body = str(comment.get("body", ""))
-        meta = {}
-        if body.startswith("<!-- devin-review-comment "):
-            try:
-                meta = json.loads(body[len("<!-- devin-review-comment "):body.index(" -->")])
-            except (ValueError, json.JSONDecodeError):
+    def devin_comments(self, number: int, head: str) -> list[dict[str, object]]:
+        found = []
+        for comment in self.get_all(f"/pulls/{number}/comments"):
+            if (comment.get("user") or {}).get("login") != REVIEW_BOT:
+                continue
+            body = str(comment.get("body", ""))
+            meta = {}
+            index = body.find(COMMENT_META)
+            if index >= 0:
+                try:
+                    start = index + len(COMMENT_META)
+                    meta = json.loads(body[start:body.index(" -->", start)])
+                except ValueError:
+                    meta = {}
+            if not isinstance(meta, dict):
                 meta = {}
-        found.append({"id": comment.get("id"), "commit_id": comment.get("commit_id"),
-                      "path": comment.get("path"), "line": comment.get("line"),
-                      "has_canary": fixture.controls["canary"] in body, "user_posted": meta.get("user_posted"),
-                      "kind": meta.get("kind"), "body_sha256": sha256(body.encode("utf-8")),
-                      "bound_to_head": comment.get("commit_id") == head})
-    return found
+            found.append({"id": comment.get("id"), "commit_id": comment.get("commit_id"),
+                          "path": comment.get("path"), "line": comment.get("line"),
+                          "has_canary": self.controls["canary"] in body,
+                          "user_posted": meta.get("user_posted"), "kind": meta.get("kind"),
+                          "body_sha256": sha256(body.encode("utf-8")),
+                          "bound_to_head": comment.get("commit_id") == head})
+        return found
 
 
 def record(args: argparse.Namespace, *, transport: Transport = default_transport) -> dict:
@@ -151,24 +177,26 @@ def record(args: argparse.Namespace, *, transport: Transport = default_transport
         raise HarnessError("record requires --allow-public-fixture-access")
     source_sha = repository_source_sha()
     fixture = ReviewFixture(args.repository, args.base_sha, args.instruction_file, transport=transport)
-    canary, marker = fixture.controls["canary"], fixture.controls["marker"]
+    canary = fixture.controls["canary"]
     base = fixture.verify_base()
     must_fire = fixture.verify_pull(args.must_fire_pr, filename="control.txt",
                                     expected=(FIXTURE / fixture.controls["control"]).read_bytes())
-    benign_head = fixture.get(f"/pulls/{args.must_not_fire_pr}")["head"]["sha"]
-    benign_bytes = fixture.blob("benign.txt", benign_head)
-    if marker.encode() in benign_bytes or canary.encode() in benign_bytes:
-        raise HarnessError("the must-not-fire control file contains the marker or canary")
-    must_not_fire = fixture.verify_pull(args.must_not_fire_pr, filename="benign.txt", expected=benign_bytes)
-    fire_review = fixture.devin_review(must_fire["number"], must_fire["head_sha"])
-    quiet_review = fixture.devin_review(must_not_fire["number"], must_not_fire["head_sha"])
-    if quiet_review["body_has_canary"]:
-        raise HarnessError("Devin Review posted the canary on the must-not-fire control")
-    fire_comments = [c for c in devin_comments(fixture, must_fire["number"], must_fire["head_sha"])
+    must_not_fire = fixture.verify_pull(args.must_not_fire_pr, filename="benign.txt",
+                                        expected=(FIXTURE / "benign.txt").read_bytes())
+    fire_review, _ = fixture.devin_reviews(must_fire["number"], must_fire["head_sha"])
+    if fire_review["reports_no_issues"]:
+        raise HarnessError("Devin Review reported no issues on the must-fire control")
+    quiet_review, quiet_reviews = fixture.devin_reviews(must_not_fire["number"], must_not_fire["head_sha"])
+    if any(canary in str(r.get("body", "")) for r in quiet_reviews):
+        raise HarnessError("a Devin Review review on the must-not-fire control carries the canary")
+    if not quiet_review["reports_no_issues"]:
+        # A summary that counts findings could hide an unpublished canary finding.
+        raise HarnessError("the must-not-fire control's latest Devin Review summary is not No Issues Found")
+    fire_comments = [c for c in fixture.devin_comments(must_fire["number"], must_fire["head_sha"])
                      if c["has_canary"] and c["bound_to_head"] and c["path"] == "control.txt"]
     if not fire_comments:
         raise HarnessError("no Devin Review finding on control.txt at the head carries the canary")
-    quiet_comments = devin_comments(fixture, must_not_fire["number"], must_not_fire["head_sha"])
+    quiet_comments = fixture.devin_comments(must_not_fire["number"], must_not_fire["head_sha"])
     if any(c["has_canary"] for c in quiet_comments):
         raise HarnessError("a Devin Review comment on the must-not-fire control carries the canary")
     if repository_source_sha() != source_sha:
@@ -187,17 +215,21 @@ def record(args: argparse.Namespace, *, transport: Transport = default_transport
         "must_not_fire": {**must_not_fire, "review": quiet_review, "findings": quiet_comments},
         "verified_controls": {
             "base_review_instructions_exact": True,
+            "canary_only_in_instruction_file": True,
             "control_files_exact": True,
             "devin_review_bound_to_each_head": True,
             "must_fire_finding_carries_canary": True,
+            "must_not_fire_summary_reports_no_issues": True,
             "must_not_fire_has_no_canary": True,
             "source_commit_unchanged": True,
         },
-        "finding_publication": ("user_posted" if all(c["user_posted"] for c in fire_comments)
+        "finding_publication": ("user_posted" if all(c["user_posted"] is True for c in fire_comments)
                                 else "automatic"),
         "limits": [
             "Devin generated the finding; when 'finding_publication' is 'user_posted', an operator "
             "published it with Devin Review's Post to GitHub action.",
+            "The canary and marker are checked absent from the base README and pull request titles "
+            "and bodies; Devin Review's other inputs are not inspectable.",
             "Review reads repository instructions only; it is not a lifecycle host.",
         ],
     }

@@ -1109,6 +1109,14 @@
                     "policy": "development"
                 },
                 {
+                    "path": "docs/evidence/devin-cloud-2026-10-07/README.md",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cloud-2026-10-07/ui-baff676.json",
+                    "policy": "development"
+                },
+                {
                     "path": "docs/evidence/devin-cli-2026-10-06/README.md",
                     "policy": "development"
                 },
@@ -1739,6 +1747,10 @@
                 },
                 {
                     "path": "adapters/devin/review-fixture/agents-control.txt",
+                    "policy": "development"
+                },
+                {
+                    "path": "adapters/devin/review-fixture/benign.txt",
                     "policy": "development"
                 },
                 {

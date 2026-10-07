@@ -340,9 +340,11 @@ substrate as the API harness. Operator attestation is not an execution-
 authorization control, and UI evidence does not inherit API-only active-build
 or account-inspection claims.
 
-This fixture proves the cloud instruction and skill substrate. Promotion still
-requires a separate lifecycle proposal/apply authorization fixture and a
-separately approved Review fixture; neither may inherit this result.
+This fixture proves the cloud instruction and skill substrate; the
+[cloud session evidence](../../docs/evidence/devin-cloud-2026-10-07/README.md)
+records a passing UI run. Promotion still requires a separate lifecycle
+proposal/apply authorization fixture and a separately approved Review fixture;
+neither may inherit this result.
 
 ## Review conformance fixture
 
@@ -356,12 +358,17 @@ each source only on its own base commit in a dedicated public fixture
 repository; merely shipping the fixture does not trigger Review.
 
 `adapters/devin/review_conformance.py` verifies each set through the GitHub API
-alone. The base commit must hold exactly `README.md` and the instruction file,
-byte-identical to this directory. The must-fire pull request must add exactly
-`control.txt` with the marker. The must-not-fire pull request must add exactly
-a `benign.txt` free of the marker and canary. Devin Review must have reviewed
-each exact head commit. A Devin Review comment on `control.txt` at the head
-must carry the canary, and nothing Devin posts on the benign pull request may.
+alone, reading every page of each list. The base commit must hold exactly
+`README.md` and the instruction file, which must be byte-identical to its
+`.fixture` source here. The canary and marker may not appear in the README or in
+either pull request's title or body. The must-fire pull request must add
+exactly `control.txt`, byte-identical to that set's control source. The
+must-not-fire pull request must add exactly `benign.txt`, byte-identical to
+`benign.txt` here. Devin Review must have reviewed each exact head commit: the
+must-fire summary must report findings and a Devin comment on `control.txt` at
+the head must carry the canary. The must-not-fire summary must read "No Issues
+Found", so an unpublished finding cannot hide there, and no Devin review or
+comment on that pull request may carry the canary.
 The script only reads GitHub; it never triggers Review, comments, approves, or
 merges.
 

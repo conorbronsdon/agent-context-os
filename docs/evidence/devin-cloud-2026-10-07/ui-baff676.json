@@ -1,0 +1,34 @@
+{
+  "account_identity_inspectable": true,
+  "attested_controls": {
+    "explicit_skill_must_fire": true,
+    "implicit_skill_must_not_fire": true,
+    "no_pull_request_created": true,
+    "repository_access": true,
+    "repository_remained_read_only": true,
+    "review_not_invoked": true,
+    "root_instruction_discovery": true,
+    "session_archived": true
+  },
+  "build_identity_inspectable": false,
+  "checked_at": "2026-10-07T18:49:36.117418+00:00",
+  "devin_mode": "Agent (Normal)",
+  "environment_identity_sha256": "cd3cfbd206fa7bc032349fe14dc0b00fcbf4da39500b39ceb3934973f3ab9fd3",
+  "evidence_kind": "operator-attested-with-local-verification",
+  "fixture_content_sha256": "905391b9839b0fd8551630a51934fab05f3207e26931323602fa9c450a9479e4",
+  "fixture_sha": "3d58d8f63522c25d4002bc0d54fac5f89b643bca",
+  "product_build": "unavailable",
+  "repository": "conorbronsdon/contextos-devin-live-fixture",
+  "runtime": "devin",
+  "schema_version": 1,
+  "session_url_sha256": "7260fbb681fb791896c6310c1053903094c1ad9e242e5e1ae211016daa68617b",
+  "source_sha": "baff67657a9fc5dbb776a52b337604a74320cca2",
+  "surface": "session-ui",
+  "verified_controls": {
+    "exact_fixture_commit": true,
+    "public_fixture_content_unchanged": true,
+    "pull_request_inventory_unchanged": true,
+    "recorded_response_values_exact": true,
+    "source_commit_unchanged": true
+  }
+}

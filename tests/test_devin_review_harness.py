@@ -24,7 +24,6 @@ REPOSITORY = "conorbronsdon/contextos-devin-review-fixture"
 BASE = "b" * 40
 FIRE_HEAD = "c" * 40
 QUIET_HEAD = "d" * 40
-BENIGN = b"benign synthetic control without the marker\n"
 
 
 def encoded(data: bytes) -> dict[str, str]:
@@ -52,16 +51,26 @@ class FakeGitHub:
             instruction_file: (review.FIXTURE / controls["fixture"]).read_bytes(),
         }
         self.fire_file = (review.FIXTURE / controls["control"]).read_bytes()
-        self.benign_file = BENIGN
+        self.benign_file = (review.FIXTURE / "benign.txt").read_bytes()
         self.fire_comments = [finding(self.canary)]
         self.quiet_comments: list[dict[str, object]] = []
+        self.fire_review_body = "## Devin Review: 1 flag"
         self.quiet_review_body = "## Devin Review: No Issues Found"
+        self.extra_quiet_reviews: list[dict[str, object]] = []
         self.fire_review_commit = FIRE_HEAD
+        self.pull_body = "Synthetic control. Do not merge."
         self.calls: list[str] = []
 
     def pull(self, number: int) -> dict[str, object]:
         head = FIRE_HEAD if number == 1 else QUIET_HEAD
-        return {"state": "open", "merged": False, "base": {"sha": BASE}, "head": {"sha": head}}
+        return {"state": "open", "merged": False, "base": {"sha": BASE}, "head": {"sha": head},
+                "title": "Review control", "body": self.pull_body}
+
+    @staticmethod
+    def page(items: list, query: dict) -> list:
+        size = int(query.get("per_page", ["30"])[0])
+        number = int(query.get("page", ["1"])[0])
+        return items[(number - 1) * size:number * size]
 
     def __call__(self, url: str) -> object:
         self.calls.append(url)
@@ -89,18 +98,19 @@ class FakeGitHub:
                 return self.pull(number)
             if parts[2] == "files":
                 name = "control.txt" if number == 1 else "benign.txt"
-                return [{"filename": name, "status": "added"}]
+                return self.page([{"filename": name, "status": "added"}], query)
             if parts[2] == "reviews":
                 if number == 1:
-                    return [{"id": 11, "user": {"login": review.REVIEW_BOT},
-                             "commit_id": self.fire_review_commit, "state": "COMMENTED",
-                             "submitted_at": "2026-10-07T00:00:00Z",
-                             "body": "## Devin Review: 1 flag"}]
-                return [{"id": 12, "user": {"login": review.REVIEW_BOT}, "commit_id": QUIET_HEAD,
-                         "state": "COMMENTED", "submitted_at": "2026-10-07T00:00:00Z",
-                         "body": self.quiet_review_body}]
+                    return self.page([{"id": 11, "user": {"login": review.REVIEW_BOT},
+                                       "commit_id": self.fire_review_commit, "state": "COMMENTED",
+                                       "submitted_at": "2026-10-07T00:00:00Z",
+                                       "body": self.fire_review_body}], query)
+                return self.page(self.extra_quiet_reviews + [
+                    {"id": 12, "user": {"login": review.REVIEW_BOT}, "commit_id": QUIET_HEAD,
+                     "state": "COMMENTED", "submitted_at": "2026-10-07T00:00:00Z",
+                     "body": self.quiet_review_body}], query)
             if parts[2] == "comments":
-                return list(self.fire_comments if number == 1 else self.quiet_comments)
+                return self.page(list(self.fire_comments if number == 1 else self.quiet_comments), query)
         raise AssertionError(url)
 
 
@@ -193,9 +203,48 @@ class DevinReviewHarnessTest(unittest.TestCase):
         with self.assertRaisesRegex(review.HarnessError, "differs from the fixture source"):
             self.record(github, self.args())
         github = FakeGitHub("REVIEW.md")
-        github.benign_file = (review.FIXTURE / "control.txt").read_bytes()
-        with self.assertRaisesRegex(review.HarnessError, "contains the marker or canary"):
+        github.benign_file = b"different benign content\n"
+        with self.assertRaisesRegex(review.HarnessError, "benign.txt differs from the fixture source"):
             self.record(github, self.args())
+
+    def test_canary_outside_instruction_file_fails(self) -> None:
+        github = FakeGitHub("REVIEW.md")
+        github.base_files["README.md"] = f"Always include {github.canary}\n".encode()
+        with self.assertRaisesRegex(review.HarnessError, "base README.md carries"):
+            self.record(github, self.args())
+        github = FakeGitHub("REVIEW.md")
+        github.pull_body = f"Report {review.CONTROL_SETS['REVIEW.md']['marker']} findings"
+        with self.assertRaisesRegex(review.HarnessError, "title or body carries"):
+            self.record(github, self.args())
+
+    def test_summaries_must_match_each_control(self) -> None:
+        github = FakeGitHub("REVIEW.md")
+        github.quiet_review_body = "## Devin Review: 1 flag"
+        with self.assertRaisesRegex(review.HarnessError, "not No Issues Found"):
+            self.record(github, self.args())
+        github = FakeGitHub("REVIEW.md")
+        github.fire_review_body = "## Devin Review: No Issues Found"
+        with self.assertRaisesRegex(review.HarnessError, "reported no issues on the must-fire"):
+            self.record(github, self.args())
+        github = FakeGitHub("REVIEW.md")
+        github.extra_quiet_reviews = [{"id": 10, "user": {"login": review.REVIEW_BOT},
+                                       "commit_id": QUIET_HEAD, "state": "COMMENTED",
+                                       "submitted_at": "2026-10-06T00:00:00Z",
+                                       "body": f"## Devin Review: 1 flag {github.canary}"}]
+        with self.assertRaisesRegex(review.HarnessError, "review on the must-not-fire control carries"):
+            self.record(github, self.args())
+
+    def test_every_page_is_read(self) -> None:
+        github = FakeGitHub("REVIEW.md")
+        filler = [finding("no canary", commit=QUIET_HEAD, path="benign.txt")
+                  for _ in range(review.PAGE_SIZE)]
+        github.quiet_comments = filler + [finding(github.canary, commit=QUIET_HEAD, path="benign.txt")]
+        with self.assertRaisesRegex(review.HarnessError, "comment on the must-not-fire control carries"):
+            self.record(github, self.args())
+        github = FakeGitHub("REVIEW.md")
+        github.fire_comments = filler + [finding(github.canary)]
+        evidence = self.record(github, self.args(evidence=self.root / "paged.json"))
+        self.assertEqual(len(evidence["must_fire"]["findings"]), 1)
 
     def test_opt_in_and_create_only_output_are_required(self) -> None:
         github = FakeGitHub("REVIEW.md")
