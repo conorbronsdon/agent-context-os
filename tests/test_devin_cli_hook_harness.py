@@ -84,6 +84,26 @@ class HookProbeTest(unittest.TestCase):
             )
 
 
+class InjectedNoticeTest(unittest.TestCase):
+    def trajectory(self, *steps: dict) -> object:
+        numbered = [dict(step, step_id=index + 1) for index, step in enumerate(steps)]
+        return hooks.Trajectory({"schema_version": "ATIF-v1.7",
+                                 "agent": {"name": "devin", "version": "1"}, "steps": numbered}, "1")
+
+    def test_notice_must_be_a_system_step_after_the_tool_call(self) -> None:
+        write = {"source": "agent", "message": "", "observation": {"results": []},
+                 "tool_calls": [{"tool_call_id": "c1", "function_name": "write", "arguments": {}}]}
+        notice = {"source": "system", "message": hooks.WRITE_NOTICE + " so invariants hold."}
+        user = {"source": "user", "message": hooks.WRITE_NOTICE}
+        self.assertTrue(hooks.injected_notice(self.trajectory(user, write, notice), hooks.WRITE_NOTICE,
+                                              after_tool="write"))
+        self.assertFalse(hooks.injected_notice(self.trajectory(notice, write, user), hooks.WRITE_NOTICE,
+                                               after_tool="write"))
+        self.assertFalse(hooks.injected_notice(self.trajectory(user, notice), hooks.WRITE_NOTICE,
+                                               after_tool="write"))
+        self.assertTrue(hooks.injected_notice(self.trajectory(notice, user), hooks.WRITE_NOTICE))
+
+
 class FixtureTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()

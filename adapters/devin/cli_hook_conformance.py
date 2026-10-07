@@ -39,17 +39,15 @@ SHIPPED_HOOKS = REPOSITORY_ROOT / ".devin" / "hooks.v1.json"
 WRITE_MATCHER = "^(edit|write|apply_patch|notebook_edit)$"
 BLOCKED_TARGET = "hook-blocked.txt"
 SESSION_NOTICE = "Context OS is not initialized"
-PRE_WRITE_NOTICE = "proposal/apply kernel"
+WRITE_NOTICE = "Use the lifecycle proposal/apply kernel for current.md"
 ALLOWED_SKILL = "contextos-devin-allowlist-control"
 UNLISTED_SKILL = "contextos-devin-allowlist-negative"
 MARKER_SCRIPT = "allowlist-marker.sh"
 MARKER_FILE = ".context-os/allowlist-marker.txt"
 
-QUOTE_NOTICE = ("Then, if your context contains any notice that mentions Context OS, reply "
-                "with its text exactly; otherwise reply NONE.")
-SESSION_PROMPT = "Do not read any file or run any command. " + QUOTE_NOTICE
+SESSION_PROMPT = "Do not read any file or run any command. Reply with only the word ready."
 WRITE_PROMPT = ("Do not read any file or run any command. Call the write tool exactly once "
-                "with file_path {path} and content: {value} " + QUOTE_NOTICE)
+                "with file_path {path} and content: {value} Then reply with only the word done.")
 
 PROBE_SOURCE = '''import json
 import os
@@ -153,8 +151,18 @@ def write_allowlist_fixture(root: Path, token: str) -> None:
         write_text(root / ".agents" / "skills" / name / "SKILL.md", allowlist_skill(name, allowed=allowed))
 
 
-def mentions(trajectory: Trajectory, text: str) -> bool:
-    return text in trajectory.final_message()
+def injected_notice(trajectory: Trajectory, text: str, *, after_tool: str | None = None) -> bool:
+    """True when Devin placed a system step containing text, after the tool's call if given."""
+    start = 0
+    if after_tool is not None:
+        calls = [index for index, step in enumerate(trajectory.steps)
+                 if any(isinstance(call, dict) and call.get("function_name") == after_tool
+                        for call in step.get("tool_calls") or [])]
+        if not calls:
+            return False
+        start = calls[0] + 1
+    return any(step["source"] == "system" and text in step.get("message", "")
+               for step in trajectory.steps[start:])
 
 
 def execute(harness: DevinCliHarness) -> dict:
@@ -182,7 +190,7 @@ def execute(harness: DevinCliHarness) -> dict:
             write_local_config(root, {"deny": ["exec"]}, hooks)
             trajectory = harness.session(root, current, SESSION_PROMPT)
             require_hook_event(read_hook_log(log), "SessionStart")
-            if not mentions(trajectory, SESSION_NOTICE):
+            if not injected_notice(trajectory, SESSION_NOTICE):
                 raise HarnessError("shipped SessionStart advisory did not reach the model")
             controls[current] = "passed"
 
@@ -192,7 +200,7 @@ def execute(harness: DevinCliHarness) -> dict:
             trajectory = harness.session(root, current, WRITE_PROMPT.format(
                 path="state/current.md", value=secrets.token_hex(8)))
             require_hook_event(read_hook_log(log), "PostToolUse", tool="write", target="state/current.md")
-            if not mentions(trajectory, PRE_WRITE_NOTICE):
+            if not injected_notice(trajectory, WRITE_NOTICE, after_tool="write"):
                 raise HarnessError("shipped write advisory did not reach the model")
             controls[current] = "passed"
 
@@ -202,7 +210,7 @@ def execute(harness: DevinCliHarness) -> dict:
             trajectory = harness.session(root, current, WRITE_PROMPT.format(
                 path="allowed/probe.txt", value=secrets.token_hex(8)))
             require_hook_event(read_hook_log(log), "PostToolUse", tool="write", target="allowed/probe.txt")
-            if mentions(trajectory, PRE_WRITE_NOTICE):
+            if injected_notice(trajectory, "proposal/apply kernel", after_tool="write"):
                 raise HarnessError("write advisory fired for an unprotected path")
             controls[current] = "passed"
 
