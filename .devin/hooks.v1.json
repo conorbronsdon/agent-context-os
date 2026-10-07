@@ -1,0 +1,26 @@
+{
+  "SessionStart": [
+    {
+      "matcher": "",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash \"$DEVIN_PROJECT_DIR/scripts/context-os-hook.sh\" devin session-start cli",
+          "timeout": 10
+        }
+      ]
+    }
+  ],
+  "PostToolUse": [
+    {
+      "matcher": "^(edit|write|apply_patch|notebook_edit)$",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash \"$DEVIN_PROJECT_DIR/scripts/context-os-hook.sh\" devin post-write cli",
+          "timeout": 10
+        }
+      ]
+    }
+  ]
+}

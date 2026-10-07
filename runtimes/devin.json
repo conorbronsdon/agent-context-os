@@ -49,15 +49,15 @@
       "capabilities": {
         "agent_skills": "native",
         "explicit_invocation": "native",
-        "project_hooks": "unsupported",
-        "blocking_pre_tool_hook": "unsupported",
+        "project_hooks": "native",
+        "blocking_pre_tool_hook": "native",
         "mcp": "native",
         "native_memory": "unsupported",
         "proposal_apply": "adapter",
-        "skill_allowlists": "unsupported",
+        "skill_allowlists": "native",
         "execution_authorization": "native"
       },
-      "hook_output": null,
+      "hook_output": "additional-context",
       "binary_probes": [
         {
           "purpose": "availability",
@@ -78,6 +78,8 @@
         "tests/test_contextos_kernel.py",
         "adapters/devin/cli_conformance.py",
         "adapters/devin/cli_lifecycle_conformance.py",
+        "adapters/devin/cli_hook_conformance.py",
+        "tests/test_devin_cli_hook_harness.py",
         "docs/evidence/devin-cli-2026-10-06/README.md"
       ],
       "evidence": [
@@ -87,10 +89,15 @@
         "devin-cli-commands",
         "devin-cli-permissions",
         "devin-cli-mcp",
+        "devin-cli-hooks",
+        "devin-cli-lifecycle-hooks",
+        "devin-cli-skill-frontmatter",
         "devin-kernel",
         "devin-conformance",
         "devin-cli-host-harness",
         "devin-cli-lifecycle-harness",
+        "devin-cli-hook-harness",
+        "devin-cli-hook-evidence",
         "devin-cli-live-evidence"
       ]
     },
@@ -254,6 +261,34 @@
         ]
       },
       {
+        "id": "devin-cli-hooks",
+        "type": "official",
+        "location": "https://docs.devin.ai/cli/extensibility/hooks/overview",
+        "claims": [
+          "project_hooks",
+          "blocking_pre_tool_hook",
+          "hook_output"
+        ]
+      },
+      {
+        "id": "devin-cli-lifecycle-hooks",
+        "type": "official",
+        "location": "https://docs.devin.ai/cli/extensibility/hooks/lifecycle-hooks",
+        "claims": [
+          "project_hooks",
+          "blocking_pre_tool_hook",
+          "hook_output"
+        ]
+      },
+      {
+        "id": "devin-cli-skill-frontmatter",
+        "type": "official",
+        "location": "https://docs.devin.ai/cli/extensibility/skills/creating-skills",
+        "claims": [
+          "skill_allowlists"
+        ]
+      },
+      {
         "id": "devin-cli-host-harness",
         "type": "conformance",
         "location": "adapters/devin/cli_conformance.py",
@@ -268,6 +303,25 @@
         "claims": [
           "support",
           "proposal_apply"
+        ]
+      },
+      {
+        "id": "devin-cli-hook-harness",
+        "type": "conformance",
+        "location": "adapters/devin/cli_hook_conformance.py",
+        "claims": [
+          "support"
+        ]
+      },
+      {
+        "id": "devin-cli-hook-evidence",
+        "type": "conformance",
+        "location": "docs/evidence/devin-cli-2026-10-07/README.md",
+        "claims": [
+          "project_hooks",
+          "blocking_pre_tool_hook",
+          "skill_allowlists",
+          "hook_output"
         ]
       },
       {

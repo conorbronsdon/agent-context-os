@@ -45,6 +45,7 @@ this is guidance, not a host-enforced gate. The `$context-setup`, `$context-star
 - `.agents/skills/` contains portable workflow cores.
 - `.claude/` contains Claude Code commands, hooks, settings, and memory adapters.
 - `.codex/hooks.json` maps Codex events to the same read-only policy checks.
+- `.devin/hooks.v1.json` maps Devin CLI events to the same advisory checks.
 - `adapters/hermes/` documents first-class CLI support, optional hooks, and skill installation.
 - `adapters/openclaw/` and `adapters/opencode/` document first-class host support.
 - `adapters/cursor/` documents first-class Cursor CLI and experimental IDE support.

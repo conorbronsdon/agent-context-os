@@ -85,15 +85,32 @@ the conformance harnesses refuse to run there. Use WSL for verified behavior.
 
 ### Hooks, memory, MCP, and handoff
 
-Devin CLI supports Claude-compatible hooks in `.devin/hooks.v1.json`, project
-MCP servers in `.devin/mcp_config.json`, and `/handoff` to a cloud session.
-Context OS ships none of them and makes no claim about them. Devin CLI has no
-native memory store beyond session resume; nothing is synchronized into
-`state/` or `sessions/`.
+Context OS ships `.devin/hooks.v1.json`, Devin CLI's standalone project hook
+file. It is needed because the import guard disables `.claude/` hooks. A
+`SessionStart` hook and a `PostToolUse` hook matched to `edit`, `write`,
+`apply_patch`, and `notebook_edit` run `scripts/context-os-hook.sh devin`,
+which returns `hookSpecificOutput.additionalContext` reminders: setup is
+missing, an apply lock exists, or a direct write targeted lifecycle state that
+belongs to proposal/apply. Devin injects `additionalContext` only for
+`SessionStart`, `UserPromptSubmit`, and `PostToolUse`, so the write reminder
+arrives after the tool runs. The hooks are advisory: they never return
+`"decision": "block"` or exit 2, so deterministic mutation checks stay inside
+the apply kernel. They require `bash` and run from `$DEVIN_PROJECT_DIR`. Run
+`/hooks` to confirm Devin loaded them.
+
+Devin skills support `allowed-tools` (auto-approval) and per-skill
+`permissions` frontmatter. The shipped lifecycle skills declare neither, so
+they add no auto-approval of their own. The session's mode and any user-level
+or project-local permission rules still decide whether a kernel command
+prompts.
+
+Project MCP servers in `.devin/mcp_config.json` and `/handoff` to a cloud
+session are not shipped. Devin CLI has no native memory store beyond session
+resume; nothing is synchronized into `state/` or `sessions/`.
 
 ### Conformance
 
-Both harnesses run only on Linux, macOS, or WSL. They point `HOME` and
+All three harnesses run only on Linux, macOS, or WSL. They point `HOME` and
 `XDG_CONFIG_HOME` at temporary directories, seed synthetic user-level
 canaries there, and pin only `XDG_DATA_HOME`, which must already hold the
 operator's Devin credentials. Evidence comes from Devin's ATIF session export
@@ -112,7 +129,26 @@ python3 adapters/devin/cli_lifecycle_conformance.py \
   --source-sha <exact-clean-commit> --data-home ~/.local/share \
   --evidence /outside/repository/devin-cli-lifecycle.json \
   --approval-dir /outside/repository/empty-approvals --allow-model-traffic
+
+python3 adapters/devin/cli_hook_conformance.py \
+  --binary /exact/path/to/devin --expected-version <version> \
+  --source-sha <exact-clean-commit> --data-home ~/.local/share \
+  --evidence /outside/repository/devin-cli-hooks.json --allow-model-traffic
 ```
+
+The hook harness clones the exact source commit. It adds a probe hook in the
+ignored `.devin/config.local.json` that logs only event, tool, and write target,
+and proves the following:
+
+- Devin runs the shipped `SessionStart` and `PostToolUse` hooks, and their
+  reminders appear as system steps Devin injects, not only in the model's reply.
+- The write reminder fires on `state/current.md` and stays silent on other paths.
+- With the shipped hook file removed, neither reminder appears (countercontrol).
+- An exit-2 probe `PreToolUse` hook blocks a write, and the write's observation
+  carries the probe's rejection.
+- A user-only skill with `allowed-tools: [exec]` expands and runs exactly its
+  marker command. Normal mode rejects the same command for an otherwise
+  identical skill without it.
 
 The host harness checks that `AGENTS.md` is injected at session start, that
 the shipped config keeps repository and user-level Claude sources out of
@@ -159,8 +195,8 @@ sets `triggers: ["user"]`. Every shipped lifecycle core and short alias carries
 that field, so Devin cannot model-invoke those skills. The same files carry
 Cursor's `disable-model-invocation: true`; each host ignores the other host's
 extension while the shared procedure remains provider-neutral. Explicit skill
-selection still is not human approval of a proposal. This adapter has no
-execution-authorization or blocking-hook control that can prove human approval:
+selection still is not human approval of a proposal. The shipped hooks are
+advisory, and no execution-authorization or hook control can prove human approval:
 do not run lifecycle skills in unattended sessions, and verify every diff
 outside the agent before apply.
 
@@ -212,9 +248,9 @@ git access for the Review CLI does not prove Devin account access to the repo.
 
 ## Unsupported and promotion gates
 
-Context OS ships no Devin repository hook, blocking pre-tool hook, memory
-bridge, skill allowlist, execution-authorization adapter, Blueprint, Knowledge
-record, secret, playbook, MCP config, or Review config. `MEMORY.md` has no
+Context OS ships no blocking Devin hook, memory bridge, skill allowlist
+declaration, execution-authorization adapter, Blueprint, Knowledge record,
+secret, playbook, MCP config, or Review config. `MEMORY.md` has no
 documented special Devin session semantics and is not synchronized.
 
 ## Live session conformance

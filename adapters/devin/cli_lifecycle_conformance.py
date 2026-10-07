@@ -253,9 +253,15 @@ def require_guarded_context(trajectory: Trajectory, user_canary: str) -> None:
         raise HarnessError("lifecycle context did not load exactly the Context OS instruction sources")
 
 
+SETUP_PRIORITY = "Verify synthetic portable continuity."
+
+
 def prompt_for(phase: str, handoff_fact: str) -> str:
     detail = {
-        "setup": "Audience confirmed: synthetic public fixture only. Use identity/lifecycle-fixture.md containing '# Synthetic lifecycle identity\\n\\nThe fixture tests portable continuity.\\n'.",
+        "setup": ("Audience confirmed: synthetic public fixture only. Use identity/lifecycle-fixture.md "
+                  "containing '# Synthetic lifecycle identity\\n\\nThe fixture tests portable continuity.\\n' "
+                  "and state/current.md containing '# Current State\\n\\n**Last Updated:** {{TODAY}}\\n\\n"
+                  "## Active priorities\\n\\n1. " + SETUP_PRIORITY + "\\n'."),
         "start": "Read the continuity inventory and summarize it. Make no changes.",
         "update": "Record this fact: The synthetic fixture completed its Devin setup test.",
         "end": "Record this outcome: The synthetic fixture completed its Devin lifecycle test. Record this exact next action: " + handoff_fact,
@@ -287,7 +293,8 @@ def execute(harness: DevinCliHarness, approvals: Path, evidence: Path) -> dict:
               "permission_mode": "Normal (default)",
               "started_at": datetime.now(timezone.utc).isoformat(),
               "prompts": {}, "phases": {}, "kernel_commands": [],
-              "limits": ["No hook, MCP execution, cloud handoff, or native-memory claim.",
+              "limits": ["Shipped advisory hooks are active; no hook, MCP execution, cloud handoff, "
+                         "or native-memory claim.",
                          "Scoped to the recorded client, model selection, and operating system.",
                          "Apply authorization is the operator digest, not a Devin permission rule."]}
     current = "preflight"
@@ -339,6 +346,10 @@ def execute(harness: DevinCliHarness, approvals: Path, evidence: Path) -> dict:
                     continue
                 path, document = proposal(root, pending, phase)
                 require_fact(document, facts[phase])
+                if phase == "setup":
+                    # The shipped SessionStart hook reports an uninitialized
+                    # workspace until current.md carries a real date.
+                    require_fact(document, SETUP_PRIORITY, prefix="state/current.md")
                 if phase == "end":
                     require_next_action(document, facts[phase])
                 raw = path.read_bytes()

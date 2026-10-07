@@ -363,6 +363,7 @@
             "oneOf": [
               {
                 "enum": [
+                  "additional-context",
                   "allow-message",
                   "system-message"
                 ]

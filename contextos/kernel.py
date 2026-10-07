@@ -4640,21 +4640,44 @@ def runtime_surface(manifest: dict[str, Any], surface_id: str | None = None) -> 
     return surfaces[selected]
 
 
+# Devin injects additionalContext only for SessionStart, UserPromptSubmit, and
+# PostToolUse, so its write advisory uses post-write and arrives after the tool runs.
+HOOK_EVENT_NAMES = {
+    "session-start": "SessionStart",
+    "pre-write": "PreToolUse",
+    "post-write": "PostToolUse",
+}
+HOOK_EVENTS = tuple(HOOK_EVENT_NAMES)
+
+
 def runtime_hook_payload(
-    manifest: dict[str, Any], messages: list[str], surface_id: str | None = None
-) -> dict[str, str] | None:
+    manifest: dict[str, Any],
+    messages: list[str],
+    surface_id: str | None = None,
+    event: str | None = None,
+) -> dict[str, Any] | None:
     hook_output = runtime_surface(manifest, surface_id).get("hook_output")
-    return render_hook_payload(hook_output, messages)
+    return render_hook_payload(hook_output, messages, event)
 
 
 def render_hook_payload(
-    hook_output: str | None, messages: list[str]
-) -> dict[str, str] | None:
+    hook_output: str | None, messages: list[str], event: str | None = None
+) -> dict[str, Any] | None:
     message = "\n".join(messages)
     if hook_output is None:
         return None
     if hook_output == "system-message":
         return {"systemMessage": message} if message else None
+    if hook_output == "additional-context":
+        event_name = HOOK_EVENT_NAMES.get(event or "")
+        if not message or event_name is None:
+            return None
+        return {
+            "hookSpecificOutput": {
+                "hookEventName": event_name,
+                "additionalContext": message,
+            }
+        }
     return {"action": "allow", "message": message}
 
 
@@ -6107,7 +6130,7 @@ def hook_report(
         lock = root / ".context-os" / "apply.lock"
         if lock.exists():
             findings.append({"severity": "warning", "message": f"A lifecycle apply lock exists at {lock}. Run context-os doctor before writing."})
-    elif event == "pre-write":
+    elif event in ("pre-write", "post-write"):
         protected = {
             relative_path(root, workspace.state_dir / "current.md"): "Use the lifecycle proposal/apply kernel for current.md so date and history invariants are enforced.",
             relative_path(root, workspace.state_dir / "current-log.md"): "Use the lifecycle proposal/apply kernel for current-log.md so history remains consistent.",
