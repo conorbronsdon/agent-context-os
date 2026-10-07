@@ -242,6 +242,7 @@ class DevinCliHarness:
         data_home: Path,
         *,
         model: str | None = None,
+        debug_dir: Path | None = None,
         runner: Runner = default_runner,
         timeout: float = 600,
     ) -> None:
@@ -254,6 +255,8 @@ class DevinCliHarness:
             raise HarnessError("Devin credentials are missing from the pinned data home")
         require_outside_source(self.data_home)
         self.model = model
+        # Local-only raw exports for diagnosing failures; never shareable evidence.
+        self.debug_dir = require_outside_source(debug_dir) if debug_dir else None
         self.runner = runner
         self.timeout = timeout
         self.evidence = Evidence(expected_version, source_sha)
@@ -337,6 +340,9 @@ class DevinCliHarness:
             "models": trajectory.models,
             "tool_calls": [call.name for call in trajectory.tool_calls()],
         }
+        if self.debug_dir:
+            self.debug_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(export, self.debug_dir / export.name)
         export.unlink()
         return trajectory
 
@@ -507,7 +513,8 @@ def run_controls(harness: DevinCliHarness) -> dict[str, str]:
             write_local_permissions(guarded_root, {"deny": ["exec"]})
             before = snapshot(guarded_root)
             trajectory = harness.session(guarded_root, current,
-                                         "Use the write tool to create denied-probe.txt containing exactly: probe")
+                                         "Do not read any file or run any command. Call the write tool exactly once "
+                                         "with file_path denied-probe.txt and content: probe")
             require_rejected_attempt(trajectory, "write", REJECTED_BY_MODE, current,
                                      argument="denied-probe.txt")
             if snapshot(guarded_root) != before:
@@ -519,7 +526,8 @@ def run_controls(harness: DevinCliHarness) -> dict[str, str]:
             before = snapshot(guarded_root)
             trajectory = harness.session(
                 guarded_root, current,
-                "Use the edit or write tool to replace the entire content of protected.txt with: changed",
+                "Do not read any file or run any command. Call the write tool exactly once with "
+                "file_path protected.txt and content: changed",
                 mode="accept-edits")
             attempts = [call for call in trajectory.tool_calls()
                         if call.name in {"edit", "write"} and "protected.txt" in json.dumps(call.arguments)]
@@ -535,7 +543,8 @@ def run_controls(harness: DevinCliHarness) -> dict[str, str]:
             before = snapshot(guarded_root)
             trajectory = harness.session(
                 guarded_root, current,
-                f"Use the write tool to create allowed/probe.txt containing exactly: {value}",
+                "Do not read any file or run any command. Call the write tool exactly once with "
+                f"file_path allowed/probe.txt and content: {value}",
                 mode="accept-edits")
             after = snapshot(guarded_root)
             target = guarded_root / "allowed" / "probe.txt"
@@ -591,6 +600,7 @@ def main() -> int:
                         help="XDG data home that already holds devin/credentials.toml")
     parser.add_argument("--evidence", required=True)
     parser.add_argument("--model")
+    parser.add_argument("--debug-dir", help="local directory for raw ATIF exports; never share")
     parser.add_argument("--allow-model-traffic", action="store_true")
     args = parser.parse_args()
     if not args.allow_model_traffic:
@@ -601,7 +611,8 @@ def main() -> int:
     if repository_source_sha() != args.source_sha:
         parser.error("--source-sha must equal the clean source HEAD")
     harness = DevinCliHarness(Path(args.binary), args.expected_version, args.source_sha,
-                              Path(args.data_home), model=args.model)
+                              Path(args.data_home), model=args.model,
+                              debug_dir=Path(args.debug_dir) if args.debug_dir else None)
     started = datetime.now(timezone.utc).isoformat()
     controls = run_controls(harness)
     record = {
