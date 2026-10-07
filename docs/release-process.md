@@ -59,7 +59,7 @@ The workflow then fails closed through these gates:
 3. build twice from its Linux Git index and compare every artifact byte;
 4. verify the same Actions candidate in separate Linux and Windows extraction
    jobs, including execution of `python -m contextos bundle check` from the
-   extracted archive. Both jobs also exercise pinned published 0.14/0.15
+   extracted archive. Both jobs also exercise pinned published 0.14/0.15/1.0
    upgrades, legacy and schema-v1 migrations, selected profiles, personalized
    managed-file conflicts, multi-publication rollback, live child lock exclusion,
    journal recovery, post-receipt doctor failure and fresh setup/readiness.
