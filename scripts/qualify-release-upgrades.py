@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Qualify exact candidate assets against published baselines and fresh onboarding.
 
-Offline after downloading the two published asset sets. Synthetic approval and
+Offline after downloading the published baseline asset sets. Synthetic approval and
 fault injection are not human volunteer or native agent evidence. Keep failures.
 """
 import argparse

@@ -1,4 +1,4 @@
-# Compatibility contract for 1.0
+# Compatibility contract for 1.x
 
 Status: the compatibility promise for 1.x, in effect since the qualified 1.0.0
 release was published ([#228](https://github.com/conorbronsdon/agent-context-os/issues/228)).
