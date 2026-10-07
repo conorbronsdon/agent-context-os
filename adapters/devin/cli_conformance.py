@@ -389,6 +389,7 @@ def write_fixture(root: Path, home: Path, canaries: Mapping[str, str], *, guarde
                f"Reply with only {canaries['skill']}.\n")
     write_text(root / "scripts" / "contextos.sh",
                "#!/usr/bin/env bash\nset -eu\n"
+               "mkdir -p \"$(dirname \"$0\")/../.context-os\"\n"
                "printf '%s\\n' \"$*\" >> \"$(dirname \"$0\")/../.context-os/exec-markers.txt\"\n")
     write_text(root / "protected.txt", "protected fixture\n")
     if guarded:
@@ -400,6 +401,12 @@ def write_fixture(root: Path, home: Path, canaries: Mapping[str, str], *, guarde
 def write_local_permissions(root: Path, permissions: Mapping[str, list[str]]) -> None:
     """Per-control permissions live in config.local.json; config.json stays shipped bytes."""
     write_text(root / ".devin" / "config.local.json",
+               json.dumps({"permissions": dict(permissions)}, indent=2) + "\n")
+
+
+def write_user_permissions(harness: "DevinCliHarness", permissions: Mapping[str, list[str]]) -> None:
+    """The isolated user config ranks below project config in Devin's precedence."""
+    write_text(Path(harness.env["XDG_CONFIG_HOME"]) / "devin" / "config.json",
                json.dumps({"permissions": dict(permissions)}, indent=2) + "\n")
 
 
@@ -440,6 +447,7 @@ def require_rejected_attempt(
 
 WRITE_PROMPT = ("Do not read any file or run any command. Call the write tool exactly once "
                 "with file_path {path} and content: {value}")
+APPLY_COMMAND = "bash scripts/contextos.sh apply synthetic.json --confirm synthetic"
 EXEC_PROMPT = "Run exactly this shell command once and report its exit status: {command}"
 
 
@@ -559,14 +567,14 @@ def run_controls(harness: DevinCliHarness) -> dict[str, str]:
                 raise HarnessError("allowed write changed unexpected files")
             controls[current] = "passed"
 
-            current = "shipped_apply_ask_rejected_unattended"
-            # The shipped config asks before every documented apply form. In
-            # print mode an ask cannot be answered, so the call is rejected,
-            # even though a broader local allow matches the same script.
-            write_local_permissions(guarded_root, {"allow": ["Exec(bash scripts/contextos.sh)"]})
+            current = "shipped_apply_ask_beats_user_allow"
+            # The shipped project config asks before every documented apply
+            # form. A broad user-level allow ranks below project config, so it
+            # must not override that ask; print mode then rejects the call.
+            write_user_permissions(harness, {"allow": ["Exec(bash scripts/contextos.sh)"]})
+            write_local_permissions(guarded_root, {"allow": ["Exec(bash scripts/contextos.sh start)"]})
             markers = guarded_root / ".context-os" / "exec-markers.txt"
-            trajectory = harness.session(guarded_root, current, EXEC_PROMPT.format(
-                command="bash scripts/contextos.sh apply synthetic.json --confirm synthetic"))
+            trajectory = harness.session(guarded_root, current, EXEC_PROMPT.format(command=APPLY_COMMAND))
             require_rejected_attempt(trajectory, "exec", REJECTED_BY_MODE, current,
                                      argument="contextos.sh apply")
             if markers.exists():
@@ -578,6 +586,7 @@ def run_controls(harness: DevinCliHarness) -> dict[str, str]:
             if not markers.is_file() or markers.read_text(encoding="utf-8").splitlines() != ["start"]:
                 raise HarnessError("allowlisted kernel command did not run exactly once")
             controls[current] = "passed"
+            write_user_permissions(harness, {})
 
             # Observations record known host limitations without gating the
             # run, so a client release that changes them is visible.
@@ -590,10 +599,19 @@ def run_controls(harness: DevinCliHarness) -> dict[str, str]:
                 call.name in {"edit", "write"} for call in trajectory.tool_calls())
             observations["accept_edits_honors_project_write_deny"] = (
                 (guarded_root / "protected.txt").read_text(encoding="utf-8") == "protected fixture\n")
+            current = "observe_local_allow_overrides_apply_ask"
+            write_local_permissions(guarded_root, {"allow": ["Exec(bash scripts/contextos.sh)"]})
+            trajectory = harness.session(guarded_root, current, EXEC_PROMPT.format(command=APPLY_COMMAND))
+            observations["local_broad_allow_apply_attempted"] = any(
+                call.name == "exec" and "contextos.sh apply" in json.dumps(call.arguments)
+                for call in trajectory.tool_calls())
+            observations["apply_ask_holds_against_local_broad_allow"] = "apply" not in markers.read_text(
+                encoding="utf-8")
             current = "observe_bypass_apply_ask"
+            markers.write_text("", encoding="utf-8")
             write_local_permissions(guarded_root, {})
-            trajectory = harness.session(guarded_root, current, EXEC_PROMPT.format(
-                command="bash scripts/contextos.sh apply synthetic.json --confirm synthetic"), mode="dangerous")
+            trajectory = harness.session(guarded_root, current, EXEC_PROMPT.format(command=APPLY_COMMAND),
+                                         mode="dangerous")
             observations["bypass_apply_attempted"] = any(
                 call.name == "exec" and "contextos.sh apply" in json.dumps(call.arguments)
                 for call in trajectory.tool_calls())
