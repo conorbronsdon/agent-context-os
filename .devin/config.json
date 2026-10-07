@@ -1,0 +1,18 @@
+{
+  "read_config_from": {
+    "claude": false,
+    "cursor": false,
+    "windsurf": false,
+    "copilot": false,
+    "opencode": false,
+    "zed": false
+  },
+  "permissions": {
+    "ask": [
+      "Exec(bash scripts/contextos.sh apply)",
+      "Exec(sh scripts/contextos.sh apply)",
+      "Exec(python3 -m contextos apply)",
+      "Exec(python -m contextos apply)"
+    ]
+  }
+}
