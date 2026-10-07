@@ -105,12 +105,15 @@ def shell_segments(command: str) -> list[list[str]]:
 
 
 def is_kernel_command(call, subcommand: str) -> bool:
-    """Detect a kernel subcommand in a shell call, over-matching rather than missing.
+    """Detect a kernel subcommand in a shell call, preferring over-matches.
 
     Any call that names ``contextos`` and contains the subcommand as a
     standalone word, in any quoting, nesting (``bash -c``), or ANSI-C form
-    (``$'apply'``), counts. An over-match makes the harness demand a deny
-    rejection, so it fails closed.
+    (``$'apply'``), counts; an over-match makes the harness demand a deny
+    rejection. Indirection the text never spells out, such as
+    ``a=ap; b=ply; bash scripts/contextos.sh "$a$b"``, is not detected. The
+    unchanged-state check before operator apply still catches any such
+    attempt that succeeds.
     """
     command = call.arguments.get("command")
     if call.name != "exec" or not isinstance(command, str) or "contextos" not in command:

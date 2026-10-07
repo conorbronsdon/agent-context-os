@@ -16,7 +16,11 @@ excludes that canary too, and adds the second-review controls; [its rerun](../de
 passed on `f36d2c2`. Devin's default
 model reported itself as `swe-2-high` in every session.
 
-## Passing runs on the final source
+## Passing runs on `c638849`
+
+The host controls below still bind to the shipped host harness. The lifecycle
+harness changed after this run; its final evidence is the
+[10/7 rerun](../devin-cli-2026-10-07/README.md).
 
 Both runs used source `c638849e1300a5ef64be6c7a892f7ab429aa4547`.
 

@@ -9,7 +9,8 @@ behavior in another.
 CLI promotion is scoped to Devin CLI `3000.11.3 (9c803229faa4)` on Linux
 (WSL2), with the default model, host controls, the shipped setup/start/update/end
 workflows, exact-digest operator apply, and fresh-session handoff recorded in
-the [promotion evidence](../../docs/evidence/devin-cli-2026-10-06/README.md).
+the [host evidence](../../docs/evidence/devin-cli-2026-10-06/README.md) and
+the [hook and final lifecycle evidence](../../docs/evidence/devin-cli-2026-10-07/README.md).
 It does not promote cloud sessions or Review, and it does not cover native
 Windows (see below).
 

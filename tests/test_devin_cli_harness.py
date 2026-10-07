@@ -315,6 +315,15 @@ class LifecycleControlTest(unittest.TestCase):
         self.assertFalse(lifecycle.is_kernel_command(
             self.call("bash scripts/contextos.sh propose end --input apply-notes.json"), "apply"))
 
+    def test_apply_detection_documented_limit_is_variable_indirection(self) -> None:
+        # The docstring promises textual detection only; the unchanged-state
+        # check is what catches an indirected apply that succeeds.
+        self.assertTrue(lifecycle.is_kernel_command(
+            self.call('a=apply; bash scripts/contextos.sh "$a" p.json'), "apply"))
+        self.assertFalse(lifecycle.is_kernel_command(
+            self.call('a=ap; b=ply; bash scripts/contextos.sh "$a$b" p.json'), "apply"))
+        self.assertIn("not detected", lifecycle.is_kernel_command.__doc__)
+
     def test_read_only_phases_deny_writes_and_proposals_but_keep_apply_denied_everywhere(self) -> None:
         root = Path("/w")
         mutation = lifecycle.lifecycle_permissions(root)
