@@ -80,10 +80,11 @@ class DevinDescriptorTest(unittest.TestCase):
                 "claude", "cursor", "windsurf", "copilot", "opencode", "zed")}},
             config,
         )
+        # Devin writes approvals to the ignored config.local.json; only the guard ships.
         self.assertEqual(
             [".devin/config.json"],
             sorted(path.relative_to(ROOT).as_posix() for path in (ROOT / ".devin").rglob("*")
-                   if path.is_file()),
+                   if path.is_file() and path.name != "config.local.json"),
         )
 
     def test_session_uses_only_repository_native_contract_files(self) -> None:
@@ -193,9 +194,11 @@ class DevinDescriptorTest(unittest.TestCase):
 
     def test_adapter_does_not_ship_fake_devin_configuration(self) -> None:
         for path in ("devin.yaml", "devin.yml", "blueprint.yaml", ".devin/hooks.v1.json",
-                     ".devin/mcp_config.json", ".devin/config.local.json", ".devin/skills"):
+                     ".devin/mcp_config.json", ".devin/skills"):
             with self.subTest(path=path):
                 self.assertFalse((ROOT / path).exists())
+        ignored = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+        self.assertIn(".devin/config.local.json", ignored)
 
     def test_review_fixture_is_scoped_inert_and_unique(self) -> None:
         fixture = ROOT / "adapters/devin/review-fixture"
