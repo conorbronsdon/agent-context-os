@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Qualify exact candidate assets against published baselines and fresh onboarding.
 
-Offline after downloading the two published asset sets. Synthetic approval and
+Offline after downloading the published baseline asset sets. Synthetic approval and
 fault injection are not human volunteer or native agent evidence. Keep failures.
 """
 import argparse
@@ -54,7 +54,7 @@ def main():
     # Recovery imports this verified archive directly in parent and crash child.
     # Windows checkout line endings cannot affect the executable qualification.
     baselines = []
-    for version in ('0.14.0', '0.15.0'):
+    for version in ('0.14.0', '0.15.0', '1.0.0'):
         old_stem = 'agent-context-os-template-v' + version
         lock = args.published_assets.resolve() / version / (old_stem + '.bundle.lock.json')
         value = json.loads(lock.read_text())

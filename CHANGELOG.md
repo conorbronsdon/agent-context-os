@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-10-07 — Devin CLI lifecycle support
+
 ### Added
 - Devin Review has a GitHub-only conformance harness,
   `adapters/devin/review_conformance.py`, with `REVIEW.md` and `AGENTS.md`
