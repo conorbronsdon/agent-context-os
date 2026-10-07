@@ -18,18 +18,26 @@ text; the operator did not edit it.
 
 ## REVIEW.md (passed)
 
-[review-md-9eb7f3f.json](review-md-9eb7f3f.json), source `9eb7f3f`, checked
+[review-md-762cde9.json](review-md-762cde9.json), source `762cde9`, checked
 2026-10-07:
 
 - The base commit `0d25618` holds exactly `README.md` and a `REVIEW.md`
-  byte-identical to `adapters/devin/review-fixture/REVIEW.md.fixture`.
+  byte-identical to `adapters/devin/review-fixture/REVIEW.md.fixture`. The
+  canary and marker appear in neither the README nor either pull request's
+  title or body.
 - Must fire: pull request #1 (head `d8e1c11`) adds exactly `control.txt` with
   the marker. Devin Review's summary review on that head reported one flag, and
   Devin's inline finding on `control.txt` at that head carries
   `CONTEXTOS_DEVIN_REVIEW_CANARY_63F0A2D8`.
-- Must not fire: pull request #2 (head `1c6bbae`) adds exactly a marker-free
-  `benign.txt`. Devin Review's summary review on that head reported no issues,
-  and Devin posted no comment carrying the canary.
+- Must not fire: pull request #2 (head `1c6bbae`) adds exactly `benign.txt`,
+  byte-identical to the checked-in benign fixture. Devin Review's latest summary
+  on that head reads "No Issues Found", and no Devin review or comment on the
+  pull request carries the canary.
+
+[review-md-9eb7f3f.json](review-md-9eb7f3f.json) is the same run checked by an
+earlier harness. It is superseded: that harness accepted any must-not-fire
+summary, read only the first page of each list, and did not check the README or
+pull request metadata.
 
 ## AGENTS.md
 

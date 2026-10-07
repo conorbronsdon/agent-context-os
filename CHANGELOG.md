@@ -3,6 +3,17 @@
 ## [Unreleased]
 
 ### Added
+- Devin Review has a GitHub-only conformance harness,
+  `adapters/devin/review_conformance.py`, with `REVIEW.md` and `AGENTS.md`
+  control sets in `adapters/devin/review-fixture/`. It checks that Devin Review
+  reported a canary-bearing finding on a must-fire pull request and a "No Issues
+  Found" summary with no canary on a benign one, each bound to its exact head
+  commit. A live `REVIEW.md` run passed (`docs/evidence/devin-review-2026-10-07/`).
+  Review stays a compatibility surface.
+- A live operator-assisted Devin cloud session run passed root instruction
+  discovery, no implicit skill, and explicit `@skills:` invocation on the public
+  fixture (`docs/evidence/devin-cloud-2026-10-07/`). Cloud sessions stay
+  experimental until cloud proposal/apply has evidence.
 - Devin CLI ships `.devin/hooks.v1.json`. The import guard disables Devin's
   `.claude/` hook import, so these hooks restore the lifecycle advisories:
   `SessionStart` and a `PostToolUse` hook on `edit`, `write`, `apply_patch`,
