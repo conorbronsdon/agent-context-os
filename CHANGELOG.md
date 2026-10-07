@@ -9,7 +9,7 @@
   and `notebook_edit`. Both run `scripts/context-os-hook.sh devin` and return
   Devin's `hookSpecificOutput.additionalContext`, a new `additional-context`
   hook output mode. Devin does not inject `PreToolUse` context, so the write
-  reminder arrives after the tool runs. They never block. The CLI surface now claims
+  reminder uses a new `post-write` hook event and arrives after the tool runs. They never block. The CLI surface now claims
   `project_hooks`, `blocking_pre_tool_hook`, and `skill_allowlists`.
   `adapters/devin/cli_hook_conformance.py` is a new opt-in live harness. It
   checks that Devin runs the shipped hooks, that their advisories reach the

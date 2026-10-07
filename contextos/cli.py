@@ -36,6 +36,7 @@ from .kernel import (
     plan_workspace_migration,
     read_json,
     render_hook_payload,
+    HOOK_EVENTS,
     runtime_ids,
     runtime_manifest,
     runtime_surface,
@@ -339,7 +340,7 @@ def parser() -> argparse.ArgumentParser:
     board_validate.add_argument("--now")
 
     hook = commands.add_parser("hook", help="Run a normalized read-only lifecycle hook check")
-    hook.add_argument("event", choices=("session-start", "pre-write"))
+    hook.add_argument("event", choices=HOOK_EVENTS)
     hook.add_argument("--runtime", metavar="RUNTIME", required=True)
     hook.add_argument("--surface", metavar="SURFACE")
 

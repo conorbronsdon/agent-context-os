@@ -4641,8 +4641,13 @@ def runtime_surface(manifest: dict[str, Any], surface_id: str | None = None) -> 
 
 
 # Devin injects additionalContext only for SessionStart, UserPromptSubmit, and
-# PostToolUse, so its write advisory is delivered after the tool runs.
-HOOK_EVENT_NAMES = {"session-start": "SessionStart", "pre-write": "PostToolUse"}
+# PostToolUse, so its write advisory uses post-write and arrives after the tool runs.
+HOOK_EVENT_NAMES = {
+    "session-start": "SessionStart",
+    "pre-write": "PreToolUse",
+    "post-write": "PostToolUse",
+}
+HOOK_EVENTS = tuple(HOOK_EVENT_NAMES)
 
 
 def runtime_hook_payload(
@@ -6125,7 +6130,7 @@ def hook_report(
         lock = root / ".context-os" / "apply.lock"
         if lock.exists():
             findings.append({"severity": "warning", "message": f"A lifecycle apply lock exists at {lock}. Run context-os doctor before writing."})
-    elif event == "pre-write":
+    elif event in ("pre-write", "post-write"):
         protected = {
             relative_path(root, workspace.state_dir / "current.md"): "Use the lifecycle proposal/apply kernel for current.md so date and history invariants are enforced.",
             relative_path(root, workspace.state_dir / "current-log.md"): "Use the lifecycle proposal/apply kernel for current-log.md so history remains consistent.",

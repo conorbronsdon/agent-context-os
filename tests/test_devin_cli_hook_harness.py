@@ -139,6 +139,21 @@ class InjectedNoticeTest(unittest.TestCase):
             with self.assertRaises(hooks.HarnessError):
                 hooks.require_allowlisted_exec(trajectory)
 
+    def test_unlisted_control_requires_expansion_the_exact_command_and_mode_rejection(self) -> None:
+        expanded = {"source": "user", "message": hooks.ALLOWLIST_BODY}
+        command = {"command": f"bash {hooks.MARKER_SCRIPT}"}
+        rejected = hooks.REJECTED_BY_MODE + "."
+        hooks.require_unlisted_exec_rejected(self.trajectory(expanded, self.call("exec", command, rejected)))
+        for trajectory in (
+            self.trajectory({"source": "user", "message": "/skill"}, self.call("exec", command, rejected)),
+            self.trajectory(expanded, self.call("exec", {"command": f"cat {hooks.MARKER_SCRIPT}"}, rejected)),
+            self.trajectory(expanded, self.call("exec", command, "Exit code: 0")),
+            self.trajectory(expanded, self.call("exec", command, rejected),
+                            self.call("exec", command, rejected, call_id="c2")),
+        ):
+            with self.assertRaises(hooks.HarnessError):
+                hooks.require_unlisted_exec_rejected(trajectory)
+
 
 class FixtureTest(unittest.TestCase):
     def setUp(self) -> None:

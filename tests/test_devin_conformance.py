@@ -198,7 +198,7 @@ class DevinDescriptorTest(unittest.TestCase):
         self.assertEqual({"SessionStart", "PostToolUse"}, set(hooks))
         expected = {
             "SessionStart": ("", "session-start"),
-            "PostToolUse": ("^(edit|write|apply_patch|notebook_edit)$", "pre-write"),
+            "PostToolUse": ("^(edit|write|apply_patch|notebook_edit)$", "post-write"),
         }
         for event, (matcher, kernel_event) in expected.items():
             with self.subTest(event=event):

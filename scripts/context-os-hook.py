@@ -25,7 +25,7 @@ from contextos.attachment import AttachmentError, resolve_root_roles  # noqa: E4
 
 def main() -> int:
     if len(sys.argv) not in (3, 4):
-        print("usage: context-os-hook.py RUNTIME session-start|pre-write [SURFACE]", file=sys.stderr)
+        print("usage: context-os-hook.py RUNTIME session-start|pre-write|post-write [SURFACE]", file=sys.stderr)
         return 2
     runtime, event = sys.argv[1:3]
     surface_id = sys.argv[3] if len(sys.argv) == 4 else None

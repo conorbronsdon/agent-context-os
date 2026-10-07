@@ -34,7 +34,7 @@ from typing import Mapping
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from adapters.devin.cli_conformance import (  # noqa: E402
     REJECTED_BY_MODE, REPOSITORY_ROOT, DevinCliHarness, HarnessError, Trajectory,
-    repository_source_sha, require_outside_source, require_rejected_attempt, write_text,
+    repository_source_sha, require_outside_source, write_text,
 )
 
 SHIPPED_HOOKS = REPOSITORY_ROOT / ".devin" / "hooks.v1.json"
@@ -173,17 +173,29 @@ def require_probe_blocked(trajectory: Trajectory) -> None:
             raise HarnessError("controlled write was not rejected by the probe hook")
 
 
-def require_allowlisted_exec(trajectory: Trajectory) -> None:
-    """The allowed skill must expand and run exactly its marker command, successfully."""
+def require_marker_exec(trajectory: Trajectory, subject: str) -> str:
+    """The skill must expand and make exactly one shell call: its marker command."""
     if not any(ALLOWLIST_BODY.strip() in message for message in trajectory.user_messages()):
-        raise HarnessError("allowed-tools skill did not expand")
+        raise HarnessError(f"{subject} did not expand")
     calls = [call for call in trajectory.tool_calls() if call.name == "exec"]
     if len(calls) != 1:
-        raise HarnessError("allowed-tools skill must make exactly one shell call")
+        raise HarnessError(f"{subject} must make exactly one shell call")
     call = calls[0]
-    if (call.arguments.get("command") != f"bash {MARKER_SCRIPT}" or len(call.observations) != 1
-            or not call.observations[0].rstrip().endswith("Exit code: 0")):
+    if call.arguments.get("command") != f"bash {MARKER_SCRIPT}" or len(call.observations) != 1:
+        raise HarnessError(f"{subject} did not attempt exactly its marker command")
+    return call.observations[0]
+
+
+def require_allowlisted_exec(trajectory: Trajectory) -> None:
+    """The allowed skill's marker command must run without a prompt and succeed."""
+    if not require_marker_exec(trajectory, "allowed-tools skill").rstrip().endswith("Exit code: 0"):
         raise HarnessError("allowed-tools skill did not run exactly its marker command")
+
+
+def require_unlisted_exec_rejected(trajectory: Trajectory) -> None:
+    """The same command from the skill without allowed-tools must be rejected by Normal mode."""
+    if REJECTED_BY_MODE not in require_marker_exec(trajectory, "unlisted skill"):
+        raise HarnessError("unlisted skill's marker command was not rejected by Normal mode")
 
 
 def injected_notice(trajectory: Trajectory, text: str, *, after_tool: str | None = None) -> bool:
@@ -284,7 +296,7 @@ def execute(harness: DevinCliHarness) -> dict:
             current = "skill_without_allowlist_rejects_exec"
             write_local_config(root, {}, hooks)
             trajectory = harness.session(root, current, f"/{UNLISTED_SKILL}")
-            require_rejected_attempt(trajectory, "exec", REJECTED_BY_MODE, current, argument=MARKER_SCRIPT)
+            require_unlisted_exec_rejected(trajectory)
             if marker.exists():
                 raise HarnessError("unlisted skill ran its shell command without approval")
             controls[current] = "passed"

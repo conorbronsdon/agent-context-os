@@ -36,6 +36,16 @@ digest, applied the approved one, checked one receipt with runtime `devin`, and
 rejected the stale replay for update and end. The model made no `apply`
 attempt. A new read-only session recovered the handoff value from `sessions/`.
 
+The setup prompt supplies the identity file and the full dated
+`state/current.md`, and the control checks only that the synthetic priority is
+present. So this run shows that the skills and kernel carry operator-supplied
+setup content through proposal and apply. It does not show the setup skill
+choosing onboarding content itself, and it does not separately check that
+`start` reports the workspace as initialized after setup. The fresh-session
+handoff, run with the shipped SessionStart hook active, is indirect evidence of
+initialization: the failed first attempt below shows that hook redirecting an
+uninitialized workspace.
+
 ## Retained attempts
 
 | Artifact | Outcome |
