@@ -1,13 +1,15 @@
 {
   "base_file_sha256": {
+    "README.md": "d88ca1580b12c4bff41ab9c4c91deea7a0f115f0e4fa31966c45f62e4f836964",
     "REVIEW.md": "571f886d03ce88ab3302a14d99efe225ba7556133089558560fae678d99fe0d4"
   },
   "base_sha": "0d256184562f721978786eb2bf00a78cc0dfff67",
-  "checked_at": "2026-10-07T17:13:35.842194+00:00",
+  "checked_at": "2026-10-07T19:00:29.784283+00:00",
   "finding_publication": "user_posted",
   "instruction_file": "REVIEW.md",
   "limits": [
     "Devin generated the finding; when 'finding_publication' is 'user_posted', an operator published it with Devin Review's Post to GitHub action.",
+    "The canary and marker are checked absent from the base README and pull request titles and bodies; Devin Review's other inputs are not inspectable.",
     "Review reads repository instructions only; it is not a lifecycle host."
   ],
   "must_fire": {
@@ -32,6 +34,7 @@
       "body_has_canary": false,
       "body_sha256": "81ff3da3ea1872bd5b4e07f8a2afe8547a2475bd97ff10e3d41de1fedf5670bc",
       "commit_id": "d8e1c119d1414f79b1945c7439b7bcdbb4730d99",
+      "reports_no_issues": false,
       "review_id": 5445423980,
       "state": "COMMENTED",
       "submitted_at": "2026-10-07T16:40:43Z",
@@ -48,6 +51,7 @@
       "body_has_canary": false,
       "body_sha256": "4414c966d92a151b0c95c45ccfca1bba4c1fac3943641b9e6778931f5b78d79c",
       "commit_id": "1c6bbaec877be764ac07347507b58ec9140ccef6",
+      "reports_no_issues": true,
       "review_id": 5445568484,
       "state": "COMMENTED",
       "submitted_at": "2026-10-07T17:00:49Z",
@@ -57,14 +61,17 @@
   "repository": "conorbronsdon/contextos-devin-review-fixture",
   "runtime": "devin",
   "schema_version": 1,
-  "source_sha": "9eb7f3fed1d97c841280338aec925e4fb6d29d98",
+  "source_sha": "e2faa97de0a1dd52124914bf7454fd0dfd9a66c6",
   "surface": "review",
   "verified_controls": {
     "base_review_instructions_exact": true,
+    "canary_only_in_instruction_file": true,
     "control_files_exact": true,
     "devin_review_bound_to_each_head": true,
+    "head_trees_are_base_plus_control": true,
     "must_fire_finding_carries_canary": true,
     "must_not_fire_has_no_canary": true,
+    "must_not_fire_summary_reports_no_issues": true,
     "source_commit_unchanged": true
   }
 }

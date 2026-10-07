@@ -18,7 +18,7 @@ text; the operator did not edit it.
 
 ## REVIEW.md (passed)
 
-[review-md-762cde9.json](review-md-762cde9.json), source `762cde9`, checked
+[review-md-e2faa97.json](review-md-e2faa97.json), source `e2faa97`, checked
 2026-10-07:
 
 - The base commit `0d25618` holds exactly `README.md` and a `REVIEW.md`
@@ -34,10 +34,8 @@ text; the operator did not edit it.
   on that head reads "No Issues Found", and no Devin review or comment on the
   pull request carries the canary.
 
-[review-md-9eb7f3f.json](review-md-9eb7f3f.json) is the same run checked by an
-earlier harness. It is superseded: that harness accepted any must-not-fire
-summary, read only the first page of each list, and did not check the README or
-pull request metadata.
+Each pull request's head tree held the unchanged base files plus only its
+added control file.
 
 ## AGENTS.md
 
