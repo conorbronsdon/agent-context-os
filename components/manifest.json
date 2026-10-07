@@ -1089,6 +1089,10 @@
                     "policy": "development"
                 },
                 {
+                    "path": "docs/evidence/devin-cli-2026-10-07/hooks-24e77a3.json",
+                    "policy": "development"
+                },
+                {
                     "path": "docs/evidence/devin-cli-2026-10-07/lifecycle-attempt-1.json",
                     "policy": "development"
                 },
