@@ -106,7 +106,7 @@ establish rollback.
 Qualification must exercise actual published 0.14, 0.15 and 1.0 bundles, customized
 seeds and extensible files, managed conflicts, missing installed state, failed
 and interrupted updates, and recovery. Synthetic unit fixtures complement
-these release trials. Final 1.0 qualification also requires current host
+these release trials. Final qualification of each 1.x release also requires current host
 evidence, independent exact-source reviews, full validation and the
 [release asset gates](release-process.md).
 

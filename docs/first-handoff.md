@@ -22,14 +22,13 @@ inspect loading. See [Anthropic's memory documentation](https://code.claude.com/
 
 Start with the five attached assets from
 [v1.1.0](https://github.com/conorbronsdon/agent-context-os/releases/tag/v1.1.0).
-Follow its `OFFLINE-VERIFY.md` before extracting or running setup. Use a fresh
-directory for this exercise. The attached template tar is the workspace;
-GitHub's generated source archives are different artifacts.
-
-Source version 1.1.0 remains a candidate until the immutable release is
-published; until then use the same steps with
+Until that release is published, use
 [v1.0.0](https://github.com/conorbronsdon/agent-context-os/releases/tag/v1.0.0)
-or the source alternative below.
+and replace `v1.1.0` with `v1.0.0` in the commands below, or use the source
+alternative. Follow the release's `OFFLINE-VERIFY.md` before extracting or
+running setup. Use a fresh directory for this exercise. The attached template
+tar is the workspace; GitHub's generated source archives are different
+artifacts.
 
 After verification and extraction, initialize an independent Git repository so
 the exercise cannot inherit an enclosing repository's hooks or Git evidence:
