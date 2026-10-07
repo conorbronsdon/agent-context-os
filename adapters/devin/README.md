@@ -100,7 +100,8 @@ the apply kernel. They require `bash` and run from `$DEVIN_PROJECT_DIR`. Run
 
 Devin skills support `allowed-tools` (auto-approval) and per-skill
 `permissions` frontmatter. The shipped lifecycle skills declare neither, so
-every kernel command still goes through the session's normal permission
+they add no auto-approval of their own. The session's mode and any user-level
+or project-local permission rules still decide whether a kernel command
 prompts.
 
 Project MCP servers in `.devin/mcp_config.json` and `/handoff` to a cloud
@@ -140,11 +141,14 @@ ignored `.devin/config.local.json` that logs only event, tool, and write target,
 and proves the following:
 
 - Devin runs the shipped `SessionStart` and `PostToolUse` hooks, and their
-  reminders reach the model.
+  reminders appear as system steps Devin injects, not only in the model's reply.
 - The write reminder fires on `state/current.md` and stays silent on other paths.
-- An exit-2 probe `PreToolUse` hook blocks a write.
-- A user-only skill with `allowed-tools: [exec]` runs a shell command that
-  Normal mode rejects for an otherwise identical skill without it.
+- With the shipped hook file removed, neither reminder appears (countercontrol).
+- An exit-2 probe `PreToolUse` hook blocks a write, and the write's observation
+  carries the probe's rejection.
+- A user-only skill with `allowed-tools: [exec]` expands and runs exactly its
+  marker command. Normal mode rejects the same command for an otherwise
+  identical skill without it.
 
 The host harness checks that `AGENTS.md` is injected at session start, that
 the shipped config keeps repository and user-level Claude sources out of

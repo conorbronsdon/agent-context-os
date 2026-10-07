@@ -5,8 +5,10 @@ Devin's default Normal mode. The clone carries the shipped
 ``.devin/config.json`` import guard and ``.devin/hooks.v1.json``. A local
 probe hook in the ignored ``.devin/config.local.json`` logs only event names,
 tool names, and write targets, so the controls can show that Devin loaded and
-ran project hooks, rather than relying on the model to report it. The probe
-also blocks one synthetic path to show that a blocking pre-tool hook works.
+ran project hooks, rather than relying on the model to report it. Advisories
+count only as system steps Devin injects, and a countercontrol with the shipped
+hook file removed must inject neither. The probe also blocks one synthetic path
+to show that a blocking pre-tool hook works.
 Two synthetic user-only skills, one with ``allowed-tools`` and one without,
 show that the allowlist auto-approves a shell command that Normal mode
 otherwise rejects in print mode.
@@ -44,6 +46,7 @@ ALLOWED_SKILL = "contextos-devin-allowlist-control"
 UNLISTED_SKILL = "contextos-devin-allowlist-negative"
 MARKER_SCRIPT = "allowlist-marker.sh"
 MARKER_FILE = ".context-os/allowlist-marker.txt"
+PROBE_BLOCK_MESSAGE = "Context OS conformance probe blocked this write"
 
 SESSION_PROMPT = "Do not read any file or run any command. Reply with only the word ready."
 WRITE_PROMPT = ("Do not read any file or run any command. Call the write tool exactly once "
@@ -133,22 +136,54 @@ def require_shipped_hooks(root: Path) -> None:
             raise HarnessError(f"fixture does not carry the shipped .devin/{name}")
 
 
+ALLOWLIST_BODY = (f"Run exactly this shell command once: bash {MARKER_SCRIPT}\n"
+                  "Then reply with only the word done.\n")
+
+
 def allowlist_skill(name: str, *, allowed: bool) -> str:
     allowed_tools = "allowed-tools:\n  - exec\n" if allowed else ""
     return (f"---\nname: {name}\n"
             "description: Synthetic Devin CLI skill allowlist control.\n"
-            f"triggers: [\"user\"]\n{allowed_tools}---\n\n"
-            f"Run exactly this shell command once: bash {MARKER_SCRIPT}\n"
-            "Then reply with only the word done.\n")
+            f"triggers: [\"user\"]\n{allowed_tools}---\n\n" + ALLOWLIST_BODY)
+
+
+def write_lf(path: Path, text: str) -> None:
+    """Write LF line endings on every platform so bash can run the fixture."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(text.encode("utf-8"))
 
 
 def write_allowlist_fixture(root: Path, token: str) -> None:
-    write_text(root / MARKER_SCRIPT,
-               "#!/usr/bin/env bash\nset -eu\n"
-               f"mkdir -p \"$(dirname \"$0\")/.context-os\"\nprintf '%s\\n' {shlex.quote(token)} "
-               f">> \"$(dirname \"$0\")/{MARKER_FILE}\"\n")
+    write_lf(root / MARKER_SCRIPT,
+             "#!/usr/bin/env bash\nset -eu\n"
+             f"mkdir -p \"$(dirname \"$0\")/.context-os\"\nprintf '%s\\n' {shlex.quote(token)} "
+             f">> \"$(dirname \"$0\")/{MARKER_FILE}\"\n")
     for name, allowed in ((ALLOWED_SKILL, True), (UNLISTED_SKILL, False)):
-        write_text(root / ".agents" / "skills" / name / "SKILL.md", allowlist_skill(name, allowed=allowed))
+        write_lf(root / ".agents" / "skills" / name / "SKILL.md", allowlist_skill(name, allowed=allowed))
+
+
+def require_probe_blocked(trajectory: Trajectory) -> None:
+    """Every write to the blocked target must carry the probe's exit-2 rejection."""
+    calls = [call for call in trajectory.tool_calls()
+             if call.name == "write" and BLOCKED_TARGET in json.dumps(call.arguments)]
+    if not calls:
+        raise HarnessError("blocking control did not attempt the controlled write")
+    for call in calls:
+        if len(call.observations) != 1 or PROBE_BLOCK_MESSAGE not in call.observations[0]:
+            raise HarnessError("controlled write was not rejected by the probe hook")
+
+
+def require_allowlisted_exec(trajectory: Trajectory) -> None:
+    """The allowed skill must expand and run exactly its marker command, successfully."""
+    if not any(ALLOWLIST_BODY.strip() in message for message in trajectory.user_messages()):
+        raise HarnessError("allowed-tools skill did not expand")
+    calls = [call for call in trajectory.tool_calls() if call.name == "exec"]
+    if len(calls) != 1:
+        raise HarnessError("allowed-tools skill must make exactly one shell call")
+    call = calls[0]
+    if (call.arguments.get("command") != f"bash {MARKER_SCRIPT}" or len(call.observations) != 1
+            or not call.observations[0].rstrip().endswith("Exit code: 0")):
+        raise HarnessError("allowed-tools skill did not run exactly its marker command")
 
 
 def injected_notice(trajectory: Trajectory, text: str, *, after_tool: str | None = None) -> bool:
@@ -214,15 +249,30 @@ def execute(harness: DevinCliHarness) -> dict:
                 raise HarnessError("write advisory fired for an unprotected path")
             controls[current] = "passed"
 
+            current = "shipped_hooks_removed_injects_nothing"
+            log.unlink(missing_ok=True)
+            shipped, parked = root / ".devin" / "hooks.v1.json", base / "hooks.v1.json.parked"
+            shipped.replace(parked)
+            try:
+                write_local_config(root, {"allow": ["Write(state/**)"], "deny": ["exec"]}, hooks)
+                trajectory = harness.session(root, current, WRITE_PROMPT.format(
+                    path="state/current.md", value=secrets.token_hex(8)))
+            finally:
+                parked.replace(shipped)
+            require_shipped_hooks(root)
+            require_hook_event(read_hook_log(log), "PostToolUse", tool="write", target="state/current.md")
+            if (injected_notice(trajectory, SESSION_NOTICE)
+                    or injected_notice(trajectory, "proposal/apply kernel")):
+                raise HarnessError("advisory reached the model without the shipped hooks")
+            controls[current] = "passed"
+
             current = "blocking_pre_tool_hook_blocks_write"
             log.unlink(missing_ok=True)
             write_local_config(root, {"allow": ["Write(**)"], "deny": ["exec"]}, hooks)
             trajectory = harness.session(root, current, WRITE_PROMPT.format(
                 path=BLOCKED_TARGET, value=secrets.token_hex(8)))
             require_hook_event(read_hook_log(log), "PreToolUse", tool="write", target=BLOCKED_TARGET)
-            if not any(call.name == "write" and BLOCKED_TARGET in json.dumps(call.arguments)
-                       for call in trajectory.tool_calls()):
-                raise HarnessError("blocking control did not attempt the controlled write")
+            require_probe_blocked(trajectory)
             if (root / BLOCKED_TARGET).exists():
                 raise HarnessError("blocking pre-tool hook did not stop the write")
             controls[current] = "passed"
@@ -240,7 +290,8 @@ def execute(harness: DevinCliHarness) -> dict:
             controls[current] = "passed"
 
             current = "skill_allowed_tools_auto_approves_exec"
-            harness.session(root, current, f"/{ALLOWED_SKILL}")
+            trajectory = harness.session(root, current, f"/{ALLOWED_SKILL}")
+            require_allowlisted_exec(trajectory)
             if not marker.is_file() or marker.read_text(encoding="utf-8").splitlines() != [token]:
                 raise HarnessError("allowed-tools skill did not run its shell command exactly once")
             controls[current] = "passed"

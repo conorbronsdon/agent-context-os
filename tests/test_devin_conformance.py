@@ -112,7 +112,8 @@ class DevinDescriptorTest(unittest.TestCase):
 
     def test_unrun_harnesses_do_not_claim_capability_evidence(self) -> None:
         sources = {source["id"]: source for source in DESCRIPTOR["evidence"]["sources"]}
-        for name in ("devin-conformance", "devin-live-harness", "devin-ui-harness"):
+        for name in ("devin-conformance", "devin-live-harness", "devin-ui-harness",
+                     "devin-cli-hook-harness"):
             self.assertEqual(["support"], sources[name]["claims"])
         self.assertIn("explicit_invocation", sources["devin-skills"]["claims"])
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -19,6 +20,7 @@ sys.modules[SPEC.name] = hooks
 SPEC.loader.exec_module(hooks)
 
 
+@unittest.skipIf(os.name == "nt", "the probe command is POSIX; the harness refuses native Windows")
 class HookProbeTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -103,6 +105,40 @@ class InjectedNoticeTest(unittest.TestCase):
                                                after_tool="write"))
         self.assertTrue(hooks.injected_notice(self.trajectory(notice, user), hooks.WRITE_NOTICE))
 
+    def call(self, name: str, arguments: dict, observation: str, call_id: str = "c1") -> dict:
+        return {"source": "agent", "message": "",
+                "tool_calls": [{"tool_call_id": call_id, "function_name": name, "arguments": arguments}],
+                "observation": {"results": [{"source_call_id": call_id, "content": observation}]}}
+
+    def test_blocking_control_requires_the_probe_rejection(self) -> None:
+        self.assertIn(hooks.PROBE_BLOCK_MESSAGE, hooks.PROBE_SOURCE)
+        arguments = {"file_path": hooks.BLOCKED_TARGET, "content": "x"}
+        hooks.require_probe_blocked(self.trajectory(
+            self.call("write", arguments, "Tool rejected: " + hooks.PROBE_BLOCK_MESSAGE)))
+        for trajectory in (
+            self.trajectory(self.call("write", arguments, "Tool execution was rejected by the user")),
+            self.trajectory(self.call("write", {"file_path": "other.txt"}, hooks.PROBE_BLOCK_MESSAGE)),
+        ):
+            with self.assertRaises(hooks.HarnessError):
+                hooks.require_probe_blocked(trajectory)
+
+    def test_allowlist_control_requires_expansion_and_the_exact_command(self) -> None:
+        expanded = {"source": "user", "message": hooks.ALLOWLIST_BODY}
+        command = {"command": f"bash {hooks.MARKER_SCRIPT}"}
+        hooks.require_allowlisted_exec(self.trajectory(
+            expanded, self.call("exec", command, "Output\n\nExit code: 0")))
+        for trajectory in (
+            self.trajectory({"source": "user", "message": "/skill"},
+                            self.call("exec", command, "Exit code: 0")),
+            self.trajectory(expanded, self.call("exec", {"command": f"cat x; bash {hooks.MARKER_SCRIPT}"},
+                                                "Exit code: 0")),
+            self.trajectory(expanded, self.call("exec", command, "Exit code: 1")),
+            self.trajectory(expanded, self.call("exec", command, "Exit code: 0"),
+                            self.call("exec", command, "Exit code: 0", call_id="c2")),
+        ):
+            with self.assertRaises(hooks.HarnessError):
+                hooks.require_allowlisted_exec(trajectory)
+
 
 class FixtureTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -145,6 +181,9 @@ class FixtureTest(unittest.TestCase):
             self.assertIn(f"bash {hooks.MARKER_SCRIPT}", text)
         self.assertIn("allowed-tools:\n  - exec\n", allowed)
         self.assertNotIn("allowed-tools", unlisted)
+        self.assertNotIn(b"\r", (self.root / hooks.MARKER_SCRIPT).read_bytes())
+        if os.name == "nt":
+            return
         subprocess.run(["bash", hooks.MARKER_SCRIPT], cwd=self.root, check=True)
         self.assertEqual(["TOKEN"], (self.root / hooks.MARKER_FILE).read_text(encoding="utf-8").splitlines())
 

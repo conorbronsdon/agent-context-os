@@ -97,6 +97,7 @@
         "devin-cli-host-harness",
         "devin-cli-lifecycle-harness",
         "devin-cli-hook-harness",
+        "devin-cli-hook-evidence",
         "devin-cli-live-evidence"
       ]
     },
@@ -309,7 +310,14 @@
         "type": "conformance",
         "location": "adapters/devin/cli_hook_conformance.py",
         "claims": [
-          "support",
+          "support"
+        ]
+      },
+      {
+        "id": "devin-cli-hook-evidence",
+        "type": "conformance",
+        "location": "docs/evidence/devin-cli-2026-10-07/README.md",
+        "claims": [
           "project_hooks",
           "blocking_pre_tool_hook",
           "skill_allowlists",
