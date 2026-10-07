@@ -21,20 +21,21 @@ inspect loading. See [Anthropic's memory documentation](https://code.claude.com/
 ## 1. Set up one shared workspace
 
 Start with the five attached assets from
-[v1.0.0](https://github.com/conorbronsdon/agent-context-os/releases/tag/v1.0.0).
+[v1.1.0](https://github.com/conorbronsdon/agent-context-os/releases/tag/v1.1.0).
 Follow its `OFFLINE-VERIFY.md` before extracting or running setup. Use a fresh
 directory for this exercise. The attached template tar is the workspace;
 GitHub's generated source archives are different artifacts.
 
-The 1.0.0 template fixes the runtime-registration failure in 0.15.0. Source
-version 1.0.0 remains a candidate until the immutable release is published; use
-the source alternative below if that release is not available yet.
+Source version 1.1.0 remains a candidate until the immutable release is
+published; until then use the same steps with
+[v1.0.0](https://github.com/conorbronsdon/agent-context-os/releases/tag/v1.0.0)
+or the source alternative below.
 
 After verification and extraction, initialize an independent Git repository so
 the exercise cannot inherit an enclosing repository's hooks or Git evidence:
 
 ```bash
-cd agent-context-os-template-v1.0.0
+cd agent-context-os-template-v1.1.0
 git init
 bash scripts/setup.sh --agents claude,codex
 ```

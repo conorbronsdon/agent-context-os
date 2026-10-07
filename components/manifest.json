@@ -1049,6 +1049,10 @@
                     "policy": "managed"
                 },
                 {
+                    "path": "docs/releases/v1.1.0.md",
+                    "policy": "managed"
+                },
+                {
                     "path": "docs/feedback-review-2026-10-04.md",
                     "policy": "development"
                 },

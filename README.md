@@ -55,15 +55,17 @@ Personal and business context often belongs in a private repository. Create an e
 
 ### Start from a published release
 
-Source version 1.0.0 is a candidate until the immutable release is published.
+Source version 1.1.0 is a candidate until the immutable release is published;
+[v1.0.0](https://github.com/conorbronsdon/agent-context-os/releases/tag/v1.0.0)
+is the latest published release until then.
 
-For a version-pinned workspace, open [v1.0.0](https://github.com/conorbronsdon/agent-context-os/releases/tag/v1.0.0)
+For a version-pinned workspace, open [v1.1.0](https://github.com/conorbronsdon/agent-context-os/releases/tag/v1.1.0)
 and download all five attached assets: the template `.tar`, bundle lock,
 provenance, `OFFLINE-VERIFY.md`, and `SHA256SUMS`. Follow that release's
-`agent-context-os-template-v1.0.0.OFFLINE-VERIFY.md` to verify the assets before
+`agent-context-os-template-v1.1.0.OFFLINE-VERIFY.md` to verify the assets before
 extracting and running setup. GitHub's generated source ZIP and tar.gz are
 repository snapshots; the attached template tar is the canonical workspace.
-Use the [v1.0.0 release notes](docs/releases/v1.0.0.md) for what that version
+Use the [v1.1.0 release notes](docs/releases/v1.1.0.md) for what that version
 ships. Changes and support promotions described on a development branch may
 require a later release.
 
@@ -72,9 +74,9 @@ before running setup (`git init`). This gives its hooks and Git evidence an
 independent boundary. The [first reviewed handoff](docs/first-handoff.md) covers
 release verification and a local synthetic exercise.
 
-Version 1.0.0 fixes the 0.15.0 template runtime-registration defect. If the
-1.0.0 release is not published yet, use the source setup path below; do not treat
-a candidate branch as published artifact qualification.
+Version 1.1.0 adds first-class Devin CLI support. If the 1.1.0 release is not
+published yet, use v1.0.0 or the source setup path below; do not treat a
+candidate branch as published artifact qualification.
 
 ### Start from source
 
@@ -349,7 +351,7 @@ behavior of an installed agent version or an external service.
 | See every command and portable skill | [Commands and skills](docs/commands-and-skills.md) |
 | Understand component ownership and the composition/materialization substrate | [Component model](docs/component-model.md) |
 | Verify an offline bundle or inspect a structural plan | [Bundle locks and plans](docs/bundle-locks.md) |
-| Read release scope and evidence limits | [v1.0.0 release notes](docs/releases/v1.0.0.md); released [v0.15.0](docs/releases/v0.15.0.md), [v0.14.0](docs/releases/v0.14.0.md), [v0.13.1](docs/releases/v0.13.1.md), and [v0.12.0](docs/releases/v0.12.0.md) |
+| Read release scope and evidence limits | [v1.1.0 release notes](docs/releases/v1.1.0.md); released [v1.0.0](docs/releases/v1.0.0.md), [v0.15.0](docs/releases/v0.15.0.md), [v0.14.0](docs/releases/v0.14.0.md), [v0.13.1](docs/releases/v0.13.1.md), and [v0.12.0](docs/releases/v0.12.0.md) |
 | Understand KernelRoot, ContextRoot, WorkingRoot, and the v0.12 compatibility boundary | [Root contract](docs/root-contract.md) |
 | Choose an optional add-on | [Integration chooser](docs/integrations-guide.md) and [catalog](references/integrations.md) |
 | Understand product language and boundaries | [Positioning](docs/positioning.md) |

@@ -22,6 +22,9 @@ PUBLISHED = {
     '0.15.0': ('947769c957423919ffcd37d4c83573aea1539bae',
                'c253fc5c56bb5d166e7d925777d67f01418bdcb1cc3594feb07d2525e342381d',
                '7d64abcbb3b80cb722157c34ebe80c8ce42631a6e2fcaf6296e724e8d46b95eb'),
+    '1.0.0': ('08b7a76112605c49b287cb2e1b2e29e1f1a0ff35',
+              'acaf77cfd6f3e1fecd29366a9317ef404bafc177d754b55cf133f6123e81df79',
+              '05d45ccedd597c706ebcad4bd61b37a6d528d42971c7e48509ea85c6a288ccca'),
 }
 
 def require(condition, message):
@@ -191,7 +194,7 @@ def main():
     require(not args.output.exists(), 'output must not exist; preserve prior evidence')
     args.output.mkdir(parents=True)
     outcome = {'synthetic': True, 'native_runtime_evidence': False, 'human_volunteer_evidence': False,
-               'final_release_qualification': args.expect_version == '1.0.0', 'cases': []}
+               'final_release_qualification': args.expect_version == '1.1.0', 'cases': []}
     try:
         candidate = bundle(args.candidate_assets.resolve(), args.output / 'candidate', args.expect_version,
                            args.expect_commit, args.expect_archive_sha256, args.expect_bundle_sha256)

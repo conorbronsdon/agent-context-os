@@ -1,8 +1,8 @@
 # Compatibility contract for 1.0
 
-Status: the compatibility promise for 1.0.0, effective when the qualified
-release is published. Source version 1.0.0 is a candidate until that publication.
-The release tracker is [#228](https://github.com/conorbronsdon/agent-context-os/issues/228).
+Status: the compatibility promise for 1.x, in effect since the qualified 1.0.0
+release was published ([#228](https://github.com/conorbronsdon/agent-context-os/issues/228)).
+Source version 1.1.0 is a candidate until its immutable release is published.
 
 ## Supported interfaces
 
@@ -103,7 +103,7 @@ durable receipt. Check `.context-os/receipts/` and
 `.context-os/installed-bundle.json` before retrying; a nonzero exit alone does not
 establish rollback.
 
-Qualification must exercise actual published 0.14 and 0.15 bundles, customized
+Qualification must exercise actual published 0.14, 0.15 and 1.0 bundles, customized
 seeds and extensible files, managed conflicts, missing installed state, failed
 and interrupted updates, and recovery. Synthetic unit fixtures complement
 these release trials. Final 1.0 qualification also requires current host
