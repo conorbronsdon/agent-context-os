@@ -24,7 +24,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from adapters.devin.cli_conformance import (  # noqa: E402
-    DevinCliHarness, HarnessError, REPOSITORY_ROOT, Trajectory, output_summary,
+    DevinCliHarness, HarnessError, REJECTED_BY_DENY, REPOSITORY_ROOT, Trajectory, output_summary,
     repository_source_sha, require_outside_source, require_success, write_local_permissions,
 )
 from contextos.kernel import validate_proposal  # noqa: E402
@@ -35,23 +35,24 @@ PHASES = ("setup", "start", "update", "end")
 
 
 def lifecycle_permissions(root: Path) -> dict[str, list[str]]:
-    """Allow the kernel by relative or absolute path; deny every apply form.
+    """Allow shell inspection and payload writes; deny every apply form.
 
-    Same-level deny beat allow in live probes, so the local config can grant
-    the kernel wrapper while keeping apply out of Devin's reach. A rejected
-    call ends a print-mode session, so read-only kernel help must be allowed.
+    One rejected call ends a print-mode session, and the skills chain
+    arbitrary read-only shell commands, so the disposable fixture allows the
+    exec tool broadly, as the Cursor lifecycle run allowed its shell. A same-
+    level deny beat an allow in live probes, so apply, direct Python, and
+    mutating Git stay denied. File writes stay limited to payload inputs, and
+    the harness separately requires every tracked file to be unchanged before
+    the operator applies.
     """
-    wrappers = ["bash scripts/contextos.sh", f"bash {root.as_posix()}/scripts/contextos.sh"]
-    modules = ["python3 -m contextos", "python -m contextos"]
+    wrappers = ["bash scripts/contextos.sh", f"bash {root.as_posix()}/scripts/contextos.sh",
+                "sh scripts/contextos.sh"]
     return {
-        "allow": [f"Exec({form})" for form in wrappers]
-        + ["Exec(git status)", "Exec(git diff)", "Exec(git log)", "Write(.context-os/inputs/**)",
-           "Exec(mkdir -p .context-os/inputs)"]
-        # Read-only utilities the skills commonly chain; Devin did not classify
-        # every one as read-only, and one rejected call ends a print session.
-        + [f"Exec({tool})" for tool in ("date", "pwd", "ls", "cat", "head", "tail", "wc", "find", "grep")],
-        "deny": [f"Exec({form} apply)" for form in wrappers + modules]
-        + [f"Exec({form})" for form in modules] + ["webfetch", "web_search"],
+        "allow": ["exec", "Write(.context-os/inputs/**)"],
+        "deny": [f"Exec({form} apply)" for form in wrappers]
+        + [f"Exec({tool})" for tool in ("python3", "python", "rm", "git commit", "git push",
+                                        "git checkout", "git reset", "git restore", "git stash")]
+        + ["webfetch", "web_search"],
     }
 
 
@@ -215,6 +216,12 @@ def execute(harness: DevinCliHarness, approvals: Path, evidence: Path) -> dict:
                 result["prompts"][phase] = prompt
                 trajectory = harness.session(root, f"lifecycle-{phase}", prompt)
                 require_guarded_context(trajectory)
+                apply_attempts = [call for call in trajectory.tool_calls() if call.name == "exec"
+                                  and "contextos" in json.dumps(call.arguments) and " apply" in json.dumps(call.arguments)]
+                if any(len(call.observations) != 1 or REJECTED_BY_DENY not in call.observations[0]
+                       for call in apply_attempts):
+                    raise HarnessError("a model apply attempt was not rejected by the fixture deny rule")
+                result.setdefault("model_apply_attempts_denied", {})[phase] = len(apply_attempts)
                 if state(root, include_pending=phase == "start") != before:
                     raise HarnessError("lifecycle changed files before operator apply")
                 head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True,
