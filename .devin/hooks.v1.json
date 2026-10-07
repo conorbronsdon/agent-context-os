@@ -11,7 +11,7 @@
       ]
     }
   ],
-  "PreToolUse": [
+  "PostToolUse": [
     {
       "matcher": "^(edit|write|apply_patch|notebook_edit)$",
       "hooks": [

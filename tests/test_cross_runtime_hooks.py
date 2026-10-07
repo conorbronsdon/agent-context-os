@@ -224,18 +224,18 @@ class CrossRuntimeHookTest(unittest.TestCase):
             with self.subTest(tool=tool):
                 result = self.run_devin_hook(
                     "pre-write",
-                    {"hook_event_name": "PreToolUse", "tool_name": tool, "tool_input": tool_input},
+                    {"hook_event_name": "PostToolUse", "tool_name": tool, "tool_input": tool_input},
                 )
                 self.assertEqual(0, result.returncode, result.stderr)
                 output = json.loads(result.stdout)["hookSpecificOutput"]
-                self.assertEqual("PreToolUse", output["hookEventName"])
+                self.assertEqual("PostToolUse", output["hookEventName"])
                 self.assertIn("proposal/apply", output["additionalContext"])
                 self.assertNotIn("decision", json.loads(result.stdout))
 
     def test_devin_pre_write_must_not_fire_control(self) -> None:
         result = self.run_devin_hook(
             "pre-write",
-            {"hook_event_name": "PreToolUse", "tool_name": "edit",
+            {"hook_event_name": "PostToolUse", "tool_name": "edit",
              "tool_input": {"file_path": str(ROOT / "README.md")}},
         )
         self.assertEqual(0, result.returncode, result.stderr)

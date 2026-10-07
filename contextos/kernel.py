@@ -4640,7 +4640,9 @@ def runtime_surface(manifest: dict[str, Any], surface_id: str | None = None) -> 
     return surfaces[selected]
 
 
-HOOK_EVENT_NAMES = {"session-start": "SessionStart", "pre-write": "PreToolUse"}
+# Devin injects additionalContext only for SessionStart, UserPromptSubmit, and
+# PostToolUse, so its write advisory is delivered after the tool runs.
+HOOK_EVENT_NAMES = {"session-start": "SessionStart", "pre-write": "PostToolUse"}
 
 
 def runtime_hook_payload(

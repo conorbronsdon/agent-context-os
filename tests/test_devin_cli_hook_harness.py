@@ -95,14 +95,15 @@ class FixtureTest(unittest.TestCase):
     def test_probe_hooks_use_the_shipped_write_matcher(self) -> None:
         shipped = json.loads(hooks.SHIPPED_HOOKS.read_text(encoding="utf-8"))
         probe = hooks.probe_hooks("probe")
-        self.assertEqual(set(shipped), set(probe))
-        self.assertEqual(shipped["PreToolUse"][0]["matcher"], probe["PreToolUse"][0]["matcher"])
+        self.assertLessEqual(set(shipped), set(probe))
+        self.assertEqual(shipped["PostToolUse"][0]["matcher"], probe["PostToolUse"][0]["matcher"])
+        self.assertEqual(shipped["PostToolUse"][0]["matcher"], probe["PreToolUse"][0]["matcher"])
 
     def test_local_config_never_touches_shipped_files(self) -> None:
         hooks.write_local_config(self.root, {"deny": ["exec"]}, hooks.probe_hooks("probe"))
         local = json.loads((self.root / ".devin/config.local.json").read_text(encoding="utf-8"))
         self.assertEqual({"deny": ["exec"]}, local["permissions"])
-        self.assertEqual({"SessionStart", "PreToolUse"}, set(local["hooks"]))
+        self.assertEqual({"SessionStart", "PreToolUse", "PostToolUse"}, set(local["hooks"]))
         self.assertFalse((self.root / ".devin/config.json").exists())
         self.assertFalse((self.root / ".devin/hooks.v1.json").exists())
 

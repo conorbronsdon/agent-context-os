@@ -94,6 +94,7 @@ def probe_hooks(command: str) -> dict[str, list[dict]]:
     return {
         "SessionStart": [{"matcher": "", "hooks": [dict(entry)]}],
         "PreToolUse": [{"matcher": WRITE_MATCHER, "hooks": [dict(entry)]}],
+        "PostToolUse": [{"matcher": WRITE_MATCHER, "hooks": [dict(entry)]}],
     }
 
 
@@ -185,24 +186,24 @@ def execute(harness: DevinCliHarness) -> dict:
                 raise HarnessError("shipped SessionStart advisory did not reach the model")
             controls[current] = "passed"
 
-            current = "pre_write_hook_fires_on_lifecycle_state"
+            current = "write_hook_fires_on_lifecycle_state"
             log.unlink(missing_ok=True)
             write_local_config(root, {"allow": ["Write(state/**)"], "deny": ["exec"]}, hooks)
             trajectory = harness.session(root, current, WRITE_PROMPT.format(
                 path="state/current.md", value=secrets.token_hex(8)))
-            require_hook_event(read_hook_log(log), "PreToolUse", tool="write", target="state/current.md")
+            require_hook_event(read_hook_log(log), "PostToolUse", tool="write", target="state/current.md")
             if not mentions(trajectory, PRE_WRITE_NOTICE):
-                raise HarnessError("shipped pre-write advisory did not reach the model")
+                raise HarnessError("shipped write advisory did not reach the model")
             controls[current] = "passed"
 
-            current = "pre_write_hook_silent_elsewhere"
+            current = "write_hook_silent_elsewhere"
             log.unlink(missing_ok=True)
             write_local_config(root, {"allow": ["Write(allowed/**)"], "deny": ["exec"]}, hooks)
             trajectory = harness.session(root, current, WRITE_PROMPT.format(
                 path="allowed/probe.txt", value=secrets.token_hex(8)))
-            require_hook_event(read_hook_log(log), "PreToolUse", tool="write", target="allowed/probe.txt")
+            require_hook_event(read_hook_log(log), "PostToolUse", tool="write", target="allowed/probe.txt")
             if mentions(trajectory, PRE_WRITE_NOTICE):
-                raise HarnessError("pre-write advisory fired for an unprotected path")
+                raise HarnessError("write advisory fired for an unprotected path")
             controls[current] = "passed"
 
             current = "blocking_pre_tool_hook_blocks_write"

@@ -194,10 +194,10 @@ class DevinDescriptorTest(unittest.TestCase):
 
     def test_cli_hooks_route_only_advisory_lifecycle_events(self) -> None:
         hooks = json.loads((ROOT / ".devin/hooks.v1.json").read_text(encoding="utf-8"))
-        self.assertEqual({"SessionStart", "PreToolUse"}, set(hooks))
+        self.assertEqual({"SessionStart", "PostToolUse"}, set(hooks))
         expected = {
             "SessionStart": ("", "session-start"),
-            "PreToolUse": ("^(edit|write|apply_patch|notebook_edit)$", "pre-write"),
+            "PostToolUse": ("^(edit|write|apply_patch|notebook_edit)$", "pre-write"),
         }
         for event, (matcher, kernel_event) in expected.items():
             with self.subTest(event=event):
