@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+- Live Devin Review evidence for the `AGENTS.md` control set: Review followed
+  the shipped instruction file on a public fixture
+  (`docs/evidence/devin-review-2026-10-07/`). Review stays a compatibility
+  surface.
+
 ## [1.1.0] — 2026-10-07 — Devin CLI lifecycle support
 
 ### Added
