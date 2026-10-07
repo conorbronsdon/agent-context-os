@@ -3,6 +3,18 @@
 ## [Unreleased]
 
 ### Added
+- Devin CLI ships `.devin/hooks.v1.json`. The import guard disables Devin's
+  `.claude/` hook import, so these hooks restore the lifecycle advisories:
+  `SessionStart` and a `PreToolUse` hook on `edit`, `write`, `apply_patch`, and
+  `notebook_edit`. Both run `scripts/context-os-hook.sh devin` and return
+  Devin's `hookSpecificOutput.additionalContext`, a new `additional-context`
+  hook output mode. They never block. The CLI surface now claims
+  `project_hooks`, `blocking_pre_tool_hook`, and `skill_allowlists`.
+  `adapters/devin/cli_hook_conformance.py` is a new opt-in live harness. It
+  checks that Devin runs the shipped hooks, that their advisories reach the
+  model, and that a synthetic probe hook can block a write. It also checks that
+  a skill's `allowed-tools` auto-approves a shell command that Normal mode
+  otherwise rejects.
 - Devin CLI is a first-class lifecycle host (#71), scoped to `3000.11.3` on
   Linux (WSL2). A shipped `.devin/config.json` stops Devin importing Claude,
   Cursor, Windsurf, Copilot, OpenCode, and Zed configuration, which otherwise

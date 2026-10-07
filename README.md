@@ -224,7 +224,7 @@ Compatibility paths that are not registered runtime adapters:
 | Identity, project, state, and session files | Yes | Reads | Reads | Reads | Reads | Reads | Reads | Reads |
 | Deterministic proposal/apply and receipts | Yes | Adapter | Native skill calls | Typed command + native skill | Installed skill calls | Copied skill calls | Native skill calls | Native skill calls |
 | Lifecycle vocabulary | Semantics | `/setup` etc. | `$setup` etc. | `/context-setup` etc. | `/context-setup` etc. | `/contextos <alias> setup` etc. | `/context-setup` etc. | `/context-setup` / `@skills:context-setup` etc. |
-| Project hooks | Event contract only | `.claude/` | `.codex/` | Not claimed | Optional adapter | Not claimed | Not claimed | Not claimed |
+| Project hooks | Event contract only | `.claude/` | `.codex/` | Not claimed | Optional adapter | Not claimed | Not claimed | CLI `.devin/hooks.v1.json`; session not claimed |
 | Native memory | No | Claude auto-memory | Outside contract | Outside contract | `MEMORY.md` / `USER.md` | Private workspace | Outside contract | Outside contract; cloud state account-managed |
 
 The shared layer is intentionally plain files. Provider-specific tool names, hooks, permissions, and memory features stay in their adapter directories.

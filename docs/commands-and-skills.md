@@ -40,7 +40,7 @@ The mutation protocol is always:
 |---|---|---|---|---|---|---|
 | Project instructions | `CLAUDE.md` | `AGENTS.md` | `AGENTS.md` | Alias-bound execution-directory `AGENTS.md` | Root `AGENTS.md` | Root `AGENTS.md` |
 | Portable skill source | Thin slash adapters | `.agents/skills/` | External directory or copied skills | Copied into private workspace `.agents/skills/` | `.agents/skills/` | `.agents/skills/` |
-| Project hooks | `.claude/settings.json` | `.codex/hooks.json` after trust | Optional shell/plugin adapter | Not claimed | Not claimed | Not claimed |
+| Project hooks | `.claude/settings.json` | `.codex/hooks.json` after trust | Optional shell/plugin adapter | Not claimed | Not claimed | CLI `.devin/hooks.v1.json`; session not claimed |
 | Authorization | Host settings | Host settings | Outside contract | Operator-scoped lifecycle plugin, OpenClaw model-tool policy, and separate trusted-shell apply | IDE/CLI permissions; CLI `--force` | CLI Normal-mode prompts (project rules limited); cloud account-managed |
 | Lifecycle enforcement | Kernel | Kernel | Kernel | Kernel | Kernel | Kernel |
 | Native memory | Claude auto-memory | Not part of the shared contract | `MEMORY.md` and `USER.md` | Private OpenClaw workspace | Outside contract | Outside contract; cloud Knowledge is not synchronized |

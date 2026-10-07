@@ -1710,12 +1710,24 @@
                     "policy": "managed"
                 },
                 {
+                    "path": ".devin/hooks.v1.json",
+                    "policy": "managed"
+                },
+                {
                     "path": "adapters/devin/cli_conformance.py",
                     "policy": "managed"
                 },
                 {
                     "path": "adapters/devin/cli_lifecycle_conformance.py",
                     "policy": "managed"
+                },
+                {
+                    "path": "adapters/devin/cli_hook_conformance.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "tests/test_devin_cli_hook_harness.py",
+                    "policy": "development"
                 },
                 {
                     "path": "tests/test_devin_cli_harness.py",

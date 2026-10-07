@@ -1149,7 +1149,7 @@ def main(argv: list[str] | None = None) -> int:
                 root, args.event, payload, roles=roles if split_mode else None
             )
             messages = [item["message"] for item in report["findings"]]
-            rendered = render_hook_payload(hook_output, messages)
+            rendered = render_hook_payload(hook_output, messages, args.event)
             if rendered is not None:
                 emit(rendered)
         return 0
@@ -1169,7 +1169,9 @@ def main(argv: list[str] | None = None) -> int:
             message = f"Context OS advisory hook could not run: {exc}"
             # If no validated descriptor established a host protocol, silence
             # is safer than emitting another runtime's incompatible envelope.
-            rendered = render_hook_payload(hook_output, [message])
+            rendered = render_hook_payload(
+                hook_output, [message], getattr(args, "event", None)
+            )
             if rendered is not None:
                 emit(rendered)
             return 0

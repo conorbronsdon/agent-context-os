@@ -34,7 +34,7 @@ INSTALL_MODES = {
     "skill-copy-to-private-workspace",
 }
 SURFACE_KINDS = {"cli", "ide", "cloud", "review", "gateway", "messaging", "environment"}
-HOOK_OUTPUT_MODES = {"system-message", "allow-message"}
+HOOK_OUTPUT_MODES = {"additional-context", "system-message", "allow-message"}
 PROBE_PURPOSES = {"availability", "version", "native-doctor"}
 INVOCATION_KEYS = {"setup", "start", "update", "end"}
 TOP_LEVEL_KEYS = {

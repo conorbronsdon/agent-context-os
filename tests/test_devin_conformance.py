@@ -51,17 +51,17 @@ class DevinDescriptorTest(unittest.TestCase):
             {
                 "agent_skills": "native",
                 "explicit_invocation": "native",
-                "project_hooks": "unsupported",
-                "blocking_pre_tool_hook": "unsupported",
+                "project_hooks": "native",
+                "blocking_pre_tool_hook": "native",
                 "mcp": "native",
                 "native_memory": "unsupported",
                 "proposal_apply": "adapter",
-                "skill_allowlists": "unsupported",
+                "skill_allowlists": "native",
                 "execution_authorization": "native",
             },
             cli["capabilities"],
         )
-        self.assertIsNone(cli["hook_output"])
+        self.assertEqual("additional-context", cli["hook_output"])
         self.assertEqual(
             [{"purpose": "availability", "candidates": ["devin"]},
              {"purpose": "version", "candidates": ["devin"]}],
@@ -73,7 +73,7 @@ class DevinDescriptorTest(unittest.TestCase):
         self.assertEqual(["support", "proposal_apply"], sources["devin-cli-lifecycle-harness"]["claims"])
         self.assertEqual("conformance", sources["devin-cli-live-evidence"]["type"])
 
-    def test_cli_import_guard_ships_only_read_config_from(self) -> None:
+    def test_cli_import_guard_ships_only_read_config_from_and_hooks(self) -> None:
         config = json.loads((ROOT / ".devin/config.json").read_text(encoding="utf-8"))
         self.assertEqual(
             {"read_config_from": {name: False for name in (
@@ -82,7 +82,7 @@ class DevinDescriptorTest(unittest.TestCase):
         )
         # Devin writes approvals to the ignored config.local.json; only the guard ships.
         self.assertEqual(
-            [".devin/config.json"],
+            [".devin/config.json", ".devin/hooks.v1.json"],
             sorted(path.relative_to(ROOT).as_posix() for path in (ROOT / ".devin").rglob("*")
                    if path.is_file() and path.name != "config.local.json"),
         )
@@ -164,8 +164,8 @@ class DevinDescriptorTest(unittest.TestCase):
             },
             session["capabilities"],
         )
-        for surface in DESCRIPTOR["surfaces"].values():
-            self.assertIsNone(surface["hook_output"])
+        for surface_id in ("session", "review"):
+            self.assertIsNone(DESCRIPTOR["surfaces"][surface_id]["hook_output"])
 
     def test_guide_preserves_repo_account_and_data_transfer_boundaries(self) -> None:
         guide = " ".join(GUIDE_PATH.read_text(encoding="utf-8").split())
@@ -192,8 +192,30 @@ class DevinDescriptorTest(unittest.TestCase):
             with self.subTest(required=required):
                 self.assertIn(required, guide)
 
+    def test_cli_hooks_route_only_advisory_lifecycle_events(self) -> None:
+        hooks = json.loads((ROOT / ".devin/hooks.v1.json").read_text(encoding="utf-8"))
+        self.assertEqual({"SessionStart", "PreToolUse"}, set(hooks))
+        expected = {
+            "SessionStart": ("", "session-start"),
+            "PreToolUse": ("^(edit|write|apply_patch|notebook_edit)$", "pre-write"),
+        }
+        for event, (matcher, kernel_event) in expected.items():
+            with self.subTest(event=event):
+                self.assertEqual(1, len(hooks[event]))
+                group = hooks[event][0]
+                self.assertEqual(matcher, group["matcher"])
+                self.assertEqual(
+                    [{
+                        "type": "command",
+                        "command": 'bash "$DEVIN_PROJECT_DIR/scripts/context-os-hook.sh" '
+                                   f"devin {kernel_event} cli",
+                        "timeout": 10,
+                    }],
+                    group["hooks"],
+                )
+
     def test_adapter_does_not_ship_fake_devin_configuration(self) -> None:
-        for path in ("devin.yaml", "devin.yml", "blueprint.yaml", ".devin/hooks.v1.json",
+        for path in ("devin.yaml", "devin.yml", "blueprint.yaml",
                      ".devin/mcp_config.json", ".devin/skills"):
             with self.subTest(path=path):
                 self.assertFalse((ROOT / path).exists())

@@ -4640,21 +4640,37 @@ def runtime_surface(manifest: dict[str, Any], surface_id: str | None = None) -> 
     return surfaces[selected]
 
 
+HOOK_EVENT_NAMES = {"session-start": "SessionStart", "pre-write": "PreToolUse"}
+
+
 def runtime_hook_payload(
-    manifest: dict[str, Any], messages: list[str], surface_id: str | None = None
-) -> dict[str, str] | None:
+    manifest: dict[str, Any],
+    messages: list[str],
+    surface_id: str | None = None,
+    event: str | None = None,
+) -> dict[str, Any] | None:
     hook_output = runtime_surface(manifest, surface_id).get("hook_output")
-    return render_hook_payload(hook_output, messages)
+    return render_hook_payload(hook_output, messages, event)
 
 
 def render_hook_payload(
-    hook_output: str | None, messages: list[str]
-) -> dict[str, str] | None:
+    hook_output: str | None, messages: list[str], event: str | None = None
+) -> dict[str, Any] | None:
     message = "\n".join(messages)
     if hook_output is None:
         return None
     if hook_output == "system-message":
         return {"systemMessage": message} if message else None
+    if hook_output == "additional-context":
+        event_name = HOOK_EVENT_NAMES.get(event or "")
+        if not message or event_name is None:
+            return None
+        return {
+            "hookSpecificOutput": {
+                "hookEventName": event_name,
+                "additionalContext": message,
+            }
+        }
     return {"action": "allow", "message": message}
 
 
