@@ -1,0 +1,77 @@
+{
+  "base_file_sha256": {
+    "AGENTS.md": "80ba99f70846d84280ed91b9d9bdf93aa08ac12eb4a8d3a44a73ecdcf4d7c388",
+    "README.md": "82abc9b6120faf23eb592edb9d2cde7db9f37ca5ab82d3650cb7b6ac5da510fe"
+  },
+  "base_sha": "72704afd8cae8c917560db0098ed728cf3f21994",
+  "checked_at": "2026-10-07T22:16:33.344309+00:00",
+  "finding_publication": "user_posted",
+  "instruction_file": "AGENTS.md",
+  "limits": [
+    "Devin generated the finding; when 'finding_publication' is 'user_posted', an operator published it with Devin Review's Post to GitHub action.",
+    "The canary and marker are checked absent from the base README and pull request titles and bodies; Devin Review's other inputs are not inspectable.",
+    "Review reads repository instructions only; it is not a lifecycle host."
+  ],
+  "must_fire": {
+    "file": "control.txt",
+    "file_sha256": "4a175c613c67548c09b6a8187d224bcb91ad5e624ee90242fab40c59ff9332e3",
+    "findings": [
+      {
+        "body_sha256": "5245cb56be76a5dc09588ee5e1f7b5f11b89169a81997f2078298aae19dff294",
+        "bound_to_head": true,
+        "commit_id": "ba651635b68399065f441683194af0f6725bdb7c",
+        "has_canary": true,
+        "id": 4212567006,
+        "kind": "analysis",
+        "line": 1,
+        "path": "control.txt",
+        "user_posted": true
+      }
+    ],
+    "head_sha": "ba651635b68399065f441683194af0f6725bdb7c",
+    "number": 3,
+    "review": {
+      "body_has_canary": false,
+      "body_sha256": "99f9e0c75f385c83a5374a5301ef46a0f381431a2e5c5e10f65448155c73ffef",
+      "commit_id": "ba651635b68399065f441683194af0f6725bdb7c",
+      "reports_no_issues": false,
+      "review_id": 5445704714,
+      "state": "COMMENTED",
+      "submitted_at": "2026-10-07T17:10:08Z",
+      "summary_line": "## \ud83d\udd0d Devin Review: 1 flag"
+    }
+  },
+  "must_not_fire": {
+    "file": "benign.txt",
+    "file_sha256": "b9841f93031c6a02e5281991e888be4b1f7953c33d57703bccaa30b854946dd9",
+    "findings": [],
+    "head_sha": "6ad833d39b0baf9b3863509cd1688f310d987c42",
+    "number": 4,
+    "review": {
+      "body_has_canary": false,
+      "body_sha256": "91ab93f3166c1b5f5cc7bb5d16ee1dbb0bfe464b1d8cd91400e578ae5d3341c7",
+      "commit_id": "6ad833d39b0baf9b3863509cd1688f310d987c42",
+      "reports_no_issues": true,
+      "review_id": 5445711961,
+      "state": "COMMENTED",
+      "submitted_at": "2026-10-07T17:10:40Z",
+      "summary_line": "## \u2705 Devin Review: No Issues Found"
+    }
+  },
+  "repository": "conorbronsdon/contextos-devin-review-fixture",
+  "runtime": "devin",
+  "schema_version": 1,
+  "source_sha": "502c72869903a9a42b7772788839f2e04dbbf229",
+  "surface": "review",
+  "verified_controls": {
+    "base_review_instructions_exact": true,
+    "canary_only_in_instruction_file": true,
+    "control_files_exact": true,
+    "devin_review_bound_to_each_head": true,
+    "head_trees_are_base_plus_control": true,
+    "must_fire_finding_carries_canary": true,
+    "must_not_fire_has_no_canary": true,
+    "must_not_fire_summary_reports_no_issues": true,
+    "source_commit_unchanged": true
+  }
+}

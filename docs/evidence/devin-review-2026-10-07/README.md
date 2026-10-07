@@ -37,12 +37,25 @@ text; the operator did not edit it.
 Each pull request's head tree held the unchanged base files plus only its
 added control file.
 
-## AGENTS.md
+## AGENTS.md (passed)
 
-Pull requests #3 (must fire) and #4 (must not fire) on base `72704af` hold the
-`AGENTS.md` control set. Devin Review reported one flag on #3 and no issues on
-#4, each on its exact head. This set has no recorded artifact until its finding
-is published to GitHub, so this file makes no `AGENTS.md` claim yet.
+[agents-md-502c728.json](agents-md-502c728.json), source `502c728`, checked
+2026-10-07:
+
+- The base commit `72704af` holds exactly `README.md` and an `AGENTS.md`
+  byte-identical to `adapters/devin/review-fixture/AGENTS.md.fixture`, the file
+  Context OS ships. The canary and marker appear in neither the README nor
+  either pull request's title or body.
+- Must fire: pull request #3 (head `ba65163`) adds exactly `control.txt` with
+  the `AGENTS.md` marker. Devin Review's summary on that head reported one flag,
+  and Devin's inline finding on `control.txt` at that head carries
+  `CONTEXTOS_DEVIN_AGENTS_CANARY_E6DF38BF`.
+- Must not fire: pull request #4 (head `6ad833d`) adds exactly `benign.txt`.
+  Devin Review's latest summary on that head reads "No Issues Found", and no
+  Devin review or comment on the pull request carries the canary.
+
+Each pull request's head tree held the unchanged base files plus only its
+added control file.
 
 ## Scope
 
