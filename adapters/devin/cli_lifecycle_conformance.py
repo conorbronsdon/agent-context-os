@@ -44,11 +44,12 @@ def lifecycle_permissions(root: Path, *, read_only: bool = False) -> dict[str, l
     mutating Git stay denied. File writes stay limited to payload inputs, and
     the harness separately requires every tracked file to be unchanged before
     the operator applies. Start and the handoff are read-only, mirroring the
-    Cursor run's ask mode: they also deny file tools, proposals, and the board.
+    Cursor run's ask mode: they also deny file tools and proposals. The start skill's board sync
+    stays allowed; with the fixture's remote removed it fails without writes.
     """
     wrappers = ["bash scripts/contextos.sh", f"bash {root.as_posix()}/scripts/contextos.sh",
                 "sh scripts/contextos.sh"]
-    mutating = ("apply",) if not read_only else ("apply", "propose", "board")
+    mutating = ("apply",) if not read_only else ("apply", "propose")
     return {
         "allow": ["exec"] + ([] if read_only else ["Write(.context-os/inputs/**)"]),
         "deny": [f"Exec({form} {command})" for form in wrappers for command in mutating]
