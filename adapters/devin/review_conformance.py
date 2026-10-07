@@ -98,14 +98,24 @@ class ReviewFixture:
         if self.controls["canary"] in text or self.controls["marker"] in text:
             raise HarnessError(f"{subject} carries the canary or marker outside the instruction file")
 
-    def verify_base(self) -> dict[str, str]:
-        tree = self.get(f"/git/trees/{self.base_sha}?recursive=1")
+    def tree(self, ref: str, subject: str) -> dict[str, tuple[str, str]]:
+        """Map every entry of a complete tree to its (blob SHA, mode)."""
+        tree = self.get(f"/git/trees/{ref}?recursive=1")
         if not isinstance(tree, dict) or tree.get("truncated") is not False:
-            raise HarnessError("GitHub did not return the complete base tree")
-        paths = {item["path"] for item in tree.get("tree", []) if item.get("type") == "blob"}
+            raise HarnessError(f"GitHub did not return the complete {subject} tree")
+        entries = {}
+        for item in tree.get("tree", []):
+            if item.get("type") != "blob" or item.get("mode") != "100644":
+                raise HarnessError(f"{subject} tree must hold only regular files, found {item.get('path')!r}")
+            entries[item["path"]] = (item.get("sha"), item.get("mode"))
+        return entries
+
+    def verify_base(self) -> dict[str, str]:
+        self.base_tree = self.tree(self.base_sha, "base")
         expected = {"README.md", self.instruction_file}
-        if paths != expected:
-            raise HarnessError(f"base commit must hold exactly {sorted(expected)}, found {sorted(paths)}")
+        if set(self.base_tree) != expected:
+            raise HarnessError(
+                f"base commit must hold exactly {sorted(expected)}, found {sorted(self.base_tree)}")
         instructions = self.blob(self.instruction_file, self.base_sha)
         if instructions != (FIXTURE / self.controls["fixture"]).read_bytes():
             raise HarnessError(f"base {self.instruction_file} differs from the checked-in fixture source")
@@ -129,6 +139,14 @@ class ReviewFixture:
             raise HarnessError(f"pull request #{number} must add exactly {filename}")
         if self.blob(filename, head) != expected:
             raise HarnessError(f"pull request #{number} {filename} differs from the fixture source")
+        # The PR diff is against the merge base, so check the whole head tree:
+        # the verified base blobs, unchanged, plus only the added control file.
+        head_tree = self.tree(head, f"pull request #{number} head")
+        if set(head_tree) != set(self.base_tree) | {filename} or any(
+            head_tree[path] != entry for path, entry in self.base_tree.items()
+        ):
+            raise HarnessError(
+                f"pull request #{number} head must hold the unchanged base files plus only {filename}")
         return {"number": number, "head_sha": head, "file": filename, "file_sha256": sha256(expected)}
 
     def devin_reviews(self, number: int, head: str) -> tuple[dict[str, object], list[dict]]:
@@ -170,6 +188,18 @@ class ReviewFixture:
                           "body_sha256": sha256(body.encode("utf-8")),
                           "bound_to_head": comment.get("commit_id") == head})
         return found
+
+
+def publication(findings: list[dict[str, object]]) -> str:
+    """Report how the findings reached GitHub; only an explicit False is automatic."""
+    flags = {finding.get("user_posted") for finding in findings}
+    if flags == {True}:
+        return "user_posted"
+    if flags == {False}:
+        return "automatic"
+    if flags <= {True, False}:
+        return "mixed"
+    return "unknown"
 
 
 def record(args: argparse.Namespace, *, transport: Transport = default_transport) -> dict:
@@ -215,6 +245,7 @@ def record(args: argparse.Namespace, *, transport: Transport = default_transport
         "must_not_fire": {**must_not_fire, "review": quiet_review, "findings": quiet_comments},
         "verified_controls": {
             "base_review_instructions_exact": True,
+            "head_trees_are_base_plus_control": True,
             "canary_only_in_instruction_file": True,
             "control_files_exact": True,
             "devin_review_bound_to_each_head": True,
@@ -223,8 +254,7 @@ def record(args: argparse.Namespace, *, transport: Transport = default_transport
             "must_not_fire_has_no_canary": True,
             "source_commit_unchanged": True,
         },
-        "finding_publication": ("user_posted" if all(c["user_posted"] is True for c in fire_comments)
-                                else "automatic"),
+        "finding_publication": publication(fire_comments),
         "limits": [
             "Devin generated the finding; when 'finding_publication' is 'user_posted', an operator "
             "published it with Devin Review's Post to GitHub action.",

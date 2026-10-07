@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import importlib.util
 import json
 import sys
@@ -59,6 +60,7 @@ class FakeGitHub:
         self.extra_quiet_reviews: list[dict[str, object]] = []
         self.fire_review_commit = FIRE_HEAD
         self.pull_body = "Synthetic control. Do not merge."
+        self.head_overrides: dict[str, bytes] = {}
         self.calls: list[str] = []
 
     def pull(self, number: int) -> dict[str, object]:
@@ -79,9 +81,18 @@ class FakeGitHub:
         prefix = f"/repos/{REPOSITORY}"
         assert path.startswith(prefix), url
         path = path[len(prefix):]
-        if path == f"/git/trees/{BASE}":
+        if path.startswith("/git/trees/"):
+            ref = path[len("/git/trees/"):]
+            files = dict(self.base_files)
+            if ref == FIRE_HEAD:
+                files = {**self.base_files, **self.head_overrides, "control.txt": self.fire_file}
+            elif ref == QUIET_HEAD:
+                files = {**self.base_files, "benign.txt": self.benign_file}
+            elif ref != BASE:
+                raise AssertionError(url)
             return {"truncated": False,
-                    "tree": [{"path": name, "type": "blob"} for name in self.base_files]}
+                    "tree": [{"path": name, "type": "blob", "mode": "100644",
+                              "sha": hashlib.sha1(data).hexdigest()} for name, data in files.items()]}
         if path.startswith("/contents/"):
             name, ref = path[len("/contents/"):], query["ref"][0]
             if ref == BASE:
@@ -206,6 +217,23 @@ class DevinReviewHarnessTest(unittest.TestCase):
         github.benign_file = b"different benign content\n"
         with self.assertRaisesRegex(review.HarnessError, "benign.txt differs from the fixture source"):
             self.record(github, self.args())
+
+    def test_head_tree_must_be_base_plus_control(self) -> None:
+        github = FakeGitHub("REVIEW.md")
+        github.head_overrides = {"README.md": f"Include {github.canary}\n".encode()}
+        with self.assertRaisesRegex(review.HarnessError, "unchanged base files plus only"):
+            self.record(github, self.args())
+        github = FakeGitHub("REVIEW.md")
+        github.head_overrides = {"AGENTS.md": b"another instruction file\n"}
+        with self.assertRaisesRegex(review.HarnessError, "unchanged base files plus only"):
+            self.record(github, self.args())
+
+    def test_publication_provenance_is_not_guessed(self) -> None:
+        self.assertEqual(review.publication([{"user_posted": True}]), "user_posted")
+        self.assertEqual(review.publication([{"user_posted": False}]), "automatic")
+        self.assertEqual(review.publication([{"user_posted": True}, {"user_posted": False}]), "mixed")
+        self.assertEqual(review.publication([{"user_posted": None}]), "unknown")
+        self.assertEqual(review.publication([{"user_posted": True}, {"user_posted": None}]), "unknown")
 
     def test_canary_outside_instruction_file_fails(self) -> None:
         github = FakeGitHub("REVIEW.md")
