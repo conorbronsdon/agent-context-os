@@ -40,12 +40,6 @@ IMPORTED_SKILL = "contextos-devin-claude-import"
 REJECTED_BY_MODE = "Tool execution was rejected by the user"
 REJECTED_BY_DENY = "by a deny rule in the project"
 FOREIGN_IMPORTS = ("claude", "cursor", "windsurf", "copilot", "opencode", "zed")
-APPLY_FORMS = (
-    "Exec(bash scripts/contextos.sh apply)",
-    "Exec(sh scripts/contextos.sh apply)",
-    "Exec(python3 -m contextos apply)",
-    "Exec(python -m contextos apply)",
-)
 
 
 class HarnessError(RuntimeError):
@@ -312,8 +306,11 @@ class DevinCliHarness:
         status = require_success(self.command([str(self.binary), "auth", "status"], cwd, "auth"), "auth status")
         if not status.lstrip().startswith("Logged in"):
             raise HarnessError("Devin CLI is not authenticated in the pinned data home")
-        self.evidence.shipped_project_config_sha256 = hashlib.sha256(
-            SHIPPED_PROJECT_CONFIG.read_bytes()).hexdigest()
+        raw = SHIPPED_PROJECT_CONFIG.read_bytes()
+        shipped = json.loads(raw.decode("utf-8"))
+        if shipped != {"read_config_from": {name: False for name in FOREIGN_IMPORTS}}:
+            raise HarnessError("shipped .devin/config.json must only disable foreign imports")
+        self.evidence.shipped_project_config_sha256 = hashlib.sha256(raw).hexdigest()
 
     def session(
         self, workspace: Path, label: str, prompt: str, *, mode: str | None = None
@@ -455,6 +452,11 @@ def changed_paths(before: Mapping[str, str], after: Mapping[str, str]) -> set[st
     return {name for name in set(before) | set(after) if before.get(name) != after.get(name)}
 
 
+def attempted(trajectory: Trajectory, tools: set[str], argument: str) -> bool:
+    return any(call.name in tools and argument in json.dumps(call.arguments)
+               for call in trajectory.tool_calls())
+
+
 def run_controls(harness: DevinCliHarness) -> dict[str, str]:
     controls = harness.evidence.controls
     observations = harness.evidence.observations
@@ -567,18 +569,16 @@ def run_controls(harness: DevinCliHarness) -> dict[str, str]:
                 raise HarnessError("allowed write changed unexpected files")
             controls[current] = "passed"
 
-            current = "shipped_apply_ask_beats_user_allow"
-            # The shipped project config asks before every documented apply
-            # form. A broad user-level allow ranks below project config, so it
-            # must not override that ask; print mode then rejects the call.
-            write_user_permissions(harness, {"allow": ["Exec(bash scripts/contextos.sh)"]})
+            current = "unapproved_exec_rejected"
+            # Normal mode prompts for every shell command without a matching
+            # allow; print mode cannot answer, so the kernel apply is rejected.
             write_local_permissions(guarded_root, {"allow": ["Exec(bash scripts/contextos.sh start)"]})
             markers = guarded_root / ".context-os" / "exec-markers.txt"
             trajectory = harness.session(guarded_root, current, EXEC_PROMPT.format(command=APPLY_COMMAND))
             require_rejected_attempt(trajectory, "exec", REJECTED_BY_MODE, current,
                                      argument="contextos.sh apply")
             if markers.exists():
-                raise HarnessError("apply command ran despite the shipped ask rule")
+                raise HarnessError("unapproved apply command ran")
             controls[current] = "passed"
 
             current = "allowed_exec_runs"
@@ -586,36 +586,36 @@ def run_controls(harness: DevinCliHarness) -> dict[str, str]:
             if not markers.is_file() or markers.read_text(encoding="utf-8").splitlines() != ["start"]:
                 raise HarnessError("allowlisted kernel command did not run exactly once")
             controls[current] = "passed"
-            write_user_permissions(harness, {})
 
             # Observations record known host limitations without gating the
-            # run, so a client release that changes them is visible.
-            current = "observe_accept_edits_project_deny"
+            # run, so a client release that changes them is visible. The
+            # unguarded workspace carries a project-level deny so the guarded
+            # workspace keeps the shipped project config bytes.
+            current = "observe_accept_edits_project_write_deny"
             write_local_permissions(guarded_root, {"deny": ["exec", "write", "edit", "Write(protected.txt)"]})
             trajectory = harness.session(guarded_root, current,
                                          WRITE_PROMPT.format(path="protected.txt", value="changed"),
                                          mode="accept-edits")
-            observations["accept_edits_write_attempted"] = any(
-                call.name in {"edit", "write"} for call in trajectory.tool_calls())
+            observations["accept_edits_write_attempted"] = attempted(trajectory, {"edit", "write"}, "protected.txt")
             observations["accept_edits_honors_project_write_deny"] = (
                 (guarded_root / "protected.txt").read_text(encoding="utf-8") == "protected fixture\n")
-            current = "observe_local_allow_overrides_apply_ask"
-            write_local_permissions(guarded_root, {"allow": ["Exec(bash scripts/contextos.sh)"]})
-            trajectory = harness.session(guarded_root, current, EXEC_PROMPT.format(command=APPLY_COMMAND))
-            observations["local_broad_allow_apply_attempted"] = any(
-                call.name == "exec" and "contextos.sh apply" in json.dumps(call.arguments)
-                for call in trajectory.tool_calls())
-            observations["apply_ask_holds_against_local_broad_allow"] = "apply" not in markers.read_text(
-                encoding="utf-8")
-            current = "observe_bypass_apply_ask"
-            markers.write_text("", encoding="utf-8")
-            write_local_permissions(guarded_root, {})
-            trajectory = harness.session(guarded_root, current, EXEC_PROMPT.format(command=APPLY_COMMAND),
-                                         mode="dangerous")
-            observations["bypass_apply_attempted"] = any(
-                call.name == "exec" and "contextos.sh apply" in json.dumps(call.arguments)
-                for call in trajectory.tool_calls())
-            observations["bypass_honors_apply_ask"] = "apply" not in markers.read_text(encoding="utf-8")
+            probe = workspaces["unguarded"]
+            probe_markers = probe / ".context-os" / "exec-markers.txt"
+            write_text(probe / ".devin" / "config.json",
+                       json.dumps({"permissions": {"deny": ["Exec(bash scripts/contextos.sh apply)"]}}) + "\n")
+            for label, mode, user_allow in (
+                ("observe_user_allow_vs_project_exec_deny", None, ["Exec(bash scripts/contextos.sh)"]),
+                ("observe_bypass_vs_project_exec_deny", "dangerous", []),
+            ):
+                current = label
+                write_local_permissions(probe, {})
+                write_user_permissions(harness, {"allow": user_allow})
+                if probe_markers.exists():
+                    probe_markers.unlink()
+                trajectory = harness.session(probe, label, EXEC_PROMPT.format(command=APPLY_COMMAND), mode=mode)
+                observations[f"{label}_attempted"] = attempted(trajectory, {"exec"}, "contextos.sh apply")
+                observations[f"{label}_held"] = not probe_markers.exists()
+            write_user_permissions(harness, {})
             controls["observations"] = "recorded"
 
             harness.verify_binary()
