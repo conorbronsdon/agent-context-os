@@ -4,7 +4,7 @@
     "REVIEW.md": "571f886d03ce88ab3302a14d99efe225ba7556133089558560fae678d99fe0d4"
   },
   "base_sha": "0d256184562f721978786eb2bf00a78cc0dfff67",
-  "checked_at": "2026-10-07T19:00:29.784283+00:00",
+  "checked_at": "2026-10-07T19:05:05.837051+00:00",
   "finding_publication": "user_posted",
   "instruction_file": "REVIEW.md",
   "limits": [
@@ -61,7 +61,7 @@
   "repository": "conorbronsdon/contextos-devin-review-fixture",
   "runtime": "devin",
   "schema_version": 1,
-  "source_sha": "e2faa97de0a1dd52124914bf7454fd0dfd9a66c6",
+  "source_sha": "788867377612174741624895406e27381736a6e4",
   "surface": "review",
   "verified_controls": {
     "base_review_instructions_exact": true,

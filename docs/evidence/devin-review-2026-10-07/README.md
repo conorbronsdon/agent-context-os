@@ -18,7 +18,7 @@ text; the operator did not edit it.
 
 ## REVIEW.md (passed)
 
-[review-md-e2faa97.json](review-md-e2faa97.json), source `e2faa97`, checked
+[review-md-7888673.json](review-md-7888673.json), source `7888673`, checked
 2026-10-07:
 
 - The base commit `0d25618` holds exactly `README.md` and a `REVIEW.md`
