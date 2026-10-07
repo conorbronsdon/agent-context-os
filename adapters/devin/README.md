@@ -340,28 +340,46 @@ substrate as the API harness. Operator attestation is not an execution-
 authorization control, and UI evidence does not inherit API-only active-build
 or account-inspection claims.
 
-This fixture proves the cloud instruction and skill substrate. Promotion still
-requires a separate lifecycle proposal/apply authorization fixture and a
-separately approved Review fixture; neither may inherit this result.
+This fixture proves the cloud instruction and skill substrate; the
+[cloud session evidence](../../docs/evidence/devin-cloud-2026-10-07/README.md)
+records a passing UI run. Promotion still requires a separate lifecycle
+proposal/apply authorization fixture and a separately approved Review fixture;
+neither may inherit this result.
 
 ## Review conformance fixture
 
-`adapters/devin/review-fixture/` is a separate inert control for the Review
-surface. Its `REVIEW.md.fixture` source must be placed as `REVIEW.md` only in a
-dedicated disposable Review fixture checkout. That scoped instruction requires
-one unique canary when a changed file
-adds the benign prohibited marker in `control.txt`. A pull request containing
-both files can therefore prove instruction ingestion without using a private
-repository or real defect. Merely shipping the fixture does not trigger Review.
+`adapters/devin/review-fixture/` holds two inert control sets for the Review
+surface. `REVIEW.md.fixture` with `control.txt` tests Review's own guidelines
+file. `AGENTS.md.fixture` with `agents-control.txt` tests `AGENTS.md`, the file
+Context OS ships. Each instruction requires a unique canary when a changed file
+adds that set's benign prohibited marker, so a pull request can prove
+instruction ingestion without a private repository or a real defect. Place
+each source only on its own base commit in a dedicated public fixture
+repository; merely shipping the fixture does not trigger Review.
 
-For a public GitHub pull request, Devin documents that replacing `github.com`
-with `devinreview.com` starts a free read-only review without an account, or the
-exact pinned `devin-review` CLI may be run from the local clone. Both paths send
-the diff and file contents to Devin servers. Require explicit external-data-
-transfer approval immediately before either path, bind evidence to the PR head
-SHA and Review version or result identity, and verify that the result contains
-`CONTEXTOS_DEVIN_REVIEW_CANARY_63F0A2D8`. Do not comment, approve, merge, apply
-changes, enable auto-review, or install the GitHub App as part of conformance.
+`adapters/devin/review_conformance.py` verifies each set through the GitHub API
+alone, reading every page of each list. The base commit must hold exactly
+`README.md` and the instruction file, which must be byte-identical to its
+`.fixture` source here. The canary and marker may not appear in the README or in
+either pull request's title or body. The must-fire pull request must add
+exactly `control.txt`, byte-identical to that set's control source. The
+must-not-fire pull request must add exactly `benign.txt`, byte-identical to
+`benign.txt` here. Devin Review must have reviewed each exact head commit: the
+must-fire summary must report findings and a Devin comment on `control.txt` at
+the head must carry the canary. The must-not-fire summary must read "No Issues
+Found", so an unpublished finding cannot hide there, and no Devin review or
+comment on that pull request may carry the canary.
+The script only reads GitHub; it never triggers Review, comments, approves, or
+merges.
+
+Running the controls sends the synthetic fixture to Devin servers. Trigger
+Review on each pull request from the Devin Review page (or let auto-review run).
+When the organization's Review settings keep findings in the Devin UI, publish
+the must-fire finding with Review's **Post to GitHub** action. Devin marks such a
+comment `user_posted`, and the evidence records `finding_publication`
+accordingly. Do not approve, merge, apply changes, or change Review settings
+as part of conformance. The [Review evidence](../../docs/evidence/devin-review-2026-10-07/README.md)
+records the dated runs.
 
 Promotion requires dated live-account fixtures that demonstrate instruction
 and skill discovery, explicit lifecycle behavior, proposal/apply authorization,
