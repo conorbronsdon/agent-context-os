@@ -20,6 +20,7 @@ sys.modules[SPEC.name] = cli
 SPEC.loader.exec_module(cli)
 
 VERSION = "3000.11.3"
+NL = chr(10)
 
 
 def atif(steps: list[dict], *, version: str = VERSION, mode: str = "Normal") -> dict:
@@ -256,12 +257,12 @@ class LifecycleControlTest(unittest.TestCase):
         ):
             with self.subTest(command=command):
                 self.assertTrue(lifecycle.is_kernel_command(self.call(command), "apply"))
-        for command in (
-            "bash scripts/contextos.sh propose update --input .context-os/inputs/apply-notes.json",
-            "bash scripts/contextos.sh start; echo apply",
-        ):
-            with self.subTest(command=command):
-                self.assertFalse(lifecycle.is_kernel_command(self.call(command), "apply"))
+        self.assertFalse(lifecycle.is_kernel_command(self.call(
+            "bash scripts/contextos.sh propose update --input .context-os/inputs/apply-notes.json"), "apply"))
+        # Over-matching is deliberate: a flagged call must show a deny, so the
+        # harness fails closed rather than missing an unusual spelling.
+        self.assertTrue(lifecycle.is_kernel_command(
+            self.call("bash scripts/contextos.sh start; echo apply"), "apply"))
         self.assertFalse(lifecycle.is_kernel_command(
             cli.ToolCall("c1", "read", {"command": "contextos apply"}, ()), "apply"))
 
@@ -276,11 +277,43 @@ class LifecycleControlTest(unittest.TestCase):
         with self.assertRaisesRegex(lifecycle.HarnessError, "did not expand"):
             lifecycle.require_skill_expanded(bare, ROOT, "start")
 
-    def test_end_fact_must_land_in_a_session_file(self) -> None:
-        document = {"changes": [{"path": "state/current.md", "after_text": "FACT"}]}
-        lifecycle.require_fact(document, "FACT")
-        with self.assertRaisesRegex(lifecycle.HarnessError, "omitted"):
-            lifecycle.require_fact(document, "FACT", prefix="sessions/")
+    def test_end_fact_must_be_saved_as_the_next_action(self) -> None:
+        def doc(path: str, *lines: str) -> dict:
+            return {"changes": [{"path": path, "after_text": NL.join(lines)}]}
+
+        lifecycle.require_next_action(
+            doc("sessions/d.md", "## What happened", "- x", "", "## Next time", "- FACT", ""), "FACT")
+        for wrong in (
+            doc("sessions/d.md", "## What happened", "- FACT", "", "## Next time", "- None recorded"),
+            doc("sessions/d.md", "## Next time", "- y", "", "## Notes", "- FACT"),
+            doc("state/current.md", "## Next time", "- FACT"),
+        ):
+            with self.subTest(wrong=wrong), self.assertRaisesRegex(lifecycle.HarnessError, "next action"):
+                lifecycle.require_next_action(wrong, "FACT")
+
+    def test_start_inventory_requires_the_wrapper_success_and_inventory_json(self) -> None:
+        good = NL.join(["Output from command in shell a:",
+                        json.dumps({"schema_version": 1, "initialized": True}), "", "", "Exit code: 0"])
+        self.assertTrue(lifecycle.ran_kernel_inventory(
+            cli.ToolCall("c", "exec", {"command": "bash scripts/contextos.sh start"}, (good,))))
+        for command, observation in (
+            ("grep 'schema_version' contextos/kernel.py # start", good),
+            ("bash scripts/contextos.sh doctor", good),
+            ("bash scripts/contextos.sh start", good.replace("Exit code: 0", "Exit code: 1")),
+            ("bash scripts/contextos.sh start",
+             NL.join(["Output:", json.dumps({"schema_version": 1}), "Exit code: 0"])),
+        ):
+            with self.subTest(command=command, observation=observation):
+                self.assertFalse(lifecycle.ran_kernel_inventory(
+                    cli.ToolCall("c", "exec", {"command": command}, (observation,))))
+
+    def test_apply_detection_covers_ansi_quoting_and_nested_shells(self) -> None:
+        for command in ("bash scripts/contextos.sh $'apply' p.json",
+                        "bash -c 'bash scripts/contextos.sh apply p.json'"):
+            with self.subTest(command=command):
+                self.assertTrue(lifecycle.is_kernel_command(self.call(command), "apply"))
+        self.assertFalse(lifecycle.is_kernel_command(
+            self.call("bash scripts/contextos.sh propose end --input apply-notes.json"), "apply"))
 
     def test_read_only_phases_deny_writes_and_proposals_but_keep_apply_denied_everywhere(self) -> None:
         root = Path("/w")

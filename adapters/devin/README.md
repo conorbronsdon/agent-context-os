@@ -128,13 +128,17 @@ disposable fixture's local config allows the shell broadly (as the Cursor run
 used `--force`) while denying every `apply` form, direct Python, `rm`, and
 mutating Git at the same level, and allows file writes only under
 `.context-os/inputs/`. Start and the handoff also deny file tools and
-`propose`. Each phase must show Devin expanding the shipped skill body into the
-user turn, and start must run the kernel inventory. Any detected model `apply`
-attempt, in any quoting or chaining, must show a deny-rule rejection; tracked
+`propose`. Each phase must show Devin expanding the complete shipped skill body
+into the user turn, and start must run the kernel wrapper's `start` and receive
+a successful inventory. A synthetic user-level `~/.claude/CLAUDE.md` must stay
+out of every phase. Apply detection deliberately over-matches (quoting,
+chaining, `bash -c`, ANSI-C strings), and every detected model `apply`
+attempt, including in the handoff, must show a deny-rule rejection; tracked
 files must be unchanged until the operator acts, which also catches an
 undetected spelling that succeeds. An external operator approves each
-proposal's exact digest before the harness applies it. Before the handoff, the
-harness removes pending inputs and proposals and requires the verification
+proposal's exact digest before the harness applies it. End must save the
+handoff fact under the session's `## Next time` heading. Before the handoff,
+the harness removes pending inputs and proposals and requires the verification
 value to survive only in `sessions/`, so a fresh session must read the saved
 session to recover it. It checks wrong-digest and stale rejection, receipts, read-only
 start, and fresh-session handoff. Add `--debug-dir` to keep raw exports locally

@@ -79,8 +79,8 @@ def skill_body(root: Path, phase: str) -> str:
 
 def require_skill_expanded(trajectory: Trajectory, root: Path, phase: str) -> None:
     """The slash command must make Devin place the shipped skill in the user turn."""
-    excerpt = skill_body(root, phase)[:600]
-    if not any(excerpt in message for message in trajectory.user_messages()):
+    body = skill_body(root, phase)
+    if not any(body in message for message in trajectory.user_messages()):
         raise HarnessError(f"/context-{phase} did not expand the shipped skill")
 
 
@@ -105,12 +105,59 @@ def shell_segments(command: str) -> list[list[str]]:
 
 
 def is_kernel_command(call, subcommand: str) -> bool:
-    """Detect a kernel subcommand in any quoting or chaining of a shell call."""
+    """Detect a kernel subcommand in a shell call, over-matching rather than missing.
+
+    Any call that names ``contextos`` and contains the subcommand as a
+    standalone word, in any quoting, nesting (``bash -c``), or ANSI-C form
+    (``$'apply'``), counts. An over-match makes the harness demand a deny
+    rejection, so it fails closed.
+    """
     command = call.arguments.get("command")
-    if call.name != "exec" or not isinstance(command, str):
+    if call.name != "exec" or not isinstance(command, str) or "contextos" not in command:
         return False
-    return any(any("contextos" in token for token in segment) and subcommand in segment
-               for segment in shell_segments(command))
+    if any(subcommand in segment for segment in shell_segments(command)):
+        return True
+    return re.search(rf"(?<![\w./-]){re.escape(subcommand)}(?![\w.-])", command) is not None
+
+
+def ran_kernel_inventory(call) -> bool:
+    """Accept only the wrapper's ``start`` subcommand, exit 0, and an inventory document."""
+    command = call.arguments.get("command")
+    if call.name != "exec" or not isinstance(command, str) or len(call.observations) != 1:
+        return False
+    invoked = any(
+        len(words) >= 3 and words[0] in {"bash", "sh"} and words[1].endswith("scripts/contextos.sh")
+        and words[2] == "start"
+        for words in shell_segments(command)
+    )
+    observation = call.observations[0]
+    if not invoked or not observation.rstrip().endswith("Exit code: 0"):
+        return False
+    start, end = observation.find("{"), observation.rfind("}")
+    try:
+        document = json.loads(observation[start:end + 1]) if start >= 0 else None
+    except json.JSONDecodeError:
+        return False
+    return isinstance(document, dict) and "schema_version" in document and "initialized" in document
+
+
+def require_next_action(document: dict, fact: str) -> None:
+    """The handoff fact must be saved under the session's ``## Next time`` heading."""
+    for change in document["changes"]:
+        if not change["path"].startswith("sessions/"):
+            continue
+        section = change["after_text"].rsplit("## Next time", 1)
+        if len(section) == 2 and fact in section[1].split("\n## ", 1)[0]:
+            return
+    raise HarnessError("end did not save the handoff fact as the next action")
+
+
+def audit_apply_attempts(trajectory: Trajectory) -> int:
+    attempts = [call for call in trajectory.tool_calls() if is_kernel_command(call, "apply")]
+    if any(len(call.observations) != 1 or REJECTED_BY_DENY not in call.observations[0]
+           for call in attempts):
+        raise HarnessError("a model apply attempt was not rejected by the fixture deny rule")
+    return len(attempts)
 
 
 def git_state(root: Path) -> dict[str, str]:
@@ -199,10 +246,10 @@ def check_applied(root: Path, document: dict, before: dict[str, str]) -> None:
         raise HarnessError("apply changed unexpected files or produced incorrect content")
 
 
-def require_guarded_context(trajectory: Trajectory) -> None:
+def require_guarded_context(trajectory: Trajectory, user_canary: str) -> None:
     """The shipped import guard must keep Claude rules out of every phase."""
     rules = trajectory.system_block("<rules")
-    if '<rule name="AGENTS"' not in rules or '<rule name="CLAUDE"' in rules:
+    if '<rule name="AGENTS"' not in rules or '<rule name="CLAUDE"' in rules or user_canary in trajectory.context:
         raise HarnessError("lifecycle context did not load exactly the Context OS instruction sources")
 
 
@@ -247,6 +294,12 @@ def execute(harness: DevinCliHarness, approvals: Path, evidence: Path) -> dict:
     try:
         with harness.isolated() as base:
             harness.preflight(base)
+            # A synthetic user-level Claude instruction must stay out of every
+            # phase, as in the host harness's import-guard control.
+            user_canary = "CONTEXTOS_DEVIN_LIFECYCLE_USER_" + secrets.token_hex(6).upper()
+            user_claude = Path(harness.env["HOME"]) / ".claude" / "CLAUDE.md"
+            user_claude.parent.mkdir(parents=True)
+            user_claude.write_text(f"# Synthetic user import control\n\n{user_canary}\n", encoding="utf-8")
             root = base / "workspace"
             cloned = subprocess.run(["git", "clone", "--local", "--no-hardlinks", "--quiet",
                                      str(REPOSITORY_ROOT), str(root)], capture_output=True, check=False)
@@ -268,13 +321,9 @@ def execute(harness: DevinCliHarness, approvals: Path, evidence: Path) -> dict:
                 prompt = prompt_for(phase, handoff_fact)
                 result["prompts"][phase] = prompt
                 trajectory = harness.session(root, f"lifecycle-{phase}", prompt)
-                require_guarded_context(trajectory)
+                require_guarded_context(trajectory, user_canary)
                 require_skill_expanded(trajectory, root, phase)
-                apply_attempts = [call for call in trajectory.tool_calls() if is_kernel_command(call, "apply")]
-                if any(len(call.observations) != 1 or REJECTED_BY_DENY not in call.observations[0]
-                       for call in apply_attempts):
-                    raise HarnessError("a model apply attempt was not rejected by the fixture deny rule")
-                result.setdefault("model_apply_attempts_denied", {})[phase] = len(apply_attempts)
+                result.setdefault("model_apply_attempts_denied", {})[phase] = audit_apply_attempts(trajectory)
                 if state(root, include_pending=phase == "start") != before:
                     raise HarnessError("lifecycle changed files before operator apply")
                 head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True,
@@ -284,14 +333,14 @@ def execute(harness: DevinCliHarness, approvals: Path, evidence: Path) -> dict:
                 if git_state(root) != metadata:
                     raise HarnessError("model changed fixture Git metadata")
                 if phase == "start":
-                    inventories = [call for call in trajectory.tool_calls() if is_kernel_command(call, "start")
-                                   and len(call.observations) == 1 and '"schema_version"' in call.observations[0]]
-                    if not inventories:
+                    if not any(ran_kernel_inventory(call) for call in trajectory.tool_calls()):
                         raise HarnessError("start did not run the read-only kernel inventory")
                     controls["start_read_only"] = "passed"
                     continue
                 path, document = proposal(root, pending, phase)
-                require_fact(document, facts[phase], prefix="sessions/" if phase == "end" else "")
+                require_fact(document, facts[phase])
+                if phase == "end":
+                    require_next_action(document, facts[phase])
                 raw = path.read_bytes()
                 approve(approvals, phase, document)
                 if path.read_bytes() != raw:
@@ -358,8 +407,9 @@ def execute(harness: DevinCliHarness, approvals: Path, evidence: Path) -> dict:
                 raise HarnessError("handoff value is not held only by saved session files")
             before = state(root)
             trajectory = harness.session(root, "lifecycle-handoff", result["prompts"]["handoff"])
-            require_guarded_context(trajectory)
+            require_guarded_context(trajectory, user_canary)
             require_skill_expanded(trajectory, root, "start")
+            result["model_apply_attempts_denied"]["handoff"] = audit_apply_attempts(trajectory)
             answer = trajectory.final_message()
             result["handoff_value_recovered"] = handoff_value in answer
             result["handoff_read_only"] = state(root) == before
