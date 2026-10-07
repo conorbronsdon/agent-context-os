@@ -2,15 +2,20 @@
 
 ## [Unreleased]
 
+## [1.1.1] — 2026-10-07 — Devin CLI lifecycle support
+
+Version 1.1.0 was qualified and tagged but never published; its tag and draft
+remain as a retired, unpublished record. 1.1.1 ships the same changes plus the
+entries marked below.
+
 ### Added
-- Live Devin Review evidence for the `AGENTS.md` control set: Review followed
-  the shipped instruction file on a public fixture
+- (New in 1.1.1) Live Devin Review evidence for the `AGENTS.md` control set:
+  Review followed the shipped instruction file on a public fixture
   (`docs/evidence/devin-review-2026-10-07/`). Review stays a compatibility
   surface.
-
-## [1.1.0] — 2026-10-07 — Devin CLI lifecycle support
-
-### Added
+- (New in 1.1.1) Release qualification upgrades workspaces that the published
+  1.0.0 kernel itself migrated and installed, in both the full-template and
+  selected profiles (#246).
 - Devin Review has a GitHub-only conformance harness,
   `adapters/devin/review_conformance.py`, with `REVIEW.md` and `AGENTS.md`
   control sets in `adapters/devin/review-fixture/`. It checks that Devin Review
