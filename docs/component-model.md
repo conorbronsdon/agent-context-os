@@ -58,7 +58,7 @@ other repository-root paths extensible or writable.
 | `hermes-adapter` | `core`, `portable-skills`, `agents-instructions` | Hermes guidance, optional hooks, and descriptor |
 | `openclaw-adapter` | `core`, `portable-skills`, `agents-instructions` | First-class OpenClaw plugin, guidance, descriptor, and conformance |
 | `cursor-adapter` | `core`, `portable-skills`, `agents-instructions` | First-class Cursor CLI and experimental IDE guidance, descriptor, and conformance |
-| `devin-adapter` | `core`, `portable-skills`, `agents-instructions` | Experimental Devin cloud-session/Review guidance and managed-account conformance |
+| `devin-adapter` | `core`, `portable-skills`, `agents-instructions` | First-class Devin CLI import guard and conformance, plus experimental cloud-session/Review guidance and managed-account conformance |
 | `example-project` | `core` | Optional removable example content |
 
 Shared dependencies have one owner. Selecting both Claude and Codex therefore

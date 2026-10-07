@@ -2012,6 +2012,12 @@ with mock.patch("contextos.kernel._fsync_directory", side_effect=crash_after_tar
     def test_managed_account_registration_never_claims_remote_readiness(self) -> None:
         self._materialize_components("devin-adapter")
         self._configure_profile("devin")
+        # No shipped runtime currently uses managed-account install; exercise
+        # the mode through a modified descriptor rather than dropping coverage.
+        manifest_path = self.root / "runtimes/devin.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["install"]["mode"] = "managed-account"
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
         unverified = doctor(self.root)
         self.assertEqual(
             "account-unverified",

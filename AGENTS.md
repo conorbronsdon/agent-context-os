@@ -48,7 +48,7 @@ this is guidance, not a host-enforced gate. The `$context-setup`, `$context-star
 - `adapters/hermes/` documents first-class CLI support, optional hooks, and skill installation.
 - `adapters/openclaw/` and `adapters/opencode/` document first-class host support.
 - `adapters/cursor/` documents first-class Cursor CLI and experimental IDE support.
-- `adapters/devin/` documents experimental Devin cloud-session and Review support.
+- `adapters/devin/` documents first-class Devin CLI, experimental cloud-session, and Review support.
 - Runtime manifests under `runtimes/` declare support instead of implying parity.
 - Kernel proposal/apply is the enforcement boundary on every host; hooks are
   defense in depth and host-local memory is never shared automatically.
@@ -88,11 +88,10 @@ this is guidance, not a host-enforced gate. The `$context-setup`, `$context-star
 
 ## Devin
 
-- Cloud sessions use `@skills:context-setup`, `@skills:context-start`,
-  `@skills:context-update`, and `@skills:context-end`; automatic skill discovery
-  remains possible. Digests prevent proposal substitution, not automated approval.
-- Review sends code externally and is not a lifecycle host. Account state is not
-  locally configured or verified; see `adapters/devin/README.md`.
+- Devin CLI: keep `.devin/config.json` (it blocks foreign config imports) and
+  invoke `/context-setup` etc. in Normal mode; CLI `/update` is a self-update.
+- Cloud sessions use `@skills:context-*`; Review sends code externally and is not
+  a lifecycle host. Apply only a reviewed digest; see `adapters/devin/README.md`.
 
 ## Validation
 

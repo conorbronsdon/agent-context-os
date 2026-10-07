@@ -72,11 +72,13 @@ proposal. See `adapters/cursor/README.md` for the separate IDE and CLI boundary.
 
 ## Devin
 
-Devin Knowledge, Blueprint knowledge, snapshots, and session history are
-account-managed state, not repository memory. Context OS neither materializes
+Devin CLI has no native memory store beyond resumable session history, which
+stays outside the shared contract. Devin Knowledge, Blueprint knowledge,
+snapshots, and cloud session history are account-managed state, not repository
+memory. Context OS neither materializes
 nor synchronizes them. Durable cross-runtime facts still belong in `state/`,
 `sessions/`, or another canonical repository file through a reviewed proposal.
-See `adapters/devin/README.md` for the separate session and Review boundary.
+See `adapters/devin/README.md` for the separate CLI, session, and Review boundaries.
 
 ## Proposal/apply boundary
 

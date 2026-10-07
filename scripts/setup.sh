@@ -634,12 +634,15 @@ case "$SELECTED_AGENT" in
     echo ""
     ;;
   devin)
-    echo "  1. Connect and authorize this repository in the intended Devin organization."
-    echo "  2. Verify its Blueprint build and active snapshot in Devin Settings."
-    echo "  3. Start a fresh cloud session, then invoke @skills:context-setup."
-    echo "     See adapters/devin/README.md for the repository/account boundary."
-    echo "     Setup records tracked intent only; it does not authenticate, launch,"
-    echo "     configure, or verify any Devin account state."
+    if [ -z "$REQUESTED_REGISTERED_AGENTS" ]; then
+      "$CONTEXTOS_PYTHON_CMD" -m contextos install --runtime devin >/dev/null
+    fi
+    printf '  CLI: cd %q && devin, then run /context-setup in Normal mode.\n' "$REPO_ROOT"
+    echo "  Keep .devin/config.json so Devin loads only AGENTS.md and .agents/skills/."
+    echo "  Cloud (experimental): connect and authorize this repository in Devin, verify"
+    echo "  its Blueprint build and active snapshot, then invoke @skills:context-setup."
+    echo "  See adapters/devin/README.md for CLI, cloud-account, and Review boundaries."
+    echo "  Setup does not launch or authenticate Devin or verify any account state."
     echo ""
     ;;
   openclaw)
@@ -664,7 +667,7 @@ case "$SELECTED_AGENT" in
     printf '  Codex:       cd %q && codex, then run $setup\n' "$REPO_ROOT"
     printf '  Hermes:      cd %q && hermes (reads AGENTS.md; see AGENTS.md Hermes section)\n' "$REPO_ROOT"
     printf '  Cursor:      see adapters/cursor/README.md (separate IDE and Agent CLI paths)\n'
-    echo "  Devin:       see adapters/devin/README.md (managed cloud account + Review)"
+    printf '  Devin CLI:   cd %q && devin, then run /context-setup (cloud: adapters/devin/README.md)\n' "$REPO_ROOT"
     echo "  OpenClaw:    see adapters/openclaw/README.md (private workspace + copied skills)"
     echo "  OpenCode:    see adapters/opencode/README.md (native skills + typed commands)"
     echo "  claude.ai:   open SETUP-PROMPTS.md and paste the prompts there"

@@ -6,12 +6,12 @@ dates, append behavior, optimistic hashes, locking, and receipts.
 
 ## Shared lifecycle
 
-| Job | Claude Code | Codex | Hermes | OpenClaw | Cursor CLI / Cursor IDE (experimental) | Devin session (experimental) | Deterministic operation |
+| Job | Claude Code | Codex | Hermes | OpenClaw | Cursor CLI / Cursor IDE (experimental) | Devin CLI / session (experimental) | Deterministic operation |
 |---|---|---|---|---|---|---|---|
-| Initialize context | `/setup` | `$setup` | `/context-setup` | `/contextos <alias> setup` | `/context-setup` | `@skills:context-setup` | `contextos propose setup` then `apply` |
-| Start a session | `/start` | `$start` | `/context-start` | `/contextos <alias> start` | `/context-start` | `@skills:context-start` | read-only `contextos start` |
-| Checkpoint | `/update` | `$update` | `/context-update` | `/contextos <alias> update` | `/context-update` | `@skills:context-update` | `contextos propose update` then `apply` |
-| Close a session | `/end` | `$end` | `/context-end` | `/contextos <alias> end` | `/context-end` | `@skills:context-end` | `contextos propose end` then `apply` |
+| Initialize context | `/setup` | `$setup` | `/context-setup` | `/contextos <alias> setup` | `/context-setup` | `/context-setup` / `@skills:context-setup` | `contextos propose setup` then `apply` |
+| Start a session | `/start` | `$start` | `/context-start` | `/contextos <alias> start` | `/context-start` | `/context-start` / `@skills:context-start` | read-only `contextos start` |
+| Checkpoint | `/update` | `$update` | `/context-update` | `/contextos <alias> update` | `/context-update` | `/context-update` / `@skills:context-update` | `contextos propose update` then `apply` |
+| Close a session | `/end` | `$end` | `/context-end` | `/contextos <alias> end` | `/context-end` | `/context-end` / `@skills:context-end` | `contextos propose end` then `apply` |
 
 The portable cores are `.agents/skills/context-setup`, `context-start`,
 `context-update`, and `context-end`. Short skill directories are thin aliases;
@@ -20,9 +20,10 @@ OpenClaw resumes setup, update, and end questions with
 `/contextos <alias> continue <session-key> <response>` (or the operator-scoped
 `contextos.continue` Gateway method). Its plugin does not expose apply; after
 independent proposal review, an operator runs the kernel from a trusted shell.
-Devin's portable skill frontmatter carries a native user-only trigger, but the
-host remains experimental until its account-managed session behavior has
-versioned live-conformance evidence.
+Devin's portable skill frontmatter carries a native user-only trigger. Devin CLI
+is first-class with versioned live evidence and avoids the short aliases because
+it owns built-in `/update`; cloud sessions remain experimental until their
+account-managed behavior has versioned live-conformance evidence.
 
 The mutation protocol is always:
 
@@ -35,14 +36,14 @@ The mutation protocol is always:
 
 ## Runtime boundary
 
-| Capability | Claude Code | Codex | Hermes | OpenClaw | Cursor CLI / Cursor IDE (experimental) | Devin session (experimental) |
+| Capability | Claude Code | Codex | Hermes | OpenClaw | Cursor CLI / Cursor IDE (experimental) | Devin CLI / session (experimental) |
 |---|---|---|---|---|---|---|
 | Project instructions | `CLAUDE.md` | `AGENTS.md` | `AGENTS.md` | Alias-bound execution-directory `AGENTS.md` | Root `AGENTS.md` | Root `AGENTS.md` |
 | Portable skill source | Thin slash adapters | `.agents/skills/` | External directory or copied skills | Copied into private workspace `.agents/skills/` | `.agents/skills/` | `.agents/skills/` |
 | Project hooks | `.claude/settings.json` | `.codex/hooks.json` after trust | Optional shell/plugin adapter | Not claimed | Not claimed | Not claimed |
-| Authorization | Host settings | Host settings | Outside contract | Operator-scoped lifecycle plugin, OpenClaw model-tool policy, and separate trusted-shell apply | IDE/CLI permissions; CLI `--force` | Account-managed; outside adapter |
+| Authorization | Host settings | Host settings | Outside contract | Operator-scoped lifecycle plugin, OpenClaw model-tool policy, and separate trusted-shell apply | IDE/CLI permissions; CLI `--force` | CLI Normal-mode prompts (project rules limited); cloud account-managed |
 | Lifecycle enforcement | Kernel | Kernel | Kernel | Kernel | Kernel | Kernel |
-| Native memory | Claude auto-memory | Not part of the shared contract | `MEMORY.md` and `USER.md` | Private OpenClaw workspace | Outside contract | Knowledge is not synchronized |
+| Native memory | Claude auto-memory | Not part of the shared contract | `MEMORY.md` and `USER.md` | Private OpenClaw workspace | Outside contract | Outside contract; cloud Knowledge is not synchronized |
 
 Runtime manifests in `runtimes/` are machine-readable claims. Hooks are defense
 in depth: the kernel repeats mutation invariants during every proposal and apply.

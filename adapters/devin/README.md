@@ -1,14 +1,140 @@
-# Devin experimental adapter
+# Devin adapter
 
-Context OS supports Devin through two deliberately separate surfaces: cloud
-Agent sessions are an experimental lifecycle host, while Devin Review is a
-compatibility surface for repository instructions only. Evidence from one
-surface does not establish behavior in the other.
+Context OS supports Devin through three deliberately separate surfaces. Devin
+CLI is a first-class lifecycle host. Cloud Agent sessions remain an
+experimental lifecycle host, and Devin Review is a compatibility surface for
+repository instructions only. Evidence from one surface does not establish
+behavior in another.
 
-No exact Devin model or product build was available to pin for this release.
-The adapter is therefore an evidence-backed pilot, not first-class support.
+CLI promotion is scoped to Devin CLI `3000.11.3 (9c803229faa4)` on Linux
+(WSL2), with the default model, host controls, the shipped setup/start/update/end
+workflows, exact-digest operator apply, and fresh-session handoff recorded in
+the [promotion evidence](../../docs/evidence/devin-cli-2026-10-06/README.md).
+It does not promote cloud sessions or Review, and it does not cover native
+Windows (see below).
 
-## Repository boundary
+## Devin CLI
+
+Install Devin CLI separately, sign in with `devin auth login`, start `devin`
+from the repository root, and record `devin version`. Setup registers the
+adapter but does not install, authenticate, or configure Devin.
+
+Devin CLI loads the root `AGENTS.md` into the session context at start and
+discovers project skills under `.agents/skills/`. Invoke `/context-setup`,
+`/context-start`, `/context-update`, and `/context-end` explicitly. Devin CLI
+owns built-in `/update` (self-update), so the documented Devin lifecycle avoids
+the short aliases, as on Cursor. Every lifecycle skill sets `triggers: ["user"]`;
+Devin omits such skills from the list it offers the model and refuses a model
+attempt to invoke one. An explicit slash command expands the skill body into
+the user turn.
+
+### Import guard
+
+By default Devin CLI also imports instructions, skills, commands, MCP servers,
+and hooks from Claude Code, Cursor, Windsurf, GitHub Copilot, OpenCode, and Zed,
+including user-level files such as `~/.claude/CLAUDE.md`. In this repository
+that would load the removable `CLAUDE.md` seed (whose command table uses the
+short names), `.claude/skills/`, and the operator's private global Claude
+instructions alongside `AGENTS.md`.
+
+The adapter therefore ships `.devin/config.json`, which sets
+`read_config_from` to `false` for every foreign tool and leaves
+`agents_standard` at its default. Live sessions with the file loaded only
+`AGENTS.md`; the same fixture without it loaded both the repository and
+user-level `CLAUDE.md`. `devin rules list` still lists `CLAUDE.md` rules when
+imports are disabled, so inspect a session export rather than that listing.
+The file contains no permissions, hooks, MCP servers, or secrets. Project-level
+`.devin/config.json` accepts only `permissions`, `read_config_from`, and
+`hooks`; keep personal overrides in the git-excluded `.devin/config.local.json`.
+
+### Authorization boundaries
+
+The kernel's exact-digest apply is the enforcement boundary. Devin permission
+rules are useful defense in depth only within the limits observed on
+`3000.11.3`:
+
+- Normal mode (the default) runs reads and read-only shell commands such as
+  `ls` and `grep` automatically and asks before every other shell command,
+  file write, and fetch. In `devin -p`, an unanswerable request is rejected and
+  ends the session's tool use.
+- In Normal mode, a project or project-local `deny` beats an `allow` at the same
+  level, and path-scoped `Write(...)` allows work as documented.
+- Accept Edits auto-approves workspace edits even when a project or
+  project-local `deny` or `ask` matches; only user-level denies held. Bypass
+  ignores project denies entirely.
+- A broad `allow` in user or project-local config overrode a project-level
+  `deny` or `ask` for the same command, contrary to the documented precedence.
+- Path-scoped `Read(...)` denies were not reliable across configuration levels.
+
+Context OS therefore ships no Devin permission rules and makes no claim that a
+rule keeps `apply` away from the model. Use Normal mode for lifecycle work,
+approve `propose` calls as they appear, inspect the proposal diff, and approve
+`apply` only for the exact digest you reviewed. Do not grant a broad
+`Exec(bash scripts/contextos.sh)` allow or a broad allow for the kernel's Python
+module, and never run lifecycle skills in Bypass mode.
+
+### Native Windows
+
+On Windows, Devin CLI resolves the home directory through the operating-system
+profile. Overriding `HOME` or `USERPROFILE` does not hide `~/.claude/CLAUDE.md`
+or `~/.agents/skills/`, so a harness cannot isolate user-level sources there.
+The shipped import guard still disables the Claude import in a Context OS
+checkout, but user-level skill directories that Devin owns, such as
+`~/.agents/skills/`, are always loaded. Native Windows behavior is untested;
+the conformance harnesses refuse to run there. Use WSL for verified behavior.
+
+### Hooks, memory, MCP, and handoff
+
+Devin CLI supports Claude-compatible hooks in `.devin/hooks.v1.json`, project
+MCP servers in `.devin/mcp_config.json`, and `/handoff` to a cloud session.
+Context OS ships none of them and makes no claim about them. Devin CLI has no
+native memory store beyond session resume; nothing is synchronized into
+`state/` or `sessions/`.
+
+### Conformance
+
+Both harnesses run only on Linux, macOS, or WSL. They point `HOME` and
+`XDG_CONFIG_HOME` at temporary directories, seed synthetic user-level
+canaries there, and pin only `XDG_DATA_HOME`, which must already hold the
+operator's Devin credentials. Evidence comes from Devin's ATIF session export
+(`--export`), which records the injected rules, the offered skills, every tool
+call, and every tool observation. Shareable evidence keeps hashes and booleans,
+never raw responses, temporary paths, or credentials.
+
+```bash
+python3 adapters/devin/cli_conformance.py \
+  --binary /exact/path/to/devin --expected-version <version> \
+  --source-sha <exact-clean-commit> --data-home ~/.local/share \
+  --evidence /outside/repository/devin-cli-host.json --allow-model-traffic
+
+python3 adapters/devin/cli_lifecycle_conformance.py \
+  --binary /exact/path/to/devin --expected-version <version> \
+  --source-sha <exact-clean-commit> --data-home ~/.local/share \
+  --evidence /outside/repository/devin-cli-lifecycle.json \
+  --approval-dir /outside/repository/empty-approvals --allow-model-traffic
+```
+
+The host harness checks that `AGENTS.md` is injected at session start, that
+the shipped config keeps repository and user-level Claude sources out of
+context while a positive control without it loads them, explicit-skill
+must-fire and implicit-skill must-not-fire behavior, print-mode rejection of
+an unapproved write and shell command, same-level deny precedence, an exact
+scoped write, and an allowlisted kernel command. It records, without gating,
+the Accept Edits and Bypass and precedence observations listed above, so a
+client release that changes them is visible. The lifecycle harness clones the
+exact source commit and runs every phase in Normal mode. A rejected call ends a
+print-mode session and the skills chain ordinary shell inspection, so the
+disposable fixture's local config allows the shell broadly (as the Cursor run
+used `--force`) while denying every `apply` form, direct Python, `rm`, and
+mutating Git at the same level, and allows file writes only under
+`.context-os/inputs/`. Start and the handoff also deny file tools and
+`propose`. Any model `apply` attempt must show a deny-rule rejection, tracked
+files must be unchanged until the operator acts, and an external operator
+approves each proposal's exact digest before the harness applies it. It checks wrong-digest and stale rejection, receipts, read-only
+start, and fresh-session handoff. Add `--debug-dir` to keep raw exports locally
+when diagnosing a failure; never share them.
+
+## Cloud session repository boundary
 
 Devin cloud sessions document repository-root `AGENTS.md` and Agent Skills under
 `.agents/skills/`. Start a session for this repository and invoke
@@ -35,8 +161,9 @@ permissions, organization roles, security profiles, MCP configuration, and UI
 state are Devin-managed account state. They are not Context OS components,
 repository instruction sources, locally installable artifacts, or proof of
 readiness. Git-based blueprints are not currently supported; configure them in
-**Settings > Environment > Blueprints**. Context OS ships no `.devin/` file or
-blueprint YAML.
+**Settings > Environment > Blueprints**. Context OS ships no blueprint YAML.
+Its only `.devin/` file is the CLI import guard described above; Devin does not
+document whether cloud sessions read it, so it is not a cloud-session control.
 
 Setup can register `devin` in `contextos.workspace.json` and local host
 metadata. That means only "selected for this workspace." It does not connect a

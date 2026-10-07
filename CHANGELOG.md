@@ -3,6 +3,19 @@
 ## [Unreleased]
 
 ### Added
+- Devin CLI is a first-class lifecycle host (#71), scoped to `3000.11.3` on
+  Linux (WSL2). A shipped `.devin/config.json` stops Devin importing Claude,
+  Cursor, Windsurf, Copilot, OpenCode, and Zed configuration, which otherwise
+  loads the `CLAUDE.md` seed and user-level `~/.claude/CLAUDE.md` beside
+  `AGENTS.md`. New host and lifecycle harnesses read Devin's ATIF session
+  export; live runs passed instruction injection, the import guard and its
+  positive control, explicit and implicit skill controls, Normal-mode
+  authorization, setup/start/update/end with exact-digest operator apply, and
+  fresh-session handoff. The guide records observed permission limits: Accept
+  Edits and Bypass ignore project write rules, and broad user or local allows
+  override a project deny. Cloud sessions stay experimental and Review stays
+  compatibility-only; native Windows is untested because Devin there reads the
+  real profile's `~/.claude` regardless of `HOME`.
 - Read-only briefings expose source IDs, raw and normalized revisions, and
   optional prior-revision comparisons without expanding the selected read set.
   `start --expect-source-revision` exits 1 when any expected revision is
