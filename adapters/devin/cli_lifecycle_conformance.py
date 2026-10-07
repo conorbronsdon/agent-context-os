@@ -34,7 +34,7 @@ from contextos.workspace_schema import strict_json_loads  # noqa: E402
 PHASES = ("setup", "start", "update", "end")
 
 
-def lifecycle_permissions(root: Path) -> dict[str, list[str]]:
+def lifecycle_permissions(root: Path, *, read_only: bool = False) -> dict[str, list[str]]:
     """Allow shell inspection and payload writes; deny every apply form.
 
     One rejected call ends a print-mode session, and the skills chain
@@ -43,16 +43,18 @@ def lifecycle_permissions(root: Path) -> dict[str, list[str]]:
     level deny beat an allow in live probes, so apply, direct Python, and
     mutating Git stay denied. File writes stay limited to payload inputs, and
     the harness separately requires every tracked file to be unchanged before
-    the operator applies.
+    the operator applies. Start and the handoff are read-only, mirroring the
+    Cursor run's ask mode: they also deny file tools, proposals, and the board.
     """
     wrappers = ["bash scripts/contextos.sh", f"bash {root.as_posix()}/scripts/contextos.sh",
                 "sh scripts/contextos.sh"]
+    mutating = ("apply",) if not read_only else ("apply", "propose", "board")
     return {
-        "allow": ["exec", "Write(.context-os/inputs/**)"],
-        "deny": [f"Exec({form} apply)" for form in wrappers]
+        "allow": ["exec"] + ([] if read_only else ["Write(.context-os/inputs/**)"]),
+        "deny": [f"Exec({form} {command})" for form in wrappers for command in mutating]
         + [f"Exec({tool})" for tool in ("python3", "python", "rm", "git commit", "git push",
                                         "git checkout", "git reset", "git restore", "git stash")]
-        + ["webfetch", "web_search"],
+        + (["write", "edit"] if read_only else []) + ["webfetch", "web_search"],
     }
 
 
@@ -210,6 +212,7 @@ def execute(harness: DevinCliHarness, approvals: Path, evidence: Path) -> dict:
             for phase in PHASES:
                 current = phase
                 print(f"Devin lifecycle: {phase}", flush=True)
+                write_local_permissions(root, lifecycle_permissions(root, read_only=phase == "start"))
                 before = state(root, include_pending=phase == "start")
                 pending = set((root / ".context-os/proposals").glob("*.json"))
                 prompt = prompt_for(phase, handoff_fact)
@@ -286,9 +289,10 @@ def execute(harness: DevinCliHarness, approvals: Path, evidence: Path) -> dict:
                         raise HarnessError("stale rejection mutated fixture")
                     controls[f"{phase}_stale_rejected"] = "passed"
             current = "handoff"
-            before = state(root)
             result["prompts"]["handoff"] = ("/context-start Read the saved session and report the exact next "
                                             "action for the synthetic fixture, including its verification value.")
+            write_local_permissions(root, lifecycle_permissions(root, read_only=True))
+            before = state(root)
             trajectory = harness.session(root, "lifecycle-handoff", result["prompts"]["handoff"])
             require_guarded_context(trajectory)
             answer = trajectory.final_message()
