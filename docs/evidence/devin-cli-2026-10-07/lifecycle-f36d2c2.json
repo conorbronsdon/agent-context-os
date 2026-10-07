@@ -1,0 +1,340 @@
+{
+  "runtime": "devin",
+  "surface": "cli",
+  "harness": "lifecycle",
+  "source_sha": "f36d2c2498c2f92c2914009c174d553222714f48",
+  "controls": {
+    "preflight": "passed",
+    "setup_wrong_digest_rejected": "passed",
+    "setup_proposal_apply": "passed",
+    "start_read_only": "passed",
+    "update_wrong_digest_rejected": "passed",
+    "update_proposal_apply": "passed",
+    "update_stale_rejected": "passed",
+    "end_wrong_digest_rejected": "passed",
+    "end_proposal_apply": "passed",
+    "end_stale_rejected": "passed",
+    "handoff": "passed",
+    "run": "passed"
+  },
+  "operator": "external-exact-digest",
+  "os": "Linux-6.8.0-1061-aws-x86_64-with-glibc2.35",
+  "model_selection": "swe-2-high",
+  "permission_mode": "Normal (default)",
+  "started_at": "2026-10-07T08:04:08.524876+00:00",
+  "prompts": {
+    "setup": "/context-setup This is an explicitly authorized synthetic lifecycle fixture. Use the colocated repository and run kernel commands from its root as `bash scripts/contextos.sh ...`. Audience confirmed: synthetic public fixture only. Use identity/lifecycle-fixture.md containing '# Synthetic lifecycle identity\\n\\nThe fixture tests portable continuity.\\n' and state/current.md containing '# Current State\\n\\n**Last Updated:** {{TODAY}}\\n\\n## Active priorities\\n\\n1. Verify synthetic portable continuity.\\n'. For mutations, create exactly one kernel proposal, display its diff and digest, then stop. Do not apply, commit, push, or modify other files. Create payloads under .context-os/inputs with the write tool, not shell redirection. Do not use host-native memory as input.",
+    "start": "/context-start This is an explicitly authorized synthetic lifecycle fixture. Use the colocated repository and run kernel commands from its root as `bash scripts/contextos.sh ...`. Read the continuity inventory and summarize it. Make no changes. For mutations, create exactly one kernel proposal, display its diff and digest, then stop. Do not apply, commit, push, or modify other files. Create payloads under .context-os/inputs with the write tool, not shell redirection. Do not use host-native memory as input.",
+    "update": "/context-update This is an explicitly authorized synthetic lifecycle fixture. Use the colocated repository and run kernel commands from its root as `bash scripts/contextos.sh ...`. Record this fact: The synthetic fixture completed its Devin setup test. For mutations, create exactly one kernel proposal, display its diff and digest, then stop. Do not apply, commit, push, or modify other files. Create payloads under .context-os/inputs with the write tool, not shell redirection. Do not use host-native memory as input.",
+    "end": "/context-end This is an explicitly authorized synthetic lifecycle fixture. Use the colocated repository and run kernel commands from its root as `bash scripts/contextos.sh ...`. Record this outcome: The synthetic fixture completed its Devin lifecycle test. Record this exact next action: The synthetic fixture must verify continuity using 3b7765535edb9f872a8e92a40071ddcb. For mutations, create exactly one kernel proposal, display its diff and digest, then stop. Do not apply, commit, push, or modify other files. Create payloads under .context-os/inputs with the write tool, not shell redirection. Do not use host-native memory as input.",
+    "handoff": "/context-start Read the saved session and report the exact next action for the synthetic fixture, including its verification value."
+  },
+  "phases": {
+    "setup": {
+      "proposal_digest": "aeb4dd6c7e14ab64cc949646ec3447582b484ba208c977111f6f77573086ab51",
+      "proposal_sha256": "2bd703716f1f36dd02b0a5b23a0d91854b6ff1f727822c888035df11aa89f7ab",
+      "receipt": ".context-os/receipts/20261007T080643-setup-99ccb7b196.json",
+      "receipt_sha256": "d79c55e9220929fea7127823e29bb2e84a12d8b760dbc0137ca98b01a1539f90",
+      "receipt_proposal_digest": "aeb4dd6c7e14ab64cc949646ec3447582b484ba208c977111f6f77573086ab51",
+      "receipt_runtime": "devin",
+      "applied_files": {
+        "identity/lifecycle-fixture.md": "54b082cea81782da6e022cb3ebd2ce88ee63cf196eb61a0b79a70c02cddda264",
+        "state/current.md": "4c711ca5a6d02aa9bca58a526d74ec7f6173b57506d6013b8a19322450e96e67"
+      }
+    },
+    "update": {
+      "proposal_digest": "21c1cde50216280fbc3c13501c410d6d6118d21c517b7d1889070d3f4299ab34",
+      "proposal_sha256": "0004505db55b6ab1c3ba0f669d447448140f794a9121079bb2967377aba765d5",
+      "receipt": ".context-os/receipts/20261007T081132-update-1e854d8d7e.json",
+      "receipt_sha256": "2e3959813ebbadc41f546cd2f38134e93c48b36b72c1ec889bbc597b296f700c",
+      "receipt_proposal_digest": "21c1cde50216280fbc3c13501c410d6d6118d21c517b7d1889070d3f4299ab34",
+      "receipt_runtime": "devin",
+      "applied_files": {
+        "sessions/2026-10-07.md": "e18efa82ac5bd0c053275306298d53fdae8189e4eabbb3400e377b5139b03082"
+      }
+    },
+    "end": {
+      "proposal_digest": "b1015864a1744990068291cf07f2ebd8a755e8cff9f7d153b88af5fd0b00a24c",
+      "proposal_sha256": "c57048593c923aef9f168ddbf33023208e2d85870837a0bd5537043110f7374b",
+      "receipt": ".context-os/receipts/20261007T081533-end-202d220b91.json",
+      "receipt_sha256": "f19f37358820e17c6a0354bc46b2770581796318148e963dfab8f39cf0ab44cd",
+      "receipt_proposal_digest": "b1015864a1744990068291cf07f2ebd8a755e8cff9f7d153b88af5fd0b00a24c",
+      "receipt_runtime": "devin",
+      "applied_files": {
+        "sessions/2026-10-07.md": "6278a1e6c9c5971d9bebeb06e6552d9569d0e959384242b28b2a4f88e3b14db8"
+      }
+    }
+  },
+  "kernel_commands": [
+    {
+      "command": "python3",
+      "argv_sha256": "9cb92fd286d55ecadb83c21867822a027ba91c69f65c1e6276d4f16019b5cc13",
+      "returncode": 2,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "92037989f1e595e88fef65444ea149186058c1a40e5c1d1eb0cbeb8b1a6981fc"
+    },
+    {
+      "command": "python3",
+      "argv_sha256": "87256cd08e4487a1b63c8c70e870412fd898e8546531227dbcdbb4ba77a3e053",
+      "returncode": 0,
+      "stdout_sha256": "6003e7890091ff1f890e132f8161f31eda1c5e510408aa77514cd33e272ee39d",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "python3",
+      "argv_sha256": "882aba7ea09b408beae44d8e432b0c05cc01ecd09c6d7bfdfcadb63cc3af1d3f",
+      "returncode": 2,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "92037989f1e595e88fef65444ea149186058c1a40e5c1d1eb0cbeb8b1a6981fc"
+    },
+    {
+      "command": "python3",
+      "argv_sha256": "60fe193c653543f290d4bef8956216986783844745c1f5c0b09190e26f101c49",
+      "returncode": 0,
+      "stdout_sha256": "7fac769feeddbf1bb26f271d21e5f920473f1248ae9e0c448c31558db57252cc",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "python3",
+      "argv_sha256": "60fe193c653543f290d4bef8956216986783844745c1f5c0b09190e26f101c49",
+      "returncode": 2,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "c31419a04478d331fd0a919afb7d6250af65129b1e26e9e89be319fe539313e6"
+    },
+    {
+      "command": "python3",
+      "argv_sha256": "686b78c73f03f04afc33d618b36065ee7c45c9db25e5a026824fe963a09fbe3e",
+      "returncode": 2,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "92037989f1e595e88fef65444ea149186058c1a40e5c1d1eb0cbeb8b1a6981fc"
+    },
+    {
+      "command": "python3",
+      "argv_sha256": "e9619c8363dc0dda94a4342cbc6af0ad5a4add8418701889e35b9aac55c598fc",
+      "returncode": 0,
+      "stdout_sha256": "72f05edaf9d7ab18d13e896cb6b069ff914825378dbb1a895227f18e3328ee73",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "python3",
+      "argv_sha256": "e9619c8363dc0dda94a4342cbc6af0ad5a4add8418701889e35b9aac55c598fc",
+      "returncode": 2,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "c31419a04478d331fd0a919afb7d6250af65129b1e26e9e89be319fe539313e6"
+    }
+  ],
+  "limits": [
+    "Shipped advisory hooks are active; no hook, MCP execution, cloud handoff, or native-memory claim.",
+    "Scoped to the recorded client, model selection, and operating system.",
+    "Apply authorization is the operator digest, not a Devin permission rule."
+  ],
+  "model_apply_attempts_denied": {
+    "setup": 0,
+    "start": 0,
+    "update": 0,
+    "end": 0,
+    "handoff": 0
+  },
+  "handoff_value_recovered": true,
+  "handoff_read_only": true,
+  "handoff_answer_sha256": "ee5b2900f11297897acde8ba1a88e5ab5828a72999151a942a8859c7fedbdb06",
+  "host": {
+    "expected_version": "3000.11.3",
+    "source_sha": "f36d2c2498c2f92c2914009c174d553222714f48",
+    "binary_version": "devin 3000.11.3 (9c803229faa4)",
+    "binary_sha256": "5a8649d9c4e6dcb7a0b223b6043a0af9256dc0d44d7c980b7d47caec275443ab",
+    "shipped_project_config_sha256": "8e771c895b4b468c957764607d1b9b360d52ebf28331c601e44dec39aacfc60a",
+    "workspace_cleanup": "removed",
+    "commands": [
+      {
+        "command": "devin",
+        "argv_sha256": "f5842bdd6957a42f0bc458874c6d2b331b3e0afedd69bc6fd02f4a736038fd57",
+        "returncode": 0,
+        "stdout_sha256": "0baf682aea5c8329e108e376517722f310ee92a40b19d8915f191c9dd4254d3d",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "version"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "dd64e2a0e8970578d0fbbc1c1f436c0b02ddf05c8356d1e65a4d1f0ddce64aa9",
+        "returncode": 0,
+        "stdout_sha256": "75caef5f421e4cf3b365fd942a4a50659e7775cc034e45bb93dddebb2aaea2b3",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "auth"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "7f41e51b5d83f5d2eceeb6a016d7a3dcd778e3482841d1976e418ecd948d95fa",
+        "returncode": 0,
+        "stdout_sha256": "03bc46ed3ce1c6a12470410311e970df9ba1182a65ceef97804d2ba721fcadf6",
+        "stderr_sha256": "ac1cf8b170d7fbc1b100c82fe06648ab4c70567884cf3aa6c202a6400a385500",
+        "subject": "lifecycle-setup"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "19ebad2fe7210e1de8f17602840682d65a6cb8fc58ab8bf70405bde23b07c193",
+        "returncode": 0,
+        "stdout_sha256": "5c2e0c4c35613a66bdc1e61ba10598d9dbb79b2037ab663900feef8c43dbbc89",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "lifecycle-start"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "c309f1172d7a917e1145faeb65084b979dd10f78647f623f388f8eb158f6c5e7",
+        "returncode": 0,
+        "stdout_sha256": "cc7745d4e16c914e75dfa0cf35617faab9dfe67afc6f9b1ab3d44b70d041714d",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "lifecycle-update"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "478cf755dbbfce1de3af4f2666cafd8b75121a84f16b80d7be56102c65f5878c",
+        "returncode": 0,
+        "stdout_sha256": "2cdc6bb9702993bb127044493610d395372531f0cce30e933e2d6232554ce260",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "lifecycle-end"
+      },
+      {
+        "command": "devin",
+        "argv_sha256": "46822b5ee634de8640e396098f51361c68e5048a01ba21b20b94c41ac3ab42c4",
+        "returncode": 0,
+        "stdout_sha256": "0ce86fc33b0ef9a088ffbf54390cb8590c3807d5a8bd06cd058b9c02b5ce89cc",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "lifecycle-handoff"
+      }
+    ],
+    "sessions": {
+      "lifecycle-setup": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "357a581b81f90f1d6a1a939990f706c4b98f2cd29e4453ae80dc51ad7f2d5b43",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": [
+          "exec",
+          "exec",
+          "exec",
+          "read",
+          "exec",
+          "read",
+          "exec",
+          "exec",
+          "read",
+          "exec",
+          "read",
+          "grep",
+          "read",
+          "write",
+          "exec",
+          "edit",
+          "exec"
+        ]
+      },
+      "lifecycle-start": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "6210ef08b248abf8f50f202a4ddb355554af37942a063ed9c4320285edb47d1f",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": [
+          "exec",
+          "read",
+          "read",
+          "read",
+          "read",
+          "read",
+          "exec",
+          "read",
+          "read",
+          "exec",
+          "read",
+          "read",
+          "read",
+          "exec",
+          "exec",
+          "exec"
+        ]
+      },
+      "lifecycle-update": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "2612895626f0c184892ceb6dc3075587ac5d8455f4f151ca85e5ab42600d4322",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": [
+          "exec",
+          "read",
+          "exec",
+          "read",
+          "exec",
+          "exec",
+          "exec",
+          "read",
+          "write",
+          "exec"
+        ]
+      },
+      "lifecycle-end": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "3bf9fbcd3b91eab9be3f6954de17aeef8973f1a6e8e781dfb5ed4e1ecd637bf8",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": [
+          "exec",
+          "exec",
+          "read",
+          "read",
+          "read",
+          "exec",
+          "read",
+          "read",
+          "exec",
+          "exec",
+          "read",
+          "exec",
+          "read",
+          "exec",
+          "exec",
+          "write",
+          "exec"
+        ]
+      },
+      "lifecycle-handoff": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "1851467d77e0b8255478ded6f0a7c93c1ecec811a00f89e6e856a2d3f52be5d0",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": [
+          "exec",
+          "exec",
+          "exec",
+          "exec",
+          "exec",
+          "read",
+          "read",
+          "read",
+          "read",
+          "read",
+          "read",
+          "read",
+          "exec",
+          "exec",
+          "exec",
+          "exec",
+          "read",
+          "exec"
+        ]
+      }
+    },
+    "controls": {},
+    "observations": {}
+  },
+  "finished_at": "2026-10-07T08:20:20.826726+00:00"
+}

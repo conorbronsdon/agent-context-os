@@ -1073,6 +1073,30 @@
                     "policy": "development"
                 },
                 {
+                    "path": "docs/evidence/devin-cli-2026-10-07/hooks-attempt-1.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-07/hooks-attempt-2.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-07/hooks-attempt-3.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-07/hooks-f36d2c2.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-07/lifecycle-attempt-1.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-2026-10-07/lifecycle-f36d2c2.json",
+                    "policy": "development"
+                },
+                {
                     "path": "docs/evidence/devin-cli-2026-10-06/README.md",
                     "policy": "development"
                 },

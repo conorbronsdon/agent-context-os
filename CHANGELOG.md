@@ -15,7 +15,11 @@
   checks that Devin runs the shipped hooks, that their advisories reach the
   model, and that a synthetic probe hook can block a write. It also checks that
   a skill's `allowed-tools` auto-approves a shell command that Normal mode
-  otherwise rejects.
+  otherwise rejects. Live hook and lifecycle runs on `f36d2c2`
+  (`docs/evidence/devin-cli-2026-10-07/`) back those claims and replace the
+  stale lifecycle evidence. Lifecycle setup now also writes a dated
+  `state/current.md`, so the shipped SessionStart hook sees an initialized
+  workspace at handoff.
 - Devin CLI is a first-class lifecycle host (#71), scoped to `3000.11.3` on
   Linux (WSL2). A shipped `.devin/config.json` stops Devin importing Claude,
   Cursor, Windsurf, Copilot, OpenCode, and Zed configuration, which otherwise

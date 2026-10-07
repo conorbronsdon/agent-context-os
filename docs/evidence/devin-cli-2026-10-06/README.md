@@ -12,8 +12,8 @@ directories and pinned only `XDG_DATA_HOME`, which held the operator's Devin
 login. The host harness seeded a synthetic user-level `~/.claude/CLAUDE.md`;
 the lifecycle harness at `c638849` did not, and checked only that no `CLAUDE`
 rule reached the context. Later lifecycle source (`2b2f6a8`) seeds and
-excludes that canary too, and adds the second-review controls; its live rerun
-is pending. Devin's default
+excludes that canary too, and adds the second-review controls; [its rerun](../devin-cli-2026-10-07/README.md)
+passed on `f36d2c2`. Devin's default
 model reported itself as `swe-2-high` in every session.
 
 ## Passing runs on the final source
