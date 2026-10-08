@@ -10,7 +10,9 @@ CLI promotion is scoped to Devin CLI `3000.11.3 (9c803229faa4)` on Linux
 workflows, exact-digest operator apply, and fresh-session handoff recorded in
 the [host evidence](../../docs/evidence/devin-cli-2026-10-06/README.md) and
 the [hook and final lifecycle evidence](../../docs/evidence/devin-cli-2026-10-07/README.md).
-It does not cover native Windows (see below).
+Native Windows 11 launched from PowerShell is also covered by the
+[Windows evidence](../../docs/evidence/devin-cli-windows-2026-10-08/README.md),
+with the real-profile limitations below. macOS remains unverified.
 
 Cloud-session promotion is scoped to the Devin v3 API on snapshot build
 `sbj-f04a9b4dd96a43ff806501a2bedd34bf`, in Agent mode (`normal`). The
@@ -110,12 +112,14 @@ order. When Devin is started from PowerShell or cmd and WSL is installed, a bare
 `bash` inside them resolves to `C:\Windows\system32\bash.exe`, the WSL
 launcher, which receives no `DEVIN_PROJECT_DIR`. The shipped hooks therefore
 call `"${BASH:-bash}"`, which reuses the running bash and falls back to `bash`
-elsewhere. Kernel commands that skills run as `bash scripts/contextos.sh ...`
-still take the WSL route in that launch mode; a quick `start` works there, but
-the lifecycle setup phase has not completed yet (see the
+elsewhere. The portable lifecycle skills likewise use `"$BASH"` when commands
+run inside Bash. The startup advisory directs agents to the setup skill;
+`scripts/setup.sh` is the separate interactive terminal installer. These changes
+let the complete lifecycle pass when Devin starts from PowerShell with the WSL
+launcher first on `PATH` (see the
 [Windows evidence](../../docs/evidence/devin-cli-windows-2026-10-08/README.md)).
 
-Native Windows support stays unverified until all three harnesses pass there.
+Native Windows support is scoped to the recorded Windows 11 and CLI version.
 Credentials live at `%APPDATA%\devin\credentials.toml`, so pass `%APPDATA%` as
 `--data-home`.
 

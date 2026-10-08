@@ -1504,7 +1504,7 @@ with mock.patch("contextos.kernel._fsync_directory", side_effect=crash_after_tar
 
         report = start_report(self.root, NOW)
         self.assertFalse(report["initialized"])
-        self.assertIn("setup workflow", report["next_action"])
+        self.assertIn("$context-setup skill", report["next_action"])
         for item in report["state"].values():
             self.assertEqual("unknown", item["freshness_status"])
             self.assertIsNone(item["stale"])

@@ -3,6 +3,12 @@
 ## [Unreleased]
 
 ### Added
+- Devin CLI native Windows 11 support, scoped to CLI `3000.11.3` launched from
+  PowerShell (#71). Opt-in host, hook and lifecycle runs passed; setup, start,
+  update, end and fresh-session handoff use reviewed exact-digest operator apply.
+  The Windows harness never writes profile fixtures and checks real global
+  Claude instructions by local line hashing. User-level skills remain visible;
+  macOS remains unverified. Evidence: `docs/evidence/devin-cli-windows-2026-10-08/`.
 - Devin cloud sessions are a first-class lifecycle host (#71). A new opt-in
   harness, `adapters/devin/cloud_lifecycle_conformance.py`, drives one API
   session through setup/start/update/end. For each mutation, Devin pushes one
@@ -19,6 +25,12 @@
   with a repo blueprint; the guide now says so.
 
 ### Fixed
+- Lifecycle setup advisories direct agents to the setup skill instead of the
+  interactive terminal installer. Portable skills reuse the active Bash, and
+  Devin hooks call `"${BASH:-bash}"`, avoiding the Windows WSL launcher when
+  Devin starts from PowerShell. Harness fixtures keep LF endings, Windows
+  timeouts terminate owned process trees, and command checks recognize shell
+  variables and PowerShell wrapper forms.
 - Devin API harnesses read repositories and snapshot builds from `/v3beta1`,
   where the v3 API now serves them, and accept the current 32-hex session IDs.
   The cloud harness tracks a created session before validating its ID, so

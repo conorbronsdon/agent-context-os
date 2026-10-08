@@ -3,7 +3,7 @@
   "runtime": "devin",
   "display_name": "Devin",
   "support_tier": "first-class",
-  "support_summary": "First-class Devin CLI lifecycle and handoff with exact-version evidence and an import guard; first-class cloud sessions with live API lifecycle, exact-digest apply and fresh-session handoff on a recorded snapshot build; Devin Review is instruction-only compatibility",
+  "support_summary": "First-class Devin CLI lifecycle and handoff on Linux (WSL2) and native Windows 11 with exact-version evidence and an import guard; first-class cloud sessions with live API lifecycle, exact-digest apply and fresh-session handoff on a recorded snapshot build; Devin Review is instruction-only compatibility",
   "components": [
     "core",
     "portable-skills",
@@ -80,7 +80,8 @@
         "adapters/devin/cli_lifecycle_conformance.py",
         "adapters/devin/cli_hook_conformance.py",
         "tests/test_devin_cli_hook_harness.py",
-        "docs/evidence/devin-cli-2026-10-06/README.md"
+        "docs/evidence/devin-cli-2026-10-06/README.md",
+        "docs/evidence/devin-cli-windows-2026-10-08/README.md"
       ],
       "evidence": [
         "devin-cli-rules",
@@ -98,7 +99,8 @@
         "devin-cli-lifecycle-harness",
         "devin-cli-hook-harness",
         "devin-cli-hook-evidence",
-        "devin-cli-live-evidence"
+        "devin-cli-live-evidence",
+        "devin-cli-windows-evidence"
       ]
     },
     "session": {
@@ -488,6 +490,21 @@
           "agent_skills",
           "explicit_invocation",
           "support"
+        ]
+      },
+      {
+        "id": "devin-cli-windows-evidence",
+        "type": "conformance",
+        "location": "docs/evidence/devin-cli-windows-2026-10-08/README.md",
+        "claims": [
+          "support",
+          "proposal_apply",
+          "invocation",
+          "instruction_sources",
+          "agent_skills",
+          "explicit_invocation",
+          "project_hooks",
+          "skill_allowlists"
         ]
       }
     ]
