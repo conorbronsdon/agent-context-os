@@ -2,7 +2,7 @@
 
 These runs used synthetic public fixtures, not personal-context data. Both ran
 through the Devin v3 API as an organization service user, from a clean clone of
-source `adbfd55`, against snapshot build
+source `e2555a9`, against snapshot build
 `sbj-f04a9b4dd96a43ff806501a2bedd34bf`. That build was checked before and after
 each run. The artifacts keep controls, digests, receipt hashes, commit SHAs and
 request hashes. Session IDs are hashed and redacted from request paths. The
@@ -20,7 +20,7 @@ before these runs. Use the same setup for a real Context OS repository.
 
 ## Instructions and skills (passed)
 
-[api-adbfd55.json](api-adbfd55.json) used
+[api-e2555a9.json](api-e2555a9.json) used
 [`live_conformance.py`](../../../adapters/devin/live_conformance.py) on
 [`contextos-devin-live-fixture`](https://github.com/conorbronsdon/contextos-devin-live-fixture)
 at `3d58d8f`. In one API session, Devin returned the root instruction canary and
@@ -32,14 +32,14 @@ pull request, Review was not invoked, and the session was archived. Mode:
 
 ## Lifecycle, apply and handoff (passed, 32 controls)
 
-[lifecycle-adbfd55.json](lifecycle-adbfd55.json) used
+[lifecycle-e2555a9.json](lifecycle-e2555a9.json) used
 [`cloud_lifecycle_conformance.py`](../../../adapters/devin/cloud_lifecycle_conformance.py)
 on [`contextos-devin-cloud-fixture`](https://github.com/conorbronsdon/contextos-devin-cloud-fixture)
 at `0243a0f`, the unmodified v1.1.1 release template. The run branch is
-[`lifecycle/20261008T051538Z-7d7decdd`](https://github.com/conorbronsdon/contextos-devin-cloud-fixture/commits/lifecycle/20261008T051538Z-7d7decdd),
-with final head `6bdb335`. The handoff branch is
-[`handoff/20261008T051538Z-7d7decdd`](https://github.com/conorbronsdon/contextos-devin-cloud-fixture/commits/handoff/20261008T051538Z-7d7decdd)
-at `661c98b`.
+[`lifecycle/20261008T053816Z-59efc103`](https://github.com/conorbronsdon/contextos-devin-cloud-fixture/commits/lifecycle/20261008T053816Z-59efc103),
+with final head `1e83699`. The handoff branch is
+[`handoff/20261008T053816Z-59efc103`](https://github.com/conorbronsdon/contextos-devin-cloud-fixture/commits/handoff/20261008T053816Z-59efc103)
+at `5b471ea`.
 
 In one API session, for each of `@skills:context-setup`, `context-update` and
 `context-end`:
@@ -59,8 +59,12 @@ In one API session, for each of `@skills:context-setup`, `context-update` and
   pushed the result. The pushed tree and receipt matched an independent replay
   of the same apply with the kernel at the pending commit: same receipt file,
   proposal ID and digest, runtime `devin`, file hashes, invariants, and Git
-  heads bound to the pending commit. The receipt's `applied_at` came after the
-  approval was sent (120-second clock-skew allowance).
+  heads bound to the pending commit.
+- **Ordering.** The harness held each proposal for 30 seconds before approving.
+  Devin's own clock showed 63-78 seconds from proposal creation to apply, more
+  than the harness's 30-second push-to-approval interval. Each duration is
+  measured on one clock, so clock offset cancels. An apply made right after the
+  proposal push would have failed this check.
 - **Stale check.** For update and end, the kernel rejected re-applying the same
   proposal as stale without mutation.
 
@@ -75,8 +79,8 @@ Both branches were unchanged after the handoff, every pre-existing ref
 ## Limits
 
 - Cloud sessions have no execution-authorization control. Devin's adherence to
-  the approval step is observed through per-commit pushes and receipt
-  timestamps, not enforced. The kernel's digest check is the enforced boundary,
+  the approval step is observed through per-commit pushes, an independent kernel
+  replay, and an offset-free timing comparison, not enforced. The kernel's digest check is the enforced boundary,
   and it does not authenticate who approved.
 - The wrong-digest and stale rejections test the kernel locally, not Devin's
   restraint.
