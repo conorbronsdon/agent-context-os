@@ -34,7 +34,7 @@ from typing import Mapping
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from adapters.devin.cli_conformance import (  # noqa: E402
     REJECTED_BY_MODE, REPOSITORY_ROOT, DevinCliHarness, HarnessError, Trajectory,
-    repository_source_sha, require_outside_source, write_text,
+    native_windows, platform_record, repository_source_sha, require_outside_source, write_text,
 )
 
 SHIPPED_HOOKS = REPOSITORY_ROOT / ".devin" / "hooks.v1.json"
@@ -73,6 +73,11 @@ entry = {
     "tool": payload.get("tool_name"),
     "target": target,
     "project_dir_set": bool(os.environ.get("DEVIN_PROJECT_DIR")),
+    # Which shell ran the hook: Git Bash sets MSYSTEM, WSL sets WSL_DISTRO_NAME,
+    # POSIX shells export SHELL; none of these hold user data.
+    "shell": os.path.basename(os.environ.get("SHELL", "")),
+    "msystem": os.environ.get("MSYSTEM", ""),
+    "wsl": bool(os.environ.get("WSL_DISTRO_NAME")),
 }
 with log.open("a", encoding="utf-8") as stream:
     stream.write(json.dumps(entry) + "\\n")
@@ -86,8 +91,31 @@ def write_probe(base: Path) -> tuple[Path, str]:
     """Write the probe outside the workspace and return its log and command."""
     probe, log = base / "hook-probe.py", base / "hook-log.jsonl"
     write_text(probe, PROBE_SOURCE)
-    command = " ".join(shlex.quote(part) for part in (sys.executable, str(probe), str(log), BLOCKED_TARGET))
+    parts = (sys.executable, str(probe), str(log), BLOCKED_TARGET)
+    if native_windows():
+        # Devin's Windows hook shell is undocumented, so use a form that bash,
+        # PowerShell, and cmd all run: forward slashes and no quoting.
+        parts = tuple(part.replace("\\", "/") for part in parts)
+        if any(" " in part or "'" in part or '"' in part for part in parts):
+            raise HarnessError("hook probe paths must not contain spaces or quotes on Windows")
+        return log, " ".join(parts)
+    command = " ".join(shlex.quote(part) for part in parts)
     return log, command
+
+
+def hook_shells(entries: list[dict]) -> list[str]:
+    """Summarize which shells ran the probe, without any payload content."""
+    shells = set()
+    for entry in entries:
+        if entry.get("wsl"):
+            shells.add("wsl")
+        elif entry.get("msystem"):
+            shells.add("git-bash:" + str(entry["msystem"])[:16])
+        elif entry.get("shell"):
+            shells.add("posix:" + str(entry["shell"])[:16])
+        else:
+            shells.add("no-posix-shell-markers")
+    return sorted(shells)
 
 
 def probe_hooks(command: str) -> dict[str, list[dict]]:
@@ -223,8 +251,8 @@ def execute(harness: DevinCliHarness) -> dict:
         with harness.isolated() as base:
             harness.preflight(base)
             root = base / "workspace"
-            cloned = subprocess.run(["git", "clone", "--local", "--no-hardlinks", "--quiet",
-                                     str(REPOSITORY_ROOT), str(root)], capture_output=True, check=False)
+            cloned = subprocess.run(["git", "clone", "-c", "core.autocrlf=false", "--local", "--no-hardlinks",
+                                     "--quiet", str(REPOSITORY_ROOT), str(root)], capture_output=True, check=False)
             if cloned.returncode:
                 raise HarnessError("cannot clone clean source fixture")
             subprocess.run(["git", "remote", "remove", "origin"], cwd=root, capture_output=True, check=True)
@@ -236,7 +264,13 @@ def execute(harness: DevinCliHarness) -> dict:
             current = "session_start_hooks_fire"
             write_local_config(root, {"deny": ["exec"]}, hooks)
             trajectory = harness.session(root, current, SESSION_PROMPT)
-            require_hook_event(read_hook_log(log), "SessionStart")
+            entries = read_hook_log(log)
+            harness.evidence.host_environment["hook_shells"] = ",".join(hook_shells(entries))
+            # Recorded before gating so a Windows run shows whether hooks ran at all.
+            observations["probe_session_start_hook_fired"] = any(
+                entry.get("event") == "SessionStart" for entry in entries)
+            observations["shipped_session_start_advisory_injected"] = injected_notice(trajectory, SESSION_NOTICE)
+            require_hook_event(entries, "SessionStart")
             if not injected_notice(trajectory, SESSION_NOTICE):
                 raise HarnessError("shipped SessionStart advisory did not reach the model")
             controls[current] = "passed"
@@ -309,6 +343,7 @@ def execute(harness: DevinCliHarness) -> dict:
             controls[current] = "passed"
 
             observations["hook_events_seen"] = bool(read_hook_log(log))
+            harness.evidence.host_environment["hook_shells"] = ",".join(hook_shells(read_hook_log(log)))
             harness.verify_binary()
             if repository_source_sha() != harness.evidence.source_sha:
                 raise HarnessError("source changed during the live run")
@@ -328,6 +363,8 @@ def main() -> int:
     parser.add_argument("--model")
     parser.add_argument("--debug-dir", help="local directory for raw ATIF exports; never share")
     parser.add_argument("--allow-model-traffic", action="store_true")
+    parser.add_argument("--windows-real-profile", action="store_true",
+                        help="native Windows only: accept that user-level skills are visible")
     args = parser.parse_args()
     if not args.allow_model_traffic:
         parser.error("requires --allow-model-traffic for disposable synthetic model calls")
@@ -336,12 +373,13 @@ def main() -> int:
         parser.error("evidence path must not exist")
     harness = DevinCliHarness(Path(args.binary), args.expected_version, args.source_sha,
                               Path(args.data_home), model=args.model,
-                              debug_dir=Path(args.debug_dir) if args.debug_dir else None)
+                              debug_dir=Path(args.debug_dir) if args.debug_dir else None,
+                              windows_real_profile=args.windows_real_profile)
     started = datetime.now(timezone.utc).isoformat()
     controls = execute(harness)
     record = {
         "runtime": "devin", "surface": "cli", "harness": "hooks-and-skill-allowlists",
-        "os": platform.platform(), "started_at": started,
+        "os": platform.platform(), "platform": platform_record(), "started_at": started,
         "finished_at": datetime.now(timezone.utc).isoformat(),
         "model_selection": args.model or "Devin CLI default",
         "permission_mode": "Normal (default)",
@@ -350,7 +388,8 @@ def main() -> int:
         "limits": [
             "Synthetic fixture only; scoped to the recorded client, model, and operating system.",
             "Shipped hooks are advisory; the blocking control uses a synthetic local probe.",
-            "No MCP execution, cloud handoff, native-memory, or native Windows claim.",
+            "No MCP execution, cloud handoff, or native-memory claim.",
+            "On native Windows the shipped hooks run `bash`; host_environment records which shell ran them.",
         ],
     }
     with evidence.open("x", encoding="utf-8") as stream:

@@ -1,11 +1,16 @@
 """Exact-version Devin CLI host controls in an isolated synthetic workspace.
 
-POSIX only. On Windows, Devin CLI resolves its home directory from the
-operating-system profile rather than HOME or USERPROFILE, so no environment
-override can keep user-level instruction files out of a fixture session. On
-Linux, macOS, or WSL the harness points HOME and XDG_CONFIG_HOME at temporary
+On Linux, macOS, or WSL the harness points HOME and XDG_CONFIG_HOME at temporary
 directories, seeds synthetic user-level canaries there, and pins only
 XDG_DATA_HOME, which holds the operator's existing Devin credentials.
+
+On native Windows, Devin CLI resolves its home directory from the operating-
+system profile rather than HOME or USERPROFILE, so no environment override can
+isolate user-level sources. The harness runs there only with the explicit
+``--windows-real-profile`` opt-in: it never writes into the real profile, never
+runs a session without the shipped ``claude: false`` import guard, proves the
+guard with a repository-level Cursor rule instead, and checks every session for
+lines of the operator's real ``~/.claude/CLAUDE.md`` by local hashing only.
 
 Evidence is read from Devin's documented ATIF export, which records the
 system context, injected rules, the skill listing, every tool call, and every
@@ -24,6 +29,7 @@ import secrets
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
@@ -40,6 +46,19 @@ IMPORTED_SKILL = "contextos-devin-claude-import"
 REJECTED_BY_MODE = "Tool execution was rejected by the user"
 REJECTED_BY_DENY = "by a deny rule in the project"
 FOREIGN_IMPORTS = ("claude", "cursor", "windsurf", "copilot", "opencode", "zed")
+CURSOR_RULE = ".cursor/rules/contextos-canary.md"
+PRIVATE_LINE_MIN = 24
+WINDOWS_OPT_IN = ("native Windows requires --windows-real-profile: Devin resolves home through "
+                  "the operating-system profile, so user-level skills under ~/.agents/skills are "
+                  "visible to the model and nothing user-level can be isolated")
+
+
+def native_windows() -> bool:
+    return os.name == "nt"
+
+
+def platform_record() -> dict[str, str]:
+    return {"sys_platform": sys.platform, "platform": platform.platform()}
 
 
 class HarnessError(RuntimeError):
@@ -60,20 +79,53 @@ Runner = Callable[[Sequence[str], Path, Mapping[str, str], float], CommandResult
 def default_runner(
     argv: Sequence[str], cwd: Path, env: Mapping[str, str], timeout: float
 ) -> CommandResult:
+    windows = native_windows()
+    group = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if windows
+             else {"start_new_session": True})
     process = subprocess.Popen(
         list(argv), cwd=cwd, env=dict(env), text=True, encoding="utf-8",
         errors="replace", stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE, start_new_session=True,
+        stderr=subprocess.PIPE, **group,
     )
     try:
         stdout, stderr = process.communicate(timeout=timeout)
     except BaseException:
-        with suppress(OSError):
-            os.killpg(process.pid, signal.SIGKILL)
+        with suppress(OSError, subprocess.SubprocessError):
+            if windows:
+                # Kill the whole tree; Devin starts helper processes.
+                subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                               capture_output=True, check=False, timeout=30)
+            else:
+                os.killpg(process.pid, signal.SIGKILL)
         with suppress(OSError, subprocess.SubprocessError):
             process.communicate(timeout=10)
         raise
     return CommandResult(list(argv), process.returncode, stdout, stderr)
+
+
+def private_line_hashes(path: Path) -> set[str] | None:
+    """Hash the non-trivial lines of a private file; ``None`` if it does not exist.
+
+    Only the hashes stay in memory, and only counts reach evidence.
+    """
+    if not path.is_file():
+        return None
+    text = path.read_text(encoding="utf-8", errors="replace")
+    return {sha256_text(line.strip()) for line in text.splitlines()
+            if len(line.strip()) >= PRIVATE_LINE_MIN}
+
+
+def private_lines_in(text: str, hashes: set[str]) -> int:
+    return sum(1 for line in text.splitlines()
+               if len(line.strip()) >= PRIVATE_LINE_MIN and sha256_text(line.strip()) in hashes)
+
+
+def cursor_positive_config() -> dict[str, dict[str, bool]]:
+    """The shipped guard minus only the ``cursor`` key; ``claude`` stays false."""
+    shipped = json.loads(SHIPPED_PROJECT_CONFIG.read_text(encoding="utf-8"))
+    guard = dict(shipped["read_config_from"])
+    guard.pop("cursor")
+    return {"read_config_from": guard}
 
 
 def sha256_text(value: str) -> str:
@@ -226,6 +278,13 @@ class Evidence:
     sessions: dict[str, dict[str, object]] = field(default_factory=dict)
     controls: dict[str, str] = field(default_factory=dict)
     observations: dict[str, bool] = field(default_factory=dict)
+    platform: dict[str, str] = field(default_factory=platform_record)
+    platform_mode: str = "posix-isolated"
+    private_global: str = "not-applicable"
+    private_global_line_count: int = 0
+    private_global_sessions_checked: int = 0
+    not_applicable: dict[str, str] = field(default_factory=dict)
+    host_environment: dict[str, str] = field(default_factory=dict)
 
 
 class DevinCliHarness:
@@ -240,9 +299,11 @@ class DevinCliHarness:
         debug_dir: Path | None = None,
         runner: Runner = default_runner,
         timeout: float = 600,
+        windows_real_profile: bool = False,
     ) -> None:
-        if os.name == "nt":
-            raise HarnessError("Devin CLI home isolation is impossible on native Windows; run under WSL")
+        self.windows = native_windows()
+        if self.windows and not windows_real_profile:
+            raise HarnessError(WINDOWS_OPT_IN)
         self.binary = binary.resolve(strict=True)
         self.data_home = data_home.resolve(strict=True)
         credentials = self.data_home / "devin" / "credentials.toml"
@@ -255,7 +316,33 @@ class DevinCliHarness:
         self.runner = runner
         self.timeout = timeout
         self.evidence = Evidence(expected_version, source_sha)
+        if self.windows:
+            self.evidence.platform_mode = "windows-real-profile"
         self.env: dict[str, str] = {}
+        self.private_hashes: set[str] = set()
+
+    @staticmethod
+    def real_profile_home() -> Path:
+        """The OS profile directory Devin resolves on Windows."""
+        return Path(os.environ.get("USERPROFILE") or Path.home())
+
+    def load_private_global(self) -> None:
+        """Hash the real ~/.claude/CLAUDE.md locally so sessions can prove it stayed out."""
+        hashes = private_line_hashes(self.real_profile_home() / ".claude" / "CLAUDE.md")
+        if hashes is None:
+            self.evidence.private_global = "absent"
+            self.private_hashes = set()
+            return
+        self.evidence.private_global = "present"
+        self.evidence.private_global_line_count = len(hashes)
+        self.private_hashes = hashes
+
+    def require_private_absent(self, trajectory: "Trajectory", label: str) -> None:
+        if not self.windows:
+            return
+        self.evidence.private_global_sessions_checked += 1
+        if self.private_hashes and private_lines_in(trajectory.context, self.private_hashes):
+            raise HarnessError(f"{label} placed lines of the real ~/.claude/CLAUDE.md in context")
 
     def binary_sha256(self) -> str:
         return hashlib.sha256(self.binary.read_bytes()).hexdigest()
@@ -273,8 +360,24 @@ class DevinCliHarness:
 
     @contextmanager
     def isolated(self) -> Iterator[Path]:
-        """Yield a temporary base with isolated HOME and Devin user config."""
+        """Yield a temporary base with isolated HOME and Devin user config.
+
+        On Windows only the workspace base is temporary: the real profile is
+        never written, and HOME/XDG overrides would not change what Devin reads.
+        """
         base = Path(tempfile.mkdtemp(prefix="contextos-devin-cli-")).resolve()
+        if self.windows:
+            try:
+                env = {key: value for key, value in os.environ.items()
+                       if not key.upper().startswith(("DEVIN_", "WINDSURF_", "COPILOT_", "XDG_"))}
+                env["PYTHONDONTWRITEBYTECODE"] = "1"
+                self.env = env
+                yield base
+            finally:
+                self.env = {}
+                shutil.rmtree(base, ignore_errors=True)
+                self.evidence.workspace_cleanup = "removed" if not base.exists() else "retained-cleanup-error"
+            return
         try:
             home, config = base / "home", base / "config"
             (config / "devin").mkdir(parents=True)
@@ -311,6 +414,13 @@ class DevinCliHarness:
         if shipped != {"read_config_from": {name: False for name in FOREIGN_IMPORTS}}:
             raise HarnessError("shipped .devin/config.json must only disable foreign imports")
         self.evidence.shipped_project_config_sha256 = hashlib.sha256(raw).hexdigest()
+        if self.windows:
+            self.load_private_global()
+            bash = shutil.which("bash") or ""
+            lowered = bash.replace("/", "\\").lower()
+            self.evidence.host_environment["bash_on_path"] = (
+                "wsl" if "\\windows\\system32\\" in lowered
+                else "git-bash" if "\\git\\" in lowered else ("other" if bash else "none"))
 
     def session(
         self, workspace: Path, label: str, prompt: str, *, mode: str | None = None
@@ -331,6 +441,7 @@ class DevinCliHarness:
             trajectory = Trajectory(json.loads(raw), self.evidence.expected_version)
         except (OSError, json.JSONDecodeError) as exc:
             raise HarnessError(f"{label} did not write a readable ATIF export") from exc
+        self.require_private_absent(trajectory, label)
         self.evidence.sessions[label] = {
             "atif_schema": trajectory.schema,
             "export_sha256": sha256_text(raw),
@@ -363,8 +474,13 @@ def write_text(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def write_fixture(root: Path, home: Path, canaries: Mapping[str, str], *, guarded: bool) -> None:
-    """Create a synthetic workspace whose only legitimate sources are Context OS ones."""
+def write_fixture(root: Path, home: Path | None, canaries: Mapping[str, str], *, guarded: bool,
+                  cursor_rule: bool = False) -> None:
+    """Create a synthetic workspace whose only legitimate sources are Context OS ones.
+
+    ``home`` is the synthetic user home; ``None`` (native Windows) writes no
+    user-level file, because the real profile must never be modified.
+    """
     write_text(root / DISPOSABLE_MARKER, "disposable\n")
     write_text(root / "AGENTS.md",
                "# Synthetic Devin CLI conformance\n\n"
@@ -373,9 +489,14 @@ def write_fixture(root: Path, home: Path, canaries: Mapping[str, str], *, guarde
     write_text(root / "CLAUDE.md",
                "# Synthetic repository import control\n\n"
                f"FOREIGN_REPOSITORY_CANARY={canaries['repo_claude']}\n")
-    write_text(home / ".claude" / "CLAUDE.md",
-               "# Synthetic user import control\n\n"
-               f"FOREIGN_USER_CANARY={canaries['user_claude']}\n")
+    if home is not None:
+        write_text(home / ".claude" / "CLAUDE.md",
+                   "# Synthetic user import control\n\n"
+                   f"FOREIGN_USER_CANARY={canaries['user_claude']}\n")
+    if cursor_rule:
+        write_text(root / CURSOR_RULE,
+                   "# Synthetic repository Cursor rule\n\n"
+                   f"FOREIGN_CURSOR_CANARY={canaries['cursor_rule']}\n")
     write_text(root / ".claude" / "skills" / IMPORTED_SKILL / "SKILL.md",
                f"---\nname: {IMPORTED_SKILL}\ndescription: Synthetic foreign skill import control.\n---\n\n"
                f"Reply with only {canaries['foreign_skill']}.\n")
@@ -403,14 +524,16 @@ def write_local_permissions(root: Path, permissions: Mapping[str, list[str]]) ->
 
 def write_user_permissions(harness: "DevinCliHarness", permissions: Mapping[str, list[str]]) -> None:
     """The isolated user config ranks below project config in Devin's precedence."""
+    if harness.windows:
+        raise HarnessError("user-level Devin config is the real profile on Windows; never write it")
     write_text(Path(harness.env["XDG_CONFIG_HOME"]) / "devin" / "config.json",
                json.dumps({"permissions": dict(permissions)}, indent=2) + "\n")
 
 
 def init_repository(root: Path, runner: Runner, env: Mapping[str, str]) -> None:
     identity = ["-c", "user.name=Context OS fixture", "-c", "user.email=fixture@example.invalid",
-                "-c", "commit.gpgsign=false"]
-    for argv in (["git", "init", "-q"], ["git", "add", "-A"],
+                "-c", "commit.gpgsign=false", "-c", "core.autocrlf=false"]
+    for argv in (["git", "init", "-q"], ["git", "-c", "core.autocrlf=false", "add", "-A"],
                  ["git", *identity, "commit", "-q", "-m", "synthetic fixture"]):
         result = runner(argv, root, env, 60)
         if result.returncode:
@@ -470,34 +593,62 @@ def run_controls(harness: DevinCliHarness) -> dict[str, str]:
     controls = harness.evidence.controls
     observations = harness.evidence.observations
     canaries = {name: f"CONTEXTOS_DEVIN_CLI_{name.upper()}_{secrets.token_hex(6).upper()}"
-                for name in ("root", "repo_claude", "user_claude", "foreign_skill", "skill")}
-    foreign = [canaries[name] for name in ("repo_claude", "user_claude", "foreign_skill")]
+                for name in ("root", "repo_claude", "user_claude", "foreign_skill", "skill", "cursor_rule")}
+    windows = harness.windows
+    foreign_names = (("repo_claude", "foreign_skill", "cursor_rule") if windows
+                     else ("repo_claude", "user_claude", "foreign_skill"))
+    foreign = [canaries[name] for name in foreign_names]
     current = "preflight"
     try:
         with harness.isolated() as base:
-            home = Path(harness.env["HOME"])
+            home = None if windows else Path(harness.env["HOME"])
             harness.preflight(base)
             controls[current] = "passed"
             workspaces = {}
-            for name, guarded in (("guarded", True), ("unguarded", False)):
+            # On Windows no session may run without ``claude: false``, so the
+            # positive control is a guarded workspace whose config omits only
+            # the ``cursor`` key, proven with a repository-level Cursor rule.
+            layout = ((("guarded", True), ("cursor_positive", True)) if windows
+                      else (("guarded", True), ("unguarded", False)))
+            for name, guarded in layout:
                 root = base / name
-                write_fixture(root, home, canaries, guarded=guarded)
+                write_fixture(root, home, canaries, guarded=guarded, cursor_rule=windows)
+                if name == "cursor_positive":
+                    write_text(root / ".devin" / "config.json",
+                               json.dumps(cursor_positive_config(), indent=2) + "\n")
                 init_repository(root, harness.runner, harness.env)
                 workspaces[name] = root
+            if windows:
+                harness.evidence.not_applicable.update({
+                    "user_level_claude_canary": "the real profile cannot hold synthetic canaries; "
+                                                "real ~/.claude/CLAUDE.md lines are checked by local hashing",
+                    "claude_positive_control": "a session without claude: false would send the real "
+                                               "~/.claude/CLAUDE.md; the Cursor positive control replaces it",
+                })
             guarded_root = workspaces["guarded"]
             # Read denies were not reliable across config levels in live
             # probes, so these controls inspect the trajectory instead.
             read_denials = ["exec", "webfetch", "web_search"]
 
             current = "positive_import_control"
-            # Without the shipped project config Devin injects both Claude
-            # sources, proving the must-not-load control below can fail.
-            write_local_permissions(workspaces["unguarded"], {"deny": read_denials})
-            trajectory = harness.session(workspaces["unguarded"], current,
-                                         "Reply with only the word ready.")
-            rules = trajectory.system_block("<rules")
-            if not all(value in rules for value in foreign[:2]):
-                raise HarnessError("unguarded fixture did not import Claude rules; control is uninformative")
+            if windows:
+                # The config differs from the shipped guard only by the cursor
+                # key, so a loaded canary shows the guard is what blocks it.
+                write_local_permissions(workspaces["cursor_positive"], {"deny": read_denials})
+                trajectory = harness.session(workspaces["cursor_positive"], current,
+                                             "Reply with only the word ready.")
+                if canaries["cursor_rule"] not in trajectory.context:
+                    raise HarnessError("cursor import was not loaded without its guard key; control is uninformative")
+                require_absent(trajectory, [canaries["repo_claude"], canaries["foreign_skill"]], current)
+            else:
+                # Without the shipped project config Devin injects both Claude
+                # sources, proving the must-not-load control below can fail.
+                write_local_permissions(workspaces["unguarded"], {"deny": read_denials})
+                trajectory = harness.session(workspaces["unguarded"], current,
+                                             "Reply with only the word ready.")
+                rules = trajectory.system_block("<rules")
+                if not all(value in rules for value in foreign[:2]):
+                    raise HarnessError("unguarded fixture did not import Claude rules; control is uninformative")
             controls[current] = "passed"
 
             current = "root_instruction_and_import_guard"
@@ -613,23 +764,32 @@ def run_controls(harness: DevinCliHarness) -> dict[str, str]:
             observations["accept_edits_write_attempted"] = attempted(trajectory, {"edit", "write"}, "protected.txt")
             observations["accept_edits_honors_project_write_deny"] = (
                 (guarded_root / "protected.txt").read_text(encoding="utf-8") == "protected fixture\n")
-            probe = workspaces["unguarded"]
-            probe_markers = probe / ".context-os" / "exec-markers.txt"
-            write_text(probe / ".devin" / "config.json",
-                       json.dumps({"permissions": {"deny": ["Exec(bash scripts/contextos.sh apply)"]}}) + "\n")
-            for label, mode, user_allow in (
-                ("observe_user_allow_vs_project_exec_deny", None, ["Exec(bash scripts/contextos.sh)"]),
-                ("observe_bypass_vs_project_exec_deny", "dangerous", []),
-            ):
-                current = label
-                write_local_permissions(probe, {})
-                write_user_permissions(harness, {"allow": user_allow})
-                if probe_markers.exists():
-                    probe_markers.unlink()
-                trajectory = harness.session(probe, label, EXEC_PROMPT.format(command=APPLY_COMMAND), mode=mode)
-                observations[f"{label}_attempted"] = attempted(trajectory, {"exec"}, "contextos.sh apply")
-                observations[f"{label}_held"] = not probe_markers.exists()
-            write_user_permissions(harness, {})
+            if windows:
+                # Both probes need an unguarded project config and a writable
+                # user config; on Windows those are the real Claude import and
+                # the real Devin profile.
+                for label in ("observe_user_allow_vs_project_exec_deny", "observe_bypass_vs_project_exec_deny"):
+                    harness.evidence.not_applicable[label] = (
+                        "needs an unguarded workspace or the user-level Devin config, both of which "
+                        "would touch the real profile on Windows")
+            else:
+                probe = workspaces["unguarded"]
+                probe_markers = probe / ".context-os" / "exec-markers.txt"
+                write_text(probe / ".devin" / "config.json",
+                           json.dumps({"permissions": {"deny": ["Exec(bash scripts/contextos.sh apply)"]}}) + "\n")
+                for label, mode, user_allow in (
+                    ("observe_user_allow_vs_project_exec_deny", None, ["Exec(bash scripts/contextos.sh)"]),
+                    ("observe_bypass_vs_project_exec_deny", "dangerous", []),
+                ):
+                    current = label
+                    write_local_permissions(probe, {})
+                    write_user_permissions(harness, {"allow": user_allow})
+                    if probe_markers.exists():
+                        probe_markers.unlink()
+                    trajectory = harness.session(probe, label, EXEC_PROMPT.format(command=APPLY_COMMAND), mode=mode)
+                    observations[f"{label}_attempted"] = attempted(trajectory, {"exec"}, "contextos.sh apply")
+                    observations[f"{label}_held"] = not probe_markers.exists()
+                write_user_permissions(harness, {})
             controls["observations"] = "recorded"
 
             harness.verify_binary()
@@ -655,6 +815,8 @@ def main() -> int:
     parser.add_argument("--model")
     parser.add_argument("--debug-dir", help="local directory for raw ATIF exports; never share")
     parser.add_argument("--allow-model-traffic", action="store_true")
+    parser.add_argument("--windows-real-profile", action="store_true",
+                        help="native Windows only: accept that user-level skills are visible")
     args = parser.parse_args()
     if not args.allow_model_traffic:
         parser.error("requires --allow-model-traffic for disposable synthetic model calls")
@@ -665,18 +827,21 @@ def main() -> int:
         parser.error("--source-sha must equal the clean source HEAD")
     harness = DevinCliHarness(Path(args.binary), args.expected_version, args.source_sha,
                               Path(args.data_home), model=args.model,
-                              debug_dir=Path(args.debug_dir) if args.debug_dir else None)
+                              debug_dir=Path(args.debug_dir) if args.debug_dir else None,
+                              windows_real_profile=args.windows_real_profile)
     started = datetime.now(timezone.utc).isoformat()
     controls = run_controls(harness)
     record = {
         "runtime": "devin", "surface": "cli", "harness": "host-controls",
-        "os": platform.platform(), "started_at": started,
+        "os": platform.platform(), "platform": platform_record(), "started_at": started,
         "finished_at": datetime.now(timezone.utc).isoformat(),
         "model_selection": args.model or "Devin CLI default",
         "host": vars(harness.evidence),
         "limits": [
             "Synthetic fixture only; scoped to the recorded client, model, and operating system.",
-            "No hook, MCP execution, sandbox, cloud handoff, or native Windows claim.",
+            "No hook, MCP execution, sandbox, or cloud handoff claim.",
+            "Native Windows runs use the real profile: user-level skills are visible, the guard is "
+            "proven with a Cursor rule, and real ~/.claude/CLAUDE.md absence is checked by local hashing.",
             "Project write rules are claimed only in Normal mode; observations record other modes.",
         ],
     }

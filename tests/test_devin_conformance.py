@@ -177,7 +177,7 @@ class DevinDescriptorTest(unittest.TestCase):
             "Context OS ships no blueprint YAML",
             "it is not a cloud-session control",
             "ships no Devin permission rules",
-            "Native Windows behavior is untested",
+            "Native Windows support stays unverified until these harnesses pass there",
             "inspect a session export rather than that listing",
             "That means only \"selected for this workspace.\"",
             "does not certify the Devin account",

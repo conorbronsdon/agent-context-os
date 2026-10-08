@@ -28,7 +28,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from adapters.devin.cli_conformance import (  # noqa: E402
     DevinCliHarness, HarnessError, REJECTED_BY_DENY, REPOSITORY_ROOT, Trajectory, output_summary,
-    repository_source_sha, require_outside_source, require_success, write_local_permissions,
+    platform_record, repository_source_sha, require_outside_source, require_success,
+    write_local_permissions,
 )
 from contextos.kernel import validate_proposal  # noqa: E402
 from contextos.primitives import is_link_like, read_regular_file_snapshot  # noqa: E402
@@ -51,7 +52,9 @@ def lifecycle_permissions(root: Path, *, read_only: bool = False) -> dict[str, l
     stays allowed; with the fixture's remote removed it fails without writes.
     """
     paths = ["scripts/contextos.sh", "./scripts/contextos.sh", f"{root.as_posix()}/scripts/contextos.sh"]
-    wrappers = [f"{shell} {path}" for shell in ("bash", "sh") for path in paths] + paths
+    # PowerShell (Devin's exec shell on Windows) adds the call operator and .exe forms.
+    shells = ("bash", "sh", "bash.exe", "& bash", "& bash.exe")
+    wrappers = [f"{shell} {path}" for shell in shells for path in paths] + paths
     mutating = ("apply",) if not read_only else ("apply", "propose")
     return {
         "allow": ["exec"] + ([] if read_only else ["Write(.context-os/inputs/**)"]),
@@ -85,6 +88,7 @@ def require_skill_expanded(trajectory: Trajectory, root: Path, phase: str) -> No
 
 
 SHELL_SEPARATORS = re.compile(r"&&|\|\||[;|&\n]")
+SHELL_NAMES = {"bash", "sh"}
 
 
 def shell_segments(command: str) -> list[list[str]]:
@@ -104,6 +108,24 @@ def shell_segments(command: str) -> list[list[str]]:
     return segments
 
 
+def command_segments(command: str) -> list[list[str]]:
+    """Shell segments tolerant of PowerShell: backslash paths, ``&``/``.`` call
+    operators (``&`` is already a separator), ``.exe`` names, and one level of
+    nested ``-c``/``-Command`` strings."""
+    segments = shell_segments(command.replace("\\", "/"))
+    nested = [inner for words in segments for word in words if " " in word
+              for inner in shell_segments(word)]
+    normalized = []
+    for words in segments + nested:
+        words = [word for word in words if word not in {".", "&"}]
+        if words:
+            head = words[0].rsplit("/", 1)[-1].lower()
+            if head.endswith(".exe"):
+                head = head[:-4]
+            normalized.append([head, *words[1:]])
+    return normalized
+
+
 def is_kernel_command(call, subcommand: str) -> bool:
     """Detect a kernel subcommand in a shell call, preferring over-matches.
 
@@ -118,7 +140,7 @@ def is_kernel_command(call, subcommand: str) -> bool:
     command = call.arguments.get("command")
     if call.name != "exec" or not isinstance(command, str) or "contextos" not in command:
         return False
-    if any(subcommand in segment for segment in shell_segments(command)):
+    if any(subcommand in segment for segment in command_segments(command)):
         return True
     return re.search(rf"(?<![\w./-]){re.escape(subcommand)}(?![\w.-])", command) is not None
 
@@ -129,9 +151,9 @@ def ran_kernel_inventory(call) -> bool:
     if call.name != "exec" or not isinstance(command, str) or len(call.observations) != 1:
         return False
     invoked = any(
-        len(words) >= 3 and words[0] in {"bash", "sh"} and words[1].endswith("scripts/contextos.sh")
+        len(words) >= 3 and words[0] in SHELL_NAMES and words[1].endswith("scripts/contextos.sh")
         and words[2] == "start"
-        for words in shell_segments(command)
+        for words in command_segments(command)
     )
     observation = call.observations[0]
     if not invoked or not observation.rstrip().endswith("Exit code: 0"):
@@ -249,10 +271,15 @@ def check_applied(root: Path, document: dict, before: dict[str, str]) -> None:
         raise HarnessError("apply changed unexpected files or produced incorrect content")
 
 
-def require_guarded_context(trajectory: Trajectory, user_canary: str) -> None:
-    """The shipped import guard must keep Claude rules out of every phase."""
+def require_guarded_context(trajectory: Trajectory, user_canary: str | None) -> None:
+    """The shipped import guard must keep Claude rules out of every phase.
+
+    ``user_canary`` is ``None`` on native Windows, where the harness checks the
+    real ~/.claude/CLAUDE.md by hashing instead of seeding a synthetic file.
+    """
     rules = trajectory.system_block("<rules")
-    if '<rule name="AGENTS"' not in rules or '<rule name="CLAUDE"' in rules or user_canary in trajectory.context:
+    leaked = user_canary is not None and user_canary in trajectory.context
+    if '<rule name="AGENTS"' not in rules or '<rule name="CLAUDE"' in rules or leaked:
         raise HarnessError("lifecycle context did not load exactly the Context OS instruction sources")
 
 
@@ -292,7 +319,8 @@ def execute(harness: DevinCliHarness, approvals: Path, evidence: Path) -> dict:
     }
     result = {"runtime": "devin", "surface": "cli", "harness": "lifecycle", "source_sha": source_sha,
               "controls": controls, "operator": "external-exact-digest",
-              "os": platform.platform(), "model_selection": harness.model or "Devin CLI default",
+              "os": platform.platform(), "platform": platform_record(),
+              "model_selection": harness.model or "Devin CLI default",
               "permission_mode": "Normal (default)",
               "started_at": datetime.now(timezone.utc).isoformat(),
               "prompts": {}, "phases": {}, "kernel_commands": [],
@@ -306,13 +334,20 @@ def execute(harness: DevinCliHarness, approvals: Path, evidence: Path) -> dict:
             harness.preflight(base)
             # A synthetic user-level Claude instruction must stay out of every
             # phase, as in the host harness's import-guard control.
-            user_canary = "CONTEXTOS_DEVIN_LIFECYCLE_USER_" + secrets.token_hex(6).upper()
-            user_claude = Path(harness.env["HOME"]) / ".claude" / "CLAUDE.md"
-            user_claude.parent.mkdir(parents=True)
-            user_claude.write_text(f"# Synthetic user import control\n\n{user_canary}\n", encoding="utf-8")
+            if harness.windows:
+                # Never write into the real profile; real CLAUDE.md lines are
+                # checked by the harness's hashing on every session.
+                user_canary = None
+                harness.evidence.not_applicable["user_level_claude_canary"] = (
+                    "the real profile cannot hold synthetic canaries on Windows")
+            else:
+                user_canary = "CONTEXTOS_DEVIN_LIFECYCLE_USER_" + secrets.token_hex(6).upper()
+                user_claude = Path(harness.env["HOME"]) / ".claude" / "CLAUDE.md"
+                user_claude.parent.mkdir(parents=True)
+                user_claude.write_text(f"# Synthetic user import control\n\n{user_canary}\n", encoding="utf-8")
             root = base / "workspace"
-            cloned = subprocess.run(["git", "clone", "--local", "--no-hardlinks", "--quiet",
-                                     str(REPOSITORY_ROOT), str(root)], capture_output=True, check=False)
+            cloned = subprocess.run(["git", "clone", "-c", "core.autocrlf=false", "--local", "--no-hardlinks",
+                                     "--quiet", str(REPOSITORY_ROOT), str(root)], capture_output=True, check=False)
             if cloned.returncode:
                 raise HarnessError("cannot clone clean source fixture")
             subprocess.run(["git", "remote", "remove", "origin"], cwd=root, capture_output=True, check=True)
@@ -460,6 +495,8 @@ def main() -> int:
     parser.add_argument("--model")
     parser.add_argument("--debug-dir", help="local directory for raw ATIF exports; never share")
     parser.add_argument("--allow-model-traffic", action="store_true")
+    parser.add_argument("--windows-real-profile", action="store_true",
+                        help="native Windows only: accept that user-level skills are visible")
     args = parser.parse_args()
     if not args.allow_model_traffic:
         parser.error("requires --allow-model-traffic for disposable synthetic model calls")
@@ -469,7 +506,8 @@ def main() -> int:
         parser.error("use an empty external approval directory and a new evidence path")
     harness = DevinCliHarness(Path(args.binary), args.expected_version, args.source_sha,
                               Path(args.data_home), model=args.model, timeout=900,
-                              debug_dir=Path(args.debug_dir) if args.debug_dir else None)
+                              debug_dir=Path(args.debug_dir) if args.debug_dir else None,
+                              windows_real_profile=args.windows_real_profile)
     return 0 if execute(harness, approvals, evidence)["controls"]["run"] == "passed" else 1
 
 

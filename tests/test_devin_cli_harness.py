@@ -222,6 +222,112 @@ class FixtureAndIsolationTest(unittest.TestCase):
             cli.require_outside_source(ROOT / "evidence.json")
 
 
+class WindowsModeTest(unittest.TestCase):
+    """Native Windows runs against the real profile, so every check is about not touching it."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name).resolve()
+        self.home = self.root / "profile"
+        self.home.mkdir()
+        self.data = self.root / "appdata"
+        (self.data / "devin").mkdir(parents=True)
+        (self.data / "devin/credentials.toml").write_text("synthetic = true\n", encoding="utf-8")
+        self.binary = self.root / "devin.exe"
+        self.binary.write_text("fixture", encoding="utf-8")
+        patcher = mock.patch.object(cli, "native_windows", return_value=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        env = mock.patch.dict(os.environ, {"USERPROFILE": str(self.home), "DEVIN_PERMISSION_MODE": "dangerous"})
+        env.start()
+        self.addCleanup(env.stop)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def harness(self):
+        return cli.DevinCliHarness(self.binary, VERSION, "0" * 40, self.data, windows_real_profile=True)
+
+    def profile_files(self) -> list[str]:
+        return sorted(path.relative_to(self.home).as_posix() for path in self.home.rglob("*"))
+
+    def test_windows_requires_the_real_profile_opt_in(self) -> None:
+        with self.assertRaisesRegex(cli.HarnessError, "--windows-real-profile"):
+            cli.DevinCliHarness(self.binary, VERSION, "0" * 40, self.data)
+        self.assertEqual("windows-real-profile", self.harness().evidence.platform_mode)
+
+    def test_windows_mode_never_writes_the_real_profile(self) -> None:
+        (self.home / ".claude").mkdir()
+        (self.home / ".claude/CLAUDE.md").write_text("private\n", encoding="utf-8")
+        before = self.profile_files()
+        harness = self.harness()
+        canaries = {name: name.upper() for name in
+                    ("root", "repo_claude", "user_claude", "foreign_skill", "skill", "cursor_rule")}
+        with harness.isolated() as base:
+            self.assertNotIn("DEVIN_PERMISSION_MODE", harness.env)
+            self.assertEqual(os.environ.get("HOME"), harness.env.get("HOME"))
+            self.assertNotIn("XDG_CONFIG_HOME", harness.env)
+            cli.write_fixture(base / "w", None, canaries, guarded=True, cursor_rule=True)
+            self.assertIn("CURSOR_RULE", (base / "w" / cli.CURSOR_RULE).read_text(encoding="utf-8"))
+            with self.assertRaisesRegex(cli.HarnessError, "never write it"):
+                cli.write_user_permissions(harness, {"allow": ["exec"]})
+        self.assertEqual(before, self.profile_files())
+        self.assertEqual("private\n", (self.home / ".claude/CLAUDE.md").read_text(encoding="utf-8"))
+
+    def test_cursor_positive_config_differs_from_the_guard_only_by_cursor(self) -> None:
+        shipped = json.loads(cli.SHIPPED_PROJECT_CONFIG.read_text(encoding="utf-8"))
+        positive = cli.cursor_positive_config()
+        expected = {name: value for name, value in shipped["read_config_from"].items() if name != "cursor"}
+        self.assertEqual({"read_config_from": expected}, positive)
+        self.assertIs(False, positive["read_config_from"]["claude"])
+        self.assertNotIn("cursor", positive["read_config_from"])
+
+    def test_private_global_lines_are_detected_and_never_stored(self) -> None:
+        private = "Conor private instruction line that must never leave this machine"
+        (self.home / ".claude").mkdir()
+        (self.home / ".claude/CLAUDE.md").write_text(f"# Global\n\n{private}\nshort\n", encoding="utf-8")
+        harness = self.harness()
+        harness.load_private_global()
+        self.assertEqual(("present", 1), (harness.evidence.private_global,
+                                          harness.evidence.private_global_line_count))
+        clean = cli.Trajectory(atif([rules(("AGENTS", "root")), agent("ok")]), VERSION)
+        harness.require_private_absent(clean, "clean")
+        leaked = cli.Trajectory(atif([rules(("AGENTS", "root"), ("CLAUDE", "  " + private)), agent("ok")]),
+                                VERSION)
+        with self.assertRaisesRegex(cli.HarnessError, "real ~/.claude/CLAUDE.md"):
+            harness.require_private_absent(leaked, "leaked")
+        self.assertEqual(2, harness.evidence.private_global_sessions_checked)
+        stored = json.dumps(vars(harness.evidence))
+        self.assertNotIn(private, stored)
+        self.assertNotIn(cli.sha256_text(private), stored)
+
+    def test_missing_private_global_is_recorded_as_absent(self) -> None:
+        harness = self.harness()
+        harness.load_private_global()
+        self.assertEqual("absent", harness.evidence.private_global)
+        harness.require_private_absent(cli.Trajectory(atif([rules(("AGENTS", "x")), agent("ok")]), VERSION), "s")
+        self.assertEqual(1, harness.evidence.private_global_sessions_checked)
+
+    def test_evidence_records_platform(self) -> None:
+        record = vars(self.harness().evidence)
+        self.assertEqual({"sys_platform", "platform"}, set(record["platform"]))
+
+
+class PosixModeUnchangedTest(unittest.TestCase):
+    def test_posix_never_hashes_or_checks_the_real_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root / "data/devin").mkdir(parents=True)
+            (root / "data/devin/credentials.toml").write_text("x = 1\n", encoding="utf-8")
+            (root / "devin").write_text("fixture", encoding="utf-8")
+            with mock.patch.object(cli, "native_windows", return_value=False):
+                harness = cli.DevinCliHarness(root / "devin", VERSION, "0" * 40, root / "data")
+            self.assertEqual("posix-isolated", harness.evidence.platform_mode)
+            harness.require_private_absent(cli.Trajectory(atif([rules(("AGENTS", "x")), agent("ok")]), VERSION), "s")
+            self.assertEqual(0, harness.evidence.private_global_sessions_checked)
+            self.assertEqual("not-applicable", harness.evidence.private_global)
+
+
 class ShippedConfigTest(unittest.TestCase):
     def test_project_config_only_disables_foreign_imports(self) -> None:
         document = json.loads(cli.SHIPPED_PROJECT_CONFIG.read_text(encoding="utf-8"))
@@ -339,6 +445,38 @@ class LifecycleControlTest(unittest.TestCase):
         self.assertIn("Exec(bash scripts/contextos.sh propose)", read_only["deny"])
         self.assertIn("write", read_only["deny"])
         self.assertNotIn("Exec(bash scripts/contextos.sh propose)", mutation["deny"])
+
+    def test_powershell_wrapped_kernel_commands_are_detected(self) -> None:
+        for command in (
+            "& bash scripts\\contextos.sh apply p.json --confirm x",
+            "bash.exe scripts\\contextos.sh apply p.json --confirm x",
+            "Set-Location C:\\w; & bash .\\scripts\\contextos.sh apply p.json",
+            'powershell -Command "bash scripts/contextos.sh apply p.json"',
+            "& 'C:\\Program Files\\Git\\bin\\bash.exe' scripts/contextos.sh apply p.json",
+        ):
+            with self.subTest(command=command):
+                self.assertTrue(lifecycle.is_kernel_command(self.call(command), "apply"))
+        good = NL.join(["Output:", json.dumps({"schema_version": 1, "initialized": True}), "Exit code: 0"])
+        for command in ("& bash scripts\\contextos.sh start", "bash.exe scripts/contextos.sh start",
+                        'powershell -Command "bash scripts/contextos.sh start"'):
+            with self.subTest(command=command):
+                self.assertTrue(lifecycle.ran_kernel_inventory(
+                    cli.ToolCall("c", "exec", {"command": command}, (good,))))
+        self.assertFalse(lifecycle.ran_kernel_inventory(
+            cli.ToolCall("c", "exec", {"command": "& bash scripts\\contextos.sh doctor"}, (good,))))
+
+    def test_permissions_deny_powershell_apply_forms(self) -> None:
+        deny = lifecycle.lifecycle_permissions(Path("/w"))["deny"]
+        for form in ("& bash scripts/contextos.sh apply", "bash.exe scripts/contextos.sh apply",
+                     "& bash.exe /w/scripts/contextos.sh apply"):
+            self.assertIn(f"Exec({form})", deny)
+
+    def test_windows_guarded_context_check_needs_no_synthetic_canary(self) -> None:
+        guarded = cli.Trajectory(atif([rules(("AGENTS", "x")), agent("ok")]), VERSION)
+        lifecycle.require_guarded_context(guarded, None)
+        imported = cli.Trajectory(atif([rules(("AGENTS", "x"), ("CLAUDE", "y")), agent("ok")]), VERSION)
+        with self.assertRaisesRegex(lifecycle.HarnessError, "exactly the Context OS"):
+            lifecycle.require_guarded_context(imported, None)
 
 if __name__ == "__main__":
     unittest.main()

@@ -85,11 +85,42 @@ module, and never run lifecycle skills in Bypass mode.
 
 On Windows, Devin CLI resolves the home directory through the operating-system
 profile. Overriding `HOME` or `USERPROFILE` does not hide `~/.claude/CLAUDE.md`
-or `~/.agents/skills/`, so a harness cannot isolate user-level sources there.
-The shipped import guard still disables the Claude import in a Context OS
-checkout, but user-level skill directories that Devin owns, such as
-`~/.agents/skills/`, are always loaded. Native Windows behavior is untested;
-the conformance harnesses refuse to run there. Use WSL for verified behavior.
+or `~/.agents/skills/`, so nothing user-level can be isolated. The shipped
+import guard still disables the Claude import in a Context OS checkout, but
+user-level skill directories that Devin owns, such as `~/.agents/skills/`, are
+always loaded, so their names and descriptions reach the model.
+
+The CLI harnesses run on native Windows only with `--windows-real-profile`,
+which acknowledges that limit. In that mode they:
+
+- never write into the real profile: no synthetic user-level canaries and no
+  user-level Devin config. Controls that need either are recorded under
+  `not_applicable` instead of passing silently;
+- never run a session without the shipped `claude: false` guard. The positive
+  control uses a repository-level `.cursor/rules/` canary and a project config
+  that differs from the shipped guard only by omitting the `cursor` key;
+- hash the non-trivial lines of the real `~/.claude/CLAUDE.md` locally and fail
+  any session whose context contains one. Evidence stores only counts;
+- record which `bash` is on `PATH` (Git Bash or WSL) and which shell ran the
+  hooks, because Devin's exec tool on Windows is PowerShell and the shipped hooks
+  call `bash`.
+
+Native Windows support stays unverified until these harnesses pass there.
+Credentials live at `%APPDATA%\devin\credentials.toml`, so pass `%APPDATA%` as
+`--data-home`.
+
+### macOS
+
+macOS uses the same POSIX isolation as Linux: temporary `HOME` and
+`XDG_CONFIG_HOME`, and a pinned `XDG_DATA_HOME` holding the credentials. This
+path is untested until a live run passes. To run it:
+
+1. Install Devin CLI, run `devin auth login`, and record `devin version`.
+2. Find the credentials directory (the parent of `devin/credentials.toml`;
+   check `~/.local/share` first) and pass that as `--data-home`.
+3. From a clean checkout, run the three harnesses below with
+   `--binary "$(command -v devin)"` and `--expected-version` set to the
+   recorded version. Each evidence record names its platform.
 
 ### Hooks, memory, MCP, and handoff
 
@@ -118,10 +149,11 @@ resume; nothing is synchronized into `state/` or `sessions/`.
 
 ### Conformance
 
-All three harnesses run only on Linux, macOS, or WSL. They point `HOME` and
+On Linux, macOS, or WSL the three harnesses point `HOME` and
 `XDG_CONFIG_HOME` at temporary directories, seed synthetic user-level
 canaries there, and pin only `XDG_DATA_HOME`, which must already hold the
-operator's Devin credentials. Evidence comes from Devin's ATIF session export
+operator's Devin credentials. Native Windows uses the real-profile mode
+described above. Evidence comes from Devin's ATIF session export
 (`--export`), which records the injected rules, the offered skills, every tool
 call, and every tool observation. Shareable evidence keeps hashes and booleans,
 never raw responses, temporary paths, or credentials.

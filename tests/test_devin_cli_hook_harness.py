@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 
@@ -208,6 +209,35 @@ class FixtureTest(unittest.TestCase):
         self.assertIn({"path": ".devin/hooks.v1.json", "policy": "managed"}, component["paths"])
         self.assertIn({"path": "adapters/devin/cli_hook_conformance.py", "policy": "managed"},
                       component["paths"])
+
+
+class WindowsProbeTest(unittest.TestCase):
+    def test_windows_probe_command_is_shell_neutral(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, \
+                unittest.mock.patch.object(hooks, "native_windows", return_value=True):
+            base = Path(directory).resolve()
+            if " " in str(base) or " " in sys.executable:
+                self.skipTest("temporary path contains a space")
+            _, command = hooks.write_probe(base)
+            self.assertNotIn("\\", command)
+            self.assertNotIn("'", command)
+            self.assertNotIn('"', command)
+            self.assertTrue(command.endswith(" " + hooks.BLOCKED_TARGET))
+
+    def test_windows_probe_refuses_paths_with_spaces(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, \
+                unittest.mock.patch.object(hooks, "native_windows", return_value=True):
+            base = Path(directory).resolve() / "has space"
+            base.mkdir()
+            with self.assertRaisesRegex(hooks.HarnessError, "spaces or quotes"):
+                hooks.write_probe(base)
+
+    def test_hook_shell_summary_holds_no_payload(self) -> None:
+        entries = [{"event": "SessionStart", "target": "secret/path.md", "msystem": "MINGW64"},
+                   {"event": "PostToolUse", "wsl": True}, {"event": "PreToolUse", "shell": "bash"}, {}]
+        summary = hooks.hook_shells(entries)
+        self.assertEqual(["git-bash:MINGW64", "no-posix-shell-markers", "posix:bash", "wsl"], summary)
+        self.assertNotIn("secret", ",".join(summary))
 
 
 if __name__ == "__main__":
