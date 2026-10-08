@@ -144,7 +144,9 @@
         "tests/test_devin_live_harness.py",
         "tests/test_devin_ui_harness.py",
         "tests/test_contextos_kernel.py",
-        "docs/evidence/devin-cloud-2026-10-07/README.md"
+        "docs/evidence/devin-cloud-2026-10-07/README.md",
+        "adapters/devin/cloud_lifecycle_conformance.py",
+        "tests/test_devin_cloud_lifecycle_harness.py"
       ],
       "evidence": [
         "devin-agents",
@@ -157,7 +159,8 @@
         "devin-conformance",
         "devin-live-harness",
         "devin-ui-harness",
-        "devin-cloud-live-evidence"
+        "devin-cloud-live-evidence",
+        "devin-cloud-lifecycle-harness"
       ]
     },
     "review": {
@@ -446,6 +449,15 @@
         "location": "adapters/devin/ui_conformance.py",
         "claims": [
           "support"
+        ]
+      },
+      {
+        "id": "devin-cloud-lifecycle-harness",
+        "type": "conformance",
+        "location": "adapters/devin/cloud_lifecycle_conformance.py",
+        "claims": [
+          "support",
+          "proposal_apply"
         ]
       },
       {

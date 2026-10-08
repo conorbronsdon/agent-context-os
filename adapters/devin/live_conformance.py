@@ -421,6 +421,52 @@ class DevinHarness:
             time.sleep(self.poll_interval)
         raise HarnessError("timed out waiting for Devin explicit conformance output")
 
+    def close_session(
+        self, session_id: str, controls: dict[str, bool], control_error: BaseException | None
+    ) -> None:
+        """Archive a disposable session, terminating it if archival cannot be confirmed."""
+        control_detail = (
+            f"control: {safe_error_detail(control_error)}; " if control_error else ""
+        )
+        try:
+            archived = self.client.request(
+                "POST", f"{self.org_path}/sessions/{session_id}/archive"
+            )
+            if archived.get("session_id") != session_id:
+                raise HarnessError("session archive returned a different session ID")
+            archive_deadline = time.monotonic() + min(
+                30.0, max(1.0, self.poll_interval * 3)
+            )
+            while archived.get("is_archived") is not True:
+                if time.monotonic() >= archive_deadline:
+                    break
+                time.sleep(min(5.0, max(0.1, self.poll_interval)))
+                archived = self.session(session_id)
+            if archived.get("is_archived") is not True:
+                raise HarnessError("Devin did not confirm that the session was archived")
+            controls["session_archived"] = True
+        except HarnessError as archive_error:
+            try:
+                terminated = self.client.request(
+                    "DELETE", f"{self.org_path}/sessions/{session_id}"
+                )
+                if terminated.get("session_id") != session_id:
+                    raise HarnessError("session termination returned a different session ID")
+                if terminated.get("status") not in {"exit", "error", "suspended"}:
+                    raise HarnessError("Devin did not confirm fallback session termination")
+                controls["session_terminated_after_archive_failure"] = True
+            except HarnessError as terminate_error:
+                raise HarnessError(
+                    f"Devin cleanup failed: {control_detail}archive: "
+                    f"{safe_error_detail(archive_error)}; fallback termination: "
+                    f"{safe_error_detail(terminate_error)}"
+                ) from terminate_error
+            raise HarnessError(
+                "Devin session was terminated, but required archival failed: "
+                f"{control_detail}"
+                f"{safe_error_detail(archive_error)}"
+            ) from archive_error
+
     def execute(self) -> Evidence:
         fixture_content_sha = verify_public_fixture(
             self.repository,
@@ -511,49 +557,8 @@ class DevinHarness:
                 "review_not_invoked": True,
             })
         finally:
-            control_error = sys.exc_info()[1]
-            control_detail = (
-                f"control: {safe_error_detail(control_error)}; " if control_error else ""
-            )
             if session_id:
-                try:
-                    archived = self.client.request(
-                        "POST", f"{self.org_path}/sessions/{session_id}/archive"
-                    )
-                    if archived.get("session_id") != session_id:
-                        raise HarnessError("session archive returned a different session ID")
-                    archive_deadline = time.monotonic() + min(
-                        30.0, max(1.0, self.poll_interval * 3)
-                    )
-                    while archived.get("is_archived") is not True:
-                        if time.monotonic() >= archive_deadline:
-                            break
-                        time.sleep(min(5.0, max(0.1, self.poll_interval)))
-                        archived = self.session(session_id)
-                    if archived.get("is_archived") is not True:
-                        raise HarnessError("Devin did not confirm that the session was archived")
-                    self.evidence.controls["session_archived"] = True
-                except HarnessError as archive_error:
-                    try:
-                        terminated = self.client.request(
-                            "DELETE", f"{self.org_path}/sessions/{session_id}"
-                        )
-                        if terminated.get("session_id") != session_id:
-                            raise HarnessError("session termination returned a different session ID")
-                        if terminated.get("status") not in {"exit", "error", "suspended"}:
-                            raise HarnessError("Devin did not confirm fallback session termination")
-                        self.evidence.controls["session_terminated_after_archive_failure"] = True
-                    except HarnessError as terminate_error:
-                        raise HarnessError(
-                            f"Devin cleanup failed: {control_detail}archive: "
-                            f"{safe_error_detail(archive_error)}; fallback termination: "
-                            f"{safe_error_detail(terminate_error)}"
-                        ) from terminate_error
-                    raise HarnessError(
-                        "Devin session was terminated, but required archival failed: "
-                        f"{control_detail}"
-                        f"{safe_error_detail(archive_error)}"
-                    ) from archive_error
+                self.close_session(session_id, self.evidence.controls, sys.exc_info()[1])
         self.evidence.requests = list(self.client.requests)
         return self.evidence
 

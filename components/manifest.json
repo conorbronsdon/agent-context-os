@@ -1734,6 +1734,10 @@
                     "policy": "managed"
                 },
                 {
+                    "path": "adapters/devin/cloud_lifecycle_conformance.py",
+                    "policy": "managed"
+                },
+                {
                     "path": "adapters/devin/live-fixture/AGENTS.md.fixture",
                     "policy": "development"
                 },
@@ -1779,6 +1783,10 @@
                 },
                 {
                     "path": "tests/test_devin_review_harness.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_devin_cloud_lifecycle_harness.py",
                     "policy": "development"
                 },
                 {
