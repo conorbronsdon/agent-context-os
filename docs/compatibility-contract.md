@@ -2,7 +2,7 @@
 
 Status: the compatibility promise for 1.x, in effect since the qualified 1.0.0
 release was published ([#228](https://github.com/conorbronsdon/agent-context-os/issues/228)).
-Source version 1.1.1 is a candidate until its immutable release is published.
+Source version 1.2.0 is a candidate until its immutable release is published.
 
 ## Supported interfaces
 
