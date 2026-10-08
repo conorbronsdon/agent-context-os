@@ -46,7 +46,7 @@ IMPORTED_SKILL = "contextos-devin-claude-import"
 REJECTED_BY_MODE = "Tool execution was rejected by the user"
 REJECTED_BY_DENY = "by a deny rule in the project"
 FOREIGN_IMPORTS = ("claude", "cursor", "windsurf", "copilot", "opencode", "zed")
-CURSOR_RULE = ".cursor/rules/contextos-canary.md"
+CURSOR_RULE = ".cursor/rules/contextos-canary.mdc"
 PRIVATE_LINE_MIN = 24
 WINDOWS_OPT_IN = ("native Windows requires --windows-real-profile: Devin resolves home through "
                   "the operating-system profile, so user-level skills under ~/.agents/skills are "
@@ -495,6 +495,7 @@ def write_fixture(root: Path, home: Path | None, canaries: Mapping[str, str], *,
                    f"FOREIGN_USER_CANARY={canaries['user_claude']}\n")
     if cursor_rule:
         write_text(root / CURSOR_RULE,
+                   "---\ndescription: Synthetic repository Cursor rule\nalwaysApply: true\n---\n\n"
                    "# Synthetic repository Cursor rule\n\n"
                    f"FOREIGN_CURSOR_CANARY={canaries['cursor_rule']}\n")
     write_text(root / ".claude" / "skills" / IMPORTED_SKILL / "SKILL.md",
