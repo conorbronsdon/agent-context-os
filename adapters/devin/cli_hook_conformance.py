@@ -82,6 +82,9 @@ entry = {
     "cwd_is_project": bool(os.environ.get("DEVIN_PROJECT_DIR")) and os.path.normcase(
         os.path.realpath(os.getcwd())) == os.path.normcase(os.path.realpath(os.environ["DEVIN_PROJECT_DIR"])),
     "parent": "",
+    # Whether the hook environment can find a Python for the kernel wrapper.
+    "python_on_path": bool(__import__("shutil").which("python")),
+    "python3_on_path": bool(__import__("shutil").which("python3")),
 }
 if os.name == "nt":
     import subprocess
@@ -129,6 +132,9 @@ def hook_shells(entries: list[dict]) -> list[str]:
             shells.add("no-posix-shell-markers")
         if entry.get("parent"):
             shells.add("parent:" + str(entry["parent"])[:32])
+        if "python_on_path" in entry:
+            shells.add("python:" + str(bool(entry["python_on_path"])).lower()
+                       + ",python3:" + str(bool(entry["python3_on_path"])).lower())
         if "cwd_is_project" in entry:
             shells.add("cwd_is_project:" + str(bool(entry["cwd_is_project"])).lower())
     return sorted(shells)
