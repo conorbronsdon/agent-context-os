@@ -168,7 +168,7 @@ SETUP_NEXT_ACTION = (
     "do not run it inside an agent session."
 )
 FUTURE_DATE_NEXT_ACTION = (
-    "Check the system clock, then run the explicit setup workflow to replace the "
+    "Check the system clock, then invoke the explicit $context-setup skill to replace the "
     "future-dated **Last Updated:** value in state/current.md before starting a session."
 )
 class ContextOSError(RuntimeError):
