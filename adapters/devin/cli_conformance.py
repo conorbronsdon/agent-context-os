@@ -471,7 +471,7 @@ def snapshot(root: Path) -> dict[str, str]:
 
 def write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    path.write_text(text, encoding="utf-8", newline="\n")
 
 
 def write_fixture(root: Path, home: Path | None, canaries: Mapping[str, str], *, guarded: bool,
@@ -846,7 +846,7 @@ def main() -> int:
             "Project write rules are claimed only in Normal mode; observations record other modes.",
         ],
     }
-    with evidence.open("x", encoding="utf-8") as stream:
+    with evidence.open("x", encoding="utf-8", newline="\n") as stream:
         json.dump(record, stream, indent=2)
         stream.write("\n")
     return 0 if controls.get("run") == "passed" else 1

@@ -246,7 +246,7 @@ def approve(directory: Path, phase: str, document: dict, timeout: float = 1800) 
     review, approval = directory / f"{phase}.review.txt", directory / f"{phase}.approve"
     if approval.exists():
         raise HarnessError("approval existed before review")
-    with review.open("x", encoding="utf-8") as stream:
+    with review.open("x", encoding="utf-8", newline="\n") as stream:
         stream.write("Digest: " + document["proposal_digest"] + "\n")
         for change in document["changes"]:
             stream.write(change["path"] + "\n" + change["diff"] + "\n")
@@ -482,7 +482,7 @@ def execute(harness: DevinCliHarness, approvals: Path, evidence: Path) -> dict:
     result["host"] = vars(harness.evidence)
     result["finished_at"] = datetime.now(timezone.utc).isoformat()
     evidence = require_outside_source(evidence)
-    with evidence.open("x", encoding="utf-8") as stream:
+    with evidence.open("x", encoding="utf-8", newline="\n") as stream:
         json.dump(result, stream, indent=2)
         stream.write("\n")
     return result

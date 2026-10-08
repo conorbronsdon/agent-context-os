@@ -392,7 +392,7 @@ def main() -> int:
             "On native Windows the shipped hooks run `bash`; host_environment records which shell ran them.",
         ],
     }
-    with evidence.open("x", encoding="utf-8") as stream:
+    with evidence.open("x", encoding="utf-8", newline="\n") as stream:
         json.dump(record, stream, indent=2)
         stream.write("\n")
     return 0 if controls.get("run") == "passed" else 1
