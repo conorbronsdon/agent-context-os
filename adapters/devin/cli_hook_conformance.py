@@ -140,11 +140,13 @@ def hook_shells(entries: list[dict]) -> list[str]:
     return sorted(shells)
 
 
-def probe_hooks(command: str, events: tuple[str, ...] = ("SessionStart", "PreToolUse", "PostToolUse")
-                ) -> dict[str, list[dict]]:
+def probe_hooks(command: str) -> dict[str, list[dict]]:
     entry = {"type": "command", "command": command, "timeout": 10}
-    matchers = {"SessionStart": "", "PreToolUse": WRITE_MATCHER, "PostToolUse": WRITE_MATCHER}
-    return {event: [{"matcher": matchers[event], "hooks": [dict(entry)]}] for event in events}
+    return {
+        "SessionStart": [{"matcher": "", "hooks": [dict(entry)]}],
+        "PreToolUse": [{"matcher": WRITE_MATCHER, "hooks": [dict(entry)]}],
+        "PostToolUse": [{"matcher": WRITE_MATCHER, "hooks": [dict(entry)]}],
+    }
 
 
 def write_local_config(root: Path, permissions: Mapping[str, list[str]], hooks: Mapping[str, list]) -> None:
@@ -279,56 +281,38 @@ def execute(harness: DevinCliHarness) -> dict:
             require_shipped_hooks(root)
             log, command = write_probe(base)
             hooks = probe_hooks(command)
-            windows = native_windows()
-            # On native Windows a project-local hook for an event masks the
-            # shipped hook's advisory for that event, so the gated controls use
-            # a probe on PreToolUse only, an event the shipped hooks do not use.
-            gated_hooks = probe_hooks(command, ("PreToolUse",)) if windows else hooks
-            write_event = "PreToolUse" if windows else "PostToolUse"
             controls[current] = "passed"
 
-            if windows:
-                current = "observe_local_hook_masks_shipped_advisory"
-                write_local_config(root, {"deny": ["exec"]}, hooks)
-                trajectory = harness.session(root, current, SESSION_PROMPT)
-                entries = read_hook_log(log)
-                harness.evidence.host_environment["hook_shells"] = ",".join(hook_shells(entries))
-                observations["probe_session_start_hook_fired"] = any(
-                    entry.get("event") == "SessionStart" for entry in entries)
-                observations["local_session_start_hook_masks_shipped_advisory"] = not injected_notice(
-                    trajectory, SESSION_NOTICE)
-                log.unlink(missing_ok=True)
-
             current = "session_start_hooks_fire"
-            write_local_config(root, {"deny": ["exec"]}, gated_hooks)
+            write_local_config(root, {"deny": ["exec"]}, hooks)
             trajectory = harness.session(root, current, SESSION_PROMPT)
             entries = read_hook_log(log)
-            if not windows:
-                harness.evidence.host_environment["hook_shells"] = ",".join(hook_shells(entries))
-                observations["probe_session_start_hook_fired"] = any(
-                    entry.get("event") == "SessionStart" for entry in entries)
-                require_hook_event(entries, "SessionStart")
+            harness.evidence.host_environment["hook_shells"] = ",".join(hook_shells(entries))
+            # Recorded before gating so a Windows run shows whether hooks ran at all.
+            observations["probe_session_start_hook_fired"] = any(
+                entry.get("event") == "SessionStart" for entry in entries)
             observations["shipped_session_start_advisory_injected"] = injected_notice(trajectory, SESSION_NOTICE)
+            require_hook_event(entries, "SessionStart")
             if not injected_notice(trajectory, SESSION_NOTICE):
                 raise HarnessError("shipped SessionStart advisory did not reach the model")
             controls[current] = "passed"
 
             current = "write_hook_fires_on_lifecycle_state"
             log.unlink(missing_ok=True)
-            write_local_config(root, {"allow": ["Write(state/**)"], "deny": ["exec"]}, gated_hooks)
+            write_local_config(root, {"allow": ["Write(state/**)"], "deny": ["exec"]}, hooks)
             trajectory = harness.session(root, current, WRITE_PROMPT.format(
                 path="state/current.md", value=secrets.token_hex(8)))
-            require_hook_event(read_hook_log(log), write_event, tool="write", target="state/current.md")
+            require_hook_event(read_hook_log(log), "PostToolUse", tool="write", target="state/current.md")
             if not injected_notice(trajectory, WRITE_NOTICE, after_tool="write"):
                 raise HarnessError("shipped write advisory did not reach the model")
             controls[current] = "passed"
 
             current = "write_hook_silent_elsewhere"
             log.unlink(missing_ok=True)
-            write_local_config(root, {"allow": ["Write(allowed/**)"], "deny": ["exec"]}, gated_hooks)
+            write_local_config(root, {"allow": ["Write(allowed/**)"], "deny": ["exec"]}, hooks)
             trajectory = harness.session(root, current, WRITE_PROMPT.format(
                 path="allowed/probe.txt", value=secrets.token_hex(8)))
-            require_hook_event(read_hook_log(log), write_event, tool="write", target="allowed/probe.txt")
+            require_hook_event(read_hook_log(log), "PostToolUse", tool="write", target="allowed/probe.txt")
             if injected_notice(trajectory, "proposal/apply kernel", after_tool="write"):
                 raise HarnessError("write advisory fired for an unprotected path")
             controls[current] = "passed"
@@ -338,13 +322,13 @@ def execute(harness: DevinCliHarness) -> dict:
             shipped, parked = root / ".devin" / "hooks.v1.json", base / "hooks.v1.json.parked"
             shipped.replace(parked)
             try:
-                write_local_config(root, {"allow": ["Write(state/**)"], "deny": ["exec"]}, gated_hooks)
+                write_local_config(root, {"allow": ["Write(state/**)"], "deny": ["exec"]}, hooks)
                 trajectory = harness.session(root, current, WRITE_PROMPT.format(
                     path="state/current.md", value=secrets.token_hex(8)))
             finally:
                 parked.replace(shipped)
             require_shipped_hooks(root)
-            require_hook_event(read_hook_log(log), write_event, tool="write", target="state/current.md")
+            require_hook_event(read_hook_log(log), "PostToolUse", tool="write", target="state/current.md")
             if (injected_notice(trajectory, SESSION_NOTICE)
                     or injected_notice(trajectory, "proposal/apply kernel")):
                 raise HarnessError("advisory reached the model without the shipped hooks")
@@ -352,7 +336,7 @@ def execute(harness: DevinCliHarness) -> dict:
 
             current = "blocking_pre_tool_hook_blocks_write"
             log.unlink(missing_ok=True)
-            write_local_config(root, {"allow": ["Write(**)"], "deny": ["exec"]}, gated_hooks)
+            write_local_config(root, {"allow": ["Write(**)"], "deny": ["exec"]}, hooks)
             trajectory = harness.session(root, current, WRITE_PROMPT.format(
                 path=BLOCKED_TARGET, value=secrets.token_hex(8)))
             require_hook_event(read_hook_log(log), "PreToolUse", tool="write", target=BLOCKED_TARGET)
@@ -366,7 +350,7 @@ def execute(harness: DevinCliHarness) -> dict:
             marker = root / MARKER_FILE
 
             current = "skill_without_allowlist_rejects_exec"
-            write_local_config(root, {}, gated_hooks)
+            write_local_config(root, {}, hooks)
             trajectory = harness.session(root, current, f"/{UNLISTED_SKILL}")
             require_unlisted_exec_rejected(trajectory)
             if marker.exists():
