@@ -187,9 +187,13 @@ class FakeDevin:
         parsed = urllib.parse.urlsplit(url)
         path = parsed.path
         self.calls.append((method, path))
-        prefix = f"/v3/organizations/{ORG}"
-        assert path.startswith(prefix), path
-        path = path[len(prefix):]
+        beta = f"/v3beta1/organizations/{ORG}"
+        if path in (beta + "/snapshot-setup/builds", beta + "/repositories"):
+            path = path[len(beta):]
+        else:
+            prefix = f"/v3/organizations/{ORG}"
+            assert path.startswith(prefix), path
+            path = path[len(prefix):]
         if path == "/snapshot-setup/builds":
             self.build_calls += 1
             build = "build-2" if "build_changes" in self.faults and self.build_calls > 1 else "build-1"

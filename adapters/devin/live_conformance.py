@@ -323,7 +323,7 @@ class DevinHarness:
     def active_build(self) -> Mapping[str, object]:
         response = self.client.request(
             "GET",
-            f"/v3/organizations/{self.client.org_id}/snapshot-setup/builds?active=true&first=2",
+            f"/v3beta1/organizations/{self.client.org_id}/snapshot-setup/builds?active=true&first=2",
         )
         items = require_items(response, "active build")
         if len(items) != 1:
@@ -340,7 +340,7 @@ class DevinHarness:
             "first": 100,
         })
         response = self.client.request(
-            "GET", f"/v3/organizations/{self.client.org_id}/repositories?{query}"
+            "GET", f"/v3beta1/organizations/{self.client.org_id}/repositories?{query}"
         )
         matches = [item for item in require_items(response, "repository access") if item.get("repo_path") == self.repository]
         if len(matches) != 1:

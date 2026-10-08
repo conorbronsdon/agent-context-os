@@ -46,9 +46,13 @@ class FakeTransport:
         self.calls.append((method, url, payload, dict(headers)))
         path = urllib.parse.urlsplit(url).path
         query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        if "/v3beta1/" in path and not path.endswith(("/repositories", "/snapshot-setup/builds")):
+            raise AssertionError(path)
         if path.endswith("/repositories"):
+            assert path.startswith("/v3beta1/organizations/"), path
             return {"items": [{"repo_path": "conorbronsdon/contextos-devin-live-fixture"}]}
         if path.endswith("/snapshot-setup/builds"):
+            assert path.startswith("/v3beta1/organizations/"), path
             self.assert_query(query, "active", "true")
             return {"items": [{"build_id": "build-fixture", "status": "succeeded"}]}
         if method == "POST" and path.endswith("/sessions"):
