@@ -13,8 +13,8 @@ responses, absolute local paths and credentials.
   guard, root instructions, explicit and implicit skills, print-mode write
   rejection, deny precedence, scoped writes, and both exec controls. The real
   `~/.claude/CLAUDE.md` was checked by local line hashing in all 10 sessions and
-  never appeared in context. Observation: in the implicit-skill session the model
-  attempted the user-only skill and read its file, but the skill did not fire.
+  never appeared in context. The implicit-skill session did not activate the
+  user-only skill or read its file.
 - [hooks-1f9bf5d.json](hooks-1f9bf5d.json), the Windows hook harness: every
   control passed at `1f9bf5d`. SessionStart and write advisories reach the model, the write
   advisory stays silent elsewhere, removing the hooks file removes the
