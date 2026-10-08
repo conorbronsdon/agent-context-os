@@ -1,0 +1,203 @@
+{
+  "active_build_id": "sbj-f04a9b4dd96a43ff806501a2bedd34bf",
+  "checked_at": "2026-10-08T06:11:44.783657+00:00",
+  "controls": {
+    "exact_active_build": true,
+    "exact_fixture_commit": true,
+    "explicit_skill_must_fire": true,
+    "implicit_skill_must_not_fire": true,
+    "no_pull_request_created": true,
+    "public_fixture_content_exact": true,
+    "public_fixture_default_head_unchanged": true,
+    "repository_access": true,
+    "review_not_invoked": true,
+    "root_instruction_discovery": true,
+    "session_archived": true
+  },
+  "devin_mode": "normal",
+  "fixture_sha": "3d58d8f63522c25d4002bc0d54fac5f89b643bca",
+  "github_requests": [
+    {
+      "endpoint": "repository",
+      "response_sha256": "a56e7f6abb8c41a6c986e8f681929c3c582aaba74b253c5865a9857c13cdb4c5"
+    },
+    {
+      "endpoint": "default_branch_ref",
+      "response_sha256": "1cf5ebbffbf4d16f80755c03b5182efd423acf12b169b8bd371a3c3e0a88003b"
+    },
+    {
+      "endpoint": "fixture_commit",
+      "response_sha256": "c03904bf5dd4506bd2b17bf59b7320d54e2a763edb632b2f7394e64614bb0eff"
+    },
+    {
+      "endpoint": "fixture_tree",
+      "response_sha256": "7dd6a511b3c648caeff4018b9c2b986a6a4a568a4e7714304bfe6cbc02f26fd0"
+    },
+    {
+      "endpoint": "fixture_content:.agents/skills/contextos-devin-live-control/SKILL.md",
+      "response_sha256": "e563a06249268706e5a2c9ab6dac1fdffb46d7cbb558daf29319c74c5b99e17f"
+    },
+    {
+      "endpoint": "fixture_content:AGENTS.md",
+      "response_sha256": "89e710c6100c15c1d732bcb6a9dd8d76d4985ef628e5e7720caaa1958ef706c3"
+    },
+    {
+      "endpoint": "repository",
+      "response_sha256": "a56e7f6abb8c41a6c986e8f681929c3c582aaba74b253c5865a9857c13cdb4c5"
+    },
+    {
+      "endpoint": "default_branch_ref",
+      "response_sha256": "1cf5ebbffbf4d16f80755c03b5182efd423acf12b169b8bd371a3c3e0a88003b"
+    },
+    {
+      "endpoint": "fixture_commit",
+      "response_sha256": "c03904bf5dd4506bd2b17bf59b7320d54e2a763edb632b2f7394e64614bb0eff"
+    },
+    {
+      "endpoint": "fixture_tree",
+      "response_sha256": "7dd6a511b3c648caeff4018b9c2b986a6a4a568a4e7714304bfe6cbc02f26fd0"
+    },
+    {
+      "endpoint": "fixture_content:.agents/skills/contextos-devin-live-control/SKILL.md",
+      "response_sha256": "e563a06249268706e5a2c9ab6dac1fdffb46d7cbb558daf29319c74c5b99e17f"
+    },
+    {
+      "endpoint": "fixture_content:AGENTS.md",
+      "response_sha256": "89e710c6100c15c1d732bcb6a9dd8d76d4985ef628e5e7720caaa1958ef706c3"
+    }
+  ],
+  "repository": "conorbronsdon/contextos-devin-live-fixture",
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/v3beta1/organizations/{org_id}/repositories?filter_name=contextos-devin-live-fixture&load_indexing_status=false&first=100",
+      "request_sha256": null,
+      "response_sha256": "d9ee684cd5c278b438b65fe8308aa96a7f8139e7a2257f8c79a617123498f634"
+    },
+    {
+      "method": "GET",
+      "path": "/v3beta1/organizations/{org_id}/snapshot-setup/builds?active=true&first=2",
+      "request_sha256": null,
+      "response_sha256": "23e5ed0a5a76d978f14878e184d55faa8b5532431ef09d7de26b480091c8dece"
+    },
+    {
+      "method": "POST",
+      "path": "/v3/organizations/{org_id}/sessions",
+      "request_sha256": "55e939f32839992a219485bdd3868197933f38bd1fa09b6a962a30a60581bb90",
+      "response_sha256": "d01e81f021fef85c77c974c41a4390442e550645b2bdccd26e0cb9d7c72dd16b"
+    },
+    {
+      "method": "GET",
+      "path": "/v3/organizations/{org_id}/sessions/{devin_id}/messages?first=200",
+      "request_sha256": null,
+      "response_sha256": "56454b4f233cef57fed160c5cf8ecc03de44365e631498dd29bec4b5c4e646b8"
+    },
+    {
+      "method": "GET",
+      "path": "/v3/organizations/{org_id}/sessions/{devin_id}",
+      "request_sha256": null,
+      "response_sha256": "23fc055497e6bb46ebcb1aba7904ef98e0d2575d04e06f6d265e321f8fc5a957"
+    },
+    {
+      "method": "GET",
+      "path": "/v3/organizations/{org_id}/sessions/{devin_id}/messages?first=200",
+      "request_sha256": null,
+      "response_sha256": "56454b4f233cef57fed160c5cf8ecc03de44365e631498dd29bec4b5c4e646b8"
+    },
+    {
+      "method": "GET",
+      "path": "/v3/organizations/{org_id}/sessions/{devin_id}",
+      "request_sha256": null,
+      "response_sha256": "2fc4dba9d15edaf8537bae4b8cb3dbcba57023e70a0237d8a46e21707fd6b822"
+    },
+    {
+      "method": "GET",
+      "path": "/v3/organizations/{org_id}/sessions/{devin_id}/messages?first=200",
+      "request_sha256": null,
+      "response_sha256": "56454b4f233cef57fed160c5cf8ecc03de44365e631498dd29bec4b5c4e646b8"
+    },
+    {
+      "method": "GET",
+      "path": "/v3/organizations/{org_id}/sessions/{devin_id}",
+      "request_sha256": null,
+      "response_sha256": "2fc4dba9d15edaf8537bae4b8cb3dbcba57023e70a0237d8a46e21707fd6b822"
+    },
+    {
+      "method": "GET",
+      "path": "/v3/organizations/{org_id}/sessions/{devin_id}/messages?first=200",
+      "request_sha256": null,
+      "response_sha256": "304d71a1312ed742a4d6181964be96b0b8478c79cba85ddb2cfa11f950997f6a"
+    },
+    {
+      "method": "GET",
+      "path": "/v3/organizations/{org_id}/sessions/{devin_id}/messages?first=200",
+      "request_sha256": null,
+      "response_sha256": "304d71a1312ed742a4d6181964be96b0b8478c79cba85ddb2cfa11f950997f6a"
+    },
+    {
+      "method": "GET",
+      "path": "/v3/organizations/{org_id}/sessions/{devin_id}/messages?first=200",
+      "request_sha256": null,
+      "response_sha256": "304d71a1312ed742a4d6181964be96b0b8478c79cba85ddb2cfa11f950997f6a"
+    },
+    {
+      "method": "POST",
+      "path": "/v3/organizations/{org_id}/sessions/{devin_id}/messages",
+      "request_sha256": "e3e108d42a292b43d62100d50ef74441f6a8d084a315887ce89ca56a4dd30478",
+      "response_sha256": "c4cb50d42716848ba8deaa501c4997e62bd796a9cba1b07b5f85388aa5afd312"
+    },
+    {
+      "method": "GET",
+      "path": "/v3/organizations/{org_id}/sessions/{devin_id}/messages?first=200",
+      "request_sha256": null,
+      "response_sha256": "54f1801f6c96fffda4fa4a388635b1bd3749c23afab40aa9af3580a62c90b78c"
+    },
+    {
+      "method": "GET",
+      "path": "/v3/organizations/{org_id}/sessions/{devin_id}",
+      "request_sha256": null,
+      "response_sha256": "edc8fd6f6c35295a6712790e95e94bb07ed1ee550feee09946e67add33bb984f"
+    },
+    {
+      "method": "GET",
+      "path": "/v3/organizations/{org_id}/sessions/{devin_id}/messages?first=200",
+      "request_sha256": null,
+      "response_sha256": "54f1801f6c96fffda4fa4a388635b1bd3749c23afab40aa9af3580a62c90b78c"
+    },
+    {
+      "method": "GET",
+      "path": "/v3/organizations/{org_id}/sessions/{devin_id}",
+      "request_sha256": null,
+      "response_sha256": "edc8fd6f6c35295a6712790e95e94bb07ed1ee550feee09946e67add33bb984f"
+    },
+    {
+      "method": "GET",
+      "path": "/v3/organizations/{org_id}/sessions/{devin_id}/messages?first=200",
+      "request_sha256": null,
+      "response_sha256": "14f68aa4085752bc22b7aa5529b97c4e0cb61080ec9685abc52d38ece0cd726a"
+    },
+    {
+      "method": "GET",
+      "path": "/v3/organizations/{org_id}/sessions/{devin_id}",
+      "request_sha256": null,
+      "response_sha256": "0e4e15e75f20fe792b4092d59cebc4006edde61102762c3f8b02d87a021149c0"
+    },
+    {
+      "method": "GET",
+      "path": "/v3beta1/organizations/{org_id}/snapshot-setup/builds?active=true&first=2",
+      "request_sha256": null,
+      "response_sha256": "23e5ed0a5a76d978f14878e184d55faa8b5532431ef09d7de26b480091c8dece"
+    },
+    {
+      "method": "POST",
+      "path": "/v3/organizations/{org_id}/sessions/{devin_id}/archive",
+      "request_sha256": null,
+      "response_sha256": "624723295317176bb941a278c747dd45bd1cbaa5f60d49898037cdb68d847b2c"
+    }
+  ],
+  "runtime": "devin",
+  "schema_version": 1,
+  "session_id_sha256": "fa2ec89d679c5d0d60f05234e6c1c162eda864993d959042ba6cdab2628b8d3f",
+  "source_sha": "97b9d511d2a50a3caeea7f3866fc6d43028c1188",
+  "surface": "session"
+}

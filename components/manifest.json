@@ -1125,6 +1125,18 @@
                     "policy": "development"
                 },
                 {
+                    "path": "docs/evidence/devin-cloud-2026-10-08/README.md",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cloud-2026-10-08/api-97b9d51.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cloud-2026-10-08/lifecycle-97b9d51.json",
+                    "policy": "development"
+                },
+                {
                     "path": "docs/evidence/devin-cli-2026-10-06/README.md",
                     "policy": "development"
                 },
@@ -1710,7 +1722,7 @@
         },
         {
             "id": "devin-adapter",
-            "description": "Devin CLI lifecycle host with an import-guard project config, plus experimental cloud-session and Review onboarding with managed-account boundary controls.",
+            "description": "Devin CLI and cloud-session lifecycle hosts with an import-guard project config, plus Review onboarding with managed-account boundary controls.",
             "depends_on": [
                 "core",
                 "portable-skills",
@@ -1731,6 +1743,10 @@
                 },
                 {
                     "path": "adapters/devin/review_conformance.py",
+                    "policy": "managed"
+                },
+                {
+                    "path": "adapters/devin/cloud_lifecycle_conformance.py",
                     "policy": "managed"
                 },
                 {
@@ -1779,6 +1795,10 @@
                 },
                 {
                     "path": "tests/test_devin_review_harness.py",
+                    "policy": "development"
+                },
+                {
+                    "path": "tests/test_devin_cloud_lifecycle_harness.py",
                     "policy": "development"
                 },
                 {

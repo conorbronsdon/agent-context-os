@@ -17,7 +17,7 @@ Keep durable project context and workflows in a Git-backed repository that suppo
 Chat history, project instructions, and copied prompts drift apart. Context OS is a Git-backed context and workflow layer that keeps the durable parts in plain Markdown: who you are, what you are working on, decisions already made, and the workflows you want an agent to follow.
 
 Claude Code, Codex, OpenClaw, OpenCode, Cursor CLI, Devin CLI, and Hermes Agent have
-first-class adapters. Cursor IDE and Devin cloud sessions remain experimental; their available
+first-class adapters, and Devin cloud sessions are first-class too. Cursor IDE remains experimental; their available
 surfaces and evidence limits are listed in [host support](#host-support). These
 adapters route to shared repository state, with a deterministic lifecycle kernel
 that turns reviewed setup, checkpoint, and close requests into hash-checked
@@ -168,7 +168,7 @@ At the end, `/end` or `$end` proposes a handoff for review before it updates `se
 
 Start small. Use the core loop for a week, add one active project, then turn a repeated task into a skill when the repetition is clear.
 
-| Moment | Claude Code | Codex | OpenCode | Hermes | OpenClaw | Cursor CLI / IDE (experimental) | Devin CLI / session (experimental) | Shared result |
+| Moment | Claude Code | Codex | OpenCode | Hermes | OpenClaw | Cursor CLI / IDE (experimental) | Devin CLI / session | Shared result |
 |---|---|---|---|---|---|---|---|---|
 | First run or major refresh | `/setup` | `$setup` | `/context-setup` | `/context-setup` | `/contextos <alias> setup` | `/context-setup` | `/context-setup` / `@skills:context-setup` | Reviewed context proposal |
 | Start work | `/start` | `$start` | `/context-start` | `/context-start` | `/contextos <alias> start` | `/context-start` | `/context-start` / `@skills:context-start` | Read-only continuity inventory and briefing |
@@ -205,7 +205,7 @@ The guide covers ChatGPT, Claude, Gemini Apps, Gemini CLI, and a generic path fo
 | Claude Code | first-class | Shared lifecycle, slash-command adapters, hooks, optional live reads, and Claude-only auto-memory curation |
 | Codex | first-class | Shared lifecycle, native skills, project instructions, hooks, and reviewed proposal/apply writes |
 | Cursor | first-class | First-class Agent CLI lifecycle and handoff with exact-version evidence; IDE remains experimental, with no hook or native-memory bridge |
-| Devin | first-class | First-class Devin CLI lifecycle and handoff with exact-version evidence and an import guard; cloud sessions remain experimental and Devin Review is instruction-only compatibility |
+| Devin | first-class | First-class Devin CLI lifecycle and handoff with exact-version evidence and an import guard; first-class cloud sessions with live API lifecycle, exact-digest apply and fresh-session handoff on a recorded snapshot build; Devin Review is instruction-only compatibility |
 | Hermes Agent | first-class | First-class CLI lifecycle with explicit skill preloading, reviewed kernel apply, advisory hooks, and verified native-memory separation |
 | OpenClaw | first-class | External-plugin multi-turn lifecycle with alias-bound lightweight subagents, copied portable skills, separate private memory, and trusted-shell kernel apply |
 | OpenCode | first-class | Repository-native AGENTS.md and Agent Skills discovery with typed lifecycle commands, native permissions, and deterministic proposal/apply safety |
@@ -221,7 +221,7 @@ Compatibility paths that are not registered runtime adapters:
 
 ## One source, explicit host adapters
 
-| Capability | Shared | Claude Code | Codex | OpenCode | Hermes | OpenClaw | Cursor CLI / IDE (experimental) | Devin CLI / session (experimental) |
+| Capability | Shared | Claude Code | Codex | OpenCode | Hermes | OpenClaw | Cursor CLI / IDE (experimental) | Devin CLI / session |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | Identity, project, state, and session files | Yes | Reads | Reads | Reads | Reads | Reads | Reads | Reads |
 | Deterministic proposal/apply and receipts | Yes | Adapter | Native skill calls | Typed command + native skill | Installed skill calls | Copied skill calls | Native skill calls | Native skill calls |
@@ -277,7 +277,7 @@ adapters/hermes/           Hermes installation and optional hook adapter
 adapters/openclaw/         First-class OpenClaw plugin and skills adapter
 adapters/opencode/         First-class OpenCode onboarding and conformance
 adapters/cursor/           First-class Cursor CLI and experimental IDE adapter
-adapters/devin/            First-class Devin CLI, experimental session, and Review adapter
+adapters/devin/            First-class Devin CLI and cloud-session adapter, plus Review
 runtimes/                  Machine-readable capability manifests
 components/                Component ownership and dependency manifest
 bundles/                   Generated detached bundle-lock schema

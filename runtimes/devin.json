@@ -3,7 +3,7 @@
   "runtime": "devin",
   "display_name": "Devin",
   "support_tier": "first-class",
-  "support_summary": "First-class Devin CLI lifecycle and handoff with exact-version evidence and an import guard; cloud sessions remain experimental and Devin Review is instruction-only compatibility",
+  "support_summary": "First-class Devin CLI lifecycle and handoff with exact-version evidence and an import guard; first-class cloud sessions with live API lifecycle, exact-digest apply and fresh-session handoff on a recorded snapshot build; Devin Review is instruction-only compatibility",
   "components": [
     "core",
     "portable-skills",
@@ -103,7 +103,7 @@
     },
     "session": {
       "kind": "cloud",
-      "support_tier": "experimental",
+      "support_tier": "first-class",
       "instruction_sources": [
         {
           "scope": "repository",
@@ -144,7 +144,10 @@
         "tests/test_devin_live_harness.py",
         "tests/test_devin_ui_harness.py",
         "tests/test_contextos_kernel.py",
-        "docs/evidence/devin-cloud-2026-10-07/README.md"
+        "docs/evidence/devin-cloud-2026-10-07/README.md",
+        "adapters/devin/cloud_lifecycle_conformance.py",
+        "tests/test_devin_cloud_lifecycle_harness.py",
+        "docs/evidence/devin-cloud-2026-10-08/README.md"
       ],
       "evidence": [
         "devin-agents",
@@ -157,7 +160,9 @@
         "devin-conformance",
         "devin-live-harness",
         "devin-ui-harness",
-        "devin-cloud-live-evidence"
+        "devin-cloud-live-evidence",
+        "devin-cloud-lifecycle-harness",
+        "devin-cloud-lifecycle-evidence"
       ]
     },
     "review": {
@@ -206,11 +211,15 @@
     }
   },
   "evidence": {
-    "checked_on": "2026-10-06",
+    "checked_on": "2026-10-08",
     "tested_versions": [
       {
         "surface": "cli",
         "version": "3000.11.3 (9c803229faa4)"
+      },
+      {
+        "surface": "session",
+        "version": "Devin cloud API v3, snapshot build sbj-f04a9b4dd96a43ff806501a2bedd34bf (2026-10-08)"
       }
     ],
     "sources": [
@@ -446,6 +455,28 @@
         "location": "adapters/devin/ui_conformance.py",
         "claims": [
           "support"
+        ]
+      },
+      {
+        "id": "devin-cloud-lifecycle-harness",
+        "type": "conformance",
+        "location": "adapters/devin/cloud_lifecycle_conformance.py",
+        "claims": [
+          "support",
+          "proposal_apply"
+        ]
+      },
+      {
+        "id": "devin-cloud-lifecycle-evidence",
+        "type": "conformance",
+        "location": "docs/evidence/devin-cloud-2026-10-08/README.md",
+        "claims": [
+          "instruction_sources",
+          "agent_skills",
+          "explicit_invocation",
+          "support",
+          "proposal_apply",
+          "invocation"
         ]
       },
       {

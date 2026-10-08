@@ -49,7 +49,7 @@ this is guidance, not a host-enforced gate. The `$context-setup`, `$context-star
 - `adapters/hermes/` documents first-class CLI support, optional hooks, and skill installation.
 - `adapters/openclaw/` and `adapters/opencode/` document first-class host support.
 - `adapters/cursor/` documents first-class Cursor CLI and experimental IDE support.
-- `adapters/devin/` documents first-class Devin CLI, experimental cloud-session, and Review support.
+- `adapters/devin/` documents first-class Devin CLI and cloud-session support, plus Review.
 - Runtime manifests under `runtimes/` declare support instead of implying parity.
 - Kernel proposal/apply is the enforcement boundary on every host; hooks are
   defense in depth and host-local memory is never shared automatically.

@@ -46,9 +46,13 @@ class FakeTransport:
         self.calls.append((method, url, payload, dict(headers)))
         path = urllib.parse.urlsplit(url).path
         query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        if "/v3beta1/" in path and not path.endswith(("/repositories", "/snapshot-setup/builds")):
+            raise AssertionError(path)
         if path.endswith("/repositories"):
+            assert path.startswith("/v3beta1/organizations/"), path
             return {"items": [{"repo_path": "conorbronsdon/contextos-devin-live-fixture"}]}
         if path.endswith("/snapshot-setup/builds"):
+            assert path.startswith("/v3beta1/organizations/"), path
             self.assert_query(query, "active", "true")
             return {"items": [{"build_id": "build-fixture", "status": "succeeded"}]}
         if method == "POST" and path.endswith("/sessions"):
@@ -225,6 +229,23 @@ class DevinLiveHarnessTest(unittest.TestCase):
         self.assertNotIn("resumable", create[2])
         self.assertEqual(["conorbronsdon/contextos-devin-live-fixture"], create[2]["repos"])
         self.assertTrue(all(call[3]["Authorization"] == "Bearer cog_fixture" for call in transport.calls))
+
+    def test_current_hex_session_ids_are_accepted_and_redacted(self) -> None:
+        hex_id = "0123456789abcdef0123456789abcdef"
+
+        class HexIds(FakeTransport):
+            def __call__(self, method, url, payload, headers, timeout):
+                response = super().__call__(
+                    method, url.replace(hex_id, "devin-fixture"), payload, headers, timeout)
+                if isinstance(response, dict) and response.get("session_id") == "devin-fixture":
+                    response = {**response, "session_id": hex_id}
+                return response
+
+        harness, _ = self.harness(HexIds())
+        evidence = harness.execute()
+        self.assertTrue(all(evidence.controls.values()))
+        self.assertNotIn(hex_id, json.dumps(evidence.requests))
+        self.assertTrue(any("/sessions/{devin_id}" in request["path"] for request in evidence.requests))
 
     def test_public_fixture_default_head_drift_fails_and_archives(self) -> None:
         harness, transport = self.harness(github=FakeGitHub("a" * 40, "c" * 40))

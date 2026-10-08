@@ -639,8 +639,8 @@ case "$SELECTED_AGENT" in
     fi
     printf '  CLI: cd %q && devin, then run /context-setup in Normal mode.\n' "$REPO_ROOT"
     echo "  Keep .devin/config.json so Devin loads only AGENTS.md and .agents/skills/."
-    echo "  Cloud (experimental): connect and authorize this repository in Devin, verify"
-    echo "  its Blueprint build and active snapshot, then invoke @skills:context-setup."
+    echo "  Cloud: add this repository as a repo blueprint in Devin's environment, confirm"
+    echo "  the new build is the active snapshot, then invoke @skills:context-setup."
     echo "  See adapters/devin/README.md for CLI, cloud-account, and Review boundaries."
     echo "  Setup does not launch or authenticate Devin or verify any account state."
     echo ""

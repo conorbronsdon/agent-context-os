@@ -7,7 +7,7 @@ its lifecycle kernel and host adapters; existing workspaces keep using this path
 
 Context OS can begin with a blank interview or selected context from another
 assistant. The result is a small, reviewable repository that Claude Code,
-Codex, OpenClaw, OpenCode, Cursor CLI, Devin CLI, and Hermes Agent, plus the experimental Cursor IDE and Devin cloud-session adapters,
+Codex, OpenClaw, OpenCode, Cursor CLI, Devin CLI and cloud sessions, and Hermes Agent, plus the experimental Cursor IDE adapter,
 can use as shared state.
 
 For one guided example before importing your own context, try
@@ -147,8 +147,8 @@ runtime but launches neither surface and changes no Cursor authorization setting
 
 For Devin CLI, follow the [Devin guide](../adapters/devin/README.md): keep the shipped
 `.devin/config.json` import guard, start `devin` from the repository root in Normal
-mode, and invoke `/context-setup`. For an experimental cloud session, verify
-repository access and the active environment in Devin first, then invoke
+mode, and invoke `/context-setup`. For a cloud session, add the repository as a
+repo blueprint in Devin's environment, confirm its build is active, then invoke
 `@skills:context-setup`. Local setup does not authenticate, launch, or verify
 Devin, and Devin Review is not a lifecycle surface.
 
@@ -191,7 +191,7 @@ Commit and push only after the diff matches what you intend to preserve.
 
 ## Run the daily loop
 
-| Moment | Claude Code | Codex | OpenCode | Hermes | OpenClaw | Cursor CLI / IDE (experimental) | Devin CLI / session (experimental) |
+| Moment | Claude Code | Codex | OpenCode | Hermes | OpenClaw | Cursor CLI / IDE (experimental) | Devin CLI / session |
 |---|---|---|---|---|---|---|---|
 | Start work | `/start` | `$start` | `/context-start` | `/context-start` | `/contextos <alias> start` | `/context-start` | `/context-start` / `@skills:context-start` |
 | Save progress without closing | `/update` | `$update` | `/context-update` | `/context-update` | `/contextos <alias> update` | `/context-update` | `/context-update` / `@skills:context-update` |

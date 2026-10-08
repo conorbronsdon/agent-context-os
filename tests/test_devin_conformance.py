@@ -28,10 +28,12 @@ class DevinDescriptorTest(unittest.TestCase):
         session = DESCRIPTOR["surfaces"]["session"]
         review = DESCRIPTOR["surfaces"]["review"]
         self.assertEqual(("cli", "first-class"), (cli["kind"], cli["support_tier"]))
-        self.assertEqual(("cloud", "experimental"), (session["kind"], session["support_tier"]))
+        self.assertEqual(("cloud", "first-class"), (session["kind"], session["support_tier"]))
         self.assertEqual(("review", "compatibility"), (review["kind"], review["support_tier"]))
         self.assertEqual(
-            [{"surface": "cli", "version": "3000.11.3 (9c803229faa4)"}],
+            [{"surface": "cli", "version": "3000.11.3 (9c803229faa4)"},
+             {"surface": "session",
+              "version": "Devin cloud API v3, snapshot build sbj-f04a9b4dd96a43ff806501a2bedd34bf (2026-10-08)"}],
             DESCRIPTOR["evidence"]["tested_versions"],
         )
         self.assertEqual("native-project-discovery", DESCRIPTOR["install"]["mode"])
@@ -171,7 +173,7 @@ class DevinDescriptorTest(unittest.TestCase):
     def test_guide_preserves_repo_account_and_data_transfer_boundaries(self) -> None:
         guide = " ".join(GUIDE_PATH.read_text(encoding="utf-8").split())
         for required in (
-            "Git-based blueprints are not currently supported",
+            "A session checks out only blueprinted repositories",
             "Context OS ships no blueprint YAML",
             "it is not a cloud-session control",
             "ships no Devin permission rules",

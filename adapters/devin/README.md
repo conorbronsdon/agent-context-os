@@ -1,18 +1,25 @@
 # Devin adapter
 
 Context OS supports Devin through three deliberately separate surfaces. Devin
-CLI is a first-class lifecycle host. Cloud Agent sessions remain an
-experimental lifecycle host, and Devin Review is a compatibility surface for
-repository instructions only. Evidence from one surface does not establish
-behavior in another.
+CLI and Devin cloud Agent sessions are first-class lifecycle hosts, and Devin
+Review is a compatibility surface for repository instructions only. Evidence
+from one surface does not establish behavior in another.
 
 CLI promotion is scoped to Devin CLI `3000.11.3 (9c803229faa4)` on Linux
 (WSL2), with the default model, host controls, the shipped setup/start/update/end
 workflows, exact-digest operator apply, and fresh-session handoff recorded in
 the [host evidence](../../docs/evidence/devin-cli-2026-10-06/README.md) and
 the [hook and final lifecycle evidence](../../docs/evidence/devin-cli-2026-10-07/README.md).
-It does not promote cloud sessions or Review, and it does not cover native
-Windows (see below).
+It does not cover native Windows (see below).
+
+Cloud-session promotion is scoped to the Devin v3 API on snapshot build
+`sbj-f04a9b4dd96a43ff806501a2bedd34bf`, in Agent mode (`normal`). The
+[cloud lifecycle evidence](../../docs/evidence/devin-cloud-2026-10-08/README.md)
+records instruction and skill discovery, setup/start/update/end proposals,
+exact-digest approval and apply with runtime `devin` receipts, wrong-digest and
+stale rejections, and a fresh-session handoff. Devin's adherence to the approval
+step is observed, not enforced; the kernel digest check is the enforced
+boundary.
 
 ## Devin CLI
 
@@ -207,8 +214,9 @@ Blueprints, builds, snapshots, standalone Knowledge, secrets, repository
 permissions, organization roles, security profiles, MCP configuration, and UI
 state are Devin-managed account state. They are not Context OS components,
 repository instruction sources, locally installable artifacts, or proof of
-readiness. Git-based blueprints are not currently supported; configure them in
-**Settings > Environment > Blueprints**. Context OS ships no blueprint YAML.
+readiness. Configure blueprints in **Settings > Environment > Blueprints** or through
+the v3beta1 snapshot-setup API, which can also read `.devin/blueprint.yaml` from
+a repository. Context OS ships no blueprint YAML.
 Its only `.devin/` file is the CLI import guard described above; Devin does not
 document whether cloud sessions read it, so it is not a cloud-session control.
 
@@ -223,7 +231,9 @@ repository files but does not certify the Devin account.
 Before use, verify in Devin that:
 
 1. the intended organization can access the exact repository;
-2. the repository is included or configured in the environment;
+2. the repository has a repo blueprint in the environment. A session checks out
+   only blueprinted repositories; naming a repository in an API session request
+   does not check it out;
 3. the current Blueprint build succeeded and the intended snapshot is active;
 4. the session security profile and user role match the task; and
 5. required secrets exist at the intended scope.
@@ -341,10 +351,36 @@ authorization control, and UI evidence does not inherit API-only active-build
 or account-inspection claims.
 
 This fixture proves the cloud instruction and skill substrate; the
-[cloud session evidence](../../docs/evidence/devin-cloud-2026-10-07/README.md)
-records a passing UI run. Promotion still requires a separate lifecycle
-proposal/apply authorization fixture and a separately approved Review fixture;
-neither may inherit this result.
+[UI run](../../docs/evidence/devin-cloud-2026-10-07/README.md) and the
+[API run](../../docs/evidence/devin-cloud-2026-10-08/README.md) record passing
+results. The separate lifecycle fixture is
+[`contextos-devin-cloud-fixture`](https://github.com/conorbronsdon/contextos-devin-cloud-fixture),
+the unmodified release template, driven by
+`adapters/devin/cloud_lifecycle_conformance.py`. Review has its own fixtures and
+does not inherit either result.
+
+For each mutating phase the lifecycle harness requires the following:
+
+- Every pushed commit before approval only adds pending inputs and proposals.
+- The proposal stays within that phase's allowed paths: setup touches only
+  `identity/lifecycle-fixture.md` and `state/current.md`, and update and end
+  each touch one `sessions/` file.
+- The branch has not moved when the approval is sent.
+
+After Devin applies, the harness replays the same approved proposal with the
+fixture's kernel at the pending commit. Devin's tree must match that replay, and
+so must its receipt's ID, digest, runtime, file hashes, Git heads and
+invariants. The harness holds each proposal at least 120 seconds before
+approving. Devin's commit-to-apply duration, on Devin's clock, must be at least
+the harness's push-to-approval duration, on the harness clock, so clock offset
+cancels. This is a timing-consistency check, not proof of ordering: a host that
+delays pushing its proposal, or withholds an apply until approval, can defeat
+it.
+
+The wrong-digest and stale checks run the kernel locally, so they test the
+kernel, not Devin. The fresh-session handoff reads a parentless handoff branch
+that excludes pending artifacts. It must quote the full saved next action, and
+every pre-existing ref must be unchanged after the sessions close.
 
 ## Review conformance fixture
 

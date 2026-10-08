@@ -6,7 +6,7 @@ dates, append behavior, optimistic hashes, locking, and receipts.
 
 ## Shared lifecycle
 
-| Job | Claude Code | Codex | Hermes | OpenClaw | Cursor CLI / Cursor IDE (experimental) | Devin CLI / session (experimental) | Deterministic operation |
+| Job | Claude Code | Codex | Hermes | OpenClaw | Cursor CLI / Cursor IDE (experimental) | Devin CLI / session | Deterministic operation |
 |---|---|---|---|---|---|---|---|
 | Initialize context | `/setup` | `$setup` | `/context-setup` | `/contextos <alias> setup` | `/context-setup` | `/context-setup` / `@skills:context-setup` | `contextos propose setup` then `apply` |
 | Start a session | `/start` | `$start` | `/context-start` | `/contextos <alias> start` | `/context-start` | `/context-start` / `@skills:context-start` | read-only `contextos start` |
@@ -22,8 +22,8 @@ OpenClaw resumes setup, update, and end questions with
 independent proposal review, an operator runs the kernel from a trusted shell.
 Devin's portable skill frontmatter carries a native user-only trigger. Devin CLI
 is first-class with versioned live evidence and avoids the short aliases because
-it owns built-in `/update`; cloud sessions remain experimental until their
-account-managed behavior has versioned live-conformance evidence.
+it owns built-in `/update`. Cloud sessions are first-class with live API
+lifecycle evidence on a recorded snapshot build; invoke `@skills:context-*` there.
 
 The mutation protocol is always:
 
@@ -36,7 +36,7 @@ The mutation protocol is always:
 
 ## Runtime boundary
 
-| Capability | Claude Code | Codex | Hermes | OpenClaw | Cursor CLI / Cursor IDE (experimental) | Devin CLI / session (experimental) |
+| Capability | Claude Code | Codex | Hermes | OpenClaw | Cursor CLI / Cursor IDE (experimental) | Devin CLI / session |
 |---|---|---|---|---|---|---|
 | Project instructions | `CLAUDE.md` | `AGENTS.md` | `AGENTS.md` | Alias-bound execution-directory `AGENTS.md` | Root `AGENTS.md` | Root `AGENTS.md` |
 | Portable skill source | Thin slash adapters | `.agents/skills/` | External directory or copied skills | Copied into private workspace `.agents/skills/` | `.agents/skills/` | `.agents/skills/` |
