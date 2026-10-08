@@ -78,7 +78,19 @@ entry = {
     "shell": os.path.basename(os.environ.get("SHELL", "")),
     "msystem": os.environ.get("MSYSTEM", ""),
     "wsl": bool(os.environ.get("WSL_DISTRO_NAME")),
+    # Whether the hook runs from the project root, so a relative command works.
+    "cwd_is_project": bool(os.environ.get("DEVIN_PROJECT_DIR")) and os.path.normcase(
+        os.path.realpath(os.getcwd())) == os.path.normcase(os.path.realpath(os.environ["DEVIN_PROJECT_DIR"])),
+    "parent": "",
 }
+if os.name == "nt":
+    import subprocess
+    try:
+        query = "(Get-CimInstance Win32_Process -Filter 'ProcessId=%d').Name" % os.getppid()
+        entry["parent"] = subprocess.run(["powershell", "-NoProfile", "-Command", query], capture_output=True,
+                                         text=True, timeout=8).stdout.strip()[:32]
+    except Exception:
+        entry["parent"] = "unknown"
 with log.open("a", encoding="utf-8") as stream:
     stream.write(json.dumps(entry) + "\\n")
 if entry["event"] == "PreToolUse" and target.endswith(blocked):
@@ -115,6 +127,10 @@ def hook_shells(entries: list[dict]) -> list[str]:
             shells.add("posix:" + str(entry["shell"])[:16])
         else:
             shells.add("no-posix-shell-markers")
+        if entry.get("parent"):
+            shells.add("parent:" + str(entry["parent"])[:32])
+        if "cwd_is_project" in entry:
+            shells.add("cwd_is_project:" + str(bool(entry["cwd_is_project"])).lower())
     return sorted(shells)
 
 
