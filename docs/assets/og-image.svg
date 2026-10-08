@@ -36,11 +36,12 @@
   </g>
 
   <g font-family="DejaVu Sans Mono, monospace">
-    <text x="74" y="401" font-size="15" font-weight="700" letter-spacing="1.5" fill="#5de1e6">FIRST-CLASS CLI</text>
-    <text x="74" y="435" font-size="21" fill="#e5e9f5">Claude Code · Codex · OpenClaw · OpenCode</text>
-    <text x="74" y="469" font-size="21" fill="#e5e9f5">Hermes Agent · Cursor CLI · Devin CLI</text>
-    <text x="74" y="512" font-size="15" font-weight="700" letter-spacing="1.5" fill="#9b7bff">EXPERIMENTAL</text>
-    <text x="74" y="546" font-size="21" fill="#aeb8d2">Cursor IDE · Devin cloud sessions</text>
+    <text x="74" y="397" font-size="15" font-weight="700" letter-spacing="1.5" fill="#5de1e6">FIRST-CLASS HOSTS</text>
+    <text x="74" y="429" font-size="21" fill="#e5e9f5">Claude Code · Codex · OpenClaw · OpenCode</text>
+    <text x="74" y="461" font-size="21" fill="#e5e9f5">Hermes Agent · Cursor CLI · Devin CLI</text>
+    <text x="74" y="493" font-size="21" fill="#e5e9f5">Devin cloud sessions</text>
+    <text x="74" y="529" font-size="15" font-weight="700" letter-spacing="1.5" fill="#9b7bff">EXPERIMENTAL</text>
+    <text x="74" y="557" font-size="21" fill="#aeb8d2">Cursor IDE</text>
     <text x="74" y="596" font-size="18" fill="#7f8aa8">github.com/conorbronsdon/agent-context-os</text>
   </g>
 

@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import runpy
 import shutil
 import subprocess
 import sys
@@ -54,7 +55,7 @@ def main():
     # Recovery imports this verified archive directly in parent and crash child.
     # Windows checkout line endings cannot affect the executable qualification.
     baselines = []
-    for version in ('0.14.0', '0.15.0', '1.0.0'):
+    for version in runpy.run_path(str(product / 'scripts/qualify-release-migration.py'))['PUBLISHED']:
         old_stem = 'agent-context-os-template-v' + version
         lock = args.published_assets.resolve() / version / (old_stem + '.bundle.lock.json')
         value = json.loads(lock.read_text())
