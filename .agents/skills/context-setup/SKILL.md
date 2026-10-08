@@ -9,6 +9,11 @@ triggers: ["user"]
 
 ## Execution roots (required)
 
+When the host executes commands inside Bash, replace the `bash` executable
+shown below with `"$BASH"` to reuse that shell. This avoids selecting a different
+Bash from `PATH`, such as the Windows WSL launcher inside a Git Bash session.
+In a terminal outside Bash, select the installed Bash explicitly.
+
 Use the exact roots supplied by the host attachment: `KernelRoot` is the trusted
 Context OS product containing `scripts/contextos.sh`; `ContextRoot` owns tracked
 identity and lifecycle state; and `WorkingRoot` is the ordinary application.

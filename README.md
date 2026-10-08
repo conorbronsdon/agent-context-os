@@ -205,7 +205,7 @@ The guide covers ChatGPT, Claude, Gemini Apps, Gemini CLI, and a generic path fo
 | Claude Code | first-class | Shared lifecycle, slash-command adapters, hooks, optional live reads, and Claude-only auto-memory curation |
 | Codex | first-class | Shared lifecycle, native skills, project instructions, hooks, and reviewed proposal/apply writes |
 | Cursor | first-class | First-class Agent CLI lifecycle and handoff with exact-version evidence; IDE remains experimental, with no hook or native-memory bridge |
-| Devin | first-class | First-class Devin CLI lifecycle and handoff with exact-version evidence and an import guard; first-class cloud sessions with live API lifecycle, exact-digest apply and fresh-session handoff on a recorded snapshot build; Devin Review is instruction-only compatibility |
+| Devin | first-class | First-class Devin CLI lifecycle and handoff on Linux (WSL2) and native Windows 11 with exact-version evidence and an import guard; first-class cloud sessions with live API lifecycle, exact-digest apply and fresh-session handoff on a recorded snapshot build; Devin Review is instruction-only compatibility |
 | Hermes Agent | first-class | First-class CLI lifecycle with explicit skill preloading, reviewed kernel apply, advisory hooks, and verified native-memory separation |
 | OpenClaw | first-class | External-plugin multi-turn lifecycle with alias-bound lightweight subagents, copied portable skills, separate private memory, and trusted-shell kernel apply |
 | OpenCode | first-class | Repository-native AGENTS.md and Agent Skills discovery with typed lifecycle commands, native permissions, and deterministic proposal/apply safety |

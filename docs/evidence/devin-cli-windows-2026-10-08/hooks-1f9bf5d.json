@@ -1,0 +1,211 @@
+{
+  "runtime": "devin",
+  "surface": "cli",
+  "harness": "hooks-and-skill-allowlists",
+  "os": "Windows-11-10.0.26200-SP0",
+  "platform": {
+    "sys_platform": "win32",
+    "platform": "Windows-11-10.0.26200-SP0"
+  },
+  "started_at": "2026-10-08T08:40:37.367670+00:00",
+  "finished_at": "2026-10-08T08:43:10.234259+00:00",
+  "model_selection": "Devin CLI default",
+  "permission_mode": "Normal (default)",
+  "shipped_hooks_sha256": "6772eb40202a714328c5d304b70ee288a86534cbaa8378fd456dbbe412b1a9f5",
+  "host": {
+    "expected_version": "3000.11.3",
+    "source_sha": "1f9bf5dd171779c92bab3c543c86fc80bd97a832",
+    "binary_version": "devin 3000.11.3 (9c803229faa4)",
+    "binary_sha256": "bd2704d32669887a15164725d043e2d3aa18c529920ebe341fb6b70eabac2d30",
+    "shipped_project_config_sha256": "8e771c895b4b468c957764607d1b9b360d52ebf28331c601e44dec39aacfc60a",
+    "workspace_cleanup": "removed",
+    "commands": [
+      {
+        "command": "devin.exe",
+        "argv_sha256": "6ebcd76c1ce76609819ca4673c893ededcb7b93fda6359e6e64f815eb99561f7",
+        "returncode": 0,
+        "stdout_sha256": "0baf682aea5c8329e108e376517722f310ee92a40b19d8915f191c9dd4254d3d",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "version"
+      },
+      {
+        "command": "devin.exe",
+        "argv_sha256": "e51394e6b215c608c360ebb4f69da59359c7df209136ae32196a6840a602fc71",
+        "returncode": 0,
+        "stdout_sha256": "b6419461d9385a940744182320991e1d0498701b4282b71caed84ffae9172b72",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "auth"
+      },
+      {
+        "command": "devin.exe",
+        "argv_sha256": "07de950c76bf53cef53c913c5240c7e547f852ea8ace8afe125b27e67bfebf75",
+        "returncode": 0,
+        "stdout_sha256": "ed1a545bb85e55816bbf9566b028b2a0bc456b88f49f6f266c0401048824194b",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "session_start_hooks_fire"
+      },
+      {
+        "command": "devin.exe",
+        "argv_sha256": "7026a7a766c527c173a481cd01f3974a11c13fe3a4776a2852198cf733fc7ed3",
+        "returncode": 0,
+        "stdout_sha256": "674c5bc6f692f08a3ce0cd2227b37bb4e6039880732021bcc7d3cb32d299db55",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "write_hook_fires_on_lifecycle_state"
+      },
+      {
+        "command": "devin.exe",
+        "argv_sha256": "d85329c7205f35ba28c618d10aae70f5b1581310e9b8a2e3ed9822563bfdb38e",
+        "returncode": 0,
+        "stdout_sha256": "d117fa006ba9208500b2930ce69cbde436c647afa917cb7396a9bc9111a46dd2",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "write_hook_silent_elsewhere"
+      },
+      {
+        "command": "devin.exe",
+        "argv_sha256": "ba59e406221bfd1433be3371ee5d0349462376b8544fa89aa7e0f25b20488b84",
+        "returncode": 0,
+        "stdout_sha256": "d117fa006ba9208500b2930ce69cbde436c647afa917cb7396a9bc9111a46dd2",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "shipped_hooks_removed_injects_nothing"
+      },
+      {
+        "command": "devin.exe",
+        "argv_sha256": "a2f183aecb20a8db877845830d732603bc10a7f3e58a7ac7b856fffd00b0ce73",
+        "returncode": 0,
+        "stdout_sha256": "a700309d1f19f94c50231c4b64c84ad4a83a46d5891b4839ec8f6a03b32eb3c7",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "blocking_pre_tool_hook_blocks_write"
+      },
+      {
+        "command": "devin.exe",
+        "argv_sha256": "7971d70bfdfb6bf40669483efaacf149e7e756281ce24d645476e27bc307d76b",
+        "returncode": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e28cbac8ef22e2fb12d1af7c513a9d985efd96cc6c33c8716710c890f20801eb",
+        "subject": "skill_without_allowlist_rejects_exec"
+      },
+      {
+        "command": "devin.exe",
+        "argv_sha256": "449298c8284528b0e18c1db5360fc00d79523db25666d1397122df1490381f5b",
+        "returncode": 0,
+        "stdout_sha256": "d117fa006ba9208500b2930ce69cbde436c647afa917cb7396a9bc9111a46dd2",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subject": "skill_allowed_tools_auto_approves_exec"
+      }
+    ],
+    "sessions": {
+      "session_start_hooks_fire": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "6b61cd6b2ff756c07a1b8ebd6131bbb3c8d676d7156e58667b460b109b7eb509",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": []
+      },
+      "write_hook_fires_on_lifecycle_state": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "811e6a9491ae3e703926f88062e3517aaa1a773ae32c102ff4b8082933a9436d",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": [
+          "write",
+          "exec",
+          "exec"
+        ]
+      },
+      "write_hook_silent_elsewhere": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "051b334343da4b55ffe146096ca6411071bc80f3cab04e57f05d3dbc84d7b2c1",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": [
+          "write"
+        ]
+      },
+      "shipped_hooks_removed_injects_nothing": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "f8be0aeba0438b02933982d29e64a22437493e85dc9db61ee5b7f5f8b6743d17",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": [
+          "write"
+        ]
+      },
+      "blocking_pre_tool_hook_blocks_write": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "69f220a619a30650492a24fe142645bb8a462ad45be704874ab0afcd49eda725",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": [
+          "write"
+        ]
+      },
+      "skill_without_allowlist_rejects_exec": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "b12a75b59c7243ef7c629042b27977f378f097c1aeea81f7aa5b989c2e1a34c5",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": [
+          "exec"
+        ]
+      },
+      "skill_allowed_tools_auto_approves_exec": {
+        "atif_schema": "ATIF-v1.7",
+        "export_sha256": "27f00964353b510cc88e207a49d2ab05802705e68411f949101ec466022a3c0f",
+        "permission_mode": "Normal",
+        "models": [
+          "swe-2-high"
+        ],
+        "tool_calls": [
+          "exec"
+        ]
+      }
+    },
+    "controls": {
+      "preflight": "passed",
+      "session_start_hooks_fire": "passed",
+      "write_hook_fires_on_lifecycle_state": "passed",
+      "write_hook_silent_elsewhere": "passed",
+      "shipped_hooks_removed_injects_nothing": "passed",
+      "blocking_pre_tool_hook_blocks_write": "passed",
+      "skill_without_allowlist_rejects_exec": "passed",
+      "skill_allowed_tools_auto_approves_exec": "passed",
+      "run": "passed"
+    },
+    "observations": {
+      "probe_session_start_hook_fired": true,
+      "shipped_session_start_advisory_injected": true,
+      "hook_events_seen": true
+    },
+    "platform": {
+      "sys_platform": "win32",
+      "platform": "Windows-11-10.0.26200-SP0"
+    },
+    "platform_mode": "windows-real-profile",
+    "private_global": "present",
+    "private_global_line_count": 15,
+    "private_global_sessions_checked": 7,
+    "not_applicable": {},
+    "host_environment": {
+      "bash_on_path": "wsl",
+      "hook_shells": "cwd_is_project:true,no-posix-shell-markers,parent:bash.exe,python:true,python3:true"
+    }
+  },
+  "limits": [
+    "Synthetic fixture only; scoped to the recorded client, model, and operating system.",
+    "Shipped hooks are advisory; the blocking control uses a synthetic local probe.",
+    "No MCP execution, cloud handoff, or native-memory claim.",
+    "On native Windows the shipped hooks run `bash`; host_environment records which shell ran them."
+  ]
+}

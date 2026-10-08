@@ -177,7 +177,7 @@ class DevinDescriptorTest(unittest.TestCase):
             "Context OS ships no blueprint YAML",
             "it is not a cloud-session control",
             "ships no Devin permission rules",
-            "Native Windows behavior is untested",
+            "Native Windows support is scoped to the recorded Windows 11 and CLI version",
             "inspect a session export rather than that listing",
             "That means only \"selected for this workspace.\"",
             "does not certify the Devin account",
@@ -210,7 +210,7 @@ class DevinDescriptorTest(unittest.TestCase):
                 self.assertEqual(
                     [{
                         "type": "command",
-                        "command": 'bash "$DEVIN_PROJECT_DIR/scripts/context-os-hook.sh" '
+                        "command": '"${BASH:-bash}" "$DEVIN_PROJECT_DIR/scripts/context-os-hook.sh" '
                                    f"devin {kernel_event} cli",
                         "timeout": 10,
                     }],

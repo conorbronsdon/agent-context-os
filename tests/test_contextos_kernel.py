@@ -1504,7 +1504,7 @@ with mock.patch("contextos.kernel._fsync_directory", side_effect=crash_after_tar
 
         report = start_report(self.root, NOW)
         self.assertFalse(report["initialized"])
-        self.assertIn("setup workflow", report["next_action"])
+        self.assertIn("$context-setup skill", report["next_action"])
         for item in report["state"].values():
             self.assertEqual("unknown", item["freshness_status"])
             self.assertIsNone(item["stale"])
@@ -1969,7 +1969,10 @@ with mock.patch("contextos.kernel._fsync_directory", side_effect=crash_after_tar
 
     def test_next_action_names_the_command_to_run(self) -> None:
         self._write_undated_state("current.md")
-        self.assertIn("scripts/setup.sh", start_report(self.root, NOW)["next_action"])
+        action = start_report(self.root, NOW)["next_action"]
+        self.assertIn("Invoke the explicit $context-setup skill", action)
+        self.assertIn("scripts/setup.sh is a separate interactive terminal installer", action)
+        self.assertIn("do not run it inside an agent session", action)
 
     def test_setup_stamps_freshness_on_tracked_state_files(self) -> None:
         """A completed setup must report as initialized without hand-written dates."""

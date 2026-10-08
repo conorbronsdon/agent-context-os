@@ -3,10 +3,12 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 
@@ -39,7 +41,7 @@ class HookProbeTest(unittest.TestCase):
             capture_output=True, check=False, env=environment,
         )
 
-    def test_probe_logs_only_event_tool_and_target(self) -> None:
+    def test_probe_logs_action_and_environment_without_payload_content(self) -> None:
         result = self.run_probe({
             "hook_event_name": "PreToolUse", "tool_name": "write", "session_id": "secret-session",
             "tool_input": {"file_path": "state/current.md", "content": "raw content"},
@@ -47,9 +49,23 @@ class HookProbeTest(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         entries = hooks.read_hook_log(self.log)
         self.assertEqual(
-            [{"event": "PreToolUse", "tool": "write", "target": "state/current.md", "project_dir_set": True}],
-            entries,
+            {"event": "PreToolUse", "tool": "write", "target": "state/current.md", "project_dir_set": True},
+            {key: entries[0][key] for key in ("event", "tool", "target", "project_dir_set")},
         )
+        self.assertEqual(1, len(entries))
+        self.assertEqual(
+            {"event", "tool", "target", "project_dir_set", "shell", "msystem", "wsl",
+             "cwd_is_project", "parent", "python_on_path", "python3_on_path"},
+            set(entries[0]),
+        )
+        self.assertEqual("", entries[0]["shell"])
+        self.assertEqual("", entries[0]["msystem"])
+        self.assertFalse(entries[0]["wsl"])
+        self.assertFalse(entries[0]["cwd_is_project"])
+        self.assertEqual("", entries[0]["parent"])
+        for name in ("python", "python3"):
+            self.assertEqual(bool(shutil.which(name, path="/usr/bin:/bin")),
+                             entries[0][name + "_on_path"])
         self.assertNotIn("raw content", self.log.read_text(encoding="utf-8"))
         self.assertNotIn("secret-session", self.log.read_text(encoding="utf-8"))
         hooks.require_hook_event(entries, "PreToolUse", tool="write", target="state/current.md")
@@ -208,6 +224,35 @@ class FixtureTest(unittest.TestCase):
         self.assertIn({"path": ".devin/hooks.v1.json", "policy": "managed"}, component["paths"])
         self.assertIn({"path": "adapters/devin/cli_hook_conformance.py", "policy": "managed"},
                       component["paths"])
+
+
+class WindowsProbeTest(unittest.TestCase):
+    def test_windows_probe_command_is_shell_neutral(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, \
+                unittest.mock.patch.object(hooks, "native_windows", return_value=True):
+            base = Path(directory).resolve()
+            if " " in str(base) or " " in sys.executable:
+                self.skipTest("temporary path contains a space")
+            _, command = hooks.write_probe(base)
+            self.assertNotIn("\\", command)
+            self.assertNotIn("'", command)
+            self.assertNotIn('"', command)
+            self.assertTrue(command.endswith(" " + hooks.BLOCKED_TARGET))
+
+    def test_windows_probe_refuses_paths_with_spaces(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, \
+                unittest.mock.patch.object(hooks, "native_windows", return_value=True):
+            base = Path(directory).resolve() / "has space"
+            base.mkdir()
+            with self.assertRaisesRegex(hooks.HarnessError, "spaces or quotes"):
+                hooks.write_probe(base)
+
+    def test_hook_shell_summary_holds_no_payload(self) -> None:
+        entries = [{"event": "SessionStart", "target": "secret/path.md", "msystem": "MINGW64"},
+                   {"event": "PostToolUse", "wsl": True}, {"event": "PreToolUse", "shell": "bash"}, {}]
+        summary = hooks.hook_shells(entries)
+        self.assertEqual(["git-bash:MINGW64", "no-posix-shell-markers", "posix:bash", "wsl"], summary)
+        self.assertNotIn("secret", ",".join(summary))
 
 
 if __name__ == "__main__":
