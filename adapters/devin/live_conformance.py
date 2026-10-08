@@ -23,6 +23,8 @@ from typing import Callable, Mapping, Sequence
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 LOCAL_FIXTURE = REPOSITORY_ROOT / "adapters" / "devin" / "live-fixture"
 API_ROOT = "https://api.devin.ai"
+# Devin v3 session IDs: legacy "devin-..." or the current 32-hex form.
+SESSION_ID_RE = re.compile(r"devin-[A-Za-z0-9_-]+|[0-9a-f]{32}")
 GITHUB_API_ROOT = "https://api.github.com"
 ROOT_CANARY = "CONTEXTOS_DEVIN_ROOT_7D6A41C9"
 SKILL_CANARY = "CONTEXTOS_DEVIN_SKILL_49B28E73"
@@ -232,7 +234,7 @@ class DevinClient:
             self.timeout,
         )
         safe_path = path.replace(self.org_id, "{org_id}")
-        safe_path = re.sub(r"devin-[A-Za-z0-9_-]+", "{devin_id}", safe_path)
+        safe_path = re.sub(r"/sessions/[^/?]+", "/sessions/{devin_id}", safe_path)
         self.requests.append({
             "method": method,
             "path": safe_path,
@@ -498,7 +500,7 @@ class DevinHarness:
                 },
             )
             session_id = str(created.get("session_id", ""))
-            if not re.fullmatch(r"devin-[A-Za-z0-9_-]+", session_id):
+            if not SESSION_ID_RE.fullmatch(session_id):
                 raise HarnessError("session creation omitted a valid Devin session ID")
             if created.get("org_id") != self.client.org_id:
                 raise HarnessError("session creation returned a different organization")

@@ -230,6 +230,23 @@ class DevinLiveHarnessTest(unittest.TestCase):
         self.assertEqual(["conorbronsdon/contextos-devin-live-fixture"], create[2]["repos"])
         self.assertTrue(all(call[3]["Authorization"] == "Bearer cog_fixture" for call in transport.calls))
 
+    def test_current_hex_session_ids_are_accepted_and_redacted(self) -> None:
+        hex_id = "0123456789abcdef0123456789abcdef"
+
+        class HexIds(FakeTransport):
+            def __call__(self, method, url, payload, headers, timeout):
+                response = super().__call__(
+                    method, url.replace(hex_id, "devin-fixture"), payload, headers, timeout)
+                if isinstance(response, dict) and response.get("session_id") == "devin-fixture":
+                    response = {**response, "session_id": hex_id}
+                return response
+
+        harness, _ = self.harness(HexIds())
+        evidence = harness.execute()
+        self.assertTrue(all(evidence.controls.values()))
+        self.assertNotIn(hex_id, json.dumps(evidence.requests))
+        self.assertTrue(any("/sessions/{devin_id}" in request["path"] for request in evidence.requests))
+
     def test_public_fixture_default_head_drift_fails_and_archives(self) -> None:
         harness, transport = self.harness(github=FakeGitHub("a" * 40, "c" * 40))
         with self.assertRaisesRegex(live.HarnessError, "default branch drifted"):

@@ -45,7 +45,8 @@ MUTATING = ("setup", "update", "end")
 PENDING_PREFIXES = (".context-os/inputs/", ".context-os/proposals/")
 RECEIPT_PREFIX = ".context-os/receipts/"
 DIGEST_RE = re.compile(r"[0-9a-f]{64}")
-SESSION_ID_RE = re.compile(r"devin-[A-Za-z0-9_-]+")
+SESSION_ID_RE = re.compile(r"devin-[A-Za-z0-9_-]+|[0-9a-f]{32}")
+SAFE_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,128}")
 SETUP_PRIORITY = "Verify synthetic portable continuity."
 WRONG_DIGEST_TEXT = "--confirm must exactly match"
 STALE_TEXT = "refusing stale proposal; file changed"
@@ -255,12 +256,16 @@ class CloudLifecycleHarness:
 
     # Devin API helpers -------------------------------------------------------------
 
-    def create_session(self, prompt: str, title: str) -> tuple[str, str | None]:
+    def create_session(self, prompt: str, title: str, sessions: list[str]) -> tuple[str, str | None]:
         created = self.api.client.request("POST", f"{self.api.org_path}/sessions", {
             "prompt": prompt, "repos": [self.clone.repository],
             "structured_output_required": False, "title": title,
         })
         session_id = str(created.get("session_id", ""))
+        # Track any plausible ID before validating it, so a session the API
+        # created is still archived if its ID format is unexpected.
+        if SAFE_ID_RE.fullmatch(session_id):
+            sessions.append(session_id)
         if not SESSION_ID_RE.fullmatch(session_id):
             raise HarnessError("session creation omitted a valid Devin session ID")
         if created.get("org_id") != self.api.client.org_id:
@@ -432,8 +437,7 @@ class CloudLifecycleHarness:
 
             rules = session_rules(self.clone.repository, self.clone.fixture_sha, self.branch)
             session_id, mode = self.create_session(rules + phase_prompt("setup", handoff_fact),
-                                                   "Context OS disposable Devin cloud lifecycle")
-            sessions.append(session_id)
+                                                   "Context OS disposable Devin cloud lifecycle", sessions)
             result["devin_mode"] = mode
             result["session_id_sha256"] = sha256_bytes(session_id.encode())
             head, after = self.clone.fixture_sha, set()
@@ -469,8 +473,7 @@ class CloudLifecycleHarness:
                 }
 
             handoff_id, _ = self.create_session(handoff_prompt(self.clone.repository, self.branch),
-                                                "Context OS disposable Devin cloud handoff")
-            sessions.append(handoff_id)
+                                                "Context OS disposable Devin cloud handoff", sessions)
             result["handoff_session_id_sha256"] = sha256_bytes(handoff_id.encode())
             answer = self.wait_for(handoff_id, r"CONTEXTOS_PHASE_DONE handoff\b", set())
             result["handoff_answer_sha256"] = sha256_bytes(answer.encode())
