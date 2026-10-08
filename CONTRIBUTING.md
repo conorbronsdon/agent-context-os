@@ -91,6 +91,9 @@ to check the entry is wanted before writing it.
 4. Describe `capabilities` honestly, including the unpleasant parts. If a
    server can delete remote objects, `delete` and `destructive` are `true` even
    when you never intend to use those tools.
+   Unresolved execution scope uses the versioned
+   [unknown capability contract](docs/integrations-guide.md#catalog-capability-semantics),
+   not an unsupported `false` claim; confirmation and risk gates remain required.
 5. The catalog documents metadata. It does not configure tools, disable
    functionality, or enforce default profiles. Place client-side scope and
    tool recommendations, along with the full reachable surface area, in

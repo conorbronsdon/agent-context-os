@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+- Autoposting CLI MCP is a listed, generic-stdio catalog reference pinned to
+  0.4.0. It discloses publishing, delayed writes, uploads, deletion, credential
+  destinations and the unverified backend API bridge; nothing is installed or
+  authenticated (#234).
+
+### Changed
+- Integration catalog schema 3 can represent unresolved execution capability
+  explicitly, with a required reason and conservative confirmation/risk gates.
+  Generated references show Unknown instead of No; boolean-only schema 2
+  catalogs remain readable.
+
 ## [1.2.0] — 2026-10-08 — Devin cloud and native Windows lifecycle support
 
 ### Added

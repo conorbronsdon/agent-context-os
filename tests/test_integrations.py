@@ -37,7 +37,7 @@ class IntegrationCatalogTests(unittest.TestCase):
 
     def test_catalog_has_expected_entries_and_visible_safety_columns(self) -> None:
         rendered = MODULE.render_reference(self.catalog)
-        self.assertEqual(self.catalog["schema_version"], 2)
+        self.assertEqual(self.catalog["schema_version"], 3)
         self.assertGreater(len(self.catalog["integrations"]), 0)
         migrated_ids = {
             "agent-skills",
@@ -391,6 +391,75 @@ class IntegrationCatalogTests(unittest.TestCase):
     def test_empty_catalog_and_old_schema_are_rejected(self) -> None:
         self.assert_invalid(lambda catalog: catalog.update({"integrations": []}))
         self.assert_invalid(lambda catalog: catalog.update({"schema_version": 1}))
+
+    def test_schema_two_boolean_catalogs_remain_readable(self) -> None:
+        catalog = copy.deepcopy(self.catalog)
+        catalog["schema_version"] = 2
+        catalog["integrations"] = [
+            item for item in catalog["integrations"] if item["id"] != "autoposting-cli-mcp"
+        ]
+        MODULE.validate_catalog(catalog)
+        self.assert_invalid(lambda value: value.update({"schema_version": 2}))
+
+    def test_unknown_execution_is_visible_and_not_a_negative_claim(self) -> None:
+        item = self.entry("autoposting-cli-mcp")
+        self.assertIsNone(item["capabilities"]["arbitrary_execution"])
+        rendered = MODULE.render_reference(self.catalog)
+        section = rendered.split("## Autoposting CLI MCP\n\n", 1)[1].split("\n## ", 1)[0]
+        row = next(line for line in rendered.splitlines() if line.startswith("| [Autoposting CLI MCP]"))
+        self.assertIn("| Unknown |", row)
+        self.assertIn("arbitrary execution (unknown; gate required)", section)
+        self.assertIn("**Unverified capability (arbitrary execution):**", section)
+        self.assertIn(item["capability_uncertainty"]["arbitrary_execution"], section)
+
+    def test_unknown_execution_cannot_drop_gates_or_dependencies(self) -> None:
+        changes = (
+            lambda item: item["confirmation"]["required_for"].remove("arbitrary_execution"),
+            lambda item: item["risk_tags"].remove("arbitrary-execution"),
+            lambda item: item["capabilities"].update({"destructive": False}),
+            lambda item: (item["capabilities"].update({"write": False}), item["data_boundary"].update({"writes": []})),
+        )
+        for index, change in enumerate(changes):
+            with self.subTest(case=index):
+                self.assert_invalid(lambda catalog, edit=change: edit(next(
+                    item for item in catalog["integrations"] if item["id"] == "autoposting-cli-mcp"
+                )))
+
+    def test_unknown_execution_requires_exact_nonempty_reason(self) -> None:
+        changes = (
+            lambda item: item.pop("capability_uncertainty"),
+            lambda item: item.update({"capability_uncertainty": []}),
+            lambda item: item["capability_uncertainty"].update({"arbitrary_execution": " "}),
+            lambda item: item["capability_uncertainty"].update({"arbitrary_execution": "one\ntwo"}),
+            lambda item: item["capability_uncertainty"].update({"publish": "not allowed"}),
+            lambda item: item["capabilities"].update({"arbitrary_execution": False}),
+            lambda item: item["capabilities"].update({"arbitrary_execution": True}),
+        )
+        for index, change in enumerate(changes):
+            with self.subTest(case=index):
+                self.assert_invalid(lambda catalog, edit=change: edit(next(
+                    item for item in catalog["integrations"] if item["id"] == "autoposting-cli-mcp"
+                )))
+
+    def test_null_is_limited_to_execution_and_strings_are_not_booleans(self) -> None:
+        for field in MODULE.CAPABILITY_FIELDS - {"details"}:
+            values = ("unknown", "false", 0, 1, [], {})
+            if field != "arbitrary_execution":
+                values += (None,)
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    self.assert_invalid(lambda catalog, key=field, replacement=value: catalog["integrations"][0]["capabilities"].update({key: replacement}))
+
+    def test_autoposting_scope_is_metadata_only_and_generic(self) -> None:
+        item = self.entry("autoposting-cli-mcp")
+        self.assertEqual(item["maturity"], "listed")
+        self.assertEqual(item["supported_agents"], ["generic"])
+        self.assertFalse(item["installation"]["automatic"])
+        self.assertFalse(item["uninstall"]["removes_user_data"])
+        self.assertFalse(item["capabilities"]["oauth"])
+        self.assertIn("not authenticated MCP validation", item["health_check"])
+        self.assertIn("AUTOPOSTING_BASE_URL", " ".join(item["data_boundary"]["credentials"]))
+        self.assertIn("create-post and update-post accept scheduledAt", " ".join(item["capabilities"]["details"]))
 
     def test_trello_mcp_types_overwrite_but_not_delete_surface(self) -> None:
         item = self.entry("trello-mcp")

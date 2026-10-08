@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "integrations": [
     {
       "id": "agent-skills",
@@ -418,6 +418,114 @@
       "health_check": "Connect to the Rovo MCP endpoint, verify authorized Atlassian site identity and the granted permission groups, then run a bounded read query for one known issue or page without creating or modifying content.",
       "uninstall": {
         "instructions": "Remove the Atlassian Rovo MCP entry from the client and revoke the authorized application connection in Atlassian account settings, or revoke the API token or service-account key; preserve all Jira, Confluence, Jira Service Management, Bitbucket, and Loom data.",
+        "removes_user_data": false
+      }
+    },
+    {
+      "id": "autoposting-cli-mcp",
+      "name": "Autoposting CLI MCP",
+      "summary": "Optional handoff from reviewed repository text to remote social drafts and post IDs. Publishing, scheduling and automated agents are separate actions; the MCP server does not sync repository context.",
+      "source_url": "https://github.com/Autoposting-ai/autoposting-cli",
+      "kind": "mcp_server",
+      "supported_agents": [
+        "generic"
+      ],
+      "installation": {
+        "automatic": false,
+        "scope": "user",
+        "prerequisites": [
+          "Node.js 20 or newer and an explicitly approved global installation of @autoposting.ai/cli 0.4.0 (MIT); ap mcp starts the local stdio server",
+          "An Autoposting account and API key with appropriate service access; the hosted paid backend is separate from the open-source CLI and is not included for self-hosting",
+          "Connected social accounts before publishing; exact per-host configuration locations and tool-disabling support are unverified"
+        ]
+      },
+      "data_boundary": {
+        "credentials": [
+          "AUTOPOSTING_API_KEY is read directly from the server process environment; MCP startup does not use the general CLI stored-profile resolver. Keep the key out of repository files, shared client configuration and logs",
+          "The SDK sends the key to https://app.autoposting.ai/api-proxy by default; AUTOPOSTING_BASE_URL can redirect this destination, so review the effective URL before exposing credentials"
+        ],
+        "reads": [
+          "Account-visible posts and drafts, brands and social-account connection status, agents and runs, knowledge-base documents and search results, ideas, clips, carousels, webhooks, billing, credits and usage",
+          "The hosted MCP backend supplies a runtime REST route allow-list for list-api-routes and api-request; its contents and additional capabilities were not retrieved",
+          "Explicitly selected local media and clip file paths for upload; imported URLs and knowledge-base source URLs are sent to the backend"
+        ],
+        "writes": [
+          "Remote create, update and delete operations for posts, brands, agents, knowledge bases, ideas, clips, carousels and webhooks; rewrites replace content and generation or rendering can consume service credits",
+          "Immediate publish, scheduling, publication retry and enabled recurring agents can send content to connected social accounts now or later",
+          "Local-file upload to the backend or backend-provided presigned storage URLs; webhook creation, updates and tests can deliver data to selected external destinations",
+          "Generic api-request dispatches backend-allowed REST actions beyond the pinned named tool inventory; backend authorization and additional side effects remain unverified"
+        ]
+      },
+      "capabilities": {
+        "read": true,
+        "sensitive_read": true,
+        "write": true,
+        "remote_write": true,
+        "publish": true,
+        "overwrite": true,
+        "delete": true,
+        "arbitrary_execution": null,
+        "oauth": false,
+        "destructive": true,
+        "details": [
+          "Metadata review is pinned to CLI 0.4.0 / commit da104175c6545d521f33d4e06847674daa364458, confirmed by the npm version gitHead. This pin does not freeze the hosted service or its runtime route list",
+          "The local stdio surface uses an API key. Separate hosted authentication and social-provider connection flows are outside this entry; no named host conformance is claimed",
+          "The pinned named MCP tools cover posts, brands, agents, knowledge bases, ideas, clips, media, carousels, webhooks, billing and usage, plus list-api-routes and api-request",
+          "No shell or code execution tool appears in the pinned named registrations or dispatcher. The backend-owned REST allow-list is fetched at runtime, so execution absence for the full reachable surface is unresolved",
+          "create-post and update-post accept scheduledAt: a draft-labelled tool is not proof of a draft-only action. publish-post, schedule-post, retry-post and publish-clip can publish; create-agent, toggle-agent and run-agent can enable delayed or immediate writes",
+          "Start with an exact reviewed draft handoff. Client-side disabling of api-request, deletion, publish, scheduling, retry, upload and automated agents is recommended only where the client supports it; neither this catalog nor the pinned server enforces that restriction",
+          "No installation, authentication, live tool call, backend authorization, credit consumption or uninstall was tested. Human confirmation is operator guidance; no per-action human gate was established in the source dispatcher"
+        ]
+      },
+      "capability_uncertainty": {
+        "arbitrary_execution": "No named execution tool was found, but the backend-owned api-request route list was not enumerated. Full-surface execution capability is unknown; retain the execution gate until the effective route list is reviewed or the bridge is verifiably unavailable."
+      },
+      "confirmation": {
+        "required_for": [
+          "credential_setup",
+          "external_install",
+          "read_sensitive",
+          "write",
+          "write_remote",
+          "publish",
+          "overwrite",
+          "delete",
+          "arbitrary_execution",
+          "destructive"
+        ],
+        "notes": "Approve the effective API destination and credential setup separately. For each action confirm the account or workspace, brand, exact content and destinations. Publishing, scheduling (including scheduledAt), retry, recurring agents, uploads, webhook delivery and deletion require their own exact-action approval. Unknown execution scope retains its gate; review the effective REST routes before using api-request. These are operator requirements, not server-enforced approvals."
+      },
+      "risk_tags": [
+        "sensitive-read",
+        "remote-write",
+        "publish-capable",
+        "overwrite-capable",
+        "delete-capable",
+        "destructive-capable",
+        "arbitrary-execution",
+        "local-file-egress",
+        "dynamic-api-scope-unverified",
+        "paid-backend"
+      ],
+      "maturity": "listed",
+      "last_verified": "2026-10-08",
+      "evidence": [
+        "https://github.com/Autoposting-ai/autoposting-cli/blob/da104175c6545d521f33d4e06847674daa364458/packages/cli/README.md",
+        "https://github.com/Autoposting-ai/autoposting-cli/blob/da104175c6545d521f33d4e06847674daa364458/packages/cli/package.json",
+        "https://github.com/Autoposting-ai/autoposting-cli/blob/da104175c6545d521f33d4e06847674daa364458/packages/cli/src/mcp/server.ts",
+        "https://github.com/Autoposting-ai/autoposting-cli/blob/da104175c6545d521f33d4e06847674daa364458/packages/cli/src/mcp/tools.ts",
+        "https://github.com/Autoposting-ai/autoposting-cli/blob/da104175c6545d521f33d4e06847674daa364458/packages/cli/src/mcp/handler.ts",
+        "https://github.com/Autoposting-ai/autoposting-cli/blob/da104175c6545d521f33d4e06847674daa364458/packages/cli/src/lib/api-routes.ts",
+        "https://github.com/Autoposting-ai/autoposting-cli/blob/da104175c6545d521f33d4e06847674daa364458/packages/cli/src/commands/doctor.ts",
+        "https://github.com/Autoposting-ai/autoposting-cli/blob/da104175c6545d521f33d4e06847674daa364458/packages/cli/src/commands/auth.ts",
+        "https://github.com/Autoposting-ai/autoposting-cli/blob/da104175c6545d521f33d4e06847674daa364458/packages/sdk/src/client.ts",
+        "https://github.com/Autoposting-ai/autoposting-cli/blob/da104175c6545d521f33d4e06847674daa364458/packages/sdk/src/resources/clips.ts",
+        "https://registry.npmjs.org/@autoposting.ai%2fcli/0.4.0",
+        "https://autoposting.ai/pricing"
+      ],
+      "health_check": "After separately approved installation, ap doctor --json checks local credential presence and public API health; it is not authenticated MCP validation and can report stored CLI profiles that MCP startup ignores. The source describes an array of name/status/value objects; no output was observed here. A minimal account read still needs separate sensitive-read approval.",
+      "uninstall": {
+        "instructions": "Remove the client MCP entry and its environment key, stop only the owned server process, and uninstall the global @autoposting.ai/cli package if owned by this setup. Revoke the key through the provider separately. General CLI stored profiles require separate local cleanup; ap auth logout removes a local profile rather than revoking its key. Remote account content remains, and backend revocation and cleanup steps are untested.",
         "removes_user_data": false
       }
     },

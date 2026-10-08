@@ -72,6 +72,12 @@ The catalog must describe the full surface; it does not disable tools or enforce
 - [ ] `arbitrary_execution`
 - [ ] `oauth`
 
+If execution scope is unresolved, propose `arbitrary_execution: null` and
+`capability_uncertainty.arbitrary_execution` with the specific missing evidence.
+The [version 3 contract](../../docs/integrations-guide.md#catalog-capability-semantics)
+retains execution confirmation and risk gates; unknown is not false. Other
+capability fields remain booleans.
+
 - `details`:
   <!--
   Required non-empty list. Describe the tool's full reachable surface area,

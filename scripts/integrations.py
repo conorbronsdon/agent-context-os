@@ -22,6 +22,7 @@ COMPONENT_MANIFEST_PATH = ROOT / "components" / "manifest.json"
 FRESHNESS_REVIEW_DAYS = 90
 FRESHNESS_DUE_SOON_DAYS = 30
 FRESHNESS_STATES = ("current", "due_soon", "stale")
+CATALOG_SCHEMA_VERSION = 3
 
 KINDS = {
     "mcp_server",
@@ -132,7 +133,7 @@ def load_entry_catalog(directory: Path = ENTRY_DIR) -> dict[str, Any]:
             )
         entries.append(entry)
     catalog = {
-        "schema_version": 2,
+        "schema_version": CATALOG_SCHEMA_VERSION,
         "integrations": sorted(entries, key=lambda item: item["id"]),
     }
     validate_catalog(catalog)
@@ -256,8 +257,8 @@ def validate_catalog(catalog: Any) -> None:
     if not isinstance(catalog, dict):
         raise CatalogError("catalog: expected an object")
     require_exact_keys(catalog, {"schema_version", "integrations"}, "catalog")
-    if catalog["schema_version"] != 2 or type(catalog["schema_version"]) is not int:
-        raise CatalogError("catalog.schema_version: expected integer 2")
+    if type(catalog["schema_version"]) is not int or catalog["schema_version"] not in (2, 3):
+        raise CatalogError("catalog.schema_version: expected integer 2 or 3")
     if not isinstance(catalog["integrations"], list) or not catalog["integrations"]:
         raise CatalogError("catalog.integrations: expected a non-empty array")
 
@@ -273,7 +274,10 @@ def validate_catalog(catalog: Any) -> None:
         location = f"catalog.integrations[{index}]"
         if not isinstance(item, dict):
             raise CatalogError(f"{location}: expected an object")
-        require_exact_keys(item, expected | ({"host_evidence"} if "host_evidence" in item else set()), location)
+        optional_fields = {"host_evidence"}
+        if catalog["schema_version"] == 3:
+            optional_fields.add("capability_uncertainty")
+        require_exact_keys(item, expected | (optional_fields & set(item)), location)
         for field in ("name", "summary", "health_check"):
             require_safe_text(item[field], f"{location}.{field}")
         if any(character in item["name"] for character in "|[]"):
@@ -378,9 +382,19 @@ def validate_catalog(catalog: Any) -> None:
             raise CatalogError(f"{location}.capabilities: expected an object")
         require_exact_keys(capabilities, CAPABILITY_FIELDS, f"{location}.capabilities")
         for field in CAPABILITY_FIELDS - {"details"}:
+            if (catalog["schema_version"] == 3 and field == "arbitrary_execution"
+                    and capabilities[field] is None):
+                continue
             if type(capabilities[field]) is not bool:
                 raise CatalogError(f"{location}.capabilities.{field}: expected a boolean")
         require_string_list(capabilities["details"], f"{location}.capabilities.details", nonempty=True)
+        unknown = {field for field in CAPABILITY_FIELDS - {"details"} if capabilities[field] is None}
+        uncertainty = item.get("capability_uncertainty", {})
+        if not isinstance(uncertainty, dict):
+            raise CatalogError(f"{location}.capability_uncertainty: expected an object")
+        require_exact_keys(uncertainty, unknown, f"{location}.capability_uncertainty")
+        for field, reason in uncertainty.items():
+            require_safe_text(reason, f"{location}.capability_uncertainty.{field}")
 
         confirmation = item["confirmation"]
         if not isinstance(confirmation, dict):
@@ -397,7 +411,7 @@ def validate_catalog(catalog: Any) -> None:
         ):
             raise CatalogError(f"{location}.confirmation.notes: may not waive structured confirmation gates")
         for capability, confirmation_name in CONFIRMATION_BY_CAPABILITY.items():
-            if capabilities[capability] and confirmation_name not in confirmation["required_for"]:
+            if capabilities[capability] is not False and confirmation_name not in confirmation["required_for"]:
                 raise CatalogError(
                     f"{location}: {capability} capability requires {confirmation_name!r} confirmation"
                 )
@@ -406,13 +420,13 @@ def validate_catalog(catalog: Any) -> None:
         if bool(boundary["writes"]) != capabilities["write"]:
             raise CatalogError(f"{location}: data writes and write capability must agree")
         for capability in ("remote_write", "publish", "overwrite", "delete", "arbitrary_execution"):
-            if capabilities[capability] and not capabilities["write"]:
+            if capabilities[capability] is not False and not capabilities["write"]:
                 raise CatalogError(f"{location}: {capability} capability requires write capability")
         if capabilities["publish"] and not capabilities["remote_write"]:
             raise CatalogError(f"{location}: publish capability requires remote_write capability")
         if capabilities["sensitive_read"] and not capabilities["read"]:
             raise CatalogError(f"{location}: sensitive_read capability requires read capability")
-        if any(capabilities[field] for field in ("overwrite", "delete", "arbitrary_execution")) and not capabilities["destructive"]:
+        if any(capabilities[field] is not False for field in ("overwrite", "delete", "arbitrary_execution")) and not capabilities["destructive"]:
             raise CatalogError(f"{location}: overwrite, delete, and arbitrary_execution require destructive capability")
         if capabilities["oauth"] and not boundary["credentials"]:
             raise CatalogError(f"{location}: oauth capability requires a credential boundary")
@@ -425,7 +439,7 @@ def validate_catalog(catalog: Any) -> None:
         if not all(ID_PATTERN.fullmatch(tag) for tag in item["risk_tags"]):
             raise CatalogError(f"{location}.risk_tags: expected kebab-case tags")
         for capability, risk_tag in RISK_TAG_BY_CAPABILITY.items():
-            if capabilities[capability] and risk_tag not in item["risk_tags"]:
+            if capabilities[capability] is not False and risk_tag not in item["risk_tags"]:
                 raise CatalogError(f"{location}: {capability} capability requires {risk_tag!r} risk tag")
 
         semantic_text = " ".join(
@@ -444,7 +458,7 @@ def validate_catalog(catalog: Any) -> None:
             "oauth": r"\boauth\b",
         }
         for capability, pattern in semantic_requirements.items():
-            if re.search(pattern, semantic_text) and not capabilities[capability]:
+            if re.search(pattern, semantic_text) and capabilities[capability] is False:
                 raise CatalogError(f"{location}: metadata describes {capability} but the typed capability is false")
 
         uninstall = item["uninstall"]
@@ -478,7 +492,9 @@ def validate_catalog(catalog: Any) -> None:
             raise CatalogError(f"{location}.last_verified: future dates are not allowed")
 
 
-def yes_no(value: bool) -> str:
+def yes_no(value: bool | None) -> str:
+    if value is None:
+        return "Unknown"
     return "Yes" if value else "No"
 
 
@@ -606,7 +622,7 @@ def render_reference(catalog: dict[str, Any]) -> str:
             f"| [{name}]({item['source_url']}) | `{item['kind']}` | "
             f"{item['maturity']} | {yes_no(caps['write'])} | {yes_no(caps['remote_write'])} | "
             f"{yes_no(caps['publish'])} | {yes_no(caps['sensitive_read'])} | "
-            f"{yes_no(caps['destructive'])} | {item['last_verified']} |"
+            f"{yes_no(caps['destructive'])} | {yes_no(caps['arbitrary_execution'])} | {item['last_verified']} |"
         )
         agents = ", ".join(f"`{agent}`" for agent in item["supported_agents"])
         prerequisites = "; ".join(map(markdown_text, item["installation"]["prerequisites"])) or "None"
@@ -615,10 +631,14 @@ def render_reference(catalog: dict[str, Any]) -> str:
         writes = "; ".join(map(markdown_text, item["data_boundary"]["writes"])) or "None"
         details = "\n".join(f"- {markdown_text(detail)}" for detail in caps["details"])
         signals = ", ".join(
-            name.replace("_", " ")
+            name.replace("_", " ") + (" (unknown; gate required)" if caps[name] is None else "")
             for name in ("sensitive_read", "remote_write", "overwrite", "delete", "arbitrary_execution", "oauth")
-            if caps[name]
+            if caps[name] is not False
         ) or "None"
+        uncertainty = "".join(
+            f"- **Unverified capability ({name.replace('_', ' ')}):** {markdown_text(reason)}\n"
+            for name, reason in sorted(item.get("capability_uncertainty", {}).items())
+        )
         evidence = "; ".join(f"[{index + 1}]({url})" for index, url in enumerate(item["evidence"]))
         required_for = ", ".join(f"`{gate}`" for gate in item["confirmation"]["required_for"]) or "None"
         host_evidence = "".join(
@@ -637,6 +657,7 @@ def render_reference(catalog: dict[str, Any]) -> str:
             f"- **Reads:** {reads}\n"
             f"- **Writes / external effects:** {writes}\n"
             f"- **Typed safety signals:** {signals}\n"
+            f"{uncertainty}"
             f"- **Required confirmation gates:** {required_for}\n"
             f"- **Confirmation:** {markdown_text(item['confirmation']['notes'])}\n"
             f"- **Risk tags:** {', '.join(f'`{tag}`' for tag in item['risk_tags'])}\n"
@@ -655,8 +676,10 @@ def render_reference(catalog: dict[str, Any]) -> str:
         "data boundary, and side effects before opting in. `verified` means the catalog metadata "
         "was checked against the linked source on the stated date; it is not a live authentication "
         "or end-to-end test. `listed` and `experimental` are leads, not endorsements.\n\n"
-        "| Integration | Kind | Maturity | Writes | Remote writes | Publishes | Sensitive reads | Destructive | Last verified |\n"
-        "|---|---|---|---:|---:|---:|---:|---:|---|\n"
+        "An `Unknown` execution capability is unresolved, not absent: its confirmation "
+        "and risk gates remain required. See [catalog capability semantics](../docs/integrations-guide.md#catalog-capability-semantics).\n\n"
+        "| Integration | Kind | Maturity | Writes | Remote writes | Publishes | Sensitive reads | Destructive | Arbitrary execution | Last verified |\n"
+        "|---|---|---|---:|---:|---:|---:|---:|---:|---|\n"
         + "\n".join(rows)
         + "\n\n"
         + "\n\n".join(section.rstrip("\n") for section in sections)
