@@ -359,6 +359,25 @@ the unmodified release template, driven by
 `adapters/devin/cloud_lifecycle_conformance.py`. Review has its own fixtures and
 does not inherit either result.
 
+For each mutating phase the lifecycle harness requires the following:
+
+- Every pushed commit before approval only adds pending inputs and proposals.
+- The proposal stays within that phase's allowed paths: setup touches only
+  `identity/lifecycle-fixture.md` and `state/current.md`, and update and end
+  each touch one `sessions/` file.
+- The branch has not moved when the approval is sent.
+
+After Devin applies, the harness replays the same approved proposal with the
+fixture's kernel at the pending commit. Devin's tree must match that replay, and
+so must its receipt's ID, digest, runtime, file hashes, Git heads and
+invariants. The receipt's `applied_at` must also fall after the approval was
+sent, allowing for clock skew.
+
+The wrong-digest and stale checks run the kernel locally, so they test the
+kernel, not Devin. The fresh-session handoff reads a parentless handoff branch
+that excludes pending artifacts. It must quote the full saved next action, and
+every pre-existing ref must be unchanged after the sessions close.
+
 ## Review conformance fixture
 
 `adapters/devin/review-fixture/` holds two inert control sets for the Review

@@ -4,11 +4,17 @@ One API-created cloud session runs the shipped setup/start/update/end skills
 against a disposable run branch of a public fixture that holds the unmodified
 Context OS release template. For each mutating phase Devin creates exactly one
 kernel proposal, pushes only its inputs and proposal, and stops. The harness
-fetches the branch anonymously, validates the proposal, confirms that nothing
-was applied, proves a wrong digest is rejected, and only then sends a message
-approving the exact digest. Devin applies in the cloud and pushes the result,
-which the harness checks file by file. A fresh session must then recover the
-saved next action without changing the branch.
+fetches the branch anonymously and checks every pushed commit, validates the
+proposal and its path scope, confirms that nothing was applied, proves a wrong
+digest is rejected, rechecks that the branch has not moved, and only then sends
+a message approving the exact digest. Devin applies in the cloud and pushes the
+result. The harness replays the same approved proposal with the fixture's own
+kernel at the pending commit and requires Devin's tree and receipt to match that
+independent replay, with a receipt timestamp after the approval was sent.
+
+Devin then publishes a parentless handoff branch without pending artifacts, and
+a fresh session must recover the saved next action from it without changing any
+branch. Every pre-existing ref must be unchanged after the sessions close.
 
 Account, repository, and active-build identity come from the Devin v3 API.
 Branch content comes from Git over HTTPS, not the GitHub REST API. Evidence
@@ -28,7 +34,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Mapping, Sequence
 
@@ -47,9 +53,16 @@ RECEIPT_PREFIX = ".context-os/receipts/"
 DIGEST_RE = re.compile(r"[0-9a-f]{64}")
 SESSION_ID_RE = re.compile(r"devin-[A-Za-z0-9_-]+|[0-9a-f]{32}")
 SAFE_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,128}")
+# A standalone 32-hex token (a v3 session ID); 40-hex SHAs and 64-hex digests stay intact.
+HEX32_RE = re.compile(r"(?<![0-9A-Fa-f])[0-9a-f]{32}(?![0-9A-Fa-f])")
 SETUP_PRIORITY = "Verify synthetic portable continuity."
+SETUP_PATHS = frozenset({"identity/lifecycle-fixture.md", "state/current.md"})
+SESSION_FILE_RE = re.compile(r"sessions/\d{4}-\d{2}-\d{2}\.md")
 WRONG_DIGEST_TEXT = "--confirm must exactly match"
 STALE_TEXT = "refusing stale proposal; file changed"
+CLOCK_SKEW_SECONDS = 120
+RECEIPT_FIELDS = ("schema_version", "proposal_id", "proposal_digest", "runtime", "invariants_checked")
+HANDOFF_READY = "CONTEXTOS_HANDOFF_READY"
 
 GitRunner = Callable[[Sequence[str], Path], subprocess.CompletedProcess]
 KernelRunner = Callable[[Sequence[str], Path], subprocess.CompletedProcess]
@@ -75,6 +88,49 @@ def default_kernel(args: Sequence[str], cwd: Path) -> subprocess.CompletedProces
 
 def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def comparable(snapshot: Mapping[str, str]) -> dict[str, str]:
+    """Paths that both a pushed commit and a local replay must agree on.
+
+    Kernel-internal state other than pending inputs and proposals (journals,
+    locks, receipts) is excluded; receipts are compared field by field.
+    """
+    return {path: value for path, value in snapshot.items()
+            if not path.startswith(".context-os/") or path.startswith(PENDING_PREFIXES)}
+
+
+def without_pending(snapshot: Mapping[str, str]) -> dict[str, str]:
+    return {path: value for path, value in snapshot.items() if not path.startswith(PENDING_PREFIXES)}
+
+
+def parse_time(value: object) -> datetime:
+    if not isinstance(value, str):
+        raise HarnessError("receipt applied_at is missing")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise HarnessError("receipt applied_at is not an ISO timestamp") from exc
+    if parsed.tzinfo is None:
+        raise HarnessError("receipt applied_at has no timezone")
+    return parsed
+
+
+def files_changed(receipt: Mapping[str, object]) -> list[tuple]:
+    entries = receipt.get("files_changed")
+    if not isinstance(entries, list):
+        raise HarnessError("receipt files_changed is missing")
+    result = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise HarnessError("receipt files_changed entry is invalid")
+        result.append((entry.get("path"), entry.get("sha256_before"), entry.get("sha256_after")))
+    return sorted(result, key=lambda item: str(item[0]))
+
+
+def final_marker_line(message: str) -> str:
+    lines = [line.strip() for line in message.splitlines() if line.strip()]
+    return lines[-1].strip("`* ") if lines else ""
 
 
 class FixtureClone:
@@ -111,6 +167,14 @@ class FixtureClone:
         self.checkout(self.fixture_sha)
         return self.run("rev-parse", f"{self.fixture_sha}^{{tree}}").strip()
 
+    def refs(self) -> dict[str, str]:
+        refs = {}
+        for line in self.run("ls-remote", "origin").splitlines():
+            if "\t" in line:
+                sha, ref = line.split("\t", 1)
+                refs[ref.strip()] = sha.strip()
+        return refs
+
     def remote_head(self, branch: str) -> str | None:
         lines = self.run("ls-remote", "origin", f"refs/heads/{branch}").split()
         return lines[0] if lines else None
@@ -125,6 +189,12 @@ class FixtureClone:
     def changed(self, before: str, after: str) -> list[tuple[str, str]]:
         output = self.run("diff", "--name-status", "--no-renames", before, after)
         return [tuple(line.split("\t", 1)) for line in output.splitlines() if line]  # type: ignore[misc]
+
+    def commits(self, before: str, after: str) -> list[str]:
+        return [line for line in self.run("rev-list", "--reverse", f"{before}..{after}").split() if line]
+
+    def parents(self, sha: str) -> list[str]:
+        return self.run("rev-list", "--parents", "-n", "1", sha).split()[1:]
 
     def checkout(self, sha: str) -> None:
         self.run("checkout", "--quiet", "--force", "--detach", sha)
@@ -165,6 +235,16 @@ def require_next_action(document: dict, fact: str) -> None:
     raise HarnessError("end did not save the handoff fact as the next action")
 
 
+def require_path_scope(document: dict, phase: str) -> None:
+    paths = [change["path"] for change in document["changes"]]
+    if phase == "setup":
+        ok = sorted(paths) == sorted(SETUP_PATHS)
+    else:
+        ok = len(paths) == 1 and SESSION_FILE_RE.fullmatch(paths[0]) is not None
+    if not ok:
+        raise HarnessError(f"{phase} proposal changes paths outside its allowed scope")
+
+
 def load_proposal(root: Path, relative: str, phase: str) -> dict:
     raw = (root / relative).read_bytes()
     if len(raw) > 2_000_000:
@@ -190,11 +270,12 @@ def session_rules(repository: str, fixture_sha: str, branch: str) -> str:
     return (
         "This is an explicitly authorized synthetic Context OS lifecycle fixture in the public "
         f"repository {repository}. Work only on the branch {branch}: create it from commit "
-        f"{fixture_sha} and push it to origin. Never push to main or any other branch, never open "
-        "a pull request, never force-push, and never invoke Devin Review. Run kernel commands only "
-        "as `bash scripts/contextos.sh ...` from the repository root. Never run `apply` unless a "
-        "later message from me gives the exact proposal digest. Do not use host-native memory or "
-        "Knowledge as input. "
+        f"{fixture_sha} and push it to origin. Never push to main or any other branch unless a "
+        "later message from me names it, never open a pull request, never force-push, and never "
+        "invoke Devin Review. Run kernel commands only as `bash scripts/contextos.sh ...` from the "
+        "repository root. Never run `apply` unless a later message from me gives the exact proposal "
+        "digest. Do not use host-native memory or Knowledge as input. End every reply with the "
+        "requested marker alone on its final line. "
     )
 
 
@@ -210,14 +291,15 @@ def phase_prompt(phase: str, handoff_fact: str) -> str:
     }
     if phase == "start":
         return ("@skills:context-start Read the continuity inventory and summarize it. Make no "
-                "changes, commits, or pushes. When finished, reply with `CONTEXTOS_PHASE_DONE start`.")
+                "changes, commits, or pushes. When finished, end your reply with "
+                "`CONTEXTOS_PHASE_DONE start` on its own final line.")
     return (
         f"@skills:context-{phase} {detail[phase]} Create exactly one kernel proposal with "
         "`bash scripts/contextos.sh propose`, writing its payload under .context-os/inputs. Then "
         "force-add only the new files under .context-os/inputs/ and .context-os/proposals/ "
         "(`git add -f`), commit them, and push the branch. Do not apply it or change any other "
-        "file. Show the proposal diff and digest, reply with "
-        f"`CONTEXTOS_PHASE_DONE {phase} <proposal_digest>`, and stop."
+        "file. Show the proposal diff and digest, end your reply with "
+        f"`CONTEXTOS_PHASE_DONE {phase} <proposal_digest>` on its own final line, and stop."
     )
 
 
@@ -227,18 +309,33 @@ def approval_prompt(phase: str, proposal: str, digest: str) -> str:
         f"`bash scripts/contextos.sh apply {proposal} --confirm {digest} --runtime devin`. Then "
         "stage every file the apply changed (`git add -A`), force-add the one new receipt under "
         ".context-os/receipts/ (`git add -f`), commit, and push the branch. Change nothing else. "
-        f"Reply with `CONTEXTOS_APPLIED {phase}` and stop."
+        f"End your reply with `CONTEXTOS_APPLIED {phase}` on its own final line and stop."
+    )
+
+
+def handoff_branch_prompt(branch: str, handoff_branch: str) -> str:
+    return (
+        f"Create an orphan branch {handoff_branch} from the current tree of {branch}: run "
+        f"`git checkout --orphan {handoff_branch}`, then `git rm -r --cached --quiet "
+        ".context-os/inputs .context-os/proposals`, delete those two directories, and commit the "
+        "remaining tree as one parentless commit. Push only that branch, leave "
+        f"{branch} unchanged, end your reply with `{HANDOFF_READY}` on its own final line, and stop."
     )
 
 
 def handoff_prompt(repository: str, branch: str) -> str:
     return (
         "This is an explicitly authorized synthetic Context OS fixture in the public repository "
-        f"{repository}. Fetch and check out the existing branch {branch}, and stay on it. Make no "
-        "changes, commits, or pushes. @skills:context-start Read the saved session and report the "
-        "exact next action for the synthetic fixture, including its verification value. Then "
-        "reply with `CONTEXTOS_PHASE_DONE handoff`."
+        f"{repository}. Fetch and check out the existing branch {branch}, and use only that branch; "
+        "do not fetch or read other branches. Make no changes, commits, or pushes. "
+        "@skills:context-start Read the saved session and report the exact next action for the "
+        "synthetic fixture, quoting it in full, including its verification value. Then end your "
+        "reply with `CONTEXTOS_PHASE_DONE handoff` on its own final line."
     )
+
+
+def normalize_space(text: str) -> str:
+    return " ".join(text.split())
 
 
 class CloudLifecycleHarness:
@@ -247,16 +344,30 @@ class CloudLifecycleHarness:
         kernel: KernelRunner = default_kernel, poll_timeout: float = 1800,
         poll_interval: float = 15, settle_polls: int = 8,
         sleep: Callable[[float], None] = time.sleep,
+        clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
     ) -> None:
         self.api, self.clone, self.kernel = api, clone, kernel
         self.source_sha, self.branch = source_sha, branch
+        self.handoff_branch = "handoff/" + branch.split("/", 1)[-1]
         self.poll_timeout, self.poll_interval, self.settle_polls = poll_timeout, poll_interval, settle_polls
-        self.sleep = sleep
+        self.sleep, self.clock = sleep, clock
         self.controls: dict[str, object] = {}
+        self.sessions: list[str] = []
+
+    # Redaction ---------------------------------------------------------------------
+
+    def redact(self, text: object) -> str:
+        value = safe_error_detail(text)
+        for session_id in self.sessions:
+            value = value.replace(session_id, "{devin_id}")
+        org_id = getattr(self.api.client, "org_id", "")
+        if org_id:
+            value = value.replace(org_id, "{org_id}")
+        return HEX32_RE.sub("{id}", value)
 
     # Devin API helpers -------------------------------------------------------------
 
-    def create_session(self, prompt: str, title: str, sessions: list[str]) -> tuple[str, str | None]:
+    def create_session(self, prompt: str, title: str) -> tuple[str, str | None]:
         created = self.api.client.request("POST", f"{self.api.org_path}/sessions", {
             "prompt": prompt, "repos": [self.clone.repository],
             "structured_output_required": False, "title": title,
@@ -265,7 +376,7 @@ class CloudLifecycleHarness:
         # Track any plausible ID before validating it, so a session the API
         # created is still archived if its ID format is unexpected.
         if SAFE_ID_RE.fullmatch(session_id):
-            sessions.append(session_id)
+            self.sessions.append(session_id)
         if not SESSION_ID_RE.fullmatch(session_id):
             raise HarnessError("session creation omitted a valid Devin session ID")
         if created.get("org_id") != self.api.client.org_id:
@@ -283,33 +394,51 @@ class CloudLifecycleHarness:
         return observed
 
     def wait_for(self, session_id: str, pattern: str, after: set[str]) -> str:
-        """Return Devin's new text once a reply carries the requested completion marker."""
+        """Return Devin's new text once its newest message ends with the completion marker.
+
+        A marker counts only as the last non-empty line of the newest Devin
+        message after the relevant user message, so an acknowledgement that
+        merely mentions the marker does not complete a phase.
+        """
         marker = re.compile(pattern)
         deadline = time.monotonic() + self.poll_timeout
         while time.monotonic() < deadline:
             new = [item for item in self.api.messages(session_id)
                    if item.get("source") == "devin" and str(item.get("event_id")) not in after]
-            text = "\n".join(str(item.get("message", "")) for item in new)
-            if marker.search(text):
-                return text
+            if new and marker.fullmatch(final_marker_line(str(new[-1].get("message", "")))):
+                return "\n".join(str(item.get("message", "")) for item in new)
             state = self.api.session(session_id)
             if state.get("status") in {"error", "exit", "suspended"}:
                 raise HarnessError("Devin session ended before the phase completed")
             self.sleep(self.poll_interval)
         raise HarnessError("timed out waiting for Devin to complete the phase")
 
+    def close_sessions(self, cleanup: dict[str, bool], closed: set[str],
+                       control_error: BaseException | None) -> list[str]:
+        """Archive (or terminate) every created session; never stop at the first error."""
+        errors = []
+        for session_id in self.sessions:
+            if session_id in closed:
+                continue
+            closed.add(session_id)
+            try:
+                self.api.close_session(session_id, cleanup, control_error)
+            except Exception as exc:  # noqa: BLE001 - every session must get its cleanup attempt
+                errors.append(self.redact(exc))
+        return errors
+
     # Git helpers -------------------------------------------------------------------
 
-    def wait_for_push(self, previous: str | None) -> str:
+    def wait_for_push(self, branch: str, previous: str | None) -> str:
         for _ in range(max(1, self.settle_polls)):
-            head = self.clone.remote_head(self.branch)
+            head = self.clone.remote_head(branch)
             if head and head != previous:
                 return head
             self.sleep(self.poll_interval)
-        raise HarnessError("Devin reported completion without pushing the run branch")
+        raise HarnessError("Devin reported completion without pushing the branch")
 
     def advance(self, previous: str) -> str:
-        head = self.wait_for_push(previous)
+        head = self.wait_for_push(self.branch, previous)
         fetched = self.clone.fetch(self.branch)
         if fetched != head or not self.clone.is_ancestor(previous, head):
             raise HarnessError("run branch was rewritten instead of advanced")
@@ -321,10 +450,19 @@ class CloudLifecycleHarness:
                        facts: Mapping[str, str]) -> tuple[str, dict]:
         reply = self.wait_for(session_id, rf"CONTEXTOS_PHASE_DONE {phase} [0-9a-f]{{64}}", after)
         head = self.advance(previous)
+        commits = self.clone.commits(previous, head)
+        if not commits:
+            raise HarnessError(f"{phase} pushed no commit")
+        for commit in commits:
+            parents = self.clone.parents(commit)
+            if len(parents) != 1:
+                raise HarnessError(f"{phase} pushed a merge or parentless commit")
+            changes = self.clone.changed(parents[0], commit)
+            if not changes or any(status != "A" or not path.startswith(PENDING_PREFIXES)
+                                  for status, path in changes):
+                raise HarnessError(f"{phase} pushed a commit beyond new pending inputs and proposals")
+        self.controls[f"{phase}_no_preapproval_commits"] = "passed"
         changes = self.clone.changed(previous, head)
-        if not changes or any(status != "A" or not path.startswith(PENDING_PREFIXES)
-                              for status, path in changes):
-            raise HarnessError(f"{phase} pushed changes beyond new pending inputs and proposals")
         proposals = [path for _, path in changes
                      if path.startswith(".context-os/proposals/") and path.endswith(".json")]
         if len(proposals) != 1:
@@ -337,6 +475,8 @@ class CloudLifecycleHarness:
         digest = document["proposal_digest"]
         if digest not in reply:
             raise HarnessError(f"{phase} reported a digest that differs from the pushed proposal")
+        require_path_scope(document, phase)
+        self.controls[f"{phase}_path_scope"] = "passed"
         if phase == "setup":
             require_fact(document, facts["setup"])
             require_fact(document, SETUP_PRIORITY, prefix="state/current.md")
@@ -357,9 +497,26 @@ class CloudLifecycleHarness:
             raise HarnessError("wrong-digest rejection mutated the fixture")
         self.clone.checkout(head)
 
+    def replay(self, pending_head: str, proposal: str, digest: str) -> tuple[dict[str, str], str, dict]:
+        """Apply the approved proposal with the fixture's kernel at the pending commit."""
+        self.clone.checkout(pending_head)
+        receipts_before = {path for path in self.clone.snapshot() if path.startswith(RECEIPT_PREFIX)}
+        result = self.kernel(["apply", proposal, "--confirm", digest, "--runtime", "devin"], self.clone.root)
+        if result.returncode:
+            raise HarnessError("independent kernel replay of the approved proposal failed")
+        snapshot = self.clone.snapshot()
+        added = [path for path in snapshot if path.startswith(RECEIPT_PREFIX)
+                 and path.endswith(".json") and path not in receipts_before]
+        if len(added) != 1:
+            raise HarnessError("independent kernel replay did not produce exactly one receipt")
+        receipt = json.loads((self.clone.root / added[0]).read_text(encoding="utf-8"))
+        self.clone.checkout(pending_head)
+        return comparable(snapshot), added[0], receipt
+
     def applied_phase(self, session_id: str, phase: str, pending_head: str, proposal: str,
-                      document: dict, before: dict[str, str], after: set[str]) -> tuple[str, dict]:
-        self.wait_for(session_id, rf"CONTEXTOS_APPLIED {phase}\b", after)
+                      document: dict, before: dict[str, str], after: set[str],
+                      approval_sent_at: datetime) -> tuple[str, dict]:
+        self.wait_for(session_id, rf"CONTEXTOS_APPLIED {phase}", after)
         head = self.advance(pending_head)
         changes = self.clone.changed(pending_head, head)
         proposed = {change["path"] for change in document["changes"]}
@@ -370,23 +527,46 @@ class CloudLifecycleHarness:
         if len(receipts) != 1 or other or any(status not in {"A", "M"} for status, _ in changes):
             raise HarnessError(f"{phase} apply pushed changes beyond the proposal and one receipt")
         self.clone.checkout(head)
+        devin_snapshot = self.clone.snapshot()
         receipt_raw = (self.clone.root / receipts[0]).read_bytes()
-        receipt = json.loads(receipt_raw.decode("utf-8"))
+        try:
+            receipt = json.loads(receipt_raw.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError) as exc:
+            raise HarnessError("pushed receipt is not valid JSON") from exc
         digest = document["proposal_digest"]
         if receipt.get("proposal_digest") != digest or receipt.get("runtime") != "devin":
             raise HarnessError("receipt does not bind the approved Devin proposal")
         expected = dict(before)
         for change in document["changes"]:
             expected[change["path"]] = sha256_bytes(change["after_text"].encode("utf-8"))
-        actual = {path: value for path, value in self.clone.snapshot().items()
-                  if not path.startswith(RECEIPT_PREFIX)}
+        actual = {path: value for path, value in devin_snapshot.items() if not path.startswith(RECEIPT_PREFIX)}
         expected = {path: value for path, value in expected.items() if not path.startswith(RECEIPT_PREFIX)}
         if actual != expected:
             raise HarnessError("apply changed unexpected files or produced incorrect content")
+
+        replay_tree, replay_receipt_path, replay_receipt = self.replay(pending_head, proposal, digest)
+        if comparable(devin_snapshot) != replay_tree:
+            raise HarnessError("apply result does not match an independent kernel replay")
+        if Path(receipts[0]).name != Path(replay_receipt_path).name:
+            raise HarnessError("receipt does not match an independent kernel replay (filename)")
+        if any(receipt.get(field) != replay_receipt.get(field) for field in RECEIPT_FIELDS) or \
+                files_changed(receipt) != files_changed(replay_receipt):
+            raise HarnessError("receipt does not match an independent kernel replay")
+        if receipt.get("git_head_before") != pending_head or receipt.get("git_head_after") != pending_head:
+            raise HarnessError("receipt is not bound to the pending proposal commit")
+        self.controls[f"{phase}_receipt_matches_replay"] = "passed"
+        applied_at = parse_time(receipt.get("applied_at"))
+        if applied_at < approval_sent_at - timedelta(seconds=CLOCK_SKEW_SECONDS):
+            raise HarnessError(f"{phase} receipt shows the apply happened before the approval was sent")
+        self.controls[f"{phase}_applied_after_approval"] = "passed"
+        self.clone.checkout(head)
         self.receipts_seen.add(receipts[0])
         return head, {
             "receipt": receipts[0], "receipt_sha256": sha256_bytes(receipt_raw),
             "receipt_proposal_digest": receipt["proposal_digest"], "receipt_runtime": receipt["runtime"],
+            "receipt_applied_at": receipt.get("applied_at"),
+            "approval_sent_at": approval_sent_at.isoformat(),
+            "receipt_matches_replay": True,
             "applied_files": {change["path"]: expected[change["path"]] for change in document["changes"]},
         }
 
@@ -400,6 +580,25 @@ class CloudLifecycleHarness:
             raise HarnessError("stale rejection mutated the fixture")
         self.clone.checkout(head)
 
+    def handoff_branch_ready(self, session_id: str, applied_head: str) -> str:
+        after = self.send(session_id, handoff_branch_prompt(self.branch, self.handoff_branch))
+        self.wait_for(session_id, re.escape(HANDOFF_READY), after)
+        remote = self.wait_for_push(self.handoff_branch, None)
+        head = self.clone.fetch(self.handoff_branch)
+        if head != remote:
+            raise HarnessError("handoff branch changed while it was being read")
+        if self.clone.parents(head):
+            raise HarnessError("handoff branch is not a single parentless commit")
+        if self.clone.remote_head(self.branch) != applied_head:
+            raise HarnessError("creating the handoff branch changed the run branch")
+        self.clone.checkout(applied_head)
+        expected = without_pending(self.clone.snapshot())
+        self.clone.checkout(head)
+        if self.clone.snapshot() != expected:
+            raise HarnessError("handoff branch tree does not equal the applied tree without pending artifacts")
+        self.controls["handoff_branch_isolated"] = "passed"
+        return head
+
     def execute(self) -> dict:
         controls = self.controls
         handoff_value = secrets.token_hex(16)
@@ -411,19 +610,27 @@ class CloudLifecycleHarness:
             "schema_version": 1, "runtime": "devin", "surface": "session", "harness": "cloud-lifecycle",
             "source_sha": self.source_sha, "repository": self.clone.repository,
             "fixture_sha": self.clone.fixture_sha, "branch": self.branch,
-            "operator": "harness-exact-digest", "started_at": datetime.now(timezone.utc).isoformat(),
+            "handoff_branch": self.handoff_branch,
+            "operator": "harness-exact-digest", "started_at": self.clock().isoformat(),
+            "clock_skew_allowance_seconds": CLOCK_SKEW_SECONDS,
             "phases": {}, "controls": controls,
             "limits": [
                 "Skill expansion is evidenced by each proposal's workflow field and kernel output, "
                 "not by a session trajectory.",
-                "Pending inputs and proposals stay committed under .context-os/ on the run branch "
-                "during the handoff.",
+                "Wrong-digest and stale rejections run the fixture's kernel locally; they test the "
+                "kernel, not Devin's restraint.",
                 "Cloud sessions have no execution-authorization control; Devin's adherence to the "
-                "approval step is observed, not enforced.",
+                "approval step is observed through per-commit pushes and receipt timestamps, not "
+                "enforced.",
+                "The run branch remains fetchable in the same repository during the handoff; the "
+                "handoff session is instructed to use only the parentless handoff branch, which is "
+                "not enforced.",
             ],
         }
         self.receipts_seen: set[str] = set()
-        sessions: list[str] = []
+        cleanup: dict[str, bool] = {}
+        closed: set[str] = set()
+        cleanup_errors: list[str] = []
         try:
             self.api.verify_repository_access()
             controls["repository_access"] = "passed"
@@ -431,13 +638,16 @@ class CloudLifecycleHarness:
             result["active_build_id"] = str(build["build_id"])
             result["fixture_tree"] = self.clone.prepare()
             controls["exact_fixture_commit"] = "passed"
-            if self.clone.remote_head(self.branch) is not None:
-                raise HarnessError("run branch already exists")
+            if self.clone.remote_head(self.branch) is not None or \
+                    self.clone.remote_head(self.handoff_branch) is not None:
+                raise HarnessError("run or handoff branch already exists")
+            refs_before = self.clone.refs()
+            result["refs_before_count"] = len(refs_before)
             self.receipts_seen = {path for path in self.clone.snapshot() if path.startswith(RECEIPT_PREFIX)}
 
             rules = session_rules(self.clone.repository, self.clone.fixture_sha, self.branch)
             session_id, mode = self.create_session(rules + phase_prompt("setup", handoff_fact),
-                                                   "Context OS disposable Devin cloud lifecycle", sessions)
+                                                   "Context OS disposable Devin cloud lifecycle")
             result["devin_mode"] = mode
             result["session_id_sha256"] = sha256_bytes(session_id.encode())
             head, after = self.clone.fixture_sha, set()
@@ -445,7 +655,7 @@ class CloudLifecycleHarness:
                 if phase != "setup":
                     after = self.send(session_id, phase_prompt(phase, handoff_fact))
                 if phase == "start":
-                    self.wait_for(session_id, r"CONTEXTOS_PHASE_DONE start\b", after)
+                    self.wait_for(session_id, r"CONTEXTOS_PHASE_DONE start", after)
                     for _ in range(max(1, self.settle_polls // 2)):
                         if self.clone.remote_head(self.branch) != head:
                             raise HarnessError("start pushed to the run branch")
@@ -459,36 +669,52 @@ class CloudLifecycleHarness:
                 self.clone.checkout(pending_head)
                 before = self.clone.snapshot()
                 self.wrong_digest_rejected(pending_head, path, digest)
-                controls[f"{phase}_wrong_digest_rejected"] = "passed"
+                controls[f"{phase}_kernel_wrong_digest_rejected"] = "passed"
+                if self.clone.remote_head(self.branch) != pending_head:
+                    raise HarnessError("run branch moved after the proposal and before approval")
+                approval_sent_at = self.clock()
                 after = self.send(session_id, approval_prompt(phase, path, digest))
-                head, applied = self.applied_phase(session_id, phase, pending_head, path, document, before, after)
+                head, applied = self.applied_phase(session_id, phase, pending_head, path, document,
+                                                   before, after, approval_sent_at)
                 controls[f"{phase}_proposal_apply"] = "passed"
                 if phase != "setup":
                     self.stale_rejected(head, path, digest)
-                    controls[f"{phase}_stale_rejected"] = "passed"
+                    controls[f"{phase}_kernel_stale_rejected"] = "passed"
                 result["phases"][phase] = {  # type: ignore[index]
                     "proposal": path, "proposal_digest": digest,
                     "proposal_sha256": sha256_bytes((self.clone.root / path).read_bytes()),
                     "pending_head": pending_head, "applied_head": head, **applied,
                 }
 
-            handoff_id, _ = self.create_session(handoff_prompt(self.clone.repository, self.branch),
-                                                "Context OS disposable Devin cloud handoff", sessions)
+            handoff_head = self.handoff_branch_ready(session_id, head)
+            result["handoff_head"] = handoff_head
+            handoff_id, _ = self.create_session(handoff_prompt(self.clone.repository, self.handoff_branch),
+                                                "Context OS disposable Devin cloud handoff")
             result["handoff_session_id_sha256"] = sha256_bytes(handoff_id.encode())
-            answer = self.wait_for(handoff_id, r"CONTEXTOS_PHASE_DONE handoff\b", set())
+            answer = self.wait_for(handoff_id, r"CONTEXTOS_PHASE_DONE handoff", set())
             result["handoff_answer_sha256"] = sha256_bytes(answer.encode())
-            if handoff_value not in answer:
+            if normalize_space(handoff_fact) not in normalize_space(answer):
                 raise HarnessError("fresh session did not recover the saved next action")
+            if self.clone.remote_head(self.handoff_branch) != handoff_head:
+                raise HarnessError("handoff changed the handoff branch")
             if self.clone.remote_head(self.branch) != head:
                 raise HarnessError("handoff changed the run branch")
-            self.clone.checkout(head)
+            self.clone.checkout(handoff_head)
             holders = self.clone.holders(handoff_value)
-            if not any(path.startswith("sessions/") for path in holders) or any(
-                not path.startswith(("sessions/", ".context-os/")) for path in holders
-            ):
-                raise HarnessError("handoff value is not held by saved session files")
+            if not holders or any(not path.startswith("sessions/") for path in holders):
+                raise HarnessError("handoff value is not held only by saved session files")
             controls["handoff"] = "passed"
             result["final_head"] = head
+
+            cleanup_errors = self.close_sessions(cleanup, closed, None)
+            if cleanup_errors:
+                raise HarnessError("Devin session cleanup failed")
+            refs_after = self.clone.refs()
+            allowed = {f"refs/heads/{self.branch}", f"refs/heads/{self.handoff_branch}"}
+            if any(refs_after.get(ref) != sha for ref, sha in refs_before.items()) or \
+                    set(refs_after) - set(refs_before) - allowed:
+                raise HarnessError("refs changed outside the run and handoff branches")
+            controls["refs_unchanged"] = "passed"
 
             if self.api.active_build().get("build_id") != result["active_build_id"]:
                 raise HarnessError("the active Devin build changed during conformance")
@@ -498,22 +724,20 @@ class CloudLifecycleHarness:
             controls["run"] = "passed"
         except Exception as exc:
             controls["run"] = "failed"
-            result["failure"] = safe_error_detail(exc)
+            result["failure"] = self.redact(exc)
             raise
         finally:
-            cleanup: dict[str, bool] = {}
-            errors = []
-            for session_id in sessions:
-                try:
-                    self.api.close_session(session_id, cleanup, sys.exc_info()[1])
-                except HarnessError as exc:
-                    errors.append(safe_error_detail(exc))
-            controls["sessions_closed"] = "passed" if not errors and sessions else ("failed" if errors else "none")
+            cleanup_errors = cleanup_errors + self.close_sessions(cleanup, closed, sys.exc_info()[1])
+            if cleanup_errors:
+                controls["run"] = "failed"
+                result["cleanup_errors"] = cleanup_errors
+            controls["sessions_closed"] = (
+                "failed" if cleanup_errors else ("passed" if self.sessions else "none"))
             result["requests"] = list(self.api.client.requests)
-            result["finished_at"] = datetime.now(timezone.utc).isoformat()
+            result["finished_at"] = self.clock().isoformat()
             self.result = result
-            if errors:
-                raise HarnessError("; ".join(errors))
+            if cleanup_errors and sys.exc_info()[1] is None:
+                raise HarnessError("; ".join(cleanup_errors))
         return result
 
 
@@ -554,6 +778,7 @@ def main(
     remote_url: str | None = None, sleep: Callable[[float], None] = time.sleep,
 ) -> int:
     args = parse_args(argv)
+    result: dict = {}
     try:
         if not args.allow_live_devin_session or not args.allow_fixture_branch_push:
             raise HarnessError("cloud lifecycle conformance requires both explicit opt-in flags")
@@ -580,11 +805,14 @@ def main(
                     write_evidence(args.evidence, harness.result)
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
-    except (HarnessError, OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError) as exc:
+    except Exception as exc:  # noqa: BLE001 - report every failure as a safe, non-zero result
         print(f"Devin cloud lifecycle conformance failed safely: {safe_error_detail(exc)}", file=sys.stderr)
         return 1
+    if result.get("controls", {}).get("run") != "passed":
+        print("Devin cloud lifecycle conformance failed; see evidence", file=sys.stderr)
+        return 1
     print(f"Devin cloud lifecycle conformance passed; evidence: {args.evidence}")
-    return 0 if result.get("controls", {}).get("run") == "passed" else 1
+    return 0
 
 
 if __name__ == "__main__":

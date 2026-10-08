@@ -447,7 +447,7 @@ class DevinHarness:
             if archived.get("is_archived") is not True:
                 raise HarnessError("Devin did not confirm that the session was archived")
             controls["session_archived"] = True
-        except HarnessError as archive_error:
+        except Exception as archive_error:  # noqa: BLE001 - network errors must still reach termination
             try:
                 terminated = self.client.request(
                     "DELETE", f"{self.org_path}/sessions/{session_id}"
@@ -457,7 +457,7 @@ class DevinHarness:
                 if terminated.get("status") not in {"exit", "error", "suspended"}:
                     raise HarnessError("Devin did not confirm fallback session termination")
                 controls["session_terminated_after_archive_failure"] = True
-            except HarnessError as terminate_error:
+            except Exception as terminate_error:  # noqa: BLE001
                 raise HarnessError(
                     f"Devin cleanup failed: {control_detail}archive: "
                     f"{safe_error_detail(archive_error)}; fallback termination: "

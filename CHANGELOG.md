@@ -6,9 +6,13 @@
 - Devin cloud sessions are a first-class lifecycle host (#71). A new opt-in
   harness, `adapters/devin/cloud_lifecycle_conformance.py`, drives one API
   session through setup/start/update/end. For each mutation, Devin pushes one
-  proposal, the harness validates it and sends an exact-digest approval, and
-  Devin applies and pushes a runtime `devin` receipt. Wrong-digest and stale
-  rejections and a fresh-session handoff are checked against the pushed branch.
+  proposal. The harness checks every pushed commit and the phase's allowed
+  paths, then sends an exact-digest approval. Devin applies and pushes a runtime
+  `devin` receipt. The harness requires Devin's tree and receipt to match an
+  independent kernel replay of the approved proposal, and a receipt timestamp
+  after the approval. A fresh session reads a parentless handoff branch without
+  pending artifacts and must quote the saved next action. Refs outside the run
+  and handoff branches must be unchanged.
   Live runs on snapshot build `sbj-f04a9b4dd96a43ff806501a2bedd34bf`
   (`docs/evidence/devin-cloud-2026-10-08/`) passed this harness and the API
   instruction and skill harness. Cloud sessions check out only repositories
@@ -18,7 +22,9 @@
 - Devin API harnesses read repositories and snapshot builds from `/v3beta1`,
   where the v3 API now serves them, and accept the current 32-hex session IDs.
   The cloud harness tracks a created session before validating its ID, so
-  cleanup archives it even if the ID format is unexpected.
+  cleanup archives it even if the ID format is unexpected. Session cleanup falls
+  back to termination on network errors as well as API errors, every session is
+  attempted, and persisted failure text redacts session and organization IDs.
 
 ## [1.1.1] — 2026-10-07 — Devin CLI lifecycle support
 
