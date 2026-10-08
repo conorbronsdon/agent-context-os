@@ -10,7 +10,7 @@ digest is rejected, rechecks that the branch has not moved, and only then sends
 a message approving the exact digest. Devin applies in the cloud and pushes the
 result. The harness replays the same approved proposal with the fixture's own
 kernel at the pending commit and requires Devin's tree and receipt to match that
-independent replay, with a receipt timestamp after the approval was sent.
+independent replay, with receipt timing consistent with applying after the approval.
 
 Devin then publishes a parentless handoff branch without pending artifacts, and
 a fresh session must recover the saved next action from it without changing any
@@ -60,8 +60,8 @@ SETUP_PATHS = frozenset({"identity/lifecycle-fixture.md", "state/current.md"})
 SESSION_FILE_RE = re.compile(r"sessions/\d{4}-\d{2}-\d{2}\.md")
 WRONG_DIGEST_TEXT = "--confirm must exactly match"
 STALE_TEXT = "refusing stale proposal; file changed"
-# Hold each proposal before approving so an apply made right after the proposal
-# push cannot satisfy the ordering check; compare durations on single clocks.
+# Hold each proposal before approving to widen the margin of the timing-consistency
+# check, which compares durations measured on single clocks.
 APPROVAL_HOLD_SECONDS = 120
 ORDERING_TOLERANCE_SECONDS = 2
 RECEIPT_FIELDS = ("schema_version", "proposal_id", "proposal_digest", "runtime", "invariants_checked")
