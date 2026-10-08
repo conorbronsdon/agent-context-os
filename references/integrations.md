@@ -3,31 +3,34 @@
 
 These add-ons are **references, not bundled dependencies**. Setup does not install, activate, authenticate, or expand permissions for any entry. Review the current source, data boundary, and side effects before opting in. `verified` means the catalog metadata was checked against the linked source on the stated date; it is not a live authentication or end-to-end test. `listed` and `experimental` are leads, not endorsements.
 
-| Integration | Kind | Maturity | Writes | Remote writes | Publishes | Sensitive reads | Destructive | Last verified |
-|---|---|---|---:|---:|---:|---:|---:|---|
-| [Agent Skills](https://github.com/conorbronsdon/agent-skills) | `skill_catalog` | verified | Yes | No | No | No | Yes | 2026-08-15 |
-| [Agent Workspace](https://github.com/conorbronsdon/agent-workspace) | `workspace_template` | verified | Yes | No | No | No | Yes | 2026-08-15 |
-| [AI Tools for Creators](https://github.com/conorbronsdon/ai-tools-for-creators) | `resource_catalog` | listed | No | No | No | No | No | 2026-08-15 |
-| [Asana MCP](https://developers.asana.com/docs/mcp-server) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-09-03 |
-| [Atlassian Rovo MCP](https://support.atlassian.com/atlassian-ai-gateway/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-09-03 |
-| [Beads for Gemini CLI](https://beads.gascity.com/integrations/gemini) | `agent_extension` | verified | Yes | Yes | No | No | Yes | 2026-08-15 |
-| [GitHub MCP](https://github.com/github/github-mcp-server) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-18 |
-| [GitLab MCP](https://docs.gitlab.com/user/model_context_protocol/mcp_server/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-09-02 |
-| [Google Workspace CLI](https://github.com/googleworkspace/cli) | `connector` | verified | Yes | Yes | No | Yes | Yes | 2026-08-15 |
-| [Granola MCP](https://docs.granola.ai/help-center/sharing/integrations/mcp) | `mcp_server` | verified | No | No | No | Yes | No | 2026-08-15 |
-| [Linear MCP](https://linear.app/docs/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-18 |
-| [MarkItDown MCP](https://github.com/microsoft/markitdown/tree/main/packages/markitdown-mcp) | `mcp_server` | verified | No | No | No | Yes | No | 2026-08-24 |
-| [Notion MCP](https://developers.notion.com/guides/mcp/get-started-with-mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-15 |
-| [Obsidian CLI](https://obsidian.md/help/cli) | `editor_guide` | verified | Yes | Yes | Yes | Yes | Yes | 2026-08-15 |
-| [Pandoc](https://github.com/jgm/pandoc) | `connector` | verified | Yes | No | No | Yes | Yes | 2026-08-25 |
-| [Pi Dash](https://github.com/The-AI-Republic/pi-dash) | `agent_extension` | experimental | Yes | Yes | Yes | Yes | Yes | 2026-09-29 |
-| [Readwise MCP](https://docs.readwise.io/tools/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-18 |
-| [Shortcut MCP](https://www.shortcut.com/help/integrations/mcp-server/) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-30 |
-| [Slack MCP](https://docs.slack.dev/ai/slack-mcp-server/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | 2026-09-02 |
-| [Substack MCP](https://github.com/conorbronsdon/substack-mcp) | `mcp_server` | verified | Yes | Yes | Yes | Yes | No | 2026-08-15 |
-| [Todoist CLI](https://github.com/Doist/todoist-cli) | `connector` | verified | Yes | Yes | No | Yes | Yes | 2026-09-03 |
-| [Tolaria MCP](https://github.com/refactoringhq/tolaria) | `local_workspace` | verified | Yes | No | No | Yes | Yes | 2026-08-15 |
-| [Trello MCP](https://support.atlassian.com/trello/docs/connect-trello-to-ai-assistants-with-trello-mcp/) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | 2026-08-30 |
+An `Unknown` execution capability is unresolved, not absent: its confirmation and risk gates remain required. See [catalog capability semantics](../docs/integrations-guide.md#catalog-capability-semantics).
+
+| Integration | Kind | Maturity | Writes | Remote writes | Publishes | Sensitive reads | Destructive | Arbitrary execution | Last verified |
+|---|---|---|---:|---:|---:|---:|---:|---:|---|
+| [Agent Skills](https://github.com/conorbronsdon/agent-skills) | `skill_catalog` | verified | Yes | No | No | No | Yes | No | 2026-08-15 |
+| [Agent Workspace](https://github.com/conorbronsdon/agent-workspace) | `workspace_template` | verified | Yes | No | No | No | Yes | No | 2026-08-15 |
+| [AI Tools for Creators](https://github.com/conorbronsdon/ai-tools-for-creators) | `resource_catalog` | listed | No | No | No | No | No | No | 2026-08-15 |
+| [Asana MCP](https://developers.asana.com/docs/mcp-server) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | No | 2026-09-03 |
+| [Atlassian Rovo MCP](https://support.atlassian.com/atlassian-ai-gateway/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | No | 2026-09-03 |
+| [Autoposting CLI MCP](https://github.com/Autoposting-ai/autoposting-cli) | `mcp_server` | listed | Yes | Yes | Yes | Yes | Yes | Unknown | 2026-10-08 |
+| [Beads for Gemini CLI](https://beads.gascity.com/integrations/gemini) | `agent_extension` | verified | Yes | Yes | No | No | Yes | No | 2026-08-15 |
+| [GitHub MCP](https://github.com/github/github-mcp-server) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | No | 2026-08-18 |
+| [GitLab MCP](https://docs.gitlab.com/user/model_context_protocol/mcp_server/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | No | 2026-09-02 |
+| [Google Workspace CLI](https://github.com/googleworkspace/cli) | `connector` | verified | Yes | Yes | No | Yes | Yes | No | 2026-08-15 |
+| [Granola MCP](https://docs.granola.ai/help-center/sharing/integrations/mcp) | `mcp_server` | verified | No | No | No | Yes | No | No | 2026-08-15 |
+| [Linear MCP](https://linear.app/docs/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | No | 2026-08-18 |
+| [MarkItDown MCP](https://github.com/microsoft/markitdown/tree/main/packages/markitdown-mcp) | `mcp_server` | verified | No | No | No | Yes | No | No | 2026-08-24 |
+| [Notion MCP](https://developers.notion.com/guides/mcp/get-started-with-mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | No | 2026-08-15 |
+| [Obsidian CLI](https://obsidian.md/help/cli) | `editor_guide` | verified | Yes | Yes | Yes | Yes | Yes | Yes | 2026-08-15 |
+| [Pandoc](https://github.com/jgm/pandoc) | `connector` | verified | Yes | No | No | Yes | Yes | Yes | 2026-08-25 |
+| [Pi Dash](https://github.com/The-AI-Republic/pi-dash) | `agent_extension` | experimental | Yes | Yes | Yes | Yes | Yes | Yes | 2026-09-29 |
+| [Readwise MCP](https://docs.readwise.io/tools/mcp) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | No | 2026-08-18 |
+| [Shortcut MCP](https://www.shortcut.com/help/integrations/mcp-server/) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | No | 2026-08-30 |
+| [Slack MCP](https://docs.slack.dev/ai/slack-mcp-server/) | `mcp_server` | verified | Yes | Yes | Yes | Yes | Yes | No | 2026-09-02 |
+| [Substack MCP](https://github.com/conorbronsdon/substack-mcp) | `mcp_server` | verified | Yes | Yes | Yes | Yes | No | No | 2026-08-15 |
+| [Todoist CLI](https://github.com/Doist/todoist-cli) | `connector` | verified | Yes | Yes | No | Yes | Yes | No | 2026-09-03 |
+| [Tolaria MCP](https://github.com/refactoringhq/tolaria) | `local_workspace` | verified | Yes | No | No | Yes | Yes | No | 2026-08-15 |
+| [Trello MCP](https://support.atlassian.com/trello/docs/connect-trello-to-ai-assistants-with-trello-mcp/) | `mcp_server` | verified | Yes | Yes | No | Yes | Yes | No | 2026-08-30 |
 
 ## Agent Skills
 
@@ -154,6 +157,35 @@ Capabilities and limits:
 - Bitbucket writes include merging pull requests and running pipelines; a commit that changes pipeline configuration followed by a pipeline run executes code on Bitbucket runners under the user's permissions
 - The server exposes a small primary tool set and defers the rest behind discover plus executeRead, executeWrite, and executeDestructive, so new tools become reachable without reconnecting; the ?tools=all endpoint variant exposes the full flat list
 - Creating, updating, publishing, or deleting anything requires explicit outbound confirmation
+
+## Autoposting CLI MCP
+
+Optional handoff from reviewed repository text to remote social drafts and post IDs. Publishing, scheduling and automated agents are separate actions; the MCP server does not sync repository context.
+
+- **Supported agents:** `generic`
+- **Install scope:** `user`; never automatic
+- **Prerequisites:** Node.js 20 or newer and an explicitly approved global installation of @autoposting.ai/cli 0.4.0 (MIT); ap mcp starts the local stdio server; An Autoposting account and API key with appropriate service access; the hosted paid backend is separate from the open-source CLI and is not included for self-hosting; Connected social accounts before publishing; exact per-host configuration locations and tool-disabling support are unverified
+- **Credentials:** AUTOPOSTING\_API\_KEY is read directly from the server process environment; MCP startup does not use the general CLI stored-profile resolver. Keep the key out of repository files, shared client configuration and logs; The SDK sends the key to https://app.autoposting.ai/api-proxy by default; AUTOPOSTING\_BASE\_URL can redirect this destination, so review the effective URL before exposing credentials
+- **Reads:** Account-visible posts and drafts, brands and social-account connection status, agents and runs, knowledge-base documents and search results, ideas, clips, carousels, webhooks, billing, credits and usage; The hosted MCP backend supplies a runtime REST route allow-list for list-api-routes and api-request; its contents and additional capabilities were not retrieved; Explicitly selected local media and clip file paths for upload; imported URLs and knowledge-base source URLs are sent to the backend
+- **Writes / external effects:** Remote create, update and delete operations for posts, brands, agents, knowledge bases, ideas, clips, carousels and webhooks; rewrites replace content and generation or rendering can consume service credits; Immediate publish, scheduling, publication retry and enabled recurring agents can send content to connected social accounts now or later; Local-file upload to the backend or backend-provided presigned storage URLs; webhook creation, updates and tests can deliver data to selected external destinations; Generic api-request dispatches backend-allowed REST actions beyond the pinned named tool inventory; backend authorization and additional side effects remain unverified
+- **Typed safety signals:** sensitive read, remote write, overwrite, delete, arbitrary execution (unknown; gate required)
+- **Unverified capability (arbitrary execution):** No named execution tool was found, but the backend-owned api-request route list was not enumerated. Full-surface execution capability is unknown; retain the execution gate until the effective route list is reviewed or the bridge is verifiably unavailable.
+- **Required confirmation gates:** `credential_setup`, `external_install`, `read_sensitive`, `write`, `write_remote`, `publish`, `overwrite`, `delete`, `arbitrary_execution`, `destructive`
+- **Confirmation:** Approve the effective API destination and credential setup separately. For each action confirm the account or workspace, brand, exact content and destinations. Publishing, scheduling (including scheduledAt), retry, recurring agents, uploads, webhook delivery and deletion require their own exact-action approval. Unknown execution scope retains its gate; review the effective REST routes before using api-request. These are operator requirements, not server-enforced approvals.
+- **Risk tags:** `sensitive-read`, `remote-write`, `publish-capable`, `overwrite-capable`, `delete-capable`, `destructive-capable`, `arbitrary-execution`, `local-file-egress`, `dynamic-api-scope-unverified`, `paid-backend`
+- **Evidence:** [1](https://github.com/Autoposting-ai/autoposting-cli/blob/da104175c6545d521f33d4e06847674daa364458/packages/cli/README.md); [2](https://github.com/Autoposting-ai/autoposting-cli/blob/da104175c6545d521f33d4e06847674daa364458/packages/cli/package.json); [3](https://github.com/Autoposting-ai/autoposting-cli/blob/da104175c6545d521f33d4e06847674daa364458/packages/cli/src/mcp/server.ts); [4](https://github.com/Autoposting-ai/autoposting-cli/blob/da104175c6545d521f33d4e06847674daa364458/packages/cli/src/mcp/tools.ts); [5](https://github.com/Autoposting-ai/autoposting-cli/blob/da104175c6545d521f33d4e06847674daa364458/packages/cli/src/mcp/handler.ts); [6](https://github.com/Autoposting-ai/autoposting-cli/blob/da104175c6545d521f33d4e06847674daa364458/packages/cli/src/lib/api-routes.ts); [7](https://github.com/Autoposting-ai/autoposting-cli/blob/da104175c6545d521f33d4e06847674daa364458/packages/cli/src/commands/doctor.ts); [8](https://github.com/Autoposting-ai/autoposting-cli/blob/da104175c6545d521f33d4e06847674daa364458/packages/cli/src/commands/auth.ts); [9](https://github.com/Autoposting-ai/autoposting-cli/blob/da104175c6545d521f33d4e06847674daa364458/packages/sdk/src/client.ts); [10](https://github.com/Autoposting-ai/autoposting-cli/blob/da104175c6545d521f33d4e06847674daa364458/packages/sdk/src/resources/clips.ts); [11](https://registry.npmjs.org/@autoposting.ai%2fcli/0.4.0); [12](https://autoposting.ai/pricing)
+- **Health check:** After separately approved installation, ap doctor --json checks local credential presence and public API health; it is not authenticated MCP validation and can report stored CLI profiles that MCP startup ignores. The source describes an array of name/status/value objects; no output was observed here. A minimal account read still needs separate sensitive-read approval.
+- **Uninstall:** Remove the client MCP entry and its environment key, stop only the owned server process, and uninstall the global @autoposting.ai/cli package if owned by this setup. Revoke the key through the provider separately. General CLI stored profiles require separate local cleanup; ap auth logout removes a local profile rather than revoking its key. Remote account content remains, and backend revocation and cleanup steps are untested. (removes user data: No)
+
+Capabilities and limits:
+
+- Metadata review is pinned to CLI 0.4.0 / commit da104175c6545d521f33d4e06847674daa364458, confirmed by the npm version gitHead. This pin does not freeze the hosted service or its runtime route list
+- The local stdio surface uses an API key. Separate hosted authentication and social-provider connection flows are outside this entry; no named host conformance is claimed
+- The pinned named MCP tools cover posts, brands, agents, knowledge bases, ideas, clips, media, carousels, webhooks, billing and usage, plus list-api-routes and api-request
+- No shell or code execution tool appears in the pinned named registrations or dispatcher. The backend-owned REST allow-list is fetched at runtime, so execution absence for the full reachable surface is unresolved
+- create-post and update-post accept scheduledAt: a draft-labelled tool is not proof of a draft-only action. publish-post, schedule-post, retry-post and publish-clip can publish; create-agent, toggle-agent and run-agent can enable delayed or immediate writes
+- Start with an exact reviewed draft handoff. Client-side disabling of api-request, deletion, publish, scheduling, retry, upload and automated agents is recommended only where the client supports it; neither this catalog nor the pinned server enforces that restriction
+- No installation, authentication, live tool call, backend authorization, credit consumption or uninstall was tested. Human confirmation is operator guidance; no per-action human gate was established in the source dispatcher
 
 ## Beads for Gemini CLI
 

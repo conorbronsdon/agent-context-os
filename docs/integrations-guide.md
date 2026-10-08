@@ -33,6 +33,29 @@ lists the host-evidence fields for future entries. The core adapter's runtime
 tier remains separate from integration support, and generic MCP support never
 implies support on a named host.
 
+## Catalog capability semantics
+
+The generated catalog uses schema version 3. Existing boolean-only version 2
+catalogs remain valid input to the validator; generation emits version 3.
+Consumers must check the schema version before interpreting capability values.
+
+`true` declares a reachable capability and `false` declares its absence within
+the entry's stated boundary. Version 3 also permits `arbitrary_execution: null`
+when execution scope cannot be established, with a non-empty explanation at
+`capability_uncertainty.arbitrary_execution`. All other capability fields remain
+booleans. This limited extension does not silently widen the meaning of version 2.
+
+Unknown execution renders as **Unknown**, never **No**. It requires the same
+execution confirmation and risk tag as a known execution capability, and retains
+the write and destructive boundaries. A consumer must not treat `null` as false
+or infer an execution-free tool from it. The uncertainty object must describe
+exactly the unknown fields; it cannot downgrade a confirmed capability. Resolve
+an unknown only after reviewing evidence for the effective reachable surface.
+
+The catalog records guidance, not enforcement. In particular, a package pin
+does not pin a backend-controlled API route list, and draft-oriented use does
+not disable a tool's publish, scheduling, upload or deletion surface.
+
 ## Outcome chooser
 
 | I want to… | Candidate | First boundary to review |
