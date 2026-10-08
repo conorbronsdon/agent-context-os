@@ -9,8 +9,8 @@
   proposal. The harness checks every pushed commit and the phase's allowed
   paths, then sends an exact-digest approval. Devin applies and pushes a runtime
   `devin` receipt. The harness requires Devin's tree and receipt to match an
-  independent kernel replay of the approved proposal, and a receipt timestamp
-  after the approval. A fresh session reads a parentless handoff branch without
+  independent kernel replay of the approved proposal, and receipt timing
+  consistent with applying after the approval. A fresh session reads a parentless handoff branch without
   pending artifacts and must quote the saved next action. Refs outside the run
   and handoff branches must be unchanged.
   Live runs on snapshot build `sbj-f04a9b4dd96a43ff806501a2bedd34bf`

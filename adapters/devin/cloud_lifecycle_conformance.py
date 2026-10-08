@@ -62,7 +62,7 @@ WRONG_DIGEST_TEXT = "--confirm must exactly match"
 STALE_TEXT = "refusing stale proposal; file changed"
 # Hold each proposal before approving so an apply made right after the proposal
 # push cannot satisfy the ordering check; compare durations on single clocks.
-APPROVAL_HOLD_SECONDS = 30
+APPROVAL_HOLD_SECONDS = 120
 ORDERING_TOLERANCE_SECONDS = 2
 RECEIPT_FIELDS = ("schema_version", "proposal_id", "proposal_digest", "runtime", "invariants_checked")
 HANDOFF_READY = "CONTEXTOS_HANDOFF_READY"
@@ -204,6 +204,9 @@ class FixtureClone:
             mode, kind, oid = meta.split()
             entries.add((mode, kind, oid, path))
         return entries
+
+    def commit_time(self, sha: str) -> str:
+        return self.run("log", "-1", "--format=%cI", sha).strip()
 
     def parents(self, sha: str) -> list[str]:
         return self.run("rev-list", "--parents", "-n", "1", sha).split()[1:]
@@ -569,16 +572,18 @@ class CloudLifecycleHarness:
         if receipt.get("git_head_before") != pending_head or receipt.get("git_head_after") != pending_head:
             raise HarnessError("receipt is not bound to the pending proposal commit")
         self.controls[f"{phase}_receipt_matches_replay"] = "passed"
-        # Devin's clock: proposal created -> receipt applied. Harness clock: proposal
-        # push observed -> approval sent. Clock offset cancels within each duration.
-        # The proposal was created before its push was observed, so an apply made
-        # only after approval makes Devin's duration at least the harness's hold.
-        devin_gap = (parse_time(receipt.get("applied_at"))
-                     - parse_time(document.get("created_at"))).total_seconds()
+        # Devin's clock: pending commit -> receipt applied. Harness clock: push
+        # observed -> approval sent. Clock offset cancels within each duration.
+        # The check bounds the apply to no earlier than
+        #   approval - (push observed - pending commit) - tolerance
+        # in true time. A host that delays its push widens that slack, so this is
+        # timing consistency, not proof of ordering.
+        commit_at = self.clone.commit_time(pending_head)
+        devin_gap = (parse_time(receipt.get("applied_at")) - parse_time(commit_at)).total_seconds()
         harness_gap = (approval_sent_at - push_observed_at).total_seconds()
         if harness_gap < APPROVAL_HOLD_SECONDS or devin_gap < harness_gap - ORDERING_TOLERANCE_SECONDS:
-            raise HarnessError(f"{phase} receipt shows the apply happened before the approval was sent")
-        self.controls[f"{phase}_applied_after_approval"] = "passed"
+            raise HarnessError(f"{phase} receipt timing is inconsistent with applying after approval")
+        self.controls[f"{phase}_apply_timing_consistent"] = "passed"
         self.clone.checkout(head)
         self.receipts_seen.add(receipts[0])
         return head, {
@@ -587,7 +592,8 @@ class CloudLifecycleHarness:
             "receipt_applied_at": receipt.get("applied_at"),
             "approval_sent_at": approval_sent_at.isoformat(),
             "proposal_created_at": document.get("created_at"),
-            "devin_proposal_to_apply_seconds": round(devin_gap, 3),
+            "pending_commit_at": commit_at,
+            "devin_commit_to_apply_seconds": round(devin_gap, 3),
             "harness_push_to_approval_seconds": round(harness_gap, 3),
             "receipt_matches_replay": True,
             "applied_files": {change["path"]: expected[change["path"]] for change in document["changes"]},

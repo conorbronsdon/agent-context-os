@@ -33,10 +33,13 @@ REPOSITORY = "conorbronsdon/contextos-devin-cloud-fixture"
 
 
 def git(cwd: Path, *args: str) -> str:
+    # Commits use the shared fake clock, as Devin's commits and receipts share one clock.
+    stamp = CLOCK.now().isoformat()
     return subprocess.run(
         ["git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
          "-c", "core.autocrlf=false", *args],
         cwd=cwd, check=True, capture_output=True, text=True, encoding="utf-8",
+        env={**os.environ, "GIT_COMMITTER_DATE": stamp, "GIT_AUTHOR_DATE": stamp},
     ).stdout
 
 
@@ -414,7 +417,7 @@ class DevinCloudLifecycleHarnessTest(unittest.TestCase):
         for phase in ("setup", "update", "end"):
             for name in ("proposal_before_apply", "no_preapproval_commits", "path_scope",
                          "kernel_wrong_digest_rejected", "proposal_apply", "receipt_matches_replay",
-                         "applied_after_approval"):
+                         "apply_timing_consistent"):
                 self.assertEqual(controls[f"{phase}_{name}"], "passed", f"{phase}_{name}")
             record = evidence["phases"][phase]
             self.assertEqual(record["receipt_proposal_digest"], record["proposal_digest"])
@@ -428,7 +431,7 @@ class DevinCloudLifecycleHarnessTest(unittest.TestCase):
         for phase in ("setup", "update", "end"):
             record = evidence["phases"][phase]
             self.assertGreaterEqual(record["harness_push_to_approval_seconds"], cloud.APPROVAL_HOLD_SECONDS)
-            self.assertGreaterEqual(record["devin_proposal_to_apply_seconds"],
+            self.assertGreaterEqual(record["devin_commit_to_apply_seconds"],
                                     record["harness_push_to_approval_seconds"] - cloud.ORDERING_TOLERANCE_SECONDS)
         self.assertRegex(evidence["branch"], r"^lifecycle/\d{8}T\d{6}Z-[0-9a-f]{8}$")
         self.assertEqual(evidence["handoff_branch"], "handoff/" + evidence["branch"].split("/", 1)[1])
@@ -451,7 +454,7 @@ class DevinCloudLifecycleHarnessTest(unittest.TestCase):
         self.assert_failed({"fabricated_receipt"}, "does not match an independent kernel replay")
 
     def test_receipt_timestamp_before_approval_fails(self) -> None:
-        self.assert_failed({"applied_before_approval"}, "before the approval was sent")
+        self.assert_failed({"applied_before_approval"}, "inconsistent with applying after approval")
 
     def test_setup_outside_path_scope_fails(self) -> None:
         self.assert_failed({"setup_touches_agents"}, "outside its allowed scope")

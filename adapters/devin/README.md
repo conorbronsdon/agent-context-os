@@ -370,8 +370,12 @@ For each mutating phase the lifecycle harness requires the following:
 After Devin applies, the harness replays the same approved proposal with the
 fixture's kernel at the pending commit. Devin's tree must match that replay, and
 so must its receipt's ID, digest, runtime, file hashes, Git heads and
-invariants. The receipt's `applied_at` must also fall after the approval was
-sent, allowing for clock skew.
+invariants. The harness holds each proposal at least 120 seconds before
+approving. Devin's commit-to-apply duration, on Devin's clock, must be at least
+the harness's push-to-approval duration, on the harness clock, so clock offset
+cancels. This is a timing-consistency check, not proof of ordering: a host that
+delays pushing its proposal, or withholds an apply until approval, can defeat
+it.
 
 The wrong-digest and stale checks run the kernel locally, so they test the
 kernel, not Devin. The fresh-session handoff reads a parentless handoff branch
