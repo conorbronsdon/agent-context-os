@@ -1105,6 +1105,22 @@
                     "policy": "development"
                 },
                 {
+                    "path": "docs/evidence/devin-cli-windows-2026-10-08/README.md",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-windows-2026-10-08/host-1f9bf5d.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-windows-2026-10-08/hooks-1f9bf5d.json",
+                    "policy": "development"
+                },
+                {
+                    "path": "docs/evidence/devin-cli-windows-2026-10-08/hooks-linux-1f9bf5d.json",
+                    "policy": "development"
+                },
+                {
                     "path": "docs/evidence/devin-review-2026-10-07/README.md",
                     "policy": "development"
                 },

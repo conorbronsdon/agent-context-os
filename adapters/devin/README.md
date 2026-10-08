@@ -101,11 +101,21 @@ which acknowledges that limit. In that mode they:
   that differs from the shipped guard only by omitting the `cursor` key;
 - hash the non-trivial lines of the real `~/.claude/CLAUDE.md` locally and fail
   any session whose context contains one. Evidence stores only counts;
-- record which `bash` is on `PATH` (Git Bash or WSL) and which shell ran the
-  hooks, because Devin's exec tool on Windows is PowerShell and the shipped hooks
-  call `bash`.
+- record which `bash` is on `PATH` (Git Bash or WSL), the hook's parent
+  process, and whether the hook runs from the project root.
 
-Native Windows support stays unverified until these harnesses pass there.
+Observed on Windows 11 with Devin CLI `3000.11.3`: Devin runs hook and shell
+commands in Git Bash's MSYS runtime, but those shells keep the Windows `PATH`
+order. When Devin is started from PowerShell or cmd and WSL is installed, a bare
+`bash` inside them resolves to `C:\Windows\system32\bash.exe`, the WSL
+launcher, which receives no `DEVIN_PROJECT_DIR`. The shipped hooks therefore
+call `"${BASH:-bash}"`, which reuses the running bash and falls back to `bash`
+elsewhere. Kernel commands that skills run as `bash scripts/contextos.sh ...`
+still take the WSL route in that launch mode; a quick `start` works there, but
+the lifecycle setup phase has not completed yet (see the
+[Windows evidence](../../docs/evidence/devin-cli-windows-2026-10-08/README.md)).
+
+Native Windows support stays unverified until all three harnesses pass there.
 Credentials live at `%APPDATA%\devin\credentials.toml`, so pass `%APPDATA%` as
 `--data-home`.
 
