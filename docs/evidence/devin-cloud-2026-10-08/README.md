@@ -2,7 +2,7 @@
 
 These runs used synthetic public fixtures, not personal-context data. Both ran
 through the Devin v3 API as an organization service user, from a clean clone of
-source `e2555a9`, against snapshot build
+source `97b9d51`, against snapshot build
 `sbj-f04a9b4dd96a43ff806501a2bedd34bf`. That build was checked before and after
 each run. The artifacts keep controls, digests, receipt hashes, commit SHAs and
 request hashes. Session IDs are hashed and redacted from request paths. The
@@ -20,7 +20,7 @@ before these runs. Use the same setup for a real Context OS repository.
 
 ## Instructions and skills (passed)
 
-[api-e2555a9.json](api-e2555a9.json) used
+[api-97b9d51.json](api-97b9d51.json) used
 [`live_conformance.py`](../../../adapters/devin/live_conformance.py) on
 [`contextos-devin-live-fixture`](https://github.com/conorbronsdon/contextos-devin-live-fixture)
 at `3d58d8f`. In one API session, Devin returned the root instruction canary and
@@ -32,14 +32,14 @@ pull request, Review was not invoked, and the session was archived. Mode:
 
 ## Lifecycle, apply and handoff (passed, 32 controls)
 
-[lifecycle-e2555a9.json](lifecycle-e2555a9.json) used
+[lifecycle-97b9d51.json](lifecycle-97b9d51.json) used
 [`cloud_lifecycle_conformance.py`](../../../adapters/devin/cloud_lifecycle_conformance.py)
 on [`contextos-devin-cloud-fixture`](https://github.com/conorbronsdon/contextos-devin-cloud-fixture)
 at `0243a0f`, the unmodified v1.1.1 release template. The run branch is
-[`lifecycle/20261008T053816Z-59efc103`](https://github.com/conorbronsdon/contextos-devin-cloud-fixture/commits/lifecycle/20261008T053816Z-59efc103),
-with final head `1e83699`. The handoff branch is
-[`handoff/20261008T053816Z-59efc103`](https://github.com/conorbronsdon/contextos-devin-cloud-fixture/commits/handoff/20261008T053816Z-59efc103)
-at `5b471ea`.
+[`lifecycle/20261008T061145Z-162b70ee`](https://github.com/conorbronsdon/contextos-devin-cloud-fixture/commits/lifecycle/20261008T061145Z-162b70ee),
+with final head `57c3d6c`. The handoff branch is
+[`handoff/20261008T061145Z-162b70ee`](https://github.com/conorbronsdon/contextos-devin-cloud-fixture/commits/handoff/20261008T061145Z-162b70ee)
+at `fef21c0`.
 
 In one API session, for each of `@skills:context-setup`, `context-update` and
 `context-end`:
@@ -60,11 +60,12 @@ In one API session, for each of `@skills:context-setup`, `context-update` and
   of the same apply with the kernel at the pending commit: same receipt file,
   proposal ID and digest, runtime `devin`, file hashes, invariants, and Git
   heads bound to the pending commit.
-- **Ordering.** The harness held each proposal for 30 seconds before approving.
-  Devin's own clock showed 63-78 seconds from proposal creation to apply, more
-  than the harness's 30-second push-to-approval interval. Each duration is
-  measured on one clock, so clock offset cancels. An apply made right after the
-  proposal push would have failed this check.
+- **Timing.** The harness held each proposal for 120 seconds before approving.
+  On Devin's clock, 149-159 seconds passed from the pending commit to the apply,
+  more than the harness's push-to-approval interval. Each duration is measured
+  on one clock, so clock offset cancels. This is consistent with applying after
+  approval. It is not proof: a host that delayed its push, or withheld an apply
+  until approval, could defeat it.
 - **Stale check.** For update and end, the kernel rejected re-applying the same
   proposal as stale without mutation.
 
@@ -80,7 +81,7 @@ Both branches were unchanged after the handoff, every pre-existing ref
 
 - Cloud sessions have no execution-authorization control. Devin's adherence to
   the approval step is observed through per-commit pushes, an independent kernel
-  replay, and an offset-free timing comparison, not enforced. The kernel's digest check is the enforced boundary,
+  replay, and a timing-consistency check, not enforced. The kernel's digest check is the enforced boundary,
   and it does not authenticate who approved.
 - The wrong-digest and stale rejections test the kernel locally, not Devin's
   restraint.

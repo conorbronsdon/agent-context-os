@@ -1,6 +1,6 @@
 {
   "active_build_id": "sbj-f04a9b4dd96a43ff806501a2bedd34bf",
-  "checked_at": "2026-10-08T05:38:16.261142+00:00",
+  "checked_at": "2026-10-08T06:11:44.783657+00:00",
   "controls": {
     "exact_active_build": true,
     "exact_fixture_commit": true,
@@ -84,91 +84,103 @@
       "method": "POST",
       "path": "/v3/organizations/{org_id}/sessions",
       "request_sha256": "55e939f32839992a219485bdd3868197933f38bd1fa09b6a962a30a60581bb90",
-      "response_sha256": "37304e280c103f4f6cc98aa2fc5deda755ad05c8d069d524469cb81d2b8f1903"
+      "response_sha256": "d01e81f021fef85c77c974c41a4390442e550645b2bdccd26e0cb9d7c72dd16b"
     },
     {
       "method": "GET",
       "path": "/v3/organizations/{org_id}/sessions/{devin_id}/messages?first=200",
       "request_sha256": null,
-      "response_sha256": "a2ea526541a1b63ad618b08db81f1b6e1357178c9338c3f75aa53c6a254bdadc"
+      "response_sha256": "56454b4f233cef57fed160c5cf8ecc03de44365e631498dd29bec4b5c4e646b8"
     },
     {
       "method": "GET",
       "path": "/v3/organizations/{org_id}/sessions/{devin_id}",
       "request_sha256": null,
-      "response_sha256": "8194a34db9de07c270c1623675482e8a26a0b0502d4d7c2d54695b7410d6a6a5"
+      "response_sha256": "23fc055497e6bb46ebcb1aba7904ef98e0d2575d04e06f6d265e321f8fc5a957"
     },
     {
       "method": "GET",
       "path": "/v3/organizations/{org_id}/sessions/{devin_id}/messages?first=200",
       "request_sha256": null,
-      "response_sha256": "a2ea526541a1b63ad618b08db81f1b6e1357178c9338c3f75aa53c6a254bdadc"
+      "response_sha256": "56454b4f233cef57fed160c5cf8ecc03de44365e631498dd29bec4b5c4e646b8"
     },
     {
       "method": "GET",
       "path": "/v3/organizations/{org_id}/sessions/{devin_id}",
       "request_sha256": null,
-      "response_sha256": "49f505dc196e5cb025db3fb313fded39b1f0048c4be49991bdd64853e8d09673"
+      "response_sha256": "2fc4dba9d15edaf8537bae4b8cb3dbcba57023e70a0237d8a46e21707fd6b822"
     },
     {
       "method": "GET",
       "path": "/v3/organizations/{org_id}/sessions/{devin_id}/messages?first=200",
       "request_sha256": null,
-      "response_sha256": "cc580fff1d6c5f8f620f9c68a3487f413e87e40d620ea653806ccf07505936cf"
+      "response_sha256": "56454b4f233cef57fed160c5cf8ecc03de44365e631498dd29bec4b5c4e646b8"
+    },
+    {
+      "method": "GET",
+      "path": "/v3/organizations/{org_id}/sessions/{devin_id}",
+      "request_sha256": null,
+      "response_sha256": "2fc4dba9d15edaf8537bae4b8cb3dbcba57023e70a0237d8a46e21707fd6b822"
     },
     {
       "method": "GET",
       "path": "/v3/organizations/{org_id}/sessions/{devin_id}/messages?first=200",
       "request_sha256": null,
-      "response_sha256": "cc580fff1d6c5f8f620f9c68a3487f413e87e40d620ea653806ccf07505936cf"
+      "response_sha256": "304d71a1312ed742a4d6181964be96b0b8478c79cba85ddb2cfa11f950997f6a"
     },
     {
       "method": "GET",
       "path": "/v3/organizations/{org_id}/sessions/{devin_id}/messages?first=200",
       "request_sha256": null,
-      "response_sha256": "cc580fff1d6c5f8f620f9c68a3487f413e87e40d620ea653806ccf07505936cf"
+      "response_sha256": "304d71a1312ed742a4d6181964be96b0b8478c79cba85ddb2cfa11f950997f6a"
+    },
+    {
+      "method": "GET",
+      "path": "/v3/organizations/{org_id}/sessions/{devin_id}/messages?first=200",
+      "request_sha256": null,
+      "response_sha256": "304d71a1312ed742a4d6181964be96b0b8478c79cba85ddb2cfa11f950997f6a"
     },
     {
       "method": "POST",
       "path": "/v3/organizations/{org_id}/sessions/{devin_id}/messages",
       "request_sha256": "e3e108d42a292b43d62100d50ef74441f6a8d084a315887ce89ca56a4dd30478",
-      "response_sha256": "2084faffc57100f58cee5b4853255dc5be5a63a48c45e9d8f9ff66349cd20547"
+      "response_sha256": "c4cb50d42716848ba8deaa501c4997e62bd796a9cba1b07b5f85388aa5afd312"
     },
     {
       "method": "GET",
       "path": "/v3/organizations/{org_id}/sessions/{devin_id}/messages?first=200",
       "request_sha256": null,
-      "response_sha256": "e990c51daa64f48158ca59f9dd07792939bd48b75b0497b7528e2b7537806955"
+      "response_sha256": "54f1801f6c96fffda4fa4a388635b1bd3749c23afab40aa9af3580a62c90b78c"
     },
     {
       "method": "GET",
       "path": "/v3/organizations/{org_id}/sessions/{devin_id}",
       "request_sha256": null,
-      "response_sha256": "810d1945c07f9f33721cd5f8cc462adb27f249fc3c16e512b9a34348c865743a"
+      "response_sha256": "edc8fd6f6c35295a6712790e95e94bb07ed1ee550feee09946e67add33bb984f"
     },
     {
       "method": "GET",
       "path": "/v3/organizations/{org_id}/sessions/{devin_id}/messages?first=200",
       "request_sha256": null,
-      "response_sha256": "e990c51daa64f48158ca59f9dd07792939bd48b75b0497b7528e2b7537806955"
+      "response_sha256": "54f1801f6c96fffda4fa4a388635b1bd3749c23afab40aa9af3580a62c90b78c"
     },
     {
       "method": "GET",
       "path": "/v3/organizations/{org_id}/sessions/{devin_id}",
       "request_sha256": null,
-      "response_sha256": "d34043f7d5e4287a2c27680eda50806e3aadc0eb133cd36bc03c7d03b1e98d15"
+      "response_sha256": "edc8fd6f6c35295a6712790e95e94bb07ed1ee550feee09946e67add33bb984f"
     },
     {
       "method": "GET",
       "path": "/v3/organizations/{org_id}/sessions/{devin_id}/messages?first=200",
       "request_sha256": null,
-      "response_sha256": "b84bd48c9399c07ba74792c8c6a676bc8970f783526f200f361e1c93ca71f180"
+      "response_sha256": "14f68aa4085752bc22b7aa5529b97c4e0cb61080ec9685abc52d38ece0cd726a"
     },
     {
       "method": "GET",
       "path": "/v3/organizations/{org_id}/sessions/{devin_id}",
       "request_sha256": null,
-      "response_sha256": "849a246437dce246c50b340b077a84252ce2585217c5aa51ad72a8148cecf579"
+      "response_sha256": "0e4e15e75f20fe792b4092d59cebc4006edde61102762c3f8b02d87a021149c0"
     },
     {
       "method": "GET",
@@ -180,12 +192,12 @@
       "method": "POST",
       "path": "/v3/organizations/{org_id}/sessions/{devin_id}/archive",
       "request_sha256": null,
-      "response_sha256": "8ca2de3f491eeae03c1c2a4bc84c33b91eb3aafc0bb0baa93fa74a5c6157c000"
+      "response_sha256": "624723295317176bb941a278c747dd45bd1cbaa5f60d49898037cdb68d847b2c"
     }
   ],
   "runtime": "devin",
   "schema_version": 1,
-  "session_id_sha256": "c333f2992ffea78c909b7f2d3e9f52106f3a519acb4e5f1288dd72febdc0f527",
-  "source_sha": "e2555a9e362ef41b7eff19265a2330abc8c23516",
+  "session_id_sha256": "fa2ec89d679c5d0d60f05234e6c1c162eda864993d959042ba6cdab2628b8d3f",
+  "source_sha": "97b9d511d2a50a3caeea7f3866fc6d43028c1188",
   "surface": "session"
 }
