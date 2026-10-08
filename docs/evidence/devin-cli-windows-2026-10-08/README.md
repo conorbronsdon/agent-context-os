@@ -35,11 +35,15 @@ responses, absolute local paths and credentials.
   the random handoff value from the saved session. All five sessions excluded the
   real global Claude instructions under the local line-hash check. The source
   stayed clean and the disposable workspace was removed.
+- [lifecycle-linux-1314d65.json](lifecycle-linux-1314d65.json), the Linux (WSL2)
+  replay at the same commit: all 12 controls passed. The external operator read
+  each synthetic diff and approved its exact digest. Wrong digests and stale
+  replays were rejected, a fresh read-only session recovered the saved handoff
+  value after pending artifacts were removed, and the source stayed clean.
 
 The host and hook artifacts predate the lifecycle setup fix. Their harness and
 hook command behavior is unchanged; the lifecycle run covers the revised
-portable skills and startup advisory. The Linux lifecycle replay is recorded
-separately when complete.
+portable skills and startup advisory on both platforms.
 
 ## Retained diagnosis
 
