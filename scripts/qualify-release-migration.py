@@ -25,10 +25,13 @@ PUBLISHED = {
     '1.0.0': ('08b7a76112605c49b287cb2e1b2e29e1f1a0ff35',
               'acaf77cfd6f3e1fecd29366a9317ef404bafc177d754b55cf133f6123e81df79',
               '05d45ccedd597c706ebcad4bd61b37a6d528d42971c7e48509ea85c6a288ccca'),
+    '1.1.1': ('10daa84a0b4fefaaf5e9f476be731ad0914b388e',
+              '88ea859c9c3ec8c322e6ab9e0de94b92eac1efd0c1f1b02f300b22f5a79dc33d',
+              '1111fd1b5aae35173cbdbc0277db1fcba9d3b4c62d8b284f1b4c49b387cbf28d'),
 }
 
 # Published kernels that write schema-2 workspace state themselves.
-NATIVE_STATE_BASELINES = {'1.0.0'}
+NATIVE_STATE_BASELINES = {'1.0.0', '1.1.1'}
 
 def require(condition, message):
     if not condition:
@@ -199,7 +202,7 @@ def main():
     require(not args.output.exists(), 'output must not exist; preserve prior evidence')
     args.output.mkdir(parents=True)
     outcome = {'synthetic': True, 'native_runtime_evidence': False, 'human_volunteer_evidence': False,
-               'final_release_qualification': args.expect_version == '1.1.1', 'cases': []}
+               'final_release_qualification': args.expect_version == '1.2.0', 'cases': []}
     try:
         candidate = bundle(args.candidate_assets.resolve(), args.output / 'candidate', args.expect_version,
                            args.expect_commit, args.expect_archive_sha256, args.expect_bundle_sha256)

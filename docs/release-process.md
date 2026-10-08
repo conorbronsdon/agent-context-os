@@ -36,8 +36,11 @@ Only dispatch `.github/workflows/release.yml` from `main`, with the exact
 reviewed 40-hex commit. Before dispatch:
 
 1. merge the release-preparation PR after canonical validation, hosted Linux and
-   Windows validation, and exact-SHA independent primary and free-Hermes reviews
-   (use an eligible independent fallback when Claude cannot complete);
+   Windows validation, and exact-SHA independent primary and free-Hermes reviews.
+   When Claude cannot complete, record its quota, authentication or service
+   failure and complete the primary review through a different model family on
+   OpenCode Go. Record the model, route, reviewed SHA and triaged findings for
+   every review. A timeout or empty report does not count;
 2. confirm the version constants, example workspace, and dated changelog agree;
 3. from a locally authenticated GitHub CLI session whose token can read
    repository administration settings, require
@@ -60,8 +63,9 @@ The workflow then fails closed through these gates:
 3. build twice from its Linux Git index and compare every artifact byte;
 4. verify the same Actions candidate in separate Linux and Windows extraction
    jobs, including execution of `python -m contextos bundle check` from the
-   extracted archive. Both jobs also exercise pinned published 0.14/0.15/1.0
-   upgrades, legacy and schema-v1 migrations, selected profiles, personalized
+   extracted archive. Both jobs also exercise the pinned published baselines in
+   `scripts/qualify-release-migration.py`, including the current 1.1.1 release,
+   legacy and schema-v1 migrations, selected profiles, personalized
    managed-file conflicts, multi-publication rollback, live child lock exclusion,
    journal recovery, post-receipt doctor failure and fresh setup/readiness.
    Synthetic fixtures and failure diagnostics are retained for seven days;

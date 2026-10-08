@@ -10,6 +10,7 @@ import io
 import json
 import os
 from pathlib import Path
+import runpy
 import shutil
 import subprocess
 import sys
@@ -26,7 +27,7 @@ def parser():
     p.add_argument('--candidate-commit', required=True)
     p.add_argument('--candidate-version', required=True)
     p.add_argument('--old-assets', required=True, type=Path,
-                   help='JSON list of {version,source,lock,sha256} for published 0.14.0/0.15.0/1.0.0')
+                   help='JSON list of {version,source,lock,sha256} for every pinned published baseline')
     p.add_argument('--out', required=True, type=Path, help='New, nonexistent evidence directory')
     p.add_argument('--child', nargs=3, metavar=('TARGET', 'PROPOSAL', 'DIGEST'), help=argparse.SUPPRESS)
     return p
@@ -126,7 +127,8 @@ def main():
     assert verified.version == args.candidate_version
     assert verified.lock['bundle']['source_git_commit'] == args.candidate_commit
     olds = json.loads(args.old_assets.read_text(encoding='utf-8'))
-    assert {a['version'] for a in olds} == {'0.14.0', '0.15.0', '1.0.0'}
+    published = runpy.run_path(str(product / 'scripts/qualify-release-migration.py'))['PUBLISHED']
+    assert {a['version'] for a in olds} == set(published)
     try:
         for old in olds:
             version = old['version']

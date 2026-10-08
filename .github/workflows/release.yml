@@ -125,7 +125,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          for version in 0.14.0 0.15.0 1.0.0; do
+          for version in $(python -c 'import runpy; print(" ".join(runpy.run_path("scripts/qualify-release-migration.py")["PUBLISHED"]))'); do
             gh release download "v$version" --repo "$GITHUB_REPOSITORY" \
               --dir "$RUNNER_TEMP/published/$version"
           done
@@ -190,7 +190,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          for version in 0.14.0 0.15.0 1.0.0; do
+          for version in $(python -c 'import runpy; print(" ".join(runpy.run_path("scripts/qualify-release-migration.py")["PUBLISHED"]))'); do
             gh release download "v$version" --repo "$GITHUB_REPOSITORY" \
               --dir "$RUNNER_TEMP/published/$version"
           done
