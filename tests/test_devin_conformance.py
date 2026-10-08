@@ -210,7 +210,7 @@ class DevinDescriptorTest(unittest.TestCase):
                 self.assertEqual(
                     [{
                         "type": "command",
-                        "command": 'bash "$DEVIN_PROJECT_DIR/scripts/context-os-hook.sh" '
+                        "command": '"${BASH:-bash}" "$DEVIN_PROJECT_DIR/scripts/context-os-hook.sh" '
                                    f"devin {kernel_event} cli",
                         "timeout": 10,
                     }],
