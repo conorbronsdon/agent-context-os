@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-10-08 — Devin cloud and native Windows lifecycle support
+
 ### Added
 - Devin CLI native Windows 11 support, scoped to CLI `3000.11.3` launched from
   PowerShell (#71). Opt-in host, hook and lifecycle runs passed; setup, start,
