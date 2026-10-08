@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -40,7 +41,7 @@ class HookProbeTest(unittest.TestCase):
             capture_output=True, check=False, env=environment,
         )
 
-    def test_probe_logs_only_event_tool_and_target(self) -> None:
+    def test_probe_logs_action_and_environment_without_payload_content(self) -> None:
         result = self.run_probe({
             "hook_event_name": "PreToolUse", "tool_name": "write", "session_id": "secret-session",
             "tool_input": {"file_path": "state/current.md", "content": "raw content"},
@@ -48,9 +49,23 @@ class HookProbeTest(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         entries = hooks.read_hook_log(self.log)
         self.assertEqual(
-            [{"event": "PreToolUse", "tool": "write", "target": "state/current.md", "project_dir_set": True}],
-            entries,
+            {"event": "PreToolUse", "tool": "write", "target": "state/current.md", "project_dir_set": True},
+            {key: entries[0][key] for key in ("event", "tool", "target", "project_dir_set")},
         )
+        self.assertEqual(1, len(entries))
+        self.assertEqual(
+            {"event", "tool", "target", "project_dir_set", "shell", "msystem", "wsl",
+             "cwd_is_project", "parent", "python_on_path", "python3_on_path"},
+            set(entries[0]),
+        )
+        self.assertEqual("", entries[0]["shell"])
+        self.assertEqual("", entries[0]["msystem"])
+        self.assertFalse(entries[0]["wsl"])
+        self.assertFalse(entries[0]["cwd_is_project"])
+        self.assertEqual("", entries[0]["parent"])
+        for name in ("python", "python3"):
+            self.assertEqual(bool(shutil.which(name, path="/usr/bin:/bin")),
+                             entries[0][name + "_on_path"])
         self.assertNotIn("raw content", self.log.read_text(encoding="utf-8"))
         self.assertNotIn("secret-session", self.log.read_text(encoding="utf-8"))
         hooks.require_hook_event(entries, "PreToolUse", tool="write", target="state/current.md")

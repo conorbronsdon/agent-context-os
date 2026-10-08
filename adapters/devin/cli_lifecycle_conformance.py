@@ -53,7 +53,7 @@ def lifecycle_permissions(root: Path, *, read_only: bool = False) -> dict[str, l
     """
     paths = ["scripts/contextos.sh", "./scripts/contextos.sh", f"{root.as_posix()}/scripts/contextos.sh"]
     # PowerShell (Devin's exec shell on Windows) adds the call operator and .exe forms.
-    shells = ("bash", "sh", "bash.exe", "& bash", "& bash.exe")
+    shells = ("bash", "sh", "bash.exe", "& bash", "& bash.exe", '"$BASH"', '"${BASH:-bash}"')
     wrappers = [f"{shell} {path}" for shell in shells for path in paths] + paths
     mutating = ("apply",) if not read_only else ("apply", "propose")
     return {
@@ -88,7 +88,7 @@ def require_skill_expanded(trajectory: Trajectory, root: Path, phase: str) -> No
 
 
 SHELL_SEPARATORS = re.compile(r"&&|\|\||[;|&\n]")
-SHELL_NAMES = {"bash", "sh"}
+SHELL_NAMES = {"bash", "sh", "$bash", "${bash:-bash}"}
 
 
 def shell_segments(command: str) -> list[list[str]]:
@@ -298,7 +298,7 @@ def prompt_for(phase: str, handoff_fact: str) -> str:
     }[phase]
     return (f"/context-{phase} This is an explicitly authorized synthetic lifecycle fixture. "
             "Use the colocated repository and run kernel commands from its root as "
-            f"`bash scripts/contextos.sh ...`. {detail} "
+            f"`\"$BASH\" scripts/contextos.sh ...` inside Bash. {detail} "
             "For mutations, create exactly one kernel proposal, display its diff and digest, "
             "then stop. Do not apply, commit, push, or modify other files. "
             "Create payloads under .context-os/inputs with the write tool, not shell redirection. "

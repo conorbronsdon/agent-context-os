@@ -163,8 +163,9 @@ LIFECYCLE_PRODUCT_ROOTS = {
 STATE_THRESHOLDS = {"current.md": 3, "weekly-priorities.md": 5, "blockers.md": 7}
 INITIALIZATION_FILE = "current.md"
 SETUP_NEXT_ACTION = (
-    "Run the explicit setup workflow (bash scripts/setup.sh, then the $context-setup "
-    "skill) before starting a session."
+    "Invoke the explicit $context-setup skill before starting a session. "
+    "bash scripts/setup.sh is a separate interactive terminal installer; "
+    "do not run it inside an agent session."
 )
 FUTURE_DATE_NEXT_ACTION = (
     "Check the system clock, then run the explicit setup workflow to replace the "

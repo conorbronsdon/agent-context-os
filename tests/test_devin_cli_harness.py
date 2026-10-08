@@ -458,6 +458,8 @@ class LifecycleControlTest(unittest.TestCase):
                 self.assertTrue(lifecycle.is_kernel_command(self.call(command), "apply"))
         good = NL.join(["Output:", json.dumps({"schema_version": 1, "initialized": True}), "Exit code: 0"])
         for command in ("& bash scripts\\contextos.sh start", "bash.exe scripts/contextos.sh start",
+                        '"$BASH" scripts/contextos.sh start',
+                        '"${BASH:-bash}" scripts/contextos.sh start',
                         'powershell -Command "bash scripts/contextos.sh start"'):
             with self.subTest(command=command):
                 self.assertTrue(lifecycle.ran_kernel_inventory(
@@ -468,6 +470,8 @@ class LifecycleControlTest(unittest.TestCase):
     def test_permissions_deny_powershell_apply_forms(self) -> None:
         deny = lifecycle.lifecycle_permissions(Path("/w"))["deny"]
         for form in ("& bash scripts/contextos.sh apply", "bash.exe scripts/contextos.sh apply",
+                     '"$BASH" scripts/contextos.sh apply',
+                     '"${BASH:-bash}" scripts/contextos.sh apply',
                      "& bash.exe /w/scripts/contextos.sh apply"):
             self.assertIn(f"Exec({form})", deny)
 
