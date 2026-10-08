@@ -60,7 +60,10 @@ SETUP_PATHS = frozenset({"identity/lifecycle-fixture.md", "state/current.md"})
 SESSION_FILE_RE = re.compile(r"sessions/\d{4}-\d{2}-\d{2}\.md")
 WRONG_DIGEST_TEXT = "--confirm must exactly match"
 STALE_TEXT = "refusing stale proposal; file changed"
-CLOCK_SKEW_SECONDS = 120
+# Hold each proposal before approving so an apply made right after the proposal
+# push cannot satisfy the ordering check; compare durations on single clocks.
+APPROVAL_HOLD_SECONDS = 30
+ORDERING_TOLERANCE_SECONDS = 2
 RECEIPT_FIELDS = ("schema_version", "proposal_id", "proposal_digest", "runtime", "invariants_checked")
 HANDOFF_READY = "CONTEXTOS_HANDOFF_READY"
 
@@ -192,6 +195,15 @@ class FixtureClone:
 
     def commits(self, before: str, after: str) -> list[str]:
         return [line for line in self.run("rev-list", "--reverse", f"{before}..{after}").split() if line]
+
+    def tree_entries(self, sha: str) -> set[tuple[str, str, str, str]]:
+        """Every committed entry as (mode, type, object id, path), symlinks and modes included."""
+        entries = set()
+        for line in self.run("ls-tree", "-r", "--full-tree", sha).splitlines():
+            meta, _, path = line.partition("\t")
+            mode, kind, oid = meta.split()
+            entries.add((mode, kind, oid, path))
+        return entries
 
     def parents(self, sha: str) -> list[str]:
         return self.run("rev-list", "--parents", "-n", "1", sha).split()[1:]
@@ -387,8 +399,9 @@ class CloudLifecycleHarness:
     def event_ids(self, session_id: str) -> set[str]:
         return {str(item.get("event_id")) for item in self.api.messages(session_id)}
 
-    def send(self, session_id: str, message: str) -> set[str]:
-        observed = self.event_ids(session_id)
+    def send(self, session_id: str, message: str, observed: set[str] | None = None) -> set[str]:
+        if observed is None:
+            observed = self.event_ids(session_id)
         self.api.client.request("POST", f"{self.api.org_path}/sessions/{session_id}/messages",
                                 {"message": message})
         return observed
@@ -450,6 +463,7 @@ class CloudLifecycleHarness:
                        facts: Mapping[str, str]) -> tuple[str, dict]:
         reply = self.wait_for(session_id, rf"CONTEXTOS_PHASE_DONE {phase} [0-9a-f]{{64}}", after)
         head = self.advance(previous)
+        self.push_observed_at = self.clock()
         commits = self.clone.commits(previous, head)
         if not commits:
             raise HarnessError(f"{phase} pushed no commit")
@@ -515,7 +529,7 @@ class CloudLifecycleHarness:
 
     def applied_phase(self, session_id: str, phase: str, pending_head: str, proposal: str,
                       document: dict, before: dict[str, str], after: set[str],
-                      approval_sent_at: datetime) -> tuple[str, dict]:
+                      approval_sent_at: datetime, push_observed_at: datetime) -> tuple[str, dict]:
         self.wait_for(session_id, rf"CONTEXTOS_APPLIED {phase}", after)
         head = self.advance(pending_head)
         changes = self.clone.changed(pending_head, head)
@@ -555,8 +569,14 @@ class CloudLifecycleHarness:
         if receipt.get("git_head_before") != pending_head or receipt.get("git_head_after") != pending_head:
             raise HarnessError("receipt is not bound to the pending proposal commit")
         self.controls[f"{phase}_receipt_matches_replay"] = "passed"
-        applied_at = parse_time(receipt.get("applied_at"))
-        if applied_at < approval_sent_at - timedelta(seconds=CLOCK_SKEW_SECONDS):
+        # Devin's clock: proposal created -> receipt applied. Harness clock: proposal
+        # push observed -> approval sent. Clock offset cancels within each duration.
+        # The proposal was created before its push was observed, so an apply made
+        # only after approval makes Devin's duration at least the harness's hold.
+        devin_gap = (parse_time(receipt.get("applied_at"))
+                     - parse_time(document.get("created_at"))).total_seconds()
+        harness_gap = (approval_sent_at - push_observed_at).total_seconds()
+        if harness_gap < APPROVAL_HOLD_SECONDS or devin_gap < harness_gap - ORDERING_TOLERANCE_SECONDS:
             raise HarnessError(f"{phase} receipt shows the apply happened before the approval was sent")
         self.controls[f"{phase}_applied_after_approval"] = "passed"
         self.clone.checkout(head)
@@ -566,6 +586,9 @@ class CloudLifecycleHarness:
             "receipt_proposal_digest": receipt["proposal_digest"], "receipt_runtime": receipt["runtime"],
             "receipt_applied_at": receipt.get("applied_at"),
             "approval_sent_at": approval_sent_at.isoformat(),
+            "proposal_created_at": document.get("created_at"),
+            "devin_proposal_to_apply_seconds": round(devin_gap, 3),
+            "harness_push_to_approval_seconds": round(harness_gap, 3),
             "receipt_matches_replay": True,
             "applied_files": {change["path"]: expected[change["path"]] for change in document["changes"]},
         }
@@ -591,10 +614,9 @@ class CloudLifecycleHarness:
             raise HarnessError("handoff branch is not a single parentless commit")
         if self.clone.remote_head(self.branch) != applied_head:
             raise HarnessError("creating the handoff branch changed the run branch")
-        self.clone.checkout(applied_head)
-        expected = without_pending(self.clone.snapshot())
-        self.clone.checkout(head)
-        if self.clone.snapshot() != expected:
+        expected = {entry for entry in self.clone.tree_entries(applied_head)
+                    if not entry[3].startswith(PENDING_PREFIXES)}
+        if self.clone.tree_entries(head) != expected:
             raise HarnessError("handoff branch tree does not equal the applied tree without pending artifacts")
         self.controls["handoff_branch_isolated"] = "passed"
         return head
@@ -612,7 +634,8 @@ class CloudLifecycleHarness:
             "fixture_sha": self.clone.fixture_sha, "branch": self.branch,
             "handoff_branch": self.handoff_branch,
             "operator": "harness-exact-digest", "started_at": self.clock().isoformat(),
-            "clock_skew_allowance_seconds": CLOCK_SKEW_SECONDS,
+            "approval_hold_seconds": APPROVAL_HOLD_SECONDS,
+            "ordering_tolerance_seconds": ORDERING_TOLERANCE_SECONDS,
             "phases": {}, "controls": controls,
             "limits": [
                 "Skill expansion is evidenced by each proposal's workflow field and kernel output, "
@@ -670,12 +693,19 @@ class CloudLifecycleHarness:
                 before = self.clone.snapshot()
                 self.wrong_digest_rejected(pending_head, path, digest)
                 controls[f"{phase}_kernel_wrong_digest_rejected"] = "passed"
+                # Read the message baseline first so the approval timestamp is
+                # taken immediately before the POST, after the final head check.
+                baseline = self.event_ids(session_id)
+                held = (self.clock() - self.push_observed_at).total_seconds()
+                if held < APPROVAL_HOLD_SECONDS:
+                    self.sleep(APPROVAL_HOLD_SECONDS - held)
                 if self.clone.remote_head(self.branch) != pending_head:
                     raise HarnessError("run branch moved after the proposal and before approval")
                 approval_sent_at = self.clock()
-                after = self.send(session_id, approval_prompt(phase, path, digest))
+                after = self.send(session_id, approval_prompt(phase, path, digest), baseline)
                 head, applied = self.applied_phase(session_id, phase, pending_head, path, document,
-                                                   before, after, approval_sent_at)
+                                                   before, after, approval_sent_at,
+                                                   self.push_observed_at)
                 controls[f"{phase}_proposal_apply"] = "passed"
                 if phase != "setup":
                     self.stale_rejected(head, path, digest)
@@ -714,6 +744,9 @@ class CloudLifecycleHarness:
             if any(refs_after.get(ref) != sha for ref, sha in refs_before.items()) or \
                     set(refs_after) - set(refs_before) - allowed:
                 raise HarnessError("refs changed outside the run and handoff branches")
+            if refs_after.get(f"refs/heads/{self.branch}") != head or \
+                    refs_after.get(f"refs/heads/{self.handoff_branch}") != handoff_head:
+                raise HarnessError("run or handoff branch moved after its final verification")
             controls["refs_unchanged"] = "passed"
 
             if self.api.active_build().get("build_id") != result["active_build_id"]:
@@ -776,6 +809,7 @@ def main(
     argv: Sequence[str] | None = None, *, transport: Transport = default_transport,
     git: GitRunner = default_git, kernel: KernelRunner = default_kernel,
     remote_url: str | None = None, sleep: Callable[[float], None] = time.sleep,
+    clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
 ) -> int:
     args = parse_args(argv)
     result: dict = {}
@@ -796,7 +830,7 @@ def main(
             clone = FixtureClone(args.repository, args.fixture_sha, workdir, git=git, remote_url=remote_url)
             harness = CloudLifecycleHarness(
                 api, clone, source_sha=source_sha, branch=run_branch_name(), kernel=kernel,
-                poll_timeout=args.poll_timeout, poll_interval=args.poll_interval, sleep=sleep,
+                poll_timeout=args.poll_timeout, poll_interval=args.poll_interval, sleep=sleep, clock=clock,
             )
             try:
                 result = harness.execute()
@@ -806,7 +840,9 @@ def main(
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
     except Exception as exc:  # noqa: BLE001 - report every failure as a safe, non-zero result
-        print(f"Devin cloud lifecycle conformance failed safely: {safe_error_detail(exc)}", file=sys.stderr)
+        detail = (harness.redact(exc) if "harness" in locals()
+                  else HEX32_RE.sub("{id}", safe_error_detail(exc).replace(args.org_id, "{org_id}")))
+        print(f"Devin cloud lifecycle conformance failed safely: {detail}", file=sys.stderr)
         return 1
     if result.get("controls", {}).get("run") != "passed":
         print("Devin cloud lifecycle conformance failed; see evidence", file=sys.stderr)

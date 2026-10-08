@@ -65,9 +65,25 @@ class Remote:
         self.fixture_sha = git(seed, "rev-parse", "HEAD").strip()
 
 
+class FakeClock:
+    """Shared test clock: sleep advances it, so the approval hold is exercised."""
+
+    def __init__(self) -> None:
+        self.offset = 0.0
+
+    def now(self) -> datetime:
+        return datetime.now(timezone.utc) + timedelta(seconds=self.offset)
+
+    def sleep(self, seconds: float) -> None:
+        self.offset += max(seconds, 0)
+
+
+CLOCK = FakeClock()
+
+
 def proposal_document(phase: str, changes: list[dict], serial: int) -> dict:
     document = {"schema_version": 1, "workflow": phase, "proposal_id": f"{phase}-{serial}",
-                "serial": serial, "changes": changes}
+                "serial": serial, "created_at": CLOCK.now().isoformat(), "changes": changes}
     document["proposal_digest"] = sha256_text(canonical_json(document))
     return document
 
@@ -104,7 +120,7 @@ def kernel_simulator(faults: set[str], devin: "FakeDevin | None" = None):
                    "proposal_digest": document["proposal_digest"], "runtime": args[5],
                    "files_changed": changed, "git_head_before": head, "git_head_after": head,
                    "invariants_checked": ["workflow-path-policy"],
-                   "applied_at": datetime.now(timezone.utc).isoformat()}
+                   "applied_at": CLOCK.now().isoformat()}
         (cwd / f".context-os/receipts/{document['proposal_id']}.json").write_text(
             json.dumps(receipt), encoding="utf-8")
         return subprocess.CompletedProcess(args, 0, "applied", "")
@@ -235,7 +251,9 @@ class FakeDevin:
                 first.write_bytes(first.read_bytes() + b"tampered\n")
             if "applied_before_approval" in self.faults:
                 data = json.loads(receipt.read_text(encoding="utf-8"))
-                data["applied_at"] = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+                # Applied right after the proposal was created, before approval.
+                data["applied_at"] = (datetime.fromisoformat(document["created_at"])
+                                      + timedelta(seconds=1)).isoformat()
                 receipt.write_text(json.dumps(data), encoding="utf-8")
         git(work, "add", "-A")
         git(work, "add", "-f", receipt.relative_to(work).as_posix())
@@ -372,7 +390,7 @@ class DevinCloudLifecycleHarnessTest(unittest.TestCase):
         with mock.patch.object(cloud, "repository_source_sha", return_value="a" * 40), \
                 mock.patch.dict(os.environ, {"DEVIN_API_TOKEN": "cog_test"}):
             code = cloud.main(argv, transport=devin, kernel=kernel_simulator(set(faults), devin),
-                              remote_url=str(self.remote.bare), sleep=lambda seconds: None)
+                              remote_url=str(self.remote.bare), sleep=CLOCK.sleep, clock=CLOCK.now)
         stored = json.loads(evidence.read_text(encoding="utf-8")) if evidence.exists() else None
         return code, stored, devin
 
@@ -406,7 +424,12 @@ class DevinCloudLifecycleHarnessTest(unittest.TestCase):
         self.assertEqual(controls["end_kernel_stale_rejected"], "passed")
         self.assertNotIn("setup_kernel_stale_rejected", controls)
         self.assertEqual(evidence["active_build_id"], "build-1")
-        self.assertEqual(evidence["clock_skew_allowance_seconds"], cloud.CLOCK_SKEW_SECONDS)
+        self.assertEqual(evidence["approval_hold_seconds"], cloud.APPROVAL_HOLD_SECONDS)
+        for phase in ("setup", "update", "end"):
+            record = evidence["phases"][phase]
+            self.assertGreaterEqual(record["harness_push_to_approval_seconds"], cloud.APPROVAL_HOLD_SECONDS)
+            self.assertGreaterEqual(record["devin_proposal_to_apply_seconds"],
+                                    record["harness_push_to_approval_seconds"] - cloud.ORDERING_TOLERANCE_SECONDS)
         self.assertRegex(evidence["branch"], r"^lifecycle/\d{8}T\d{6}Z-[0-9a-f]{8}$")
         self.assertEqual(evidence["handoff_branch"], "handoff/" + evidence["branch"].split("/", 1)[1])
         self.assertEqual(len(devin.archived), 2)
