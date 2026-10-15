@@ -55,12 +55,9 @@ Personal and business context often belongs in a private repository. Create an e
 
 ### Start from a published release
 
-Source version 1.2.0 is a candidate until its immutable release is published.
-Until then, [v1.1.1](https://github.com/conorbronsdon/agent-context-os/releases/tag/v1.1.1)
-is the latest published release.
-
 For a version-pinned workspace, open [v1.2.0](https://github.com/conorbronsdon/agent-context-os/releases/tag/v1.2.0)
-and download all five attached assets: the template `.tar`, bundle lock,
+and download all five attached assets from its immutable release, published
+October 8, 2026: the template `.tar`, bundle lock,
 provenance, `OFFLINE-VERIFY.md`, and `SHA256SUMS`. Follow that release's
 `agent-context-os-template-v1.2.0.OFFLINE-VERIFY.md` to verify the assets before
 extracting and running setup. GitHub's generated source ZIP and tar.gz are
@@ -75,7 +72,7 @@ independent boundary. The [first reviewed handoff](docs/first-handoff.md) covers
 release verification and a local synthetic exercise.
 
 Version 1.2.0 adds first-class Devin cloud sessions and native Windows Devin CLI
-support. If it is not published yet, use v1.1.1 or the source setup path below.
+support.
 
 ### Start from source
 

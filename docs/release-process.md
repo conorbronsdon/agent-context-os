@@ -64,7 +64,7 @@ The workflow then fails closed through these gates:
 4. verify the same Actions candidate in separate Linux and Windows extraction
    jobs, including execution of `python -m contextos bundle check` from the
    extracted archive. Both jobs also exercise the pinned published baselines in
-   `scripts/qualify-release-migration.py`, including the current 1.1.1 release,
+   `scripts/qualify-release-migration.py`, including the 1.1.1 migration baseline,
    legacy and schema-v1 migrations, selected profiles, personalized
    managed-file conflicts, multi-publication rollback, live child lock exclusion,
    journal recovery, post-receipt doctor failure and fresh setup/readiness.

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+- Release setup, the first-handoff guide and the compatibility contract now
+  direct readers to the published immutable v1.2.0 release. Removed the expired
+  v1.1.1 fallback and clarified its role as a migration baseline in the release
+  process. Historical release notes and published assets are unchanged.
+
 ### Added
 - Autoposting CLI MCP is a listed, generic-stdio catalog reference pinned to
   0.4.0. It discloses publishing, delayed writes, uploads, deletion, credential
