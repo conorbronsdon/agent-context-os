@@ -2,13 +2,18 @@
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-11-16 — Autoposting catalog entry and unknown execution scope
+
 ### Fixed
-- Release setup, the first-handoff guide and the compatibility contract now
-  direct readers to the published immutable v1.2.0 release. Removed the expired
-  v1.1.1 fallback and clarified its role as a migration baseline in the release
-  process. Historical release notes and published assets are unchanged.
+- Release setup, the first-handoff guide and the compatibility contract no
+  longer offer the expired v1.1.1 fallback; they point to the published
+  immutable v1.2.0 release until 1.3.0 is published. The release process
+  clarifies 1.1.1's role as a migration baseline. Historical release notes and
+  published assets are unchanged.
 
 ### Added
+- Release qualification includes the current published 1.2.0 baseline, with
+  full-template and selected workspaces installed by that published kernel.
 - Autoposting CLI MCP is a listed, generic-stdio catalog reference pinned to
   0.4.0. It discloses publishing, delayed writes, uploads, deletion, credential
   destinations and the unverified backend API bridge; nothing is installed or
