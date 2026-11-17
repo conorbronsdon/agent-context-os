@@ -697,6 +697,10 @@
                     "policy": "development"
                 },
                 {
+                    "path": "tests/test_workflow_pins.py",
+                    "policy": "development"
+                },
+                {
                     "path": "tests/test-hooks.sh",
                     "policy": "development"
                 },
