@@ -55,14 +55,17 @@ Personal and business context often belongs in a private repository. Create an e
 
 ### Start from a published release
 
-For a version-pinned workspace, open [v1.2.0](https://github.com/conorbronsdon/agent-context-os/releases/tag/v1.2.0)
-and download all five attached assets from its immutable release, published
-October 8, 2026: the template `.tar`, bundle lock,
-provenance, `OFFLINE-VERIFY.md`, and `SHA256SUMS`. Follow that release's
-`agent-context-os-template-v1.2.0.OFFLINE-VERIFY.md` to verify the assets before
+Source version 1.3.0 is a candidate until its immutable release is published.
+Until then, [v1.2.0](https://github.com/conorbronsdon/agent-context-os/releases/tag/v1.2.0)
+is the latest published release.
+
+For a version-pinned workspace, open [v1.3.0](https://github.com/conorbronsdon/agent-context-os/releases/tag/v1.3.0)
+and download all five attached assets from its immutable release: the template
+`.tar`, bundle lock, provenance, `OFFLINE-VERIFY.md`, and `SHA256SUMS`. Follow
+that release's `agent-context-os-template-v1.3.0.OFFLINE-VERIFY.md` to verify the assets before
 extracting and running setup. GitHub's generated source ZIP and tar.gz are
 repository snapshots; the attached template tar is the canonical workspace.
-Use the [v1.2.0 release notes](docs/releases/v1.2.0.md) for what that version
+Use the [v1.3.0 release notes](docs/releases/v1.3.0.md) for what that version
 ships. Changes and support promotions described on a development branch may
 require a later release.
 
@@ -71,8 +74,9 @@ before running setup (`git init`). This gives its hooks and Git evidence an
 independent boundary. The [first reviewed handoff](docs/first-handoff.md) covers
 release verification and a local synthetic exercise.
 
-Version 1.2.0 adds first-class Devin cloud sessions and native Windows Devin CLI
-support.
+Version 1.3.0 lists Autoposting in the integration catalog and lets catalog
+entries record an unresolved execution capability as Unknown. If it is not
+published yet, use v1.2.0 or the source setup path below.
 
 ### Start from source
 
@@ -347,7 +351,7 @@ behavior of an installed agent version or an external service.
 | See every command and portable skill | [Commands and skills](docs/commands-and-skills.md) |
 | Understand component ownership and the composition/materialization substrate | [Component model](docs/component-model.md) |
 | Verify an offline bundle or inspect a structural plan | [Bundle locks and plans](docs/bundle-locks.md) |
-| Read release scope and evidence limits | [v1.2.0 release notes](docs/releases/v1.2.0.md); released [v1.1.1](docs/releases/v1.1.1.md), [v1.0.0](docs/releases/v1.0.0.md), [v0.15.0](docs/releases/v0.15.0.md), [v0.14.0](docs/releases/v0.14.0.md), [v0.13.1](docs/releases/v0.13.1.md), and [v0.12.0](docs/releases/v0.12.0.md) |
+| Read release scope and evidence limits | [v1.3.0 release notes](docs/releases/v1.3.0.md); released [v1.2.0](docs/releases/v1.2.0.md), [v1.1.1](docs/releases/v1.1.1.md), [v1.0.0](docs/releases/v1.0.0.md), [v0.15.0](docs/releases/v0.15.0.md), [v0.14.0](docs/releases/v0.14.0.md), [v0.13.1](docs/releases/v0.13.1.md), and [v0.12.0](docs/releases/v0.12.0.md) |
 | Understand KernelRoot, ContextRoot, WorkingRoot, and the v0.12 compatibility boundary | [Root contract](docs/root-contract.md) |
 | Choose an optional add-on | [Integration chooser](docs/integrations-guide.md) and [catalog](references/integrations.md) |
 | Understand product language and boundaries | [Positioning](docs/positioning.md) |
